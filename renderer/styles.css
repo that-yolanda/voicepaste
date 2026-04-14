@@ -1,0 +1,270 @@
+:root {
+  color-scheme: dark;
+  --bg: rgba(12, 12, 14, 0.94);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: rgba(255, 255, 255, 0.96);
+  --muted: rgba(255, 255, 255, 0.62);
+  --soft: rgba(255, 255, 255, 0.4);
+  --success: #8fd69b;
+  --warning: #f0cc7a;
+  --error: #f08b85;
+  --idle: #ff5d5d;
+  --recording: #5fd68d;
+  --connecting: #f0cc7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family:
+    "SF Pro Display",
+    "PingFang SC",
+    sans-serif;
+  background: transparent;
+  color: var(--text);
+}
+
+.overlay {
+  width: 100%;
+  height: 100%;
+  padding: 6px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.card {
+  min-height: 56px;
+  border: 1px solid var(--border);
+  background: rgb(14, 14, 17);
+  border-radius: 56px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.card[data-wrap="single"] {
+  min-height: 56px;
+}
+
+.card[data-wrap="multi"] {
+  min-height: 68px;
+  border-radius: 30px;
+  align-items: flex-start;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  overflow: visible;
+}
+
+.content {
+  min-width: 0px;
+  max-width: 620px;
+  display: grid;
+  gap: 0;
+  align-content: center;
+  flex: 1 1 auto;
+  overflow: visible;
+  /* padding-right: 2px; */
+}
+
+.transcript {
+  display: block;
+  min-height: 18px;
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.card[data-wrap="multi"] .transcript {
+  white-space: normal;
+  overflow: visible;
+}
+
+.final-text {
+  color: var(--text);
+}
+
+.partial-text {
+  color: var(--soft);
+}
+
+.hint {
+  display: none;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--muted);
+  opacity: 0.92;
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  align-self: center;
+  height: 34px;
+  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--idle);
+  box-shadow: 0 0 10px rgba(255, 93, 93, 0.45);
+}
+
+.status-spinner {
+  display: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: var(--connecting);
+  animation: spin 0.8s linear infinite;
+}
+
+.status-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.status-bar {
+  width: 2px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  opacity: 0.55;
+  transform-origin: center bottom;
+}
+
+.card[data-state="recording"] .status-dot {
+  background: var(--recording);
+  box-shadow: 0 0 12px rgba(95, 214, 141, 0.55);
+  animation: pulse-dot 1.15s ease-in-out infinite;
+}
+
+.card[data-state="connecting"] .status-dot,
+.card[data-state="finishing"] .status-dot {
+  background: var(--connecting);
+  box-shadow: 0 0 12px rgba(240, 204, 122, 0.45);
+}
+
+.card[data-state="finishing"] .status-dot,
+.card[data-state="finishing"] .status-bars {
+  display: none;
+}
+
+.card[data-state="finishing"] .status-spinner {
+  display: block;
+}
+
+.card[data-state="error"] .status-dot {
+  background: var(--error);
+  box-shadow: 0 0 12px rgba(240, 139, 133, 0.45);
+}
+
+.card[data-state="recording"] .status-bar:nth-child(1) {
+  animation: equalize 0.9s ease-in-out infinite 0.05s;
+}
+
+.card[data-state="recording"] .status-bar:nth-child(2) {
+  animation: equalize 0.9s ease-in-out infinite 0.18s;
+}
+
+.card[data-state="recording"] .status-bar:nth-child(3) {
+  animation: equalize 0.9s ease-in-out infinite 0.31s;
+}
+
+.card[data-state="recording"] .status-bar:nth-child(4) {
+  animation: equalize 0.9s ease-in-out infinite 0.44s;
+}
+
+.hint[data-level="success"] {
+  color: var(--success);
+}
+
+.hint[data-level="warning"] {
+  color: var(--warning);
+}
+
+.hint[data-level="error"] {
+  color: var(--error);
+}
+
+.measure-text {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  max-width: 620px;
+  font-family:
+    "SF Pro Display",
+    "PingFang SC",
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+@keyframes equalize {
+  0%,
+  100% {
+    height: 5px;
+    opacity: 0.42;
+  }
+
+  45% {
+    height: 14px;
+    opacity: 1;
+  }
+
+  75% {
+    height: 8px;
+    opacity: 0.72;
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.18);
+    opacity: 0.78;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

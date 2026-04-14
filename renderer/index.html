@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice Overlay</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="overlay">
+      <section class="card" id="card" data-state="idle">
+        <div class="status-pill" id="statusPill" aria-hidden="true">
+          <div class="status-dot" id="statusDot"></div>
+          <div class="status-spinner" id="statusSpinner"></div>
+          <div class="status-bars">
+            <span class="status-bar"></span>
+            <span class="status-bar"></span>
+            <span class="status-bar"></span>
+            <span class="status-bar"></span>
+          </div>
+        </div>
+        
+        <div class="content">
+          <div class="transcript" id="transcript">
+            <span class="final-text" id="finalText"></span>
+            <span class="partial-text" id="partialText"></span>
+          </div>
+          <div class="hint" id="hint"></div>
+        </div>
+        
+      </section>
+    </main>
+    <div class="measure-text" id="measureText"></div>
+    <script src="./app.js"></script>
+  </body>
+  </html>

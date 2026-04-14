@@ -1,0 +1,19 @@
+{
+  "name": "f13-voice-paste",
+  "version": "0.1.0",
+  "description": "Electron floating voice input tool triggered by F13.",
+  "main": "main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "postinstall": "node node_modules/.pnpm/electron@41.2.0/node_modules/electron/install.js"
+  },
+  "devDependencies": {
+    "electron": "^41.2.0"
+  },
+  "dependencies": {
+    "@xmov/doubao-asr": "^1.0.2",
+    "ws": "^8.20.0",
+    "yaml": "^2.8.3"
+  }
+}
