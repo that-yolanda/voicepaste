@@ -61,9 +61,33 @@ function createOverlayWindow() {
   return win;
 }
 
+function createSettingsWindow() {
+  const win = new BrowserWindow({
+    width: 860,
+    height: 760,
+    minWidth: 760,
+    minHeight: 680,
+    show: false,
+    frame: true,
+    title: "VoicePaste 配置",
+    backgroundColor: "#0f1115",
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "..", "preload", "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
+  return win;
+}
+
 module.exports = {
   clampOverlaySize,
   createOverlayWindow,
+  createSettingsWindow,
   getOverlayBounds,
   positionOverlayWindow,
 };

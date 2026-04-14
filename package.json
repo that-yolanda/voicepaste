@@ -1,19 +1,61 @@
 {
-  "name": "f13-voice-paste",
-  "version": "0.1.0",
+  "name": "voicepaste",
+  "version": "0.2.0",
   "description": "Electron floating voice input tool triggered by F13.",
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "pack": "electron-builder --mac zip",
     "postinstall": "node node_modules/.pnpm/electron@41.2.0/node_modules/electron/install.js"
   },
   "devDependencies": {
-    "electron": "^41.2.0"
+    "electron": "^41.2.0",
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "@xmov/doubao-asr": "^1.0.2",
     "ws": "^8.20.0",
     "yaml": "^2.8.3"
+  },
+  "build": {
+    "appId": "com.yolanda.voicepaste",
+    "productName": "VoicePaste",
+    "files": [
+      "main/**/*",
+      "preload/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "config.yaml",
+        "to": "config.yaml"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "build/trayTemplate.png",
+        "to": "trayTemplate.png"
+      },
+      {
+        "from": "build/trayTemplate@2x.png",
+        "to": "trayTemplate@2x.png"
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.png",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "用于录制你的语音并将识别结果粘贴到当前输入位置。",
+        "NSAppleEventsUsageDescription": "用于将识别结果自动粘贴到当前聚焦的输入位置。"
+      },
+      "category": "public.app-category.productivity",
+      "target": [
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
   }
 }

@@ -2,7 +2,38 @@ const fs = require("node:fs");
 const path = require("node:path");
 const YAML = require("yaml");
 
-const CONFIG_PATH = path.join(__dirname, "..", "config.yaml");
+function getConfigCandidates() {
+  const candidates = [];
+
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, "config.yaml"));
+  }
+
+  candidates.push(path.join(process.cwd(), "config.yaml"));
+  candidates.push(path.join(__dirname, "..", "config.yaml"));
+
+  return [...new Set(candidates)];
+}
+
+function resolveConfigPath() {
+  const matched = getConfigCandidates().find((candidate) => fs.existsSync(candidate));
+
+  if (!matched) {
+    throw new Error("未找到 config.yaml");
+  }
+
+  return matched;
+}
+
+const CONFIG_PATH = resolveConfigPath();
+
+function readConfigFile() {
+  return fs.readFileSync(CONFIG_PATH, "utf8");
+}
+
+function parseConfigFile() {
+  return YAML.parse(readConfigFile()) || {};
+}
 
 function parseContextHotwords(value) {
   if (!Array.isArray(value)) {
@@ -28,8 +59,7 @@ function parseContextHotwords(value) {
 }
 
 function loadConfig() {
-  const raw = fs.readFileSync(CONFIG_PATH, "utf8");
-  const config = YAML.parse(raw) || {};
+  const config = parseConfigFile();
 
   return {
     app: {
@@ -67,7 +97,28 @@ function loadConfig() {
   };
 }
 
+function getEditableConfig() {
+  return parseConfigFile();
+}
+
+function saveConfig(nextConfig) {
+  const yaml = YAML.stringify(nextConfig, {
+    indent: 2,
+    lineWidth: 0,
+  });
+  fs.writeFileSync(CONFIG_PATH, yaml, "utf8");
+}
+
+function saveConfigText(text) {
+  YAML.parse(text);
+  fs.writeFileSync(CONFIG_PATH, text, "utf8");
+}
+
 module.exports = {
   CONFIG_PATH,
+  getEditableConfig,
   loadConfig,
+  readConfigFile,
+  saveConfig,
+  saveConfigText,
 };

@@ -25,3 +25,26 @@ contextBridge.exposeInMainWorld("voiceOverlay", {
     ipcRenderer.send("renderer:audio-stopped");
   },
 });
+
+contextBridge.exposeInMainWorld("voiceSettings", {
+  getData() {
+    return ipcRenderer.invoke("settings:get-data");
+  },
+  saveConfig(payload) {
+    return ipcRenderer.invoke("settings:save-config", payload);
+  },
+  getMicrophoneStatus() {
+    return ipcRenderer.invoke("settings:get-microphone-status");
+  },
+  requestMicrophoneAccess() {
+    return ipcRenderer.invoke("settings:request-microphone-access");
+  },
+  onEvent(listener) {
+    const wrapped = (_event, payload) => listener(payload);
+    ipcRenderer.on("settings:event", wrapped);
+
+    return () => {
+      ipcRenderer.removeListener("settings:event", wrapped);
+    };
+  },
+});

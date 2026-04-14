@@ -1,16 +1,18 @@
 const path = require("node:path");
-const { app, globalShortcut, ipcMain, systemPreferences } = require("electron");
-const { createOverlayWindow, positionOverlayWindow, getOverlayBounds } = require("./windowManager");
-const { loadConfig } = require("./config");
+const fs = require("node:fs");
+const { app, Menu, Tray, nativeImage, globalShortcut, ipcMain, systemPreferences } = require("electron");
+const { createOverlayWindow, createSettingsWindow, positionOverlayWindow, getOverlayBounds } = require("./windowManager");
+const { CONFIG_PATH, loadConfig, readConfigFile, saveConfigText } = require("./config");
 const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
-const config = loadConfig();
-
-const HOTKEY = config.app.hotkey;
+const { logInfo, logError, resolveLogPath } = require("./logger");
+let currentConfig = loadConfig();
 const ESC_HOTKEY = "Esc";
 const DEBOUNCE_MS = 200;
 
 let overlayWindow;
+let settingsWindow;
+let tray;
 let appState = "idle";
 let lastHotkeyAt = 0;
 let latestTranscript = {
@@ -22,6 +24,11 @@ let suppressCloseError = false;
 let expectingSessionClose = false;
 let receivedAudioChunkCount = 0;
 let pendingAudioStopResolve = null;
+let isQuitting = false;
+
+function getHotkey() {
+  return currentConfig.app.hotkey;
+}
 
 async function ensureMicrophoneAccess() {
   if (process.platform !== "darwin") {
@@ -30,6 +37,7 @@ async function ensureMicrophoneAccess() {
 
   const status = systemPreferences.getMediaAccessStatus("microphone");
   console.log("[ASR] microphone access status", status);
+  logInfo("microphone access status", { status });
 
   if (status === "granted") {
     return true;
@@ -39,9 +47,11 @@ async function ensureMicrophoneAccess() {
     try {
       const granted = await systemPreferences.askForMediaAccess("microphone");
       console.log("[ASR] microphone access requested", granted);
+      logInfo("microphone access requested", { granted });
       return granted;
     } catch (error) {
       console.error("[ASR] microphone access request failed", error);
+      logError("microphone access request failed", { message: error.message || String(error) });
       return false;
     }
   }
@@ -93,6 +103,7 @@ function hideOverlay() {
 
 function setState(nextState) {
   appState = nextState;
+  logInfo("state changed", { state: nextState });
   syncEscapeShortcut();
   sendOverlayMessage("state", { state: nextState });
 }
@@ -142,12 +153,16 @@ function waitForRendererAudioStop(timeoutMs = 1200) {
 
 async function startRecordingFlow() {
   if (appState !== "idle") {
+    logInfo("start ignored", { appState });
     return;
   }
+
+  logInfo("start recording flow");
 
   const hasMicrophoneAccess = await ensureMicrophoneAccess();
   if (!hasMicrophoneAccess) {
     console.error("[ASR] microphone access denied");
+    logError("microphone access denied");
     return;
   }
 
@@ -161,30 +176,30 @@ async function startRecordingFlow() {
     suppressCloseError = false;
     expectingSessionClose = false;
     asrSession = createAsrSession({
-      url: config.asr.wsUrl,
-      resourceId: config.asr.resourceId,
-      appId: config.auth.appId,
-      accessToken: config.auth.accessToken,
-      language: config.asr.language,
-      sampleRate: config.asr.sampleRate,
-      audioFormat: config.asr.audioFormat,
-      audioCodec: config.asr.audioCodec,
-      audioBits: config.asr.audioBits,
-      audioChannel: config.asr.audioChannel,
-      modelName: config.asr.modelName,
-      modelVersion: config.asr.modelVersion,
-      operation: config.asr.operation,
-      sequence: config.asr.sequence,
-      enableItn: config.asr.enableItn,
-      enablePunc: config.asr.enablePunc,
-      enableNonstream: config.asr.enableNonstream,
-      enableDdc: config.asr.enableDdc,
-      showUtterances: config.asr.showUtterances,
-      resultType: config.asr.resultType,
-      endWindowSize: config.asr.endWindowSize,
-      forceToSpeechTime: config.asr.forceToSpeechTime,
-      boostingTableId: config.asr.boostingTableId,
-      contextHotwords: config.asr.contextHotwords,
+      url: currentConfig.asr.wsUrl,
+      resourceId: currentConfig.asr.resourceId,
+      appId: currentConfig.auth.appId,
+      accessToken: currentConfig.auth.accessToken,
+      language: currentConfig.asr.language,
+      sampleRate: currentConfig.asr.sampleRate,
+      audioFormat: currentConfig.asr.audioFormat,
+      audioCodec: currentConfig.asr.audioCodec,
+      audioBits: currentConfig.asr.audioBits,
+      audioChannel: currentConfig.asr.audioChannel,
+      modelName: currentConfig.asr.modelName,
+      modelVersion: currentConfig.asr.modelVersion,
+      operation: currentConfig.asr.operation,
+      sequence: currentConfig.asr.sequence,
+      enableItn: currentConfig.asr.enableItn,
+      enablePunc: currentConfig.asr.enablePunc,
+      enableNonstream: currentConfig.asr.enableNonstream,
+      enableDdc: currentConfig.asr.enableDdc,
+      showUtterances: currentConfig.asr.showUtterances,
+      resultType: currentConfig.asr.resultType,
+      endWindowSize: currentConfig.asr.endWindowSize,
+      forceToSpeechTime: currentConfig.asr.forceToSpeechTime,
+      boostingTableId: currentConfig.asr.boostingTableId,
+      contextHotwords: currentConfig.asr.contextHotwords,
       onOpen: () => {
         setState("recording");
         sendOverlayMessage("recording:start");
@@ -239,6 +254,7 @@ async function startRecordingFlow() {
       },
     });
   } catch (error) {
+    logError("start recording flow failed", { message: error.message || String(error) });
     setState("error");
     sendOverlayMessage("hint", {
       level: "error",
@@ -256,10 +272,14 @@ async function startRecordingFlow() {
 
 async function finishRecordingFlow() {
   if (appState !== "recording") {
+    logInfo("finish ignored", { appState });
     return;
   }
 
+  logInfo("finish recording flow");
+
   if (!asrSession?.isReady()) {
+    logError("finish failed because asr not ready");
     await cleanupSession();
     hideOverlay();
     setState("idle");
@@ -281,6 +301,7 @@ async function finishRecordingFlow() {
     ).trim();
 
     if (!textToPaste) {
+      logInfo("finish completed with empty transcript");
       await cleanupSession();
       resetTranscript();
       hideOverlay();
@@ -292,6 +313,7 @@ async function finishRecordingFlow() {
 
     if (!pasteResult.ok) {
       console.error("[Paste] failed", pasteResult.message);
+      logError("paste failed", { message: pasteResult.message });
       await cleanupSession();
       hideOverlay();
       setState("idle");
@@ -302,6 +324,7 @@ async function finishRecordingFlow() {
     hideOverlay();
     setState("idle");
   } catch (error) {
+    logError("finish recording flow failed", { message: error.message || String(error) });
     expectingSessionClose = false;
     sendOverlayMessage("hint", {
       level: "error",
@@ -315,8 +338,11 @@ async function finishRecordingFlow() {
 
 async function cancelRecordingFlow() {
   if (appState !== "recording" && appState !== "finishing" && appState !== "connecting") {
+    logInfo("cancel ignored", { appState });
     return;
   }
+
+  logInfo("cancel recording flow", { appState });
 
   sendOverlayMessage("recording:stop");
   expectingSessionClose = true;
@@ -331,10 +357,12 @@ function handleHotkeyToggle() {
   const now = Date.now();
 
   if (now - lastHotkeyAt < DEBOUNCE_MS) {
+    logInfo("hotkey ignored by debounce");
     return;
   }
 
   lastHotkeyAt = now;
+  logInfo("hotkey pressed", { appState, hotkey: getHotkey() });
 
   if (appState === "idle") {
     startRecordingFlow();
@@ -347,20 +375,111 @@ function handleHotkeyToggle() {
 }
 
 function registerShortcuts() {
-  const mainRegistered = globalShortcut.register(HOTKEY, handleHotkeyToggle);
+  const hotkey = getHotkey();
+  const mainRegistered = globalShortcut.register(hotkey, handleHotkeyToggle);
+  logInfo("register main hotkey", { hotkey, registered: mainRegistered });
 
   if (!mainRegistered) {
-    throw new Error(`无法注册全局热键 ${HOTKEY}`);
+    logError("register main hotkey failed", { hotkey });
+    throw new Error(`无法注册全局热键 ${hotkey}`);
   }
 }
 
+function reloadRuntimeConfig() {
+  currentConfig = loadConfig();
+}
+
+function getTrayIconPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "trayTemplate.png");
+  }
+
+  return path.join(__dirname, "..", "build", "trayTemplate.png");
+}
+
+function createTrayImage() {
+  const iconPath = getTrayIconPath();
+  if (!fs.existsSync(iconPath)) {
+    return nativeImage.createEmpty();
+  }
+
+  const image = nativeImage.createFromPath(iconPath);
+  if (image.isEmpty()) {
+    return nativeImage.createEmpty();
+  }
+  image.setTemplateImage(true);
+  return image;
+}
+
+function showSettingsWindow() {
+  if (!settingsWindow || settingsWindow.isDestroyed()) {
+    settingsWindow = createSettingsWindow();
+    settingsWindow.on("close", (event) => {
+      if (isQuitting) {
+        return;
+      }
+      event.preventDefault();
+      settingsWindow.hide();
+    });
+  }
+
+  settingsWindow.show();
+  settingsWindow.focus();
+}
+
+function buildTrayMenu() {
+  return Menu.buildFromTemplate([
+    {
+      label: "打开配置",
+      click: () => showSettingsWindow(),
+    },
+    {
+      label: "检测麦克风权限",
+      click: async () => {
+        const status = systemPreferences.getMediaAccessStatus("microphone");
+        logInfo("tray microphone status", { status });
+        showSettingsWindow();
+        settingsWindow?.webContents.send("settings:event", {
+          type: "microphone-status",
+          payload: { status },
+        });
+      },
+    },
+    { type: "separator" },
+    {
+      label: "退出",
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+}
+
+function createTray() {
+  const image = createTrayImage();
+  tray = new Tray(image);
+  tray.setToolTip("VoicePaste");
+  tray.setContextMenu(buildTrayMenu());
+  tray.on("click", () => {
+    showSettingsWindow();
+  });
+}
+
 app.whenReady().then(() => {
+  logInfo("app ready", {
+    hotkey: getHotkey(),
+    logPath: resolveLogPath(),
+    configPath: CONFIG_PATH,
+  });
+  reloadRuntimeConfig();
   overlayWindow = createOverlayWindow();
   overlayWindow.on("closed", () => {
     overlayWindow = null;
   });
 
+  createTray();
   registerShortcuts();
+  showSettingsWindow();
 
   ipcMain.handle("asr:audio-chunk", (_event, base64Chunk) => {
     receivedAudioChunkCount += 1;
@@ -380,11 +499,86 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("app:get-config", () => ({
-    hotkey: HOTKEY,
+    hotkey: getHotkey(),
   }));
+
+  ipcMain.handle("settings:get-data", async () => {
+    const microphoneStatus = process.platform === "darwin"
+      ? systemPreferences.getMediaAccessStatus("microphone")
+      : "granted";
+
+    return {
+      configPath: CONFIG_PATH,
+      configText: readConfigFile(),
+      runtime: {
+        hotkey: getHotkey(),
+        microphoneStatus,
+      },
+    };
+  });
+
+  ipcMain.handle("settings:save-config", async (_event, payload) => {
+    const previousHotkey = getHotkey();
+    saveConfigText(String(payload?.configText || ""));
+    reloadRuntimeConfig();
+
+    if (previousHotkey !== getHotkey()) {
+      globalShortcut.unregister(previousHotkey);
+      registerShortcuts();
+    }
+
+    logInfo("settings saved", {
+      hotkey: getHotkey(),
+    });
+
+    return {
+      ok: true,
+      configText: readConfigFile(),
+      runtime: {
+        hotkey: getHotkey(),
+      },
+    };
+  });
+
+  ipcMain.handle("settings:get-microphone-status", async () => {
+    const status = process.platform === "darwin"
+      ? systemPreferences.getMediaAccessStatus("microphone")
+      : "granted";
+
+    logInfo("settings microphone status", { status });
+    return { status };
+  });
+
+  ipcMain.handle("settings:request-microphone-access", async () => {
+    if (process.platform !== "darwin") {
+      return { status: "granted", granted: true };
+    }
+
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.show();
+      settingsWindow.focus();
+    }
+
+    app.focus({ steal: true });
+    const currentStatus = systemPreferences.getMediaAccessStatus("microphone");
+    if (currentStatus === "granted") {
+      return { status: "granted", granted: true };
+    }
+
+    if (currentStatus === "not-determined") {
+      const granted = await systemPreferences.askForMediaAccess("microphone");
+      const status = systemPreferences.getMediaAccessStatus("microphone");
+      logInfo("settings microphone requested", { granted, status });
+      return { status, granted };
+    }
+
+    logInfo("settings microphone request skipped", { status: currentStatus });
+    return { status: currentStatus, granted: false };
+  });
 
   ipcMain.on("renderer:diagnostic", (_event, payload) => {
     console.log("[Renderer]", payload);
+    logInfo("renderer diagnostic", payload);
   });
 
   ipcMain.on("renderer:audio-stopped", () => {
@@ -404,9 +598,11 @@ app.whenReady().then(() => {
   });
 
   app.on("activate", () => {
+    logInfo("app activate");
     if (!overlayWindow) {
       overlayWindow = createOverlayWindow();
     }
+    showSettingsWindow();
   });
 });
 
@@ -414,6 +610,21 @@ app.on("window-all-closed", (event) => {
   event.preventDefault();
 });
 
+process.on("uncaughtException", (error) => {
+  logError("uncaught exception", { message: error.message || String(error) });
+});
+
+process.on("unhandledRejection", (error) => {
+  logError("unhandled rejection", {
+    message: error?.message || String(error),
+  });
+});
+
+app.on("before-quit", () => {
+  isQuitting = true;
+});
+
 app.on("will-quit", () => {
+  logInfo("app will quit");
   globalShortcut.unregisterAll();
 });

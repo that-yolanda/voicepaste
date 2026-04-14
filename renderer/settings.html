@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VoicePaste 配置</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">VoicePaste</p>
+          <h1>配置与权限</h1>
+          <p class="subtle">应用启动后默认打开这里。修改 `config.yaml` 后保存即可生效。</p>
+        </div>
+        <div class="hero-actions">
+          <button id="refreshBtn" class="secondary">重新读取</button>
+          <button id="saveBtn" class="primary">保存配置</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>麦克风</h2>
+            <p class="subtle" id="micStatusText">检测中</p>
+          </div>
+          <div class="row">
+            <button id="checkMicBtn" class="secondary">检测权限</button>
+            <button id="requestMicBtn" class="primary">请求权限</button>
+          </div>
+        </div>
+        <div class="chips">
+          <span class="chip" id="hotkeyChip">热键: -</span>
+          <span class="chip" id="configPathChip">配置文件: -</span>
+        </div>
+        <p class="note">
+          如果状态是 `denied`，先关闭应用，再到系统设置里开启麦克风，然后重新打开应用。
+        </p>
+      </section>
+
+      <section class="panel editor-panel">
+        <div class="panel-head">
+          <div>
+            <h2>config.yaml</h2>
+            <p class="subtle">直接编辑配置原文，注释会保留。</p>
+          </div>
+          <span class="status" id="saveStatus">未保存</span>
+        </div>
+        <textarea id="configEditor" spellcheck="false"></textarea>
+      </section>
+    </main>
+
+    <script src="./settings.js"></script>
+  </body>
+</html>
