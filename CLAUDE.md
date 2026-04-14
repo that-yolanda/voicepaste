@@ -56,7 +56,6 @@ Contains hotkey, ASR WebSocket URL, resource ID, language settings, hotwords, an
 
 - Pure CommonJS (`require`/`module.exports`), no ES modules or TypeScript
 - No bundler — renderer files are loaded directly by Electron
-- `@xmov/doubao-asr` is a dependency but the actual ASR implementation is custom in `asrService.js`
 - Uses `ws` package for WebSocket in main process (Node.js side)
 - Mac-only: paste via AppleScript, mic permissions via `systemPreferences`
 - Binary protocol in `asrService.js`: protocol byte `0x11`, message types `0x01` (full request), `0x02` (audio-only), `0x09` (server ack), `0x0f` (error)

@@ -106,7 +106,6 @@ function parseServerResponse(buffer) {
     try {
       payload = zlib.gunzipSync(payload);
     } catch {
-      // Some server frames are not gzip-compressed even when the header suggests it.
       payload = buffer.subarray(offset, offset + payloadSize);
     }
   }
@@ -137,48 +136,48 @@ function parseServerResponse(buffer) {
   };
 }
 
-function createInitRequest(sampleRate, options = {}) {
-  const audio = {
-    format: options.audioFormat || "pcm",
-    codec: options.audioCodec || "raw",
-    rate: sampleRate,
-    bits: options.audioBits || 16,
-    channel: options.audioChannel || 1,
-  };
+/**
+ * 从 config.yaml 的 audio + request 配置直接构建 API 请求体。
+ * 字段名与官方文档一一对应，config.yaml 中有什么就发什么。
+ */
+function buildApiRequestBody(audioConfig, requestConfig) {
+  // audio 部分：过滤空值
+  const audio = {};
+  for (const [key, value] of Object.entries(audioConfig)) {
+    if (value !== "" && value !== undefined && value !== null) {
+      audio[key] = value;
+    }
+  }
+  if (!audio.format) audio.format = "pcm";
 
-  if (options.language) {
-    audio.language = options.language;
+  // request 部分：过滤空值，处理 corpus 和 context_hotwords
+  const request = {};
+  const contextHotwords = requestConfig.context_hotwords;
+
+  for (const [key, value] of Object.entries(requestConfig)) {
+    if (key === "corpus" || key === "context_hotwords") continue;
+    if (value === "" || value === undefined || value === null) continue;
+    request[key] = value;
   }
 
-  const request = {
-    model_name: options.modelName || "bigmodel",
-    model_version: options.modelVersion || "400",
-    operation: options.operation || "submit",
-    sequence: options.sequence ?? 0,
-    enable_itn: options.enableItn !== false,
-    enable_punc: options.enablePunc !== false,
-    enable_ddc: options.enableDdc !== false,
-    show_utterances: options.showUtterances !== false,
-    result_type: options.resultType || "full",
-    end_window_size: options.endWindowSize || 800,
-    force_to_speech_time: options.forceToSpeechTime || 1000,
-  };
+  if (!request.model_name) request.model_name = "bigmodel";
 
-  if (options.enableNonstream) {
-    request.enable_nonstream = true;
+  // corpus 部分
+  const corpus = {};
+  const rawCorpus = requestConfig.corpus || {};
+  for (const [key, value] of Object.entries(rawCorpus)) {
+    if (key === "context_hotwords") continue; // 单独处理，不发送原数组
+    if (value === "" || value === undefined || value === null) continue;
+    corpus[key] = value;
   }
 
-  if (options.boostingTableId) {
-    request.corpus = {
-      boosting_table_id: options.boostingTableId,
-    };
+  // context_hotwords → corpus.context (JSON string)
+  if (contextHotwords?.length) {
+    corpus.context = JSON.stringify({ hotwords: contextHotwords });
   }
 
-  if (options.contextHotwords?.length) {
-    request.corpus = request.corpus || {};
-    request.corpus.context = JSON.stringify({
-      hotwords: options.contextHotwords,
-    });
+  if (Object.keys(corpus).length > 0) {
+    request.corpus = corpus;
   }
 
   return {
@@ -242,54 +241,33 @@ function isIgnorableRawText(text, connectId) {
 }
 
 function createAsrSession({
-  url,
-  resourceId,
-  appId,
-  accessToken,
-  language,
-  sampleRate = 16000,
-  audioFormat,
-  audioCodec,
-  audioBits,
-  audioChannel,
-  modelName,
-  modelVersion,
-  operation,
-  sequence,
-  enableItn,
-  enablePunc,
-  enableNonstream,
-  enableDdc,
-  showUtterances,
-  resultType,
-  endWindowSize,
-  forceToSpeechTime,
-  boostingTableId,
-  contextHotwords,
+  connection,
+  audio: audioConfig,
+  request: requestConfig,
   onOpen,
   onPartial,
   onFinal,
   onError,
   onClose,
 }) {
-  if (!url) {
-    throw new Error("缺少 ASR_WS_URL");
+  if (!connection?.url) {
+    throw new Error("缺少 connection.url");
   }
 
-  if (!resourceId) {
-    throw new Error("缺少 ASR_RESOURCE_ID");
+  if (!connection?.resource_id) {
+    throw new Error("缺少 connection.resource_id");
   }
 
-  if (!appId) {
-    throw new Error("缺少 VOLCENGINE_APP_ID");
+  if (!connection?.app_id) {
+    throw new Error("缺少 connection.app_id");
   }
 
-  if (!accessToken) {
-    throw new Error("缺少 VOLCENGINE_ACCESS_TOKEN");
+  if (!connection?.access_token) {
+    throw new Error("缺少 connection.access_token");
   }
 
   const connectId = crypto.randomUUID();
-  const wsUrl = new URL(url);
+  const wsUrl = new URL(connection.url);
   wsUrl.searchParams.set("request_id", connectId);
 
   let isReady = false;
@@ -302,13 +280,11 @@ function createAsrSession({
   let pendingCommitReject = null;
   let audioChunkCount = 0;
 
-  const parsedContextHotwords = Array.isArray(contextHotwords) ? contextHotwords : [];
-
   const socket = new WebSocket(wsUrl, {
     headers: {
-      "X-Api-App-Key": appId,
-      "X-Api-Access-Key": accessToken,
-      "X-Api-Resource-Id": resourceId,
+      "X-Api-App-Key": connection.app_id,
+      "X-Api-Access-Key": connection.access_token,
+      "X-Api-Resource-Id": connection.resource_id,
       "X-Api-Connect-Id": connectId,
     },
   });
@@ -387,41 +363,15 @@ function createAsrSession({
 
   socket.on("open", () => {
     try {
-      console.log("[ASR] init options", {
-        language: language || "",
-        sampleRate,
-        modelName: modelName || "bigmodel",
-        modelVersion: modelVersion || "400",
-        enableNonstream: Boolean(enableNonstream),
-        enableDdc: enableDdc !== false,
-        boostingTableId: boostingTableId || "",
-        contextHotwords: parsedContextHotwords.map((item) => item.word),
+      const requestBody = buildApiRequestBody(audioConfig, requestConfig);
+      console.log("[ASR] init request", {
+        url: connection.url,
+        resource_id: connection.resource_id,
+        model_name: requestConfig.model_name || "bigmodel",
+        enable_ddc: requestConfig.enable_ddc,
+        enable_nonstream: requestConfig.enable_nonstream,
       });
-      socket.send(
-        encodeFullClientRequest(
-          createInitRequest(sampleRate, {
-            language,
-            audioFormat,
-            audioCodec,
-            audioBits,
-            audioChannel,
-            modelName,
-            modelVersion,
-            operation,
-            sequence,
-            enableItn,
-            enablePunc,
-            enableNonstream,
-            enableDdc,
-            showUtterances,
-            resultType,
-            endWindowSize,
-            forceToSpeechTime,
-            boostingTableId,
-            contextHotwords: parsedContextHotwords,
-          }),
-        ),
-      );
+      socket.send(encodeFullClientRequest(requestBody));
       isReady = true;
       onOpen?.();
     } catch (error) {

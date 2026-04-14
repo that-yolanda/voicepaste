@@ -1,101 +1,87 @@
 app:
-  # 全局开始/结束录音热键
   hotkey: F13
 
-asr:
-  # 豆包大模型流式识别 WebSocket 地址
-  ws_url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
+connection:
+  url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
+  app_id: ""
+  access_token: ""
+  secret_key: ""
+  resource_id: ""
 
-  # 资源 ID，需与控制台开通的服务一致
-  resource_id: volc.seedasr.sauc.duration
+audio:
+  format: pcm          # pcm / wav / ogg / mp3
+  codec: raw            # raw / opus，ogg 时必须 opus
+  rate: 16000           # 采样率，仅支持 16000
+  bits: 16              # 采样位深，仅支持 16
+  channel: 1            # 1=单声道，2=立体声
 
-  # 是否开启二遍识别。开=true 通常整体更准，但可能改变专有名词最终结果。
-  enable_nonstream: false
-
-  # 是否开启语义顺滑。开=true 文本更像自然书面语，但可能改写部分口语表达。
-  enable_ddc: true
-
-  # 热词表 ID。用于增强专有名词命中率。
-  boosting_table_id: ba2441a3-91b8-4d8e-9514-c3ad18abad34
-
-  # 高优先级直传热词。优先级高于热词表。
-  context_hotwords:
-    - word: Claude Code
-      weight: 12
-    - word: Claude
-      weight: 12
-    - word: Claudecode
-      weight: 12
-    - word: claude code
-      weight: 12
-    - word: claude
-      weight: 12
-    - word: codex
-      weight: 10
-    - word: OpenAI
-      weight: 10
-    - word: openai
-      weight: 10
-    - word: ChatGPT
-      weight: 10
-    - word: chatgpt
-      weight: 10
-    - word: GLM
-      weight: 9
-    - word: glm
-      weight: 9
-    - word: cronjob
-      weight: 8
-    - word: hermes
-      weight: 8
-    - word: openclaw
-      weight: 8
-    - word: obsidian
-      weight: 8
-    - word: schema
-      weight: 8
-    - word: cwd
-      weight: 8
-    - word: skill
-      weight: 8
-    - word: agent
-      weight: 8
-
-  # 下面这些是高级参数。
-  # 当前项目一般不需要改，只有调识别效果或排查协议问题时再打开。
-  #
-  # 固定语种。留空表示自动判断；如果主要是纯中文场景，可改成 zh-CN。
-  # language: ""
-  #
-  # 采样率与音频格式。当前录音链路默认就是 16k PCM raw 16bit 单声道。
-  # sample_rate: 16000
-  # audio_format: pcm
-  # audio_codec: raw
-  # audio_bits: 16
-  # audio_channel: 1
-  #
-  # 模型与协议参数。通常保持默认即可。
-  # model_name: bigmodel
-  # model_version: "400"
-  # operation: submit
-  # sequence: 0
-  #
-  # 文本后处理参数。
-  # enable_itn: true        # 数字、日期等格式化
-  # enable_punc: true       # 自动标点
-  # show_utterances: true   # 返回分句信息，供白字/灰字展示
-  # result_type: full       # 返回全量文本
-  #
-  # 断句与收尾参数。想调“结束等待时机”再改这里。
-  # end_window_size: 800
-  # force_to_speech_time: 1000
-
-auth:
-  # 控制台应用 ID
-  app_id: "5820286475"
-
-  # 访问令牌
-  access_token: "wayNEcG_RnkZ7FtpdxzLoHborgdGLebE"
-
-  # 目前主流程未使用 secret_key，先保留在配置里
-  secret_key: "uStVjj3L2gVuqvFRT_0oG8T9HnoME1dM"
+request:
+  model_name: bigmodel  # 固定 bigmodel
+  model_version: "400"
+  operation: submit
+  sequence: 0
+  enable_itn: true          # 文本规范化：数字日期自动格式化
+  enable_punc: true         # 自动标点
+  enable_ddc: true          # 语义顺滑：去除停顿词、语气词、重复词
+  enable_nonstream: false   # 二遍识别：实时返回+非流式重识别提升准确率，仅 bigmodel_async 支持
+  show_utterances: true     # 输出分句信息（start_time / end_time / definite）
+  result_type: full         # full=全量返回，single=增量返回
+  end_window_size: 1000      # 静音判停阈值(ms)，最小200，超时输出 definite 分句
+  force_to_speech_time: 1000 # 音频时长阈值(ms)，配合 end_window_size，低于此值不判停
+  enable_speaker_info: false # 说话人聚类分离，需配合 ssd_version=200
+  ssd_version: ""           # 设 "200" 启用大模型 SSD
+  output_zh_variant: ""     # 繁体输出：traditional / tw / hk，留空不转换
+  show_speech_rate: false   # 分句携带语速 (token/s)，启用后自动开启 VAD 分句
+  show_volume: false        # 分句携带音量 (dB)，启用后自动开启 VAD 分句
+  enable_lid: false         # 语种检测：中英/上海话/闽南语/川/陕/粤语
+  enable_accelerate_text: false   # 首字返回加速，会降低首字准确率
+  accelerate_score: 0       # 首字加速率 [0-20]，配合 enable_accelerate_text，越大越快
+  sensitive_words_filter: "" # 敏感词过滤，JSON 字符串格式
+  corpus:
+    boosting_table_id: ba2441a3-91b8-4d8e-9514-c3ad18abad34  # 热词表 ID（自学习平台）
+    boosting_table_name: ""    # 热词表名称
+    correct_table_id: ""       # 替换词表 ID（自学习平台）
+    correct_table_name: ""     # 替换词表名称
+    context_hotwords:          # 热词直传，优先级高于热词表
+      - word: Claude Code
+        weight: 12
+      - word: Claude
+        weight: 12
+      - word: Claudecode
+        weight: 12
+      - word: claude code
+        weight: 12
+      - word: claude
+        weight: 12
+      - word: codex
+        weight: 10
+      - word: OpenAI
+        weight: 10
+      - word: openai
+        weight: 10
+      - word: ChatGPT
+        weight: 10
+      - word: chatgpt
+        weight: 10
+      - word: GLM
+        weight: 9
+      - word: glm
+        weight: 9
+      - word: cronjob
+        weight: 8
+      - word: hermes
+        weight: 8
+      - word: openclaw
+        weight: 8
+      - word: obsidian
+        weight: 8
+      - word: schema
+        weight: 8
+      - word: cwd
+        weight: 8
+      - word: skill
+        weight: 8
+      - word: agent
+        weight: 8
+      - word: AGENTS.md
+        weight: 8

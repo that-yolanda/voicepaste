@@ -58,41 +58,53 @@ function parseContextHotwords(value) {
     .filter(Boolean);
 }
 
+/**
+ * loadConfig() 返回与 config.yaml / 官方 API 文档完全一致的字段名（snake_case）。
+ * 新增 API 参数只需在 config.yaml 中添加，loadConfig 会自动透传。
+ */
 function loadConfig() {
-  const config = parseConfigFile();
+  const raw = parseConfigFile();
 
   return {
     app: {
-      hotkey: config.app?.hotkey || "F13",
+      ...(raw.app || {}),
+      hotkey: raw.app?.hotkey || "F13",
     },
-    asr: {
-      wsUrl: config.asr?.ws_url || "",
-      resourceId: config.asr?.resource_id || "",
-      language: config.asr?.language || "",
-      sampleRate: Number(config.asr?.sample_rate || 16000),
-      audioFormat: config.asr?.audio_format || "pcm",
-      audioCodec: config.asr?.audio_codec || "raw",
-      audioBits: Number(config.asr?.audio_bits || 16),
-      audioChannel: Number(config.asr?.audio_channel || 1),
-      modelName: config.asr?.model_name || "bigmodel",
-      modelVersion: String(config.asr?.model_version || "400"),
-      operation: config.asr?.operation || "submit",
-      sequence: Number(config.asr?.sequence ?? 0),
-      enableItn: config.asr?.enable_itn !== false,
-      enablePunc: config.asr?.enable_punc !== false,
-      enableNonstream: Boolean(config.asr?.enable_nonstream),
-      enableDdc: config.asr?.enable_ddc !== false,
-      showUtterances: config.asr?.show_utterances !== false,
-      resultType: config.asr?.result_type || "full",
-      endWindowSize: Number(config.asr?.end_window_size || 800),
-      forceToSpeechTime: Number(config.asr?.force_to_speech_time || 1000),
-      boostingTableId: config.asr?.boosting_table_id || "",
-      contextHotwords: parseContextHotwords(config.asr?.context_hotwords),
+    connection: {
+      ...(raw.connection || {}),
+      url: raw.connection?.url || "",
+      app_id: String(raw.connection?.app_id || ""),
+      access_token: raw.connection?.access_token || "",
+      resource_id: raw.connection?.resource_id || "",
     },
-    auth: {
-      appId: String(config.auth?.app_id || ""),
-      accessToken: config.auth?.access_token || "",
-      secretKey: config.auth?.secret_key || "",
+    audio: {
+      ...(raw.audio || {}),
+      format: raw.audio?.format || "pcm",
+      rate: Number(raw.audio?.rate || 16000),
+      bits: Number(raw.audio?.bits || 16),
+      channel: Number(raw.audio?.channel || 1),
+    },
+    request: {
+      ...(raw.request || {}),
+      // 需要类型转换的已知字段默认值
+      model_name: raw.request?.model_name || "bigmodel",
+      model_version: String(raw.request?.model_version || "400"),
+      operation: raw.request?.operation || "submit",
+      sequence: Number(raw.request?.sequence ?? 0),
+      enable_itn: raw.request?.enable_itn !== false,
+      enable_punc: raw.request?.enable_punc !== false,
+      enable_ddc: raw.request?.enable_ddc !== false,
+      show_utterances: raw.request?.show_utterances !== false,
+      result_type: raw.request?.result_type || "full",
+      end_window_size: Number(raw.request?.end_window_size || 800),
+      force_to_speech_time: Number(raw.request?.force_to_speech_time || 1000),
+      accelerate_score: Number(raw.request?.accelerate_score || 0),
+      vad_segment_duration: Number(raw.request?.vad_segment_duration || 3000),
+      // corpus 单独处理（context_hotwords 需要解析）
+      corpus: {
+        ...(raw.request?.corpus || {}),
+      },
+      context_hotwords: parseContextHotwords(raw.request?.corpus?.context_hotwords),
     },
   };
 }

@@ -2,7 +2,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { app, Menu, Tray, nativeImage, globalShortcut, ipcMain, systemPreferences } = require("electron");
 const { createOverlayWindow, createSettingsWindow, positionOverlayWindow, getOverlayBounds } = require("./windowManager");
-const { CONFIG_PATH, loadConfig, readConfigFile, saveConfigText } = require("./config");
+const { CONFIG_PATH, loadConfig, readConfigFile, saveConfigText, getEditableConfig, saveConfig } = require("./config");
 const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
 const { logInfo, logError, resolveLogPath } = require("./logger");
@@ -176,30 +176,9 @@ async function startRecordingFlow() {
     suppressCloseError = false;
     expectingSessionClose = false;
     asrSession = createAsrSession({
-      url: currentConfig.asr.wsUrl,
-      resourceId: currentConfig.asr.resourceId,
-      appId: currentConfig.auth.appId,
-      accessToken: currentConfig.auth.accessToken,
-      language: currentConfig.asr.language,
-      sampleRate: currentConfig.asr.sampleRate,
-      audioFormat: currentConfig.asr.audioFormat,
-      audioCodec: currentConfig.asr.audioCodec,
-      audioBits: currentConfig.asr.audioBits,
-      audioChannel: currentConfig.asr.audioChannel,
-      modelName: currentConfig.asr.modelName,
-      modelVersion: currentConfig.asr.modelVersion,
-      operation: currentConfig.asr.operation,
-      sequence: currentConfig.asr.sequence,
-      enableItn: currentConfig.asr.enableItn,
-      enablePunc: currentConfig.asr.enablePunc,
-      enableNonstream: currentConfig.asr.enableNonstream,
-      enableDdc: currentConfig.asr.enableDdc,
-      showUtterances: currentConfig.asr.showUtterances,
-      resultType: currentConfig.asr.resultType,
-      endWindowSize: currentConfig.asr.endWindowSize,
-      forceToSpeechTime: currentConfig.asr.forceToSpeechTime,
-      boostingTableId: currentConfig.asr.boostingTableId,
-      contextHotwords: currentConfig.asr.contextHotwords,
+      connection: currentConfig.connection,
+      audio: currentConfig.audio,
+      request: currentConfig.request,
       onOpen: () => {
         setState("recording");
         sendOverlayMessage("recording:start");
@@ -510,6 +489,7 @@ app.whenReady().then(() => {
     return {
       configPath: CONFIG_PATH,
       configText: readConfigFile(),
+      parsedConfig: getEditableConfig(),
       runtime: {
         hotkey: getHotkey(),
         microphoneStatus,
@@ -534,6 +514,28 @@ app.whenReady().then(() => {
     return {
       ok: true,
       configText: readConfigFile(),
+      runtime: {
+        hotkey: getHotkey(),
+      },
+    };
+  });
+
+  ipcMain.handle("settings:save-config-object", async (_event, configObject) => {
+    const previousHotkey = getHotkey();
+    saveConfig(configObject);
+    reloadRuntimeConfig();
+
+    if (previousHotkey !== getHotkey()) {
+      globalShortcut.unregister(previousHotkey);
+      registerShortcuts();
+    }
+
+    logInfo("settings saved (object)", { hotkey: getHotkey() });
+
+    return {
+      ok: true,
+      configText: readConfigFile(),
+      parsedConfig: getEditableConfig(),
       runtime: {
         hotkey: getHotkey(),
       },

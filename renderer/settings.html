@@ -11,48 +11,206 @@
     <link rel="stylesheet" href="./settings.css" />
   </head>
   <body>
-    <main class="page">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">VoicePaste</p>
-          <h1>配置与权限</h1>
-          <p class="subtle">应用启动后默认打开这里。修改 `config.yaml` 后保存即可生效。</p>
+    <header class="header">
+      <div class="header-brand">
+        <div class="brand-wave">
+          <span></span><span></span><span></span><span></span><span></span>
         </div>
-        <div class="hero-actions">
-          <button id="refreshBtn" class="secondary">重新读取</button>
-          <button id="saveBtn" class="primary">保存配置</button>
+        <div class="brand-text">
+          <div class="brand-name">VoicePaste</div>
+          <div class="brand-sub">语音输入配置工具</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span class="save-status" id="saveStatus">加载中</span>
+        <button class="btn btn-ghost" id="reloadBtn">重新读取</button>
+        <button class="btn btn-accent" id="saveBtn">保存配置</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- 常规 -->
+      <section class="section" style="--c: var(--accent)">
+        <div class="section-pad">
+          <h2 class="section-title">常规</h2>
+          <div class="fields">
+            <div class="field">
+              <label class="label" for="hotkey">全局热键</label>
+              <input type="text" id="hotkey" class="input" placeholder="F13" />
+            </div>
+            <div class="field">
+              <label class="label">配置文件</label>
+              <div class="static-text" id="configPath">-</div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <h2>麦克风</h2>
-            <p class="subtle" id="micStatusText">检测中</p>
+      <!-- 麦克风 -->
+      <section class="section" style="--c: var(--blue)">
+        <div class="section-pad">
+          <h2 class="section-title">麦克风</h2>
+          <div class="mic-row">
+            <div class="mic-status">
+              <span class="mic-dot" id="micDot"></span>
+              <span class="mic-label" id="micText">检测中</span>
+            </div>
+            <div class="mic-btns">
+              <button class="btn btn-ghost btn-sm" id="checkMicBtn">检测权限</button>
+              <button class="btn btn-accent btn-sm" id="requestMicBtn">请求权限</button>
+            </div>
           </div>
-          <div class="row">
-            <button id="checkMicBtn" class="secondary">检测权限</button>
-            <button id="requestMicBtn" class="primary">请求权限</button>
-          </div>
+          <p class="hint-text">状态为「已拒绝」时，需到系统设置中手动开启麦克风权限后重启应用。</p>
         </div>
-        <div class="chips">
-          <span class="chip" id="hotkeyChip">热键: -</span>
-          <span class="chip" id="configPathChip">配置文件: -</span>
-        </div>
-        <p class="note">
-          如果状态是 `denied`，先关闭应用，再到系统设置里开启麦克风，然后重新打开应用。
-        </p>
       </section>
 
-      <section class="panel editor-panel">
-        <div class="panel-head">
-          <div>
-            <h2>config.yaml</h2>
-            <p class="subtle">直接编辑配置原文，注释会保留。</p>
+      <!-- 识别服务 -->
+      <section class="section" style="--c: var(--purple)">
+        <div class="section-pad">
+          <h2 class="section-title">识别服务</h2>
+          <div class="fields">
+            <div class="field">
+              <label class="label" for="wsUrl">WebSocket 地址</label>
+              <input type="text" id="wsUrl" class="input mono" />
+            </div>
+            <div class="field">
+              <label class="label" for="resourceId">资源 ID</label>
+              <input type="text" id="resourceId" class="input mono" />
+            </div>
+            <div class="field">
+              <label class="label" for="language">语言</label>
+              <input type="text" id="language" class="input" placeholder="留空则自动检测" />
+            </div>
           </div>
-          <span class="status" id="saveStatus">未保存</span>
         </div>
-        <textarea id="configEditor" spellcheck="false"></textarea>
+      </section>
+
+      <!-- 识别选项 -->
+      <section class="section" style="--c: var(--accent)">
+        <div class="section-pad">
+          <h2 class="section-title">识别选项</h2>
+          <div class="toggle-grid">
+            <label class="toggle">
+              <input type="checkbox" id="enableDdc" checked />
+              <span class="track"></span>
+              <div class="toggle-info">
+                <span class="toggle-name">语义顺滑</span>
+                <span class="toggle-desc">让文本更像自然书面语</span>
+              </div>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="enableNonstream" />
+              <span class="track"></span>
+              <div class="toggle-info">
+                <span class="toggle-name">二遍识别</span>
+                <span class="toggle-desc">整体更准确，但可能改变专有名词</span>
+              </div>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="enableItn" checked />
+              <span class="track"></span>
+              <div class="toggle-info">
+                <span class="toggle-name">数字格式化</span>
+                <span class="toggle-desc">数字、日期等自动格式化</span>
+              </div>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="enablePunc" checked />
+              <span class="track"></span>
+              <div class="toggle-info">
+                <span class="toggle-name">自动标点</span>
+                <span class="toggle-desc">自动添加标点符号</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 热词管理 -->
+      <section class="section collapsible" style="--c: var(--amber)">
+        <button class="collapse-toggle" aria-expanded="false">
+          <h2 class="section-title">热词管理</h2>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="collapse-body">
+          <div class="collapse-inner">
+            <div class="fields">
+              <div class="field">
+                <label class="label" for="boostingTableId">热词表 ID</label>
+                <input type="text" id="boostingTableId" class="input mono" />
+              </div>
+              <div class="field">
+                <label class="label">高优先级热词</label>
+                <div class="tag-list" id="hotwordTags"></div>
+                <div class="tag-add">
+                  <input type="text" id="newHotword" class="input input-sm" placeholder="新热词" />
+                  <input type="number" id="newWeight" class="input input-sm input-num" value="8" min="1" max="20" />
+                  <button type="button" class="btn btn-ghost btn-sm" id="addHotwordBtn">添加</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 认证信息 -->
+      <section class="section collapsible" style="--c: var(--coral)">
+        <button class="collapse-toggle" aria-expanded="false">
+          <h2 class="section-title">认证信息</h2>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="collapse-body">
+          <div class="collapse-inner">
+            <div class="fields">
+              <div class="field">
+                <label class="label" for="appId">App ID</label>
+                <input type="text" id="appId" class="input mono" />
+              </div>
+              <div class="field">
+                <label class="label" for="accessToken">Access Token</label>
+                <div class="input-group">
+                  <input type="password" id="accessToken" class="input mono" />
+                  <button type="button" class="input-addon" id="toggleAccessToken">显示</button>
+                </div>
+              </div>
+              <div class="field">
+                <label class="label" for="secretKey">Secret Key</label>
+                <div class="input-group">
+                  <input type="password" id="secretKey" class="input mono" />
+                  <button type="button" class="input-addon" id="toggleSecretKey">显示</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- YAML 源码 -->
+      <section class="section collapsible" style="--c: var(--text-muted)">
+        <button class="collapse-toggle" aria-expanded="false">
+          <h2 class="section-title">YAML 源码</h2>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="collapse-body">
+          <div class="collapse-inner">
+            <p class="yaml-hint">
+              <span>通过表单保存时注释会丢失。如需保留注释请在此编辑后点击「保存 YAML」。</span>
+              <a class="yaml-hint" href="https://www.volcengine.com/docs/6561/1354869?lang=zh" target="_blank">参考官方文档</a>
+            </p>
+            
+            <textarea id="yamlEditor" class="yaml-editor" spellcheck="false"></textarea>
+            <div class="yaml-actions">
+              <button class="btn btn-ghost btn-sm" id="reloadYamlBtn">重新读取</button>
+              <button class="btn btn-accent btn-sm" id="saveYamlBtn">保存 YAML</button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
 

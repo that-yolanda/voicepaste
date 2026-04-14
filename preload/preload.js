@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   saveConfig(payload) {
     return ipcRenderer.invoke("settings:save-config", payload);
   },
+  saveConfigObject(config) {
+    return ipcRenderer.invoke("settings:save-config-object", config);
+  },
   getMicrophoneStatus() {
     return ipcRenderer.invoke("settings:get-microphone-status");
   },
