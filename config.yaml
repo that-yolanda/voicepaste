@@ -38,7 +38,7 @@ request:
   accelerate_score: 0       # 首字加速率 [0-20]，配合 enable_accelerate_text，越大越快
   sensitive_words_filter: "" # 敏感词过滤，JSON 字符串格式
   corpus:
-    boosting_table_id: ba2441a3-91b8-4d8e-9514-c3ad18abad34  # 热词表 ID（自学习平台）
+    boosting_table_id: ""  # 热词表 ID（自学习平台）
     boosting_table_name: ""    # 热词表名称
     correct_table_id: ""       # 替换词表 ID（自学习平台）
     correct_table_name: ""     # 替换词表名称

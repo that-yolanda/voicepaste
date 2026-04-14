@@ -1,7 +1,26 @@
 {
   "name": "voicepaste",
-  "version": "1.0.0",
-  "description": "Electron floating voice input tool triggered by F13.",
+  "version": "1.0.1",
+  "description": "macOS voice-to-text input tool — press a hotkey, speak, auto-paste.",
+  "author": "that-yolanda",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/that-yolanda/voicepaste.git"
+  },
+  "homepage": "https://github.com/that-yolanda/voicepaste#readme",
+  "bugs": {
+    "url": "https://github.com/that-yolanda/voicepaste/issues"
+  },
+  "keywords": [
+    "electron",
+    "voice",
+    "speech-to-text",
+    "asr",
+    "macos",
+    "doubao",
+    "volcengine"
+  ],
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
