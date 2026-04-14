@@ -23,6 +23,22 @@
 
 ![VoicePaste Settings](docs/config.png)
 
+---
+
+## Getting API Credentials
+
+- Log in to the [Volcengine Console](https://console.volcengine.com/speech/app), create an app, and select "Doubao Streaming ASR Model 2.0 (Hourly)"
+
+![Create App](docs/api-step1.png)
+
+- Open the model, select your app, and enable the model package. You'll see the APP ID, Access Token, and Secret Key below
+
+![Get Credentials](docs/api-step2.png)
+
+- Enter the credentials in the settings page and click Save
+
+![Save Config](docs/api-step3.png)
+
 ## Installation
 
 ### Build from Source

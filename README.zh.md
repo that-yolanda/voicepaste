@@ -23,6 +23,24 @@
 
 ![VoicePaste Settings](docs/config.png)
 
+
+---
+
+## API 获取
+- 登录[火山引擎控制台](https://console.volcengine.com/speech/app)，创建一个应用，选择"豆包流式语音识别模型2.0 小时版"
+
+![Create App](docs/api-step1.png)
+
+- 进入对应模型，选择创建的 app，并开通模型包，下方可以看到 APP ID，	Access Token，Secret Key
+
+![Get Credentials](docs/api-step2.png)
+
+- 填入配置页面填入凭证，点击保存即可
+
+![Save Config](docs/api-step3.png)
+
+
+
 ## 安装
 
 ### 从源码构建
