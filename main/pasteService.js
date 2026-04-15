@@ -22,7 +22,7 @@ function runAppleScript(scriptLines) {
   });
 }
 
-async function pasteTextToFocusedElement(text) {
+async function pasteTextToFocusedElement(text, keepClipboard = true) {
   const previousText = clipboard.readText();
 
   clipboard.writeText(text);
@@ -36,13 +36,18 @@ async function pasteTextToFocusedElement(text) {
 
     // Give the target app a brief moment to read the clipboard before restoring it.
     await sleep(120);
-    clipboard.writeText(previousText);
+
+    if (!keepClipboard) {
+      clipboard.writeText(previousText);
+    }
 
     return {
       ok: true,
     };
   } catch (error) {
-    clipboard.writeText(previousText);
+    if (!keepClipboard) {
+      clipboard.writeText(previousText);
+    }
     return {
       ok: false,
       message: error.message || "模拟粘贴失败，请检查辅助功能权限或当前焦点位置",

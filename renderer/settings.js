@@ -23,6 +23,7 @@
     enableNonstream: $("enableNonstream"),
     enableItn: $("enableItn"),
     enablePunc: $("enablePunc"),
+    keepClipboard: $("keepClipboard"),
     boostingTableId: $("boostingTableId"),
     hotwordTags: $("hotwordTags"),
     newHotword: $("newHotword"),
@@ -87,6 +88,7 @@
     el.enableNonstream.checked = Boolean(c.request?.enable_nonstream);
     el.enableItn.checked = c.request?.enable_itn !== false;
     el.enablePunc.checked = c.request?.enable_punc !== false;
+    el.keepClipboard.checked = c.app?.keep_clipboard !== false;
 
     el.boostingTableId.value = c.request?.corpus?.boosting_table_id || "";
 
@@ -110,6 +112,7 @@
 
     config.app = config.app || {};
     config.app.hotkey = el.hotkey.value.trim() || "F13";
+    config.app.keep_clipboard = el.keepClipboard.checked;
 
     config.connection = config.connection || {};
     config.connection.url = el.wsUrl.value.trim();
@@ -274,6 +277,7 @@
     el.enableNonstream,
     el.enableItn,
     el.enablePunc,
+    el.keepClipboard,
   ];
   toggles.forEach((toggle) => {
     if (toggle) toggle.addEventListener("change", markDirty);

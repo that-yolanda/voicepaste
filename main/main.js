@@ -288,7 +288,8 @@ async function finishRecordingFlow() {
       return;
     }
 
-    const pasteResult = await pasteTextToFocusedElement(textToPaste);
+    const keepClipboard = currentConfig.app?.keep_clipboard !== false;
+    const pasteResult = await pasteTextToFocusedElement(textToPaste, keepClipboard);
 
     if (!pasteResult.ok) {
       console.error("[Paste] failed", pasteResult.message);
