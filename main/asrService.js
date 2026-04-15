@@ -534,6 +534,8 @@ function createAsrSession({
 
     if (isCommitted && (code === 1000 || reason === "finish last sequence")) {
       resolvePendingCommitWithServerFinal();
+    } else if (isCommitted) {
+      resolvePendingCommitWithServerFinal();
     }
 
     if (!isCommitted && code !== 1000) {
@@ -589,6 +591,25 @@ function createAsrSession({
       return new Promise((resolve, reject) => {
         pendingCommitResolve = resolve;
         pendingCommitReject = reject;
+
+        const timeout = setTimeout(() => {
+          if (pendingCommitResolve) {
+            console.warn("[ASR] commitAndAwaitFinal timed out");
+            resolvePendingCommitWithServerFinal();
+          }
+        }, 5000);
+
+        const originalResolve = pendingCommitResolve;
+        const originalReject = pendingCommitReject;
+
+        pendingCommitResolve = (value) => {
+          clearTimeout(timeout);
+          originalResolve(value);
+        };
+        pendingCommitReject = (err) => {
+          clearTimeout(timeout);
+          originalReject(err);
+        };
 
         socket.send(encodeAudioOnlyRequest(Buffer.alloc(0), true));
       });

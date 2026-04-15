@@ -1,6 +1,6 @@
 # VoicePaste
 
-> macOS 语音输入工具 — 按下快捷键，说话，松开即粘贴。
+> macOS & Windows 语音输入工具 — 按下快捷键，说话，松开即粘贴。
 
 **[English](README.md)**
 
@@ -133,7 +133,7 @@ voicepaste/
 - **Electron** — 桌面应用框架
 - **字节跳动豆包 ASR** — 流式语音识别（WebSocket + 二进制协议）
 - **gzip 压缩** — 自定义二进制帧格式（4字节头 + 压缩 JSON）
-- **AppleScript** — 模拟 Cmd+V 粘贴
+- **AppleScript / PowerShell** — 模拟 Cmd+V / Ctrl+V 粘贴
 
 ## 工作流程
 
@@ -147,7 +147,7 @@ voicepaste/
 
 ## 系统要求
 
-- macOS 12+
+- macOS 12+ / Windows 10+
 - Node.js 18+
 - pnpm
 
@@ -159,6 +159,9 @@ pnpm dev
 
 # 打包 macOS 应用
 pnpm pack
+
+# 打包 Windows 安装包
+pnpm pack:win
 ```
 
 ## License

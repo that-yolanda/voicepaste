@@ -1,6 +1,6 @@
 # VoicePaste
 
-> A macOS voice input tool — press a hotkey, speak, auto-paste.
+> A voice input tool for macOS & Windows — press a hotkey, speak, auto-paste.
 
 **[中文](README.zh.md)**
 
@@ -126,7 +126,7 @@ voicepaste/
 - **Electron** — Desktop app framework
 - **ByteDance Doubao ASR** — Streaming speech recognition (WebSocket + binary protocol)
 - **gzip** — Custom binary framing (4-byte header + compressed JSON)
-- **AppleScript** — Simulates Cmd+V paste
+- **AppleScript / PowerShell** — Simulates Cmd+V / Ctrl+V paste
 
 ## How It Works
 
@@ -139,7 +139,7 @@ Press again → Wait for final result → Copy to clipboard → AppleScript Cmd+
 
 ## System Requirements
 
-- macOS 12+
+- macOS 12+ / Windows 10+
 - Node.js 18+
 - pnpm
 
@@ -151,6 +151,9 @@ pnpm dev
 
 # Package macOS app
 pnpm pack
+
+# Package Windows installer
+pnpm pack:win
 ```
 
 ## License

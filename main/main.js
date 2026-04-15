@@ -171,9 +171,9 @@ async function startRecordingFlow() {
   }
 
   resetTranscript();
+  sendOverlayMessage("reset");
   showOverlay();
   setState("connecting");
-  sendOverlayMessage("reset");
   receivedAudioChunkCount = 0;
 
   try {
