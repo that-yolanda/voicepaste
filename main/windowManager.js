@@ -1,5 +1,5 @@
 const path = require("node:path");
-const { BrowserWindow, screen } = require("electron");
+const { BrowserWindow, screen, shell } = require("electron");
 
 const OVERLAY_WIDTH = 720;
 const OVERLAY_HEIGHT = 300;
@@ -68,7 +68,7 @@ function createSettingsWindow() {
     show: false,
     frame: true,
     title: "VoicePaste 配置",
-    backgroundColor: "#0f1115",
+    backgroundColor: "#141413",
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "preload.js"),
@@ -79,6 +79,12 @@ function createSettingsWindow() {
   });
 
   win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
+
   return win;
 }
 

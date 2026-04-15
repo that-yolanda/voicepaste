@@ -73,6 +73,30 @@ Edit `config.yaml` in the project root and fill in your credentials:
 
 Get your credentials from [Volcengine Voice Service](https://www.volcengine.com/product/voice-service).
 
+## FAQ
+
+### VoicePaste doesn't work on macOS?
+
+VoicePaste requires **Microphone** and **Accessibility** permissions to function properly.
+
+**Microphone Permission**
+
+1. Settings page → System Permissions → Click "Request Permission"
+2. System Settings → Privacy & Security → Microphone, make sure VoicePaste is authorized
+3. If previously denied, reset via Terminal and re-authorize:
+```bash
+tccutil reset Microphone com.yolanda.voicepaste
+```
+
+**Accessibility Permission**
+
+1. System Settings → Privacy & Security → Accessibility, make sure VoicePaste is authorized
+2. If reinstalled after deletion, you need to add it again
+
+### Hotwords work during streaming but are wrong in the final result with non-stream enabled?
+
+The non-stream (second-pass) recognition mode does not currently support hotword libraries or injected hotwords — only correction tables are supported. Create a [correction table](https://console.volcengine.com/speech/correctword) in the Volcengine console and replace `boosting_table_id` with `correct_table_id` in your config.
+
 ## Project Structure
 
 ```
@@ -132,3 +156,25 @@ pnpm pack
 ## License
 
 [MIT](LICENSE)
+
+---
+
+## Changelog
+
+### v1.1.0 (2025-04)
+
+- **UI Redesign** — New Claude-inspired interface with warm minimalism color palette
+- **Overlay Optimization** — Eliminated text flickering during speech, smooth horizontal expansion animation
+- **Cross-platform Fonts** — Unified sans-serif font stack for macOS / Windows
+- **External Links** — Settings page links now open in the system default browser
+- **Settings Page** — Added GitHub repo link, unified terra cotta section theme
+- **FAQ** — Added common questions (macOS permissions, non-stream hotwords, Windows compatibility)
+
+### v1.0.0 (2025-03)
+
+- Initial release
+- Global hotkey voice input
+- ByteDance Doubao streaming ASR
+- Auto-paste into the focused input field
+- Floating overlay with real-time transcription
+- Hotword support

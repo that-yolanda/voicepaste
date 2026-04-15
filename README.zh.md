@@ -80,6 +80,30 @@ pnpm pack
 
 凭证申请请参考 [字节跳动火山引擎语音服务](https://www.volcengine.com/product/voice-service)。
 
+## FAQ
+
+### macOS 上无法使用？
+
+VoicePaste 需要 **麦克风权限** 和 **辅助功能权限** 才能正常工作。
+
+**麦克风权限**
+
+1. 配置页面 → 系统权限 → 点击「请求权限」
+2. 系统设置 → 隐私与安全 → 麦克风，确保 VoicePaste 已被授权
+3. 若之前拒绝过，可通过终端重置权限后重新授权：
+```bash
+tccutil reset Microphone com.yolanda.voicepaste
+```
+
+**辅助功能权限**
+
+1. 系统设置 → 隐私与安全 → 辅助功能，确保 VoicePaste 已被授权
+2. 若删除后重新安装，需重新添加
+
+### 二遍识别开启后，热词在流式识别中正确但最终结果错误？
+
+二遍识别（non-stream）模式下，官方当前不支持热词库和注入热词，仅支持替换库。建议在[火山引擎控制台](https://console.volcengine.com/speech/correctword)创建替换库，并在配置中将 `boosting_table_id` 替换为 `correct_table_id`。
+
 ## 项目结构
 
 ```
@@ -120,6 +144,7 @@ voicepaste/
 再次按下 → 等待最终结果 → 写入剪贴板 → AppleScript 粘贴
 ```
 
+
 ## 系统要求
 
 - macOS 12+
@@ -139,3 +164,25 @@ pnpm pack
 ## License
 
 [MIT](LICENSE)
+
+---
+
+## 更新说明
+
+### v1.1.0 (2025-04)
+
+- **UI 重构** — 全新 Claude 风格界面设计，温暖极简主义配色方案
+- **Overlay 优化** — 消除语音输入过程中文字闪烁，平滑横向扩展动画
+- **跨平台字体** — 统一 macOS / Windows 无衬线字体，中英文一致体验
+- **外部链接** — 设置页面链接改为系统默认浏览器打开
+- **设置页面** — 新增 GitHub 仓库入口，section 统一赤陶色主题
+- **FAQ** — 新增常见问题（macOS 权限、二遍识别热词、Windows 兼容性）
+
+### v1.0.0 (2025-03)
+
+- 初始版本发布
+- 全局快捷键语音输入
+- 字节跳动豆包 ASR 流式识别
+- 自动粘贴到当前输入框
+- 浮动窗口实时显示识别进度
+- 热词支持
