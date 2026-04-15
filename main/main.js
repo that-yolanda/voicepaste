@@ -273,11 +273,17 @@ async function finishRecordingFlow() {
     const finalText = await asrSession.commitAndAwaitFinal();
     expectingSessionClose = true;
     const transcriptSnapshot = asrSession.getTranscriptSnapshot();
-    const textToPaste = (
+    let textToPaste = (
       transcriptSnapshot.latestResultText ||
       finalText ||
       transcriptSnapshot.finalText
     ).trim();
+
+    if (currentConfig.request.remove_trailing_period !== false) {
+      if (textToPaste.endsWith("。") || textToPaste.endsWith(".")) {
+        textToPaste = textToPaste.slice(0, -1);
+      }
+    }
 
     if (!textToPaste) {
       logInfo("finish completed with empty transcript");
