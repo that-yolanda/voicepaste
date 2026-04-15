@@ -512,9 +512,11 @@ function showSettingsWindow() {
       }
       event.preventDefault();
       settingsWindow.hide();
+      if (app.dock) app.dock.hide();
     });
   }
 
+  if (app.dock) app.dock.show();
   settingsWindow.show();
   settingsWindow.focus();
 }
