@@ -170,8 +170,16 @@
               <input type="checkbox" id="removeTrailingPeriod" checked />
               <span class="track"></span>
               <div class="toggle-info">
-                <span class="toggle-name">删除句尾句号</span>
+                <span class="toggle-name">删除句尾句号 <span class="label-path">app.remove_trailing_period</span></span>
                 <span class="toggle-desc">自动删除最终输出文本末尾的句号</span>
+              </div>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="keepClipboard" checked />
+              <span class="track"></span>
+              <div class="toggle-info">
+                <span class="toggle-name">保留结果在剪贴板 <span class="label-path">app.keep_clipboard</span></span>
+                <span class="toggle-desc">勾选后将不再恢复原有剪贴板，方便在出现未知错误或无输入框时手动粘贴识别结果</span>
               </div>
             </label>
           </div>
