@@ -41,6 +41,7 @@ html {
 body {
   height: 100%;
   overflow: hidden;
+  display: flex;
   background:
     radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.016) 1px, transparent 0) 0 0 / 30px 30px,
     radial-gradient(ellipse at 0% 0%, rgba(0, 232, 150, 0.025), transparent 55%),
@@ -69,6 +70,52 @@ body {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-bottom: 1px solid var(--border);
+}
+
+/* ===== SIDEBAR ===== */
+
+.sidebar {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  bottom: 0;
+  width: 152px;
+  background: rgba(7, 10, 15, 0.55);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.sidebar-inner {
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-link:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.sidebar-link.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(0, 232, 150, 0.04);
 }
 
 .header-brand {
@@ -108,6 +155,14 @@ body {
   letter-spacing: -0.02em;
   line-height: 1.2;
   color: var(--text);
+}
+
+.brand-version {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  vertical-align: middle;
+  margin-left: 4px;
 }
 
 .brand-sub {
@@ -213,7 +268,7 @@ body {
 .content {
   position: fixed;
   top: 56px;
-  left: 0;
+  left: 152px;
   right: 0;
   bottom: 0;
   overflow-y: auto;
@@ -343,9 +398,98 @@ body {
   padding: 0 10px;
 }
 
-.input-num {
-  width: 56px;
-  text-align: center;
+/* Hotkey recorder */
+
+.hotkey-recorder {
+  display: flex;
+}
+
+.hotkey-recorder .input {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  cursor: default;
+}
+
+.hotkey-record-btn {
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  padding: 0 14px;
+  height: 38px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.hotkey-record-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.hotkey-recorder.is-recording .input {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+  color: var(--accent);
+}
+
+.hotkey-recorder.is-recording .hotkey-record-btn {
+  background: var(--accent);
+  color: #041f12;
+  border-color: var(--accent);
+}
+
+.hotkey-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  min-height: 0;
+  margin-top: 0;
+  transition: all 0.2s;
+  line-height: 1.5;
+}
+
+.hotkey-hint:not(:empty) {
+  margin-top: 4px;
+}
+
+.hotkey-hint[data-level="error"] {
+  color: var(--error);
+}
+
+.field-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.label-path {
+  font-family: "SF Mono", "Menlo", monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.section-link {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--purple);
+  text-decoration: none;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  transition: opacity 0.15s;
+}
+
+.section-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 /* Input with addon (password toggle) */
@@ -384,7 +528,7 @@ body {
 
 /* ===== MICROPHONE ===== */
 
-.mic-row {
+.perm-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -392,13 +536,19 @@ body {
   margin-top: 14px;
 }
 
-.mic-status {
+.perm-info {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.mic-dot {
+.perm-label {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.perm-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -407,27 +557,27 @@ body {
   flex-shrink: 0;
 }
 
-.mic-dot[data-status="granted"] {
+.perm-dot[data-status="granted"] {
   background: var(--success);
   box-shadow: 0 0 8px rgba(0, 232, 150, 0.35);
 }
 
-.mic-dot[data-status="denied"] {
+.perm-dot[data-status="denied"] {
   background: var(--error);
   box-shadow: 0 0 8px rgba(232, 112, 106, 0.35);
 }
 
-.mic-dot[data-status="not-determined"] {
+.perm-dot[data-status="not-determined"] {
   background: var(--warning);
   box-shadow: 0 0 8px rgba(232, 180, 74, 0.35);
 }
 
-.mic-label {
-  font-size: 13px;
-  color: var(--text);
+.perm-status {
+  font-size: 12px;
+  color: var(--text-dim);
 }
 
-.mic-btns {
+.perm-btns {
   display: flex;
   gap: 8px;
 }
@@ -577,8 +727,8 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 10px;
   min-height: 28px;
+  margin-top: 8px;
 }
 
 .tag {
@@ -591,8 +741,17 @@ body {
   border-radius: 6px;
   font-size: 12.5px;
   color: var(--text);
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
   animation: tag-in 0.2s ease-out;
+}
+
+.tag.is-dimmed {
+  opacity: 0.25;
+}
+
+.tag.is-match {
+  background: rgba(0, 232, 150, 0.22);
+  border-color: var(--accent);
 }
 
 @keyframes tag-in {
@@ -613,16 +772,6 @@ body {
 
 .tag-word {
   font-weight: 500;
-}
-
-.tag-weight {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(0, 232, 150, 0.14);
-  color: var(--accent);
-  font-weight: 700;
-  font-family: "SF Mono", "Menlo", monospace;
 }
 
 .tag-remove {
@@ -654,6 +803,22 @@ body {
   gap: 6px;
 }
 
+.hotword-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  min-height: 0;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.hotword-hint:not(:empty) {
+  margin-top: 4px;
+}
+
+.hotword-hint[data-level="warn"] {
+  color: var(--warning);
+}
+
 /* ===== YAML EDITOR ===== */
 
 .yaml-hint {
@@ -665,7 +830,7 @@ body {
 
 .yaml-editor {
   width: 100%;
-  min-height: 280px;
+  min-height: 480px;
   resize: vertical;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--border);
@@ -690,6 +855,14 @@ body {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 10px;
+}
+
+/* ===== FIELD SEPARATOR ===== */
+
+.field-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
 }
 
 /* ===== FOCUS VISIBLE ===== */

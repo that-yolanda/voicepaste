@@ -1,7 +1,7 @@
 {
   "name": "voicepaste",
-  "version": "1.0.1",
-  "description": "macOS voice-to-text input tool — press a hotkey, speak, auto-paste.",
+  "version": "1.0.2",
+  "description": "Voice-to-text input tool — press a hotkey, speak, auto-paste.",
   "author": "that-yolanda",
   "license": "MIT",
   "repository": {
@@ -18,6 +18,7 @@
     "speech-to-text",
     "asr",
     "macos",
+    "windows",
     "doubao",
     "volcengine"
   ],
@@ -26,6 +27,7 @@
     "start": "electron .",
     "dev": "electron .",
     "pack": "electron-builder --mac zip",
+    "pack:win": "electron-builder --win nsis",
     "postinstall": "node node_modules/.pnpm/electron@41.2.0/node_modules/electron/install.js"
   },
   "devDependencies": {
@@ -47,8 +49,12 @@
     ],
     "extraResources": [
       {
-        "from": "config.yaml",
+        "from": "config.yaml.example",
         "to": "config.yaml"
+      },
+      {
+        "from": "config.yaml.example",
+        "to": "config.yaml.example"
       },
       {
         "from": "build/icon.png",
@@ -61,13 +67,16 @@
       {
         "from": "build/trayTemplate@2x.png",
         "to": "trayTemplate@2x.png"
+      },
+      {
+        "from": "build/trayIcon.ico",
+        "to": "trayIcon.ico"
       }
     ],
     "mac": {
       "icon": "build/icon.png",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "用于录制你的语音并将识别结果粘贴到当前输入位置。",
-        "NSAppleEventsUsageDescription": "用于将识别结果自动粘贴到当前聚焦的输入位置。"
+        "NSMicrophoneUsageDescription": "用于录制你的语音并将识别结果粘贴到当前输入位置。"
       },
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
@@ -77,6 +86,20 @@
         "zip"
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VoicePaste"
     }
   }
 }

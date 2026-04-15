@@ -10,11 +10,8 @@ const state = {
   processorNode: null,
   pendingSamples: [],
   layoutWidth: 0,
-  layoutHeight: 0,
   layoutWrap: false,
-  layoutLines: 1,
   renderedWidth: 0,
-  renderedHeight: 0,
 };
 
 const elements = {
@@ -28,22 +25,22 @@ const elements = {
 
 let resizeRaf = 0;
 
-function measureWrappedHeight(text, width) {
-  elements.measureText.style.width = `${width}px`;
-  elements.measureText.textContent = text;
-  const height = Math.ceil(elements.measureText.getBoundingClientRect().height);
-  elements.measureText.style.width = "";
-  return height;
-}
-
 function scheduleResize() {
   if (resizeRaf) {
     cancelAnimationFrame(resizeRaf);
   }
 
   resizeRaf = requestAnimationFrame(() => {
-    const visibleText =
-      `${state.finalText}${state.partialText}`.trim() || "开始说话";
+    const hasText = Boolean(state.finalText || state.partialText);
+
+    if (!hasText) {
+      elements.card.style.width = "";
+      state.renderedWidth = 0;
+      elements.card.dataset.wrap = "single";
+      return;
+    }
+
+    const visibleText = `${state.finalText}${state.partialText}`.trim();
     elements.measureText.textContent = visibleText;
 
     const measuredWidth = Math.ceil(elements.measureText.getBoundingClientRect().width);
@@ -54,42 +51,26 @@ function scheduleResize() {
     const contentWidth = shouldWrap
       ? 420
       : Math.min(singleLineLimit, Math.max(120, measuredWidth + 20));
-    const wrappedHeight = shouldWrap ? measureWrappedHeight(visibleText, contentWidth) : 22;
-    const lineHeight = 22;
-    const measuredLines = shouldWrap ? Math.max(2, Math.ceil(wrappedHeight / lineHeight)) : 1;
     const nextWidth = shouldWrap ? 560 : chromeWidth + contentWidth;
-    const nextHeight = shouldWrap ? Math.max(82, 34 + measuredLines * lineHeight) : 68;
 
     if (!lockLayout) {
       state.layoutWidth = nextWidth;
-      state.layoutHeight = nextHeight;
       state.layoutWrap = shouldWrap;
-      state.layoutLines = measuredLines;
     } else {
       state.layoutWidth = Math.max(state.layoutWidth || 0, nextWidth);
       state.layoutWrap = state.layoutWrap || shouldWrap;
-      state.layoutLines = Math.max(state.layoutLines || 1, measuredLines);
-      state.layoutHeight = state.layoutWrap
-        ? Math.max(82, 34 + state.layoutLines * lineHeight)
-        : Math.max(state.layoutHeight || 0, nextHeight);
     }
 
     elements.card.dataset.wrap = state.layoutWrap ? "multi" : "single";
 
     const width = state.layoutWidth || nextWidth;
-    const height = state.layoutHeight || nextHeight;
 
-    if (width === state.renderedWidth && height === state.renderedHeight) {
+    if (width === state.renderedWidth) {
       return;
     }
 
     state.renderedWidth = width;
-    state.renderedHeight = height;
-
-    window.voiceOverlay.resizeOverlay({
-      width,
-      height,
-    });
+    elements.card.style.width = `${width}px`;
   });
 }
 
@@ -108,11 +89,9 @@ function resetState() {
   state.hintText = "";
   state.hintLevel = "info";
   state.layoutWidth = 0;
-  state.layoutHeight = 0;
   state.layoutWrap = false;
-  state.layoutLines = 1;
   state.renderedWidth = 0;
-  state.renderedHeight = 0;
+  elements.card.style.width = "";
   updateView();
 }
 

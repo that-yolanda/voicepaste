@@ -18,6 +18,9 @@ function writeUInt32BE(num) {
 }
 
 function encodeFullClientRequest(payloadObject) {
+
+  console.debug(payloadObject);
+
   const payload = Buffer.from(JSON.stringify(payloadObject), "utf8");
   const gzipped = zlib.gzipSync(payload);
   const header = buildHeader(0x01, 0x00, 0x01, 0x01);
@@ -184,7 +187,7 @@ function buildApiRequestBody(audioConfig, requestConfig) {
     user: {
       uid: `voice_overlay_${Date.now()}`,
       did: "electron_desktop",
-      platform: "macOS/Electron",
+      platform: `${process.platform === "win32" ? "Windows" : "macOS"}/Electron`,
       sdk_version: "0.1.0",
       app_version: "0.1.0",
     },
@@ -245,8 +248,7 @@ function createAsrSession({
   audio: audioConfig,
   request: requestConfig,
   onOpen,
-  onPartial,
-  onFinal,
+  onTranscript,
   onError,
   onClose,
 }) {
@@ -308,6 +310,46 @@ function createAsrSession({
     pendingCommitReject = null;
   }
 
+  function isPunctuation(ch) {
+    return /[，。！？、；：…—·\s,.!?;:'"()（）【】《》]/.test(ch);
+  }
+
+  /**
+   * punctuation-agnostic prefix matching:
+   * 逐字符比较 baseText 与 resultText，跳过标点差异，
+   * 从 resultText 中去掉与 baseText 等价的前缀部分，返回剩余的 partial 文本。
+   * 如果 baseText 不是 resultText 的前缀（有效字符完全不匹配），返回 null。
+   */
+  function splitPartialText(baseText, resultText) {
+    if (!baseText || !resultText) return resultText || "";
+
+    let fi = 0;
+    let ri = 0;
+
+    while (fi < baseText.length && ri < resultText.length) {
+      while (fi < baseText.length && isPunctuation(baseText[fi])) fi++;
+      while (ri < resultText.length && isPunctuation(resultText[ri])) ri++;
+
+      if (fi >= baseText.length || ri >= resultText.length) break;
+
+      if (baseText[fi] === resultText[ri]) {
+        fi++;
+        ri++;
+      } else {
+        break;
+      }
+    }
+
+    while (fi < baseText.length && isPunctuation(baseText[fi])) fi++;
+    while (ri < resultText.length && isPunctuation(resultText[ri])) ri++;
+
+    if (fi >= baseText.length) {
+      return resultText.slice(ri);
+    }
+
+    return null;
+  }
+
   function handleRecognitionPayload(payload) {
     const utterances = payload?.result?.utterances;
     const resultText = (payload?.result?.text || "").trim();
@@ -318,11 +360,16 @@ function createAsrSession({
         if (isCommitted) {
           finalText = resultText;
           partialText = "";
-          onFinal?.(finalText);
+          onTranscript?.(finalText, partialText);
         } else {
-          finalText = "";
-          partialText = resultText;
-          onPartial?.(partialText);
+          const partial = splitPartialText(finalText, resultText);
+          if (partial !== null) {
+            partialText = partial;
+          } else {
+            finalText = "";
+            partialText = resultText;
+          }
+          onTranscript?.(finalText, partialText);
         }
       }
       return;
@@ -339,10 +386,18 @@ function createAsrSession({
     }
 
     if (resultText) {
-      if (completedText && resultText.startsWith(completedText)) {
-        partialText = resultText.slice(completedText.length).trimStart();
-      } else if (completedText === resultText) {
-        partialText = "";
+      const baseText = completedText || finalText;
+      const partial = splitPartialText(baseText, resultText);
+      if (partial !== null) {
+        partialText = partial;
+      } else if (completedText) {
+        // nostream 重写文本导致 result.text 与 definite utterances 不一致，
+        // 用 non-definite utterance 文本作为 partial
+        partialText = utterances
+          .filter((item) => !item?.definite)
+          .map((item) => item?.text || "")
+          .join("")
+          .trim();
       } else {
         partialText = resultText;
       }
@@ -353,12 +408,11 @@ function createAsrSession({
 
     if (isCommitted || !partialText) {
       partialText = "";
-      onFinal?.(resultText || finalText);
+      onTranscript?.(resultText || finalText, "");
       return;
     }
 
-    onFinal?.(finalText);
-    onPartial?.(partialText);
+    onTranscript?.(finalText, partialText);
   }
 
   socket.on("open", () => {
@@ -418,10 +472,10 @@ function createAsrSession({
         if (rawText) {
           if (isCommitted) {
             finalText = rawText;
-            onFinal?.(finalText);
+            onTranscript?.(finalText, "");
           } else {
             partialText = rawText;
-            onPartial?.(partialText);
+            onTranscript?.(finalText, partialText);
           }
         }
         return;

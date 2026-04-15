@@ -36,26 +36,27 @@ function parseConfigFile() {
 }
 
 function parseContextHotwords(value) {
-  if (!Array.isArray(value)) {
-    return [];
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((word) => ({ word }));
   }
 
-  return value
-    .map((item) => {
-      if (typeof item === "string") {
-        return { word: item };
-      }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return { word: item.trim() };
+        if (item && typeof item.word === "string" && item.word.trim()) {
+          return { word: item.word.trim() };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }
 
-      if (item && typeof item.word === "string" && item.word.trim()) {
-        return {
-          word: item.word.trim(),
-          ...(typeof item.weight === "number" ? { weight: item.weight } : {}),
-        };
-      }
-
-      return null;
-    })
-    .filter(Boolean);
+  return [];
 }
 
 /**
@@ -126,11 +127,34 @@ function saveConfigText(text) {
   fs.writeFileSync(CONFIG_PATH, text, "utf8");
 }
 
+function getConfigExamplePath() {
+  if (process.resourcesPath) {
+    const p = path.join(process.resourcesPath, "config.yaml.example");
+    if (fs.existsSync(p)) return p;
+  }
+
+  const local = path.join(__dirname, "..", "config.yaml.example");
+  if (fs.existsSync(local)) return local;
+
+  return null;
+}
+
+function resetConfigToDefault() {
+  const examplePath = getConfigExamplePath();
+  if (!examplePath) {
+    throw new Error("未找到 config.yaml.example");
+  }
+
+  const content = fs.readFileSync(examplePath, "utf8");
+  fs.writeFileSync(CONFIG_PATH, content, "utf8");
+}
+
 module.exports = {
   CONFIG_PATH,
   getEditableConfig,
   loadConfig,
   readConfigFile,
+  resetConfigToDefault,
   saveConfig,
   saveConfigText,
 };

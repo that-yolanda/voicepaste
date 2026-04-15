@@ -22,17 +22,41 @@ function runAppleScript(scriptLines) {
   });
 }
 
+function runPowerShell(scriptContent) {
+  return new Promise((resolve, reject) => {
+    execFile("powershell", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      scriptContent,
+    ], (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr?.trim() || error.message));
+        return;
+      }
+
+      resolve(stdout.trim());
+    });
+  });
+}
+
 async function pasteTextToFocusedElement(text) {
   const previousText = clipboard.readText();
 
   clipboard.writeText(text);
 
   try {
-    await runAppleScript([
-      'tell application "System Events"',
-      'keystroke "v" using command down',
-      "end tell",
-    ]);
+    if (process.platform === "darwin") {
+      await runAppleScript([
+        'tell application "System Events"',
+        'keystroke "v" using command down',
+        "end tell",
+      ]);
+    } else {
+      await runPowerShell(
+        "(New-Object -ComObject WScript.Shell).SendKeys('^v')"
+      );
+    }
 
     // Give the target app a brief moment to read the clipboard before restoring it.
     await sleep(120);
@@ -43,9 +67,19 @@ async function pasteTextToFocusedElement(text) {
     };
   } catch (error) {
     clipboard.writeText(previousText);
+
+    const msg = error.message || "";
+    const isAccessibilityError = process.platform === "darwin" && (
+      /not allowed/i.test(msg) ||
+      /not authorized/i.test(msg) ||
+      /keystroke/i.test(msg) ||
+      /apple event/i.test(msg)
+    );
+
     return {
       ok: false,
-      message: error.message || "模拟粘贴失败，请检查辅助功能权限或当前焦点位置",
+      message: msg || "模拟粘贴失败，请检查当前焦点位置",
+      permissionError: isAccessibilityError ? "accessibility" : null,
     };
   }
 }

@@ -17,26 +17,36 @@
           <span></span><span></span><span></span><span></span><span></span>
         </div>
         <div class="brand-text">
-          <div class="brand-name">VoicePaste</div>
+          <div class="brand-name">VoicePaste <span class="brand-version" id="appVersion"></span></div>
           <div class="brand-sub">语音输入配置工具</div>
         </div>
       </div>
       <div class="header-actions">
         <span class="save-status" id="saveStatus">加载中</span>
-        <button class="btn btn-ghost" id="reloadBtn">重新读取</button>
+        <button class="btn btn-ghost" id="resetBtn">还原默认</button>
+        <button class="btn btn-ghost" id="reloadBtn">刷新配置</button>
         <button class="btn btn-accent" id="saveBtn">保存配置</button>
       </div>
     </header>
 
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-inner" id="sidebarNav"></div>
+    </nav>
+
     <main class="content">
       <!-- 常规 -->
-      <section class="section" style="--c: var(--accent)">
+      <section class="section" id="sectionGeneral" data-nav="常规" style="--c: var(--accent)">
         <div class="section-pad">
           <h2 class="section-title">常规</h2>
           <div class="fields">
             <div class="field">
-              <label class="label" for="hotkey">全局热键</label>
-              <input type="text" id="hotkey" class="input" placeholder="F13" />
+              <label class="label" for="hotkey">全局热键 <span class="label-path">app.hotkey</span></label>
+              <div class="hotkey-recorder" id="hotkeyRecorder">
+                <input type="text" id="hotkey" class="input" placeholder="点击「录制」设置热键" readonly />
+                <button type="button" class="btn btn-ghost btn-sm hotkey-record-btn" id="hotkeyRecordBtn">录制</button>
+              </div>
+              <div class="hotkey-hint" id="hotkeyHint"></div>
+              <div class="field-desc">按一次开始语音输入，再按一次自动粘贴到当前输入框。录音期间按 Esc 取消。</div>
             </div>
             <div class="field">
               <label class="label">配置文件</label>
@@ -46,55 +56,89 @@
         </div>
       </section>
 
-      <!-- 麦克风 -->
-      <section class="section" style="--c: var(--blue)">
+      <!-- 系统权限 -->
+      <section class="section" id="sectionPermissions" data-nav="系统权限" style="--c: var(--blue)">
         <div class="section-pad">
-          <h2 class="section-title">麦克风</h2>
-          <div class="mic-row">
-            <div class="mic-status">
-              <span class="mic-dot" id="micDot"></span>
-              <span class="mic-label" id="micText">检测中</span>
+          <h2 class="section-title">系统权限</h2>
+
+          <div class="perm-row">
+            <div class="perm-info">
+              <span class="perm-label">麦克风权限</span>
+              <span class="perm-dot" id="micDot"></span>
+              <span class="perm-status" id="micText">检测中</span>
             </div>
-            <div class="mic-btns">
+            <div class="perm-btns">
               <button class="btn btn-ghost btn-sm" id="checkMicBtn">检测权限</button>
               <button class="btn btn-accent btn-sm" id="requestMicBtn">请求权限</button>
             </div>
           </div>
-          <p class="hint-text">状态为「已拒绝」时，需到系统设置中手动开启麦克风权限后重启应用。</p>
+
+          <div class="perm-row" id="accessibilityRow">
+            <div class="perm-info">
+              <span class="perm-label">辅助功能权限</span>
+            </div>
+            <div class="perm-btns">
+              <button class="btn btn-accent btn-sm" id="openAccBtn">前往授权</button>
+            </div>
+          </div>
+
+          <p class="hint-text" id="permHint">MacOS 需要麦克风权限和辅助功能权限，可前往：系统设置 -> 隐私与隐私 -> 麦克风权限/辅助功能权限</p>
         </div>
       </section>
 
       <!-- 识别服务 -->
-      <section class="section" style="--c: var(--purple)">
+      <section class="section" id="sectionService" data-nav="识别服务" style="--c: var(--purple)">
         <div class="section-pad">
           <h2 class="section-title">识别服务</h2>
+          <a class="section-link" href="https://console.volcengine.com/speech/app" target="_blank">前往火山引擎控制台获取 API 凭据</a>
           <div class="fields">
             <div class="field">
-              <label class="label" for="wsUrl">WebSocket 地址</label>
+              <label class="label" for="wsUrl">WebSocket 地址 <span class="label-path">connection.url</span></label>
               <input type="text" id="wsUrl" class="input mono" />
             </div>
             <div class="field">
-              <label class="label" for="resourceId">资源 ID</label>
+              <label class="label" for="resourceId">资源 ID <span class="label-path">connection.resource_id</span></label>
               <input type="text" id="resourceId" class="input mono" />
             </div>
             <div class="field">
-              <label class="label" for="language">语言</label>
+              <label class="label" for="language">语言 <span class="label-path">audio.language</span></label>
               <input type="text" id="language" class="input" placeholder="留空则自动检测" />
+            </div>
+
+            <div class="field-sep"></div>
+
+            <div class="field">
+              <label class="label" for="appId">App ID <span class="label-path">connection.app_id</span></label>
+              <input type="text" id="appId" class="input mono" />
+            </div>
+            <div class="field">
+              <label class="label" for="accessToken">Access Token <span class="label-path">connection.access_token</span></label>
+              <div class="input-group">
+                <input type="password" id="accessToken" class="input mono" />
+                <button type="button" class="input-addon" id="toggleAccessToken">显示</button>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="secretKey">Secret Key <span class="label-path">connection.secret_key</span></label>
+              <div class="input-group">
+                <input type="password" id="secretKey" class="input mono" />
+                <button type="button" class="input-addon" id="toggleSecretKey">显示</button>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 识别选项 -->
-      <section class="section" style="--c: var(--accent)">
+      <!-- 高级配置 -->
+      <section class="section" id="sectionAdvanced" data-nav="高级配置" style="--c: var(--accent)">
         <div class="section-pad">
-          <h2 class="section-title">识别选项</h2>
+          <h2 class="section-title">高级配置</h2>
           <div class="toggle-grid">
             <label class="toggle">
               <input type="checkbox" id="enableDdc" checked />
               <span class="track"></span>
               <div class="toggle-info">
-                <span class="toggle-name">语义顺滑</span>
+                <span class="toggle-name">语义顺滑 <span class="label-path">request.enable_ddc</span></span>
                 <span class="toggle-desc">让文本更像自然书面语</span>
               </div>
             </label>
@@ -102,7 +146,7 @@
               <input type="checkbox" id="enableNonstream" />
               <span class="track"></span>
               <div class="toggle-info">
-                <span class="toggle-name">二遍识别</span>
+                <span class="toggle-name">二遍识别 <span class="label-path">request.enable_nonstream</span></span>
                 <span class="toggle-desc">整体更准确，但可能改变专有名词</span>
               </div>
             </label>
@@ -110,7 +154,7 @@
               <input type="checkbox" id="enableItn" checked />
               <span class="track"></span>
               <div class="toggle-info">
-                <span class="toggle-name">数字格式化</span>
+                <span class="toggle-name">数字格式化 <span class="label-path">request.enable_itn</span></span>
                 <span class="toggle-desc">数字、日期等自动格式化</span>
               </div>
             </label>
@@ -118,97 +162,45 @@
               <input type="checkbox" id="enablePunc" checked />
               <span class="track"></span>
               <div class="toggle-info">
-                <span class="toggle-name">自动标点</span>
+                <span class="toggle-name">自动标点 <span class="label-path">request.enable_punc</span></span>
                 <span class="toggle-desc">自动添加标点符号</span>
               </div>
             </label>
           </div>
-        </div>
-      </section>
 
-      <!-- 热词管理 -->
-      <section class="section collapsible" style="--c: var(--amber)">
-        <button class="collapse-toggle" aria-expanded="false">
-          <h2 class="section-title">热词管理</h2>
-          <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <div class="collapse-body">
-          <div class="collapse-inner">
-            <div class="fields">
-              <div class="field">
-                <label class="label" for="boostingTableId">热词表 ID</label>
-                <input type="text" id="boostingTableId" class="input mono" />
+          <div class="field-sep"></div>
+
+          <div class="fields" style="margin-top:0">
+            <div class="field">
+              <label class="label" for="boostingTableId">热词表 ID <span class="label-path">request.corpus.boosting_table_id</span></label>
+              <input type="text" id="boostingTableId" class="input mono" />
+            </div>
+            <div class="field">
+              <label class="label">高优先级热词 <span class="label-path">request.corpus.context_hotwords</span></label>
+              <div class="tag-add">
+                <input type="text" id="newHotword" class="input input-sm" placeholder="输入热词后回车添加" />
+                <button type="button" class="btn btn-ghost btn-sm" id="addHotwordBtn">添加</button>
               </div>
-              <div class="field">
-                <label class="label">高优先级热词</label>
-                <div class="tag-list" id="hotwordTags"></div>
-                <div class="tag-add">
-                  <input type="text" id="newHotword" class="input input-sm" placeholder="新热词" />
-                  <input type="number" id="newWeight" class="input input-sm input-num" value="8" min="1" max="20" />
-                  <button type="button" class="btn btn-ghost btn-sm" id="addHotwordBtn">添加</button>
-                </div>
-              </div>
+              <div class="hotword-hint" id="hotwordHint"></div>
+              <div class="tag-list" id="hotwordTags"></div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 认证信息 -->
-      <section class="section collapsible" style="--c: var(--coral)">
-        <button class="collapse-toggle" aria-expanded="false">
-          <h2 class="section-title">认证信息</h2>
-          <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <div class="collapse-body">
-          <div class="collapse-inner">
-            <div class="fields">
-              <div class="field">
-                <label class="label" for="appId">App ID</label>
-                <input type="text" id="appId" class="input mono" />
-              </div>
-              <div class="field">
-                <label class="label" for="accessToken">Access Token</label>
-                <div class="input-group">
-                  <input type="password" id="accessToken" class="input mono" />
-                  <button type="button" class="input-addon" id="toggleAccessToken">显示</button>
-                </div>
-              </div>
-              <div class="field">
-                <label class="label" for="secretKey">Secret Key</label>
-                <div class="input-group">
-                  <input type="password" id="secretKey" class="input mono" />
-                  <button type="button" class="input-addon" id="toggleSecretKey">显示</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <!-- 完整配置 -->
+      <section class="section" id="sectionYaml" data-nav="完整配置" style="--c: var(--text-muted)">
+        <div class="section-pad">
+          <h2 class="section-title">完整配置</h2>
+          <p class="yaml-hint" style="margin-top: 14px">
+            <span>通过表单保存时注释会丢失。如需保留注释请在此编辑后点击「保存 YAML」。</span>
+            <a href="https://www.volcengine.com/docs/6561/1354869?lang=zh" target="_blank">参考官方文档</a>
+          </p>
 
-      <!-- YAML 源码 -->
-      <section class="section collapsible" style="--c: var(--text-muted)">
-        <button class="collapse-toggle" aria-expanded="false">
-          <h2 class="section-title">YAML 源码</h2>
-          <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <div class="collapse-body">
-          <div class="collapse-inner">
-            <p class="yaml-hint">
-              <span>通过表单保存时注释会丢失。如需保留注释请在此编辑后点击「保存 YAML」。</span>
-              <a class="yaml-hint" href="https://www.volcengine.com/docs/6561/1354869?lang=zh" target="_blank">参考官方文档</a>
-            </p>
-            
-            <textarea id="yamlEditor" class="yaml-editor" spellcheck="false"></textarea>
-            <div class="yaml-actions">
-              <button class="btn btn-ghost btn-sm" id="reloadYamlBtn">重新读取</button>
-              <button class="btn btn-accent btn-sm" id="saveYamlBtn">保存 YAML</button>
-            </div>
+          <textarea id="yamlEditor" class="yaml-editor" spellcheck="false"></textarea>
+          <div class="yaml-actions">
+            <button class="btn btn-ghost btn-sm" id="reloadYamlBtn">刷新配置</button>
+            <button class="btn btn-accent btn-sm" id="saveYamlBtn">保存 YAML</button>
           </div>
         </div>
       </section>

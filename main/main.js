@@ -1,8 +1,8 @@
 const path = require("node:path");
 const fs = require("node:fs");
-const { app, Menu, Tray, nativeImage, globalShortcut, ipcMain, systemPreferences } = require("electron");
-const { createOverlayWindow, createSettingsWindow, positionOverlayWindow, getOverlayBounds } = require("./windowManager");
-const { CONFIG_PATH, loadConfig, readConfigFile, saveConfigText, getEditableConfig, saveConfig } = require("./config");
+const { app, Menu, Tray, nativeImage, globalShortcut, ipcMain, systemPreferences, dialog, shell } = require("electron");
+const { createOverlayWindow, createSettingsWindow, positionOverlayWindow } = require("./windowManager");
+const { CONFIG_PATH, loadConfig, readConfigFile, saveConfigText, getEditableConfig, saveConfig, resetConfigToDefault } = require("./config");
 const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
 const { logInfo, logError, resolveLogPath } = require("./logger");
@@ -25,6 +25,7 @@ let expectingSessionClose = false;
 let receivedAudioChunkCount = 0;
 let pendingAudioStopResolve = null;
 let isQuitting = false;
+let isRecordingHotkey = false;
 
 function getHotkey() {
   return currentConfig.app.hotkey;
@@ -159,6 +160,9 @@ async function startRecordingFlow() {
 
   logInfo("start recording flow");
 
+  // Reload config to pick up any changes made in settings since last save
+  reloadRuntimeConfig();
+
   const hasMicrophoneAccess = await ensureMicrophoneAccess();
   if (!hasMicrophoneAccess) {
     console.error("[ASR] microphone access denied");
@@ -183,14 +187,10 @@ async function startRecordingFlow() {
         setState("recording");
         sendOverlayMessage("recording:start");
       },
-      onPartial: (text) => {
-        updateTranscript({ partialText: text });
-        sendOverlayMessage("transcript", latestTranscript);
-      },
-      onFinal: (text) => {
+      onTranscript: (final, partial) => {
         updateTranscript({
-          finalText: text,
-          partialText: "",
+          finalText: final,
+          partialText: partial,
         });
         sendOverlayMessage("transcript", latestTranscript);
       },
@@ -234,18 +234,35 @@ async function startRecordingFlow() {
     });
   } catch (error) {
     logError("start recording flow failed", { message: error.message || String(error) });
-    setState("error");
-    sendOverlayMessage("hint", {
-      level: "error",
-      text: error.message,
-    });
-    await cleanupSession();
-    setTimeout(() => {
-      if (appState === "error") {
-        setState("idle");
-        hideOverlay();
-      }
-    }, 1400);
+
+    const msg = error.message || String(error);
+    const isConfigError = msg.startsWith("缺少 ") || msg.includes("config");
+
+    if (isConfigError) {
+      hideOverlay();
+      setState("idle");
+      dialog.showMessageBox({
+        type: "warning",
+        title: "配置错误",
+        message: `VoicePaste 配置不完整，无法开始录音。`,
+        detail: `${msg}\n\n请打开配置页面检查识别服务和认证信息。`,
+        buttons: ["知道了"],
+        defaultId: 0,
+      });
+    } else {
+      setState("error");
+      sendOverlayMessage("hint", {
+        level: "error",
+        text: msg,
+      });
+      await cleanupSession();
+      setTimeout(() => {
+        if (appState === "error") {
+          setState("idle");
+          hideOverlay();
+        }
+      }, 1400);
+    }
   }
 }
 
@@ -292,7 +309,25 @@ async function finishRecordingFlow() {
 
     if (!pasteResult.ok) {
       console.error("[Paste] failed", pasteResult.message);
-      logError("paste failed", { message: pasteResult.message });
+      logError("paste failed", { message: pasteResult.message, permissionError: pasteResult.permissionError });
+
+      if (pasteResult.permissionError === "accessibility") {
+        const result = await dialog.showMessageBox({
+          type: "warning",
+          title: "需要辅助功能权限",
+          message: "VoicePaste 需要辅助功能权限才能自动粘贴文本。",
+          detail: "请前往 系统设置 > 隐私与安全 > 辅助功能，将 VoicePaste 添加到允许列表。",
+          buttons: ["打开系统设置", "知道了"],
+          defaultId: 0,
+          cancelId: 1,
+        });
+        if (result.response === 0) {
+          shell.openExternal(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+          );
+        }
+      }
+
       await cleanupSession();
       hideOverlay();
       setState("idle");
@@ -368,11 +403,85 @@ function reloadRuntimeConfig() {
   currentConfig = loadConfig();
 }
 
+function inputToAccelerator(input) {
+  const codeToKey = (code) => {
+    if (!code) return null;
+    if (code.startsWith("Key")) return code.slice(3);
+    if (code.startsWith("Digit")) return code.slice(5);
+    if (/^F\d{1,2}$/.test(code)) return code;
+    const map = {
+      Space: "Space", Backspace: "Backspace", Delete: "Delete",
+      Insert: "Insert", Enter: "Return",
+      ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
+      Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+      BracketLeft: "[", BracketRight: "]", Semicolon: ";", Quote: "'",
+      Backquote: "`", Backslash: "\\", Comma: ",", Period: ".",
+      Slash: "/", Minus: "-", Equal: "=",
+    };
+    return map[code] || null;
+  };
+
+  const key = codeToKey(input.code);
+  if (!key) return null;
+
+  const parts = [];
+  if (input.control) parts.push("Control");
+  if (input.meta) parts.push("Cmd");
+  if (input.alt) parts.push("Alt");
+  if (input.shift) parts.push("Shift");
+  parts.push(key);
+  return parts.join("+");
+}
+
+function setupSettingsHotkeyRecording(win) {
+  win.webContents.on("before-input-event", (event, input) => {
+    if (!isRecordingHotkey) return;
+    if (input.type !== "keyDown") return;
+
+    event.preventDefault();
+
+    if (input.key === "Escape" && !input.control && !input.meta && !input.alt && !input.shift) {
+      isRecordingHotkey = false;
+      win.webContents.send("settings:event", { type: "hotkey-recording-cancelled" });
+      return;
+    }
+
+    const modifierKeys = ["Control", "Alt", "Shift", "Meta"];
+    if (modifierKeys.includes(input.key)) {
+      const mods = [];
+      if (input.control) mods.push("Ctrl");
+      if (input.meta) mods.push("Cmd");
+      if (input.alt) mods.push("Alt");
+      if (input.shift) mods.push("Shift");
+      win.webContents.send("settings:event", {
+        type: "hotkey-recording-modifiers",
+        payload: { display: mods.join("+") + "+" },
+      });
+      return;
+    }
+
+    const accelerator = inputToAccelerator(input);
+    if (accelerator) {
+      isRecordingHotkey = false;
+      win.webContents.send("settings:event", {
+        type: "hotkey-recording-done",
+        payload: { accelerator },
+      });
+    }
+  });
+}
+
 function getTrayIconPath() {
   if (app.isPackaged) {
+    if (process.platform === "win32") {
+      return path.join(process.resourcesPath, "trayIcon.ico");
+    }
     return path.join(process.resourcesPath, "trayTemplate.png");
   }
 
+  if (process.platform === "win32") {
+    return path.join(__dirname, "..", "build", "trayIcon.ico");
+  }
   return path.join(__dirname, "..", "build", "trayTemplate.png");
 }
 
@@ -386,13 +495,17 @@ function createTrayImage() {
   if (image.isEmpty()) {
     return nativeImage.createEmpty();
   }
-  image.setTemplateImage(true);
+
+  if (process.platform === "darwin") {
+    image.setTemplateImage(true);
+  }
   return image;
 }
 
 function showSettingsWindow() {
   if (!settingsWindow || settingsWindow.isDestroyed()) {
     settingsWindow = createSettingsWindow();
+    setupSettingsHotkeyRecording(settingsWindow);
     settingsWindow.on("close", (event) => {
       if (isQuitting) {
         return;
@@ -413,16 +526,8 @@ function buildTrayMenu() {
       click: () => showSettingsWindow(),
     },
     {
-      label: "检测麦克风权限",
-      click: async () => {
-        const status = systemPreferences.getMediaAccessStatus("microphone");
-        logInfo("tray microphone status", { status });
-        showSettingsWindow();
-        settingsWindow?.webContents.send("settings:event", {
-          type: "microphone-status",
-          payload: { status },
-        });
-      },
+      label: "系统权限",
+      click: () => showSettingsWindow(),
     },
     { type: "separator" },
     {
@@ -493,6 +598,8 @@ app.whenReady().then(() => {
       runtime: {
         hotkey: getHotkey(),
         microphoneStatus,
+        version: app.getVersion(),
+        platform: process.platform,
       },
     };
   });
@@ -542,6 +649,48 @@ app.whenReady().then(() => {
     };
   });
 
+  ipcMain.handle("settings:reset-config", async () => {
+    const previousHotkey = getHotkey();
+    resetConfigToDefault();
+    reloadRuntimeConfig();
+
+    if (previousHotkey !== getHotkey()) {
+      globalShortcut.unregister(previousHotkey);
+      registerShortcuts();
+    }
+
+    logInfo("config reset to default");
+
+    return {
+      ok: true,
+      configText: readConfigFile(),
+      parsedConfig: getEditableConfig(),
+      runtime: {
+        hotkey: getHotkey(),
+      },
+    };
+  });
+
+  ipcMain.handle("settings:open-accessibility-settings", async () => {
+    if (process.platform === "darwin") {
+      await shell.openExternal(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+      );
+    }
+  });
+
+  ipcMain.handle("settings:start-hotkey-recording", () => {
+    isRecordingHotkey = true;
+    logInfo("hotkey recording started");
+    return { ok: true };
+  });
+
+  ipcMain.handle("settings:stop-hotkey-recording", () => {
+    isRecordingHotkey = false;
+    logInfo("hotkey recording stopped");
+    return { ok: true };
+  });
+
   ipcMain.handle("settings:get-microphone-status", async () => {
     const status = process.platform === "darwin"
       ? systemPreferences.getMediaAccessStatus("microphone")
@@ -587,16 +736,6 @@ app.whenReady().then(() => {
     if (pendingAudioStopResolve) {
       pendingAudioStopResolve();
     }
-  });
-
-  ipcMain.handle("overlay:resize", (_event, size) => {
-    if (!overlayWindow || overlayWindow.isDestroyed()) {
-      return { ok: false };
-    }
-
-    const nextBounds = getOverlayBounds(size);
-    overlayWindow.setBounds(nextBounds, false);
-    return { ok: true };
   });
 
   app.on("activate", () => {

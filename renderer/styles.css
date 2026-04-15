@@ -37,7 +37,7 @@ body {
   padding: 6px;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-end;
   overflow: hidden;
 }
 
@@ -50,21 +50,13 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: fit-content;
   max-width: 100%;
   overflow: hidden;
-}
-
-.card[data-wrap="single"] {
-  min-height: 56px;
+  transition: width 0.15s ease-out, border-radius 0.2s ease-out;
 }
 
 .card[data-wrap="multi"] {
-  min-height: 68px;
   border-radius: 30px;
-  align-items: flex-start;
-  padding-top: 12px;
-  padding-bottom: 12px;
   overflow: visible;
 }
 

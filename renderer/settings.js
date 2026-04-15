@@ -8,14 +8,22 @@
 
   const el = {
     saveBtn: $("saveBtn"),
+    resetBtn: $("resetBtn"),
     reloadBtn: $("reloadBtn"),
     saveStatus: $("saveStatus"),
     hotkey: $("hotkey"),
+    hotkeyRecorder: $("hotkeyRecorder"),
+    hotkeyRecordBtn: $("hotkeyRecordBtn"),
+    hotkeyHint: $("hotkeyHint"),
+    appVersion: $("appVersion"),
     configPath: $("configPath"),
     micDot: $("micDot"),
     micText: $("micText"),
     checkMicBtn: $("checkMicBtn"),
     requestMicBtn: $("requestMicBtn"),
+    accessibilityRow: $("accessibilityRow"),
+    permHint: $("permHint"),
+    openAccBtn: $("openAccBtn"),
     wsUrl: $("wsUrl"),
     resourceId: $("resourceId"),
     language: $("language"),
@@ -25,8 +33,8 @@
     enablePunc: $("enablePunc"),
     boostingTableId: $("boostingTableId"),
     hotwordTags: $("hotwordTags"),
+    hotwordHint: $("hotwordHint"),
     newHotword: $("newHotword"),
-    newWeight: $("newWeight"),
     addHotwordBtn: $("addHotwordBtn"),
     appId: $("appId"),
     accessToken: $("accessToken"),
@@ -78,6 +86,17 @@
 
     el.hotkey.value = c.app?.hotkey || "F13";
     el.configPath.textContent = data.configPath || "-";
+    el.appVersion.textContent = "v" + (data.runtime?.version || "");
+
+    if (data.runtime?.platform !== "darwin" && el.accessibilityRow) {
+      el.accessibilityRow.style.display = "none";
+    }
+
+    if (el.permHint) {
+      el.permHint.textContent = data.runtime?.platform === "darwin"
+        ? "macOS 需要麦克风权限和辅助功能权限，可前往：系统设置 > 隐私与安全 > 麦克风 / 辅助功能"
+        : "当前系统无需额外权限配置。";
+    }
 
     el.wsUrl.value = c.connection?.url || "";
     el.resourceId.value = c.connection?.resource_id || "";
@@ -90,14 +109,16 @@
 
     el.boostingTableId.value = c.request?.corpus?.boosting_table_id || "";
 
-    hotwords = Array.isArray(c.request?.corpus?.context_hotwords)
-      ? c.request.corpus.context_hotwords
-          .map((h) => {
-            if (typeof h === "string") return { word: h, weight: 8 };
-            return { word: h.word || "", weight: h.weight || 8 };
-          })
-          .filter((h) => h.word.trim())
-      : [];
+    const raw = c.request?.corpus?.context_hotwords;
+    if (typeof raw === "string") {
+      hotwords = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    } else if (Array.isArray(raw)) {
+      hotwords = raw
+        .map((h) => (typeof h === "string" ? h.trim() : (h?.word || "").trim()))
+        .filter(Boolean);
+    } else {
+      hotwords = [];
+    }
     renderHotwords();
 
     el.appId.value = c.connection?.app_id || "";
@@ -134,10 +155,7 @@
 
     config.request.corpus = config.request.corpus || {};
     config.request.corpus.boosting_table_id = el.boostingTableId.value.trim();
-    config.request.corpus.context_hotwords = hotwords.map((h) => ({
-      word: h.word,
-      weight: h.weight,
-    }));
+    config.request.corpus.context_hotwords = hotwords.join(", ");
 
     return config;
   }
@@ -187,25 +205,38 @@
     updateMicStatus(result.status || "unknown");
   }
 
-  function renderHotwords() {
+  function renderHotwords(filter = "") {
+    const query = filter.trim().toLowerCase();
     el.hotwordTags.innerHTML = hotwords
-      .map(
-        (h, i) =>
-          `<span class="tag">` +
-          `<span class="tag-word">${escapeHtml(h.word)}</span>` +
-          `<span class="tag-weight">${h.weight}</span>` +
+      .map((word, i) => {
+        const isMatch = query && word.toLowerCase() === query;
+        const isDimmed = query && !word.toLowerCase().includes(query);
+        const cls = "tag" + (isMatch ? " is-match" : isDimmed ? " is-dimmed" : "");
+        return (
+          `<span class="${cls}">` +
+          `<span class="tag-word">${escapeHtml(word)}</span>` +
           `<button type="button" class="tag-remove" data-index="${i}" title="移除">&times;</button>` +
           `</span>`
-      )
+        );
+      })
       .join("");
+  }
+
+  function setHotwordHint(text, level) {
+    el.hotwordHint.textContent = text;
+    el.hotwordHint.dataset.level = level || "";
   }
 
   function addHotword() {
     const word = el.newHotword.value.trim();
-    const weight = Math.max(1, Math.min(20, parseInt(el.newWeight.value, 10) || 8));
     if (!word) return;
-    hotwords.push({ word, weight });
+    if (hotwords.includes(word)) {
+      setHotwordHint(`「${word}」已存在`, "warn");
+      return;
+    }
+    hotwords.push(word);
     el.newHotword.value = "";
+    setHotwordHint("", "");
     renderHotwords();
     markDirty();
   }
@@ -227,17 +258,78 @@
     }
   }
 
+  // ===== HOTKEY RECORDING =====
+
+  let isRecordingHotkey = false;
+  let hotkeyBackup = "";
+
+  function setHotkeyHint(text, level) {
+    el.hotkeyHint.textContent = text;
+    el.hotkeyHint.dataset.level = level || "";
+  }
+
+  async function startHotkeyRecording() {
+    hotkeyBackup = el.hotkey.value;
+    isRecordingHotkey = true;
+    el.hotkeyRecorder.classList.add("is-recording");
+    el.hotkey.value = "";
+    el.hotkey.placeholder = "请按键...";
+    el.hotkeyRecordBtn.textContent = "取消";
+    setHotkeyHint("按下快捷键组合（Esc 取消录制）", "");
+    await window.voiceSettings.startHotkeyRecording();
+  }
+
+  async function stopHotkeyRecording() {
+    isRecordingHotkey = false;
+    el.hotkeyRecorder.classList.remove("is-recording");
+    el.hotkey.placeholder = "点击「录制」设置热键";
+    el.hotkeyRecordBtn.textContent = "录制";
+    await window.voiceSettings.stopHotkeyRecording();
+  }
+
   // ===== EVENT LISTENERS =====
 
   el.saveBtn.addEventListener("click", saveFromForm);
+  el.resetBtn.addEventListener("click", async () => {
+    if (!confirm("确定要还原为默认配置吗？当前配置将被覆盖。")) return;
+    setSaveStatus("还原中...", "saving");
+    try {
+      await window.voiceSettings.resetConfig();
+      await loadSettings();
+    } catch (err) {
+      setSaveStatus(err.message || "还原失败", "error");
+    }
+  });
   el.reloadBtn.addEventListener("click", loadSettings);
 
   el.checkMicBtn.addEventListener("click", checkMic);
   el.requestMicBtn.addEventListener("click", requestMic);
+  el.openAccBtn.addEventListener("click", () => {
+    window.voiceSettings.openAccessibilitySettings();
+  });
+
+  el.hotkeyRecordBtn.addEventListener("click", () => {
+    if (isRecordingHotkey) {
+      el.hotkey.value = hotkeyBackup;
+      stopHotkeyRecording();
+      setHotkeyHint("", "");
+    } else {
+      startHotkeyRecording();
+    }
+  });
 
   el.addHotwordBtn.addEventListener("click", addHotword);
   el.newHotword.addEventListener("keydown", (e) => {
     if (e.key === "Enter") addHotword();
+  });
+  el.newHotword.addEventListener("input", () => {
+    const val = el.newHotword.value.trim();
+    renderHotwords(val);
+    if (val && hotwords.includes(val)) {
+      setHotwordHint(`「${val}」已存在`, "warn");
+    } else {
+      setHotwordHint("", "");
+    }
   });
   el.hotwordTags.addEventListener("click", (e) => {
     const btn = e.target.closest(".tag-remove");
@@ -256,7 +348,6 @@
 
   // Track changes on all form inputs
   const inputs = [
-    el.hotkey,
     el.wsUrl,
     el.resourceId,
     el.language,
@@ -293,10 +384,70 @@
     });
   });
 
+  // Sidebar navigation
+  const sidebarNav = $("sidebarNav");
+  const contentEl = document.querySelector(".content");
+  const sections = document.querySelectorAll(".content .section[data-nav]");
+
+  sections.forEach((section) => {
+    const label = section.dataset.nav;
+    const link = document.createElement("a");
+    link.className = "sidebar-link";
+    link.textContent = label;
+    link.href = "#" + section.id;
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    sidebarNav.appendChild(link);
+  });
+
+  const sidebarLinks = sidebarNav.querySelectorAll(".sidebar-link");
+
+  function updateActiveNav() {
+    const scrollTop = contentEl.scrollTop;
+    const offset = 80;
+    let activeIndex = 0;
+
+    sections.forEach((section, i) => {
+      const top = section.offsetTop - contentEl.offsetTop - offset;
+      if (scrollTop >= top) {
+        activeIndex = i;
+      }
+    });
+
+    sidebarLinks.forEach((link, i) => {
+      link.classList.toggle("active", i === activeIndex);
+    });
+  }
+
+  contentEl.addEventListener("scroll", updateActiveNav, { passive: true });
+  updateActiveNav();
+
   // Mic status events from main process
   window.voiceSettings.onEvent((event) => {
     if (event.type === "microphone-status") {
       updateMicStatus(event.payload?.status || "unknown");
+    }
+
+    if (event.type === "hotkey-recording-done") {
+      const acc = event.payload.accelerator;
+      el.hotkey.value = acc;
+      stopHotkeyRecording();
+      markDirty();
+      setHotkeyHint("已录制: " + acc, "");
+      setTimeout(() => setHotkeyHint("", ""), 2000);
+    }
+
+    if (event.type === "hotkey-recording-cancelled") {
+      el.hotkey.value = hotkeyBackup;
+      stopHotkeyRecording();
+      setHotkeyHint("录制已取消", "");
+      setTimeout(() => setHotkeyHint("", ""), 1500);
+    }
+
+    if (event.type === "hotkey-recording-modifiers") {
+      el.hotkey.value = event.payload.display;
     }
   });
 

@@ -15,9 +15,6 @@ contextBridge.exposeInMainWorld("voiceOverlay", {
   getConfig() {
     return ipcRenderer.invoke("app:get-config");
   },
-  resizeOverlay(size) {
-    return ipcRenderer.invoke("overlay:resize", size);
-  },
   sendDiagnostic(payload) {
     ipcRenderer.send("renderer:diagnostic", payload);
   },
@@ -41,6 +38,18 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   },
   requestMicrophoneAccess() {
     return ipcRenderer.invoke("settings:request-microphone-access");
+  },
+  resetConfig() {
+    return ipcRenderer.invoke("settings:reset-config");
+  },
+  openAccessibilitySettings() {
+    return ipcRenderer.invoke("settings:open-accessibility-settings");
+  },
+  startHotkeyRecording() {
+    return ipcRenderer.invoke("settings:start-hotkey-recording");
+  },
+  stopHotkeyRecording() {
+    return ipcRenderer.invoke("settings:stop-hotkey-recording");
   },
   onEvent(listener) {
     const wrapped = (_event, payload) => listener(payload);
