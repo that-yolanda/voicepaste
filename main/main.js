@@ -6,9 +6,100 @@ const { CONFIG_PATH, loadConfig, readConfigFile, saveConfigText, getEditableConf
 const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
 const { logInfo, logError, resolveLogPath } = require("./logger");
+const { uIOhook, UiohookKey } = require("uiohook-napi");
+
 let currentConfig = loadConfig();
 const ESC_HOTKEY = "Esc";
 const DEBOUNCE_MS = 200;
+
+let pressedKeys = new Set();
+let isRecordingHotkey = false;
+let recordingCombo = new Set();
+let maxRecordingSize = 0;
+let hotkeyRecorderResolve = null;
+
+uIOhook.on("keydown", (e) => {
+  pressedKeys.add(e.keycode);
+
+  if (isRecordingHotkey) {
+    recordingCombo.add(e.keycode);
+    if (recordingCombo.size > maxRecordingSize) {
+      maxRecordingSize = recordingCombo.size;
+    }
+    return;
+  }
+
+  const currentHotkey = getHotkey();
+  if (Array.isArray(currentHotkey)) {
+    if (
+      currentHotkey.length > 0 &&
+      pressedKeys.size === currentHotkey.length &&
+      currentHotkey.every((k) => pressedKeys.has(k))
+    ) {
+      handleHotkeyToggle();
+    }
+  }
+});
+
+uIOhook.on("keyup", (e) => {
+  if (isRecordingHotkey && maxRecordingSize > 0) {
+    const finalCombo = Array.from(recordingCombo);
+    isRecordingHotkey = false;
+    pressedKeys.clear(); 
+    
+    if (hotkeyRecorderResolve) {
+      hotkeyRecorderResolve(finalCombo);
+      hotkeyRecorderResolve = null;
+    }
+  }
+
+  if (isRecordingHotkey) {
+    recordingCombo.delete(e.keycode);
+  }
+
+  pressedKeys.delete(e.keycode);
+});
+uIOhook.start();
+
+const keyNames = {
+  [UiohookKey.Escape]: "Escape",
+  [UiohookKey.F1]: "F1",
+  [UiohookKey.F2]: "F2", [UiohookKey.F3]: "F3", [UiohookKey.F4]: "F4",
+  [UiohookKey.F5]: "F5", [UiohookKey.F6]: "F6", [UiohookKey.F7]: "F7",
+  [UiohookKey.F8]: "F8", [UiohookKey.F9]: "F9", [UiohookKey.F10]: "F10",
+  [UiohookKey.F11]: "F11", [UiohookKey.F12]: "F12", [UiohookKey.F13]: "F13",
+  [UiohookKey.Space]: "Space",
+  [UiohookKey.Enter]: "Enter",
+  [UiohookKey.Backspace]: "Backspace",
+  [UiohookKey.Tab]: "Tab",
+  [UiohookKey.Alt]: "L-Option",
+  [UiohookKey.AltRight]: "R-Option",
+  [UiohookKey.Shift]: "L-Shift",
+  [UiohookKey.ShiftRight]: "R-Shift",
+  [UiohookKey.Ctrl]: "L-Control",
+  [UiohookKey.CtrlRight]: "R-Control",
+  [UiohookKey.Meta]: "L-Command",
+  [UiohookKey.MetaRight]: "R-Command",
+  [UiohookKey.A]: "A", [UiohookKey.B]: "B", [UiohookKey.C]: "C",
+  [UiohookKey.D]: "D", [UiohookKey.E]: "E", [UiohookKey.F]: "F",
+  [UiohookKey.G]: "G", [UiohookKey.H]: "H", [UiohookKey.I]: "I",
+  [UiohookKey.J]: "J", [UiohookKey.K]: "K", [UiohookKey.L]: "L",
+  [UiohookKey.M]: "M", [UiohookKey.N]: "N", [UiohookKey.O]: "O",
+  [UiohookKey.P]: "P", [UiohookKey.Q]: "Q", [UiohookKey.R]: "R",
+  [UiohookKey.S]: "S", [UiohookKey.T]: "T", [UiohookKey.U]: "U",
+  [UiohookKey.V]: "V", [UiohookKey.W]: "W", [UiohookKey.X]: "X",
+  [UiohookKey.Y]: "Y", [UiohookKey.Z]: "Z",
+  [UiohookKey.ArrowUp]: "Up", [UiohookKey.ArrowDown]: "Down",
+  [UiohookKey.ArrowLeft]: "Left", [UiohookKey.ArrowRight]: "Right"
+};
+
+function formatHotkey(hotkey) {
+  if (typeof hotkey === "string") return hotkey;
+  if (Array.isArray(hotkey)) {
+    return hotkey.map((k) => keyNames[k] || `Key(${k})`).join(" + ");
+  }
+  return "无";
+}
 
 let overlayWindow;
 let settingsWindow;
@@ -25,7 +116,6 @@ let expectingSessionClose = false;
 let receivedAudioChunkCount = 0;
 let pendingAudioStopResolve = null;
 let isQuitting = false;
-let isRecordingHotkey = false;
 
 function getHotkey() {
   return currentConfig.app.hotkey;
@@ -397,85 +487,16 @@ function handleHotkeyToggle() {
 
 function registerShortcuts() {
   const hotkey = getHotkey();
-  const mainRegistered = globalShortcut.register(hotkey, handleHotkeyToggle);
-  logInfo("register main hotkey", { hotkey, registered: mainRegistered });
-
-  if (!mainRegistered) {
-    logError("register main hotkey failed", { hotkey });
-    throw new Error(`无法注册全局热键 ${hotkey}`);
+  if (typeof hotkey === "string" && hotkey.trim() !== "") {
+    const mainRegistered = globalShortcut.register(hotkey, handleHotkeyToggle);
+    logInfo("register main hotkey", { hotkey, registered: mainRegistered });
+  } else {
+    logInfo("register main hotkey using uIOhook", { hotkey });
   }
 }
 
 function reloadRuntimeConfig() {
   currentConfig = loadConfig();
-}
-
-function inputToAccelerator(input) {
-  const codeToKey = (code) => {
-    if (!code) return null;
-    if (code.startsWith("Key")) return code.slice(3);
-    if (code.startsWith("Digit")) return code.slice(5);
-    if (/^F\d{1,2}$/.test(code)) return code;
-    const map = {
-      Space: "Space", Backspace: "Backspace", Delete: "Delete",
-      Insert: "Insert", Enter: "Return",
-      ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
-      Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
-      BracketLeft: "[", BracketRight: "]", Semicolon: ";", Quote: "'",
-      Backquote: "`", Backslash: "\\", Comma: ",", Period: ".",
-      Slash: "/", Minus: "-", Equal: "=",
-    };
-    return map[code] || null;
-  };
-
-  const key = codeToKey(input.code);
-  if (!key) return null;
-
-  const parts = [];
-  if (input.control) parts.push("Control");
-  if (input.meta) parts.push("Cmd");
-  if (input.alt) parts.push("Alt");
-  if (input.shift) parts.push("Shift");
-  parts.push(key);
-  return parts.join("+");
-}
-
-function setupSettingsHotkeyRecording(win) {
-  win.webContents.on("before-input-event", (event, input) => {
-    if (!isRecordingHotkey) return;
-    if (input.type !== "keyDown") return;
-
-    event.preventDefault();
-
-    if (input.key === "Escape" && !input.control && !input.meta && !input.alt && !input.shift) {
-      isRecordingHotkey = false;
-      win.webContents.send("settings:event", { type: "hotkey-recording-cancelled" });
-      return;
-    }
-
-    const modifierKeys = ["Control", "Alt", "Shift", "Meta"];
-    if (modifierKeys.includes(input.key)) {
-      const mods = [];
-      if (input.control) mods.push("Ctrl");
-      if (input.meta) mods.push("Cmd");
-      if (input.alt) mods.push("Alt");
-      if (input.shift) mods.push("Shift");
-      win.webContents.send("settings:event", {
-        type: "hotkey-recording-modifiers",
-        payload: { display: mods.join("+") + "+" },
-      });
-      return;
-    }
-
-    const accelerator = inputToAccelerator(input);
-    if (accelerator) {
-      isRecordingHotkey = false;
-      win.webContents.send("settings:event", {
-        type: "hotkey-recording-done",
-        payload: { accelerator },
-      });
-    }
-  });
 }
 
 function getTrayIconPath() {
@@ -512,7 +533,6 @@ function createTrayImage() {
 function showSettingsWindow() {
   if (!settingsWindow || settingsWindow.isDestroyed()) {
     settingsWindow = createSettingsWindow();
-    setupSettingsHotkeyRecording(settingsWindow);
     settingsWindow.on("close", (event) => {
       if (isQuitting) {
         return;
@@ -611,6 +631,22 @@ app.whenReady().then(() => {
     return app.getLoginItemSettings();
   });
 
+  ipcMain.handle("settings:record-hotkey", async () => {
+    isRecordingHotkey = true;
+    recordingCombo.clear();
+    maxRecordingSize = 0;
+    pressedKeys.clear();
+    
+    const keys = await new Promise((resolve) => {
+      hotkeyRecorderResolve = resolve;
+    });
+
+    return {
+      keys,
+      displayString: formatHotkey(keys),
+    };
+  });
+
   ipcMain.handle("settings:get-data", async () => {
     const microphoneStatus = process.platform === "darwin"
       ? systemPreferences.getMediaAccessStatus("microphone")
@@ -622,6 +658,7 @@ app.whenReady().then(() => {
       parsedConfig: getEditableConfig(),
       runtime: {
         hotkey: getHotkey(),
+        hotkeyDisplay: formatHotkey(getHotkey()),
         microphoneStatus,
         version: app.getVersion(),
         platform: process.platform,
@@ -634,10 +671,10 @@ app.whenReady().then(() => {
     saveConfigText(String(payload?.configText || ""));
     reloadRuntimeConfig();
 
-    if (previousHotkey !== getHotkey()) {
+    if (previousHotkey !== getHotkey() && typeof previousHotkey === "string") {
       globalShortcut.unregister(previousHotkey);
-      registerShortcuts();
     }
+    registerShortcuts();
 
     logInfo("settings saved", {
       hotkey: getHotkey(),
@@ -648,6 +685,7 @@ app.whenReady().then(() => {
       configText: readConfigFile(),
       runtime: {
         hotkey: getHotkey(),
+        hotkeyDisplay: formatHotkey(getHotkey()),
       },
     };
   });
@@ -657,10 +695,10 @@ app.whenReady().then(() => {
     saveConfig(configObject);
     reloadRuntimeConfig();
 
-    if (previousHotkey !== getHotkey()) {
+    if (previousHotkey !== getHotkey() && typeof previousHotkey === "string") {
       globalShortcut.unregister(previousHotkey);
-      registerShortcuts();
     }
+    registerShortcuts();
 
     logInfo("settings saved (object)", { hotkey: getHotkey() });
 
@@ -670,6 +708,7 @@ app.whenReady().then(() => {
       parsedConfig: getEditableConfig(),
       runtime: {
         hotkey: getHotkey(),
+        hotkeyDisplay: formatHotkey(getHotkey()),
       },
     };
   });
@@ -702,18 +741,6 @@ app.whenReady().then(() => {
         "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
       );
     }
-  });
-
-  ipcMain.handle("settings:start-hotkey-recording", () => {
-    isRecordingHotkey = true;
-    logInfo("hotkey recording started");
-    return { ok: true };
-  });
-
-  ipcMain.handle("settings:stop-hotkey-recording", () => {
-    isRecordingHotkey = false;
-    logInfo("hotkey recording stopped");
-    return { ok: true };
   });
 
   ipcMain.handle("settings:get-microphone-status", async () => {

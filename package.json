@@ -35,6 +35,7 @@
     "electron-builder": "^26.0.12"
   },
   "dependencies": {
+    "uiohook-napi": "^1.5.0",
     "ws": "^8.20.0",
     "yaml": "^2.8.3"
   },

@@ -45,17 +45,14 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   openAccessibilitySettings() {
     return ipcRenderer.invoke("settings:open-accessibility-settings");
   },
-  startHotkeyRecording() {
-    return ipcRenderer.invoke("settings:start-hotkey-recording");
-  },
-  stopHotkeyRecording() {
-    return ipcRenderer.invoke("settings:stop-hotkey-recording");
-  },
   getLoginItemSettings() {
     return ipcRenderer.invoke("settings:get-login-item");
   },
   setLoginItemSettings(enabled) {
     return ipcRenderer.invoke("settings:set-login-item", enabled);
+  },
+  recordHotkey() {
+    return ipcRenderer.invoke("settings:record-hotkey");
   },
   onEvent(listener) {
     const wrapped = (_event, payload) => listener(payload);
