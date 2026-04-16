@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   requestMicrophoneAccess() {
     return ipcRenderer.invoke("settings:request-microphone-access");
   },
+  getLoginItemSettings() {
+    return ipcRenderer.invoke("settings:get-login-item");
+  },
+  setLoginItemSettings(enabled) {
+    return ipcRenderer.invoke("settings:set-login-item", enabled);
+  },
   onEvent(listener) {
     const wrapped = (_event, payload) => listener(payload);
     ipcRenderer.on("settings:event", wrapped);
