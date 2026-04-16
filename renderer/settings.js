@@ -17,6 +17,7 @@
     hotkeyHint: $("hotkeyHint"),
     appVersion: $("appVersion"),
     configPath: $("configPath"),
+    autoStart: $("autoStart"),
     micDot: $("micDot"),
     micText: $("micText"),
     checkMicBtn: $("checkMicBtn"),
@@ -75,6 +76,12 @@
       populateForm(data);
       el.yamlEditor.value = data.configText || "";
       updateMicStatus(data.runtime?.microphoneStatus || "unknown");
+
+      // Load auto-start state from system login items
+      try {
+        const loginSettings = await window.voiceSettings.getLoginItemSettings();
+        el.autoStart.checked = loginSettings.openAtLogin;
+      } catch (_) { /* ignore */ }
       isDirty = false;
       setSaveStatus("已加载", "success");
     } catch (err) {
@@ -305,6 +312,10 @@
     }
   });
   el.reloadBtn.addEventListener("click", loadSettings);
+
+  el.autoStart.addEventListener("change", async () => {
+    await window.voiceSettings.setLoginItemSettings(el.autoStart.checked);
+  });
 
   el.checkMicBtn.addEventListener("click", checkMic);
   el.requestMicBtn.addEventListener("click", requestMic);

@@ -564,6 +564,13 @@ app.whenReady().then(() => {
     configPath: CONFIG_PATH,
   });
   reloadRuntimeConfig();
+
+  // Enable auto-start on first launch (default: on)
+  const loginSettings = app.getLoginItemSettings();
+  if (!loginSettings.openAtLogin) {
+    app.setLoginItemSettings({ openAtLogin: true });
+  }
+
   overlayWindow = createOverlayWindow();
   overlayWindow.on("closed", () => {
     overlayWindow = null;
@@ -593,6 +600,15 @@ app.whenReady().then(() => {
   ipcMain.handle("app:get-config", () => ({
     hotkey: getHotkey(),
   }));
+
+  ipcMain.handle("settings:get-login-item", () => {
+    return app.getLoginItemSettings();
+  });
+
+  ipcMain.handle("settings:set-login-item", (_event, enabled) => {
+    app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
+    return app.getLoginItemSettings();
+  });
 
   ipcMain.handle("settings:get-data", async () => {
     const microphoneStatus = process.platform === "darwin"
