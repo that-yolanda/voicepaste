@@ -11,6 +11,7 @@
     reloadBtn: $("reloadBtn"),
     saveStatus: $("saveStatus"),
     hotkey: $("hotkey"),
+    recordHotkeyBtn: $("recordHotkeyBtn"),
     configPath: $("configPath"),
     micDot: $("micDot"),
     micText: $("micText"),
@@ -76,7 +77,7 @@
   function populateForm(data) {
     const c = parsedConfig;
 
-    el.hotkey.value = c.app?.hotkey || "F13";
+    el.hotkey.value = data.runtime?.hotkeyDisplay || (Array.isArray(c.app?.hotkey) ? "自定义快捷键" : c.app?.hotkey || "F13");
     el.configPath.textContent = data.configPath || "-";
 
     el.wsUrl.value = c.connection?.url || "";
@@ -109,7 +110,7 @@
     const config = JSON.parse(JSON.stringify(parsedConfig));
 
     config.app = config.app || {};
-    config.app.hotkey = el.hotkey.value.trim() || "F13";
+    // config.app.hotkey is maintained directly in parsedConfig when recording or loaded
 
     config.connection = config.connection || {};
     config.connection.url = el.wsUrl.value.trim();
@@ -227,10 +228,49 @@
     }
   }
 
+  // ===== HOTKEY RECORDING =====
+
+  async function recordHotkey() {
+    if (el.recordHotkeyBtn.disabled) return;
+    el.recordHotkeyBtn.disabled = true;
+    const oldText = el.hotkey.value;
+    const oldBtnText = el.recordHotkeyBtn.textContent;
+    
+    el.hotkey.value = "请按下快捷键组合并松开...";
+    el.recordHotkeyBtn.textContent = "录制中...";
+    
+    try {
+      const result = await window.voiceSettings.recordHotkey();
+      const keys = Array.isArray(result) ? result : result?.keys;
+      const displayString = result?.displayString || "自定义";
+
+      if (keys && keys.length > 0) {
+        parsedConfig.app = parsedConfig.app || {};
+        parsedConfig.app.hotkey = keys;
+        
+        // Use placeholder text for immediate UI feedback.
+        // True hotkey display format relies on main process logic and updates post-save.
+        el.hotkey.value = `已录制（${displayString}），点击右上角“保存配置”生效`;
+        markDirty();
+      } else {
+        el.hotkey.value = oldText;
+      }
+    } catch(err) {
+      el.hotkey.value = oldText;
+    } finally {
+      el.recordHotkeyBtn.disabled = false;
+      el.recordHotkeyBtn.textContent = oldBtnText;
+    }
+  }
+
   // ===== EVENT LISTENERS =====
 
   el.saveBtn.addEventListener("click", saveFromForm);
   el.reloadBtn.addEventListener("click", loadSettings);
+
+  if (el.recordHotkeyBtn) {
+    el.recordHotkeyBtn.addEventListener("click", recordHotkey);
+  }
 
   el.checkMicBtn.addEventListener("click", checkMic);
   el.requestMicBtn.addEventListener("click", requestMic);
@@ -256,7 +296,6 @@
 
   // Track changes on all form inputs
   const inputs = [
-    el.hotkey,
     el.wsUrl,
     el.resourceId,
     el.language,

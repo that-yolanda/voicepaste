@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   requestMicrophoneAccess() {
     return ipcRenderer.invoke("settings:request-microphone-access");
   },
+  recordHotkey() {
+    return ipcRenderer.invoke("settings:record-hotkey");
+  },
   onEvent(listener) {
     const wrapped = (_event, payload) => listener(payload);
     ipcRenderer.on("settings:event", wrapped);

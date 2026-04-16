@@ -36,7 +36,10 @@
           <div class="fields">
             <div class="field">
               <label class="label" for="hotkey">全局热键</label>
-              <input type="text" id="hotkey" class="input" placeholder="F13" />
+              <div class="input-group">
+                <input type="text" id="hotkey" class="input mono" readonly placeholder="未设置" />
+                <button type="button" class="input-addon" id="recordHotkeyBtn">录制</button>
+              </div>
             </div>
             <div class="field">
               <label class="label">配置文件</label>
