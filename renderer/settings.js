@@ -93,7 +93,7 @@
   function populateForm(data) {
     const c = parsedConfig;
 
-    el.hotkey.value = c.app?.hotkey || "F13";
+    el.hotkey.value = data.runtime?.hotkeyDisplay || (Array.isArray(c.app?.hotkey) ? "自定义快捷键" : c.app?.hotkey || "F13");
     el.configPath.textContent = data.configPath || "-";
     el.appVersion.textContent = "v" + (data.runtime?.version || "");
 
@@ -141,7 +141,7 @@
     const config = JSON.parse(JSON.stringify(parsedConfig));
 
     config.app = config.app || {};
-    config.app.hotkey = el.hotkey.value.trim() || "F13";
+    config.app.hotkey = config.app.hotkey || el.hotkey.value.trim() || "F13";
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
 
@@ -282,23 +282,40 @@
     el.hotkeyHint.dataset.level = level || "";
   }
 
-  async function startHotkeyRecording() {
+  async function recordHotkey() {
+    if (isRecordingHotkey) return;
     hotkeyBackup = el.hotkey.value;
     isRecordingHotkey = true;
     el.hotkeyRecorder.classList.add("is-recording");
     el.hotkey.value = "";
-    el.hotkey.placeholder = "请按键...";
-    el.hotkeyRecordBtn.textContent = "取消";
-    setHotkeyHint("按下快捷键组合（Esc 取消录制）", "");
-    await window.voiceSettings.startHotkeyRecording();
-  }
+    el.hotkey.placeholder = "请按下快捷键组合并松开...";
+    el.hotkeyRecordBtn.textContent = "录制中...";
+    setHotkeyHint("按下快捷键组合并松开，Esc 取消", "");
 
-  async function stopHotkeyRecording() {
-    isRecordingHotkey = false;
-    el.hotkeyRecorder.classList.remove("is-recording");
-    el.hotkey.placeholder = "点击「录制」设置热键";
-    el.hotkeyRecordBtn.textContent = "录制";
-    await window.voiceSettings.stopHotkeyRecording();
+    try {
+      const result = await window.voiceSettings.recordHotkey();
+      const keys = Array.isArray(result) ? result : result?.keys;
+      const displayString = result?.displayString || "自定义快捷键";
+
+      if (keys && keys.length > 0) {
+        parsedConfig.app = parsedConfig.app || {};
+        parsedConfig.app.hotkey = keys;
+        el.hotkey.value = displayString;
+        setHotkeyHint("已录制，点击右上角“保存配置”生效", "success");
+        markDirty();
+      } else {
+        el.hotkey.value = hotkeyBackup;
+        setHotkeyHint("", "");
+      }
+    } catch (err) {
+      el.hotkey.value = hotkeyBackup;
+      setHotkeyHint(err?.message || "", err?.message ? "error" : "");
+    } finally {
+      isRecordingHotkey = false;
+      el.hotkeyRecorder.classList.remove("is-recording");
+      el.hotkey.placeholder = "点击「录制」设置热键";
+      el.hotkeyRecordBtn.textContent = "录制";
+    }
   }
 
   // ===== EVENT LISTENERS =====
@@ -326,15 +343,7 @@
     window.voiceSettings.openAccessibilitySettings();
   });
 
-  el.hotkeyRecordBtn.addEventListener("click", () => {
-    if (isRecordingHotkey) {
-      el.hotkey.value = hotkeyBackup;
-      stopHotkeyRecording();
-      setHotkeyHint("", "");
-    } else {
-      startHotkeyRecording();
-    }
-  });
+  el.hotkeyRecordBtn.addEventListener("click", recordHotkey);
 
   el.addHotwordBtn.addEventListener("click", addHotword);
   el.newHotword.addEventListener("keydown", (e) => {
@@ -448,26 +457,6 @@
   window.voiceSettings.onEvent((event) => {
     if (event.type === "microphone-status") {
       updateMicStatus(event.payload?.status || "unknown");
-    }
-
-    if (event.type === "hotkey-recording-done") {
-      const acc = event.payload.accelerator;
-      el.hotkey.value = acc;
-      stopHotkeyRecording();
-      markDirty();
-      setHotkeyHint("已录制: " + acc, "");
-      setTimeout(() => setHotkeyHint("", ""), 2000);
-    }
-
-    if (event.type === "hotkey-recording-cancelled") {
-      el.hotkey.value = hotkeyBackup;
-      stopHotkeyRecording();
-      setHotkeyHint("录制已取消", "");
-      setTimeout(() => setHotkeyHint("", ""), 1500);
-    }
-
-    if (event.type === "hotkey-recording-modifiers") {
-      el.hotkey.value = event.payload.display;
     }
   });
 
