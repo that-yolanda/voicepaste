@@ -42,6 +42,7 @@
   "build": {
     "appId": "com.yolanda.voicepaste",
     "productName": "VoicePaste",
+    "npmRebuild": false,
     "files": [
       "main/**/*",
       "preload/**/*",
