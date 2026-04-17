@@ -31,6 +31,7 @@
     enableNonstream: $("enableNonstream"),
     enableItn: $("enableItn"),
     enablePunc: $("enablePunc"),
+    removeTrailingPeriod: $("removeTrailingPeriod"),
     boostingTableId: $("boostingTableId"),
     hotwordTags: $("hotwordTags"),
     hotwordHint: $("hotwordHint"),
@@ -106,6 +107,7 @@
     el.enableNonstream.checked = Boolean(c.request?.enable_nonstream);
     el.enableItn.checked = c.request?.enable_itn !== false;
     el.enablePunc.checked = c.request?.enable_punc !== false;
+    el.removeTrailingPeriod.checked = c.app?.remove_trailing_period !== false;
 
     el.boostingTableId.value = c.request?.corpus?.boosting_table_id || "";
 
@@ -131,6 +133,7 @@
 
     config.app = config.app || {};
     config.app.hotkey = el.hotkey.value.trim() || "F13";
+    config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
 
     config.connection = config.connection || {};
     config.connection.url = el.wsUrl.value.trim();
@@ -152,6 +155,7 @@
     config.request.enable_nonstream = el.enableNonstream.checked;
     config.request.enable_itn = el.enableItn.checked;
     config.request.enable_punc = el.enablePunc.checked;
+    delete config.request.remove_trailing_period;
 
     config.request.corpus = config.request.corpus || {};
     config.request.corpus.boosting_table_id = el.boostingTableId.value.trim();
@@ -365,6 +369,7 @@
     el.enableNonstream,
     el.enableItn,
     el.enablePunc,
+    el.removeTrailingPeriod,
   ];
   toggles.forEach((toggle) => {
     if (toggle) toggle.addEventListener("change", markDirty);

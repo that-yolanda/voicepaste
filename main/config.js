@@ -70,6 +70,7 @@ function loadConfig() {
     app: {
       ...(raw.app || {}),
       hotkey: raw.app?.hotkey || "F13",
+      remove_trailing_period: raw.app?.remove_trailing_period !== false,
     },
     connection: {
       ...(raw.connection || {}),
