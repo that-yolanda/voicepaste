@@ -40,7 +40,7 @@ function runPowerShell(scriptContent) {
   });
 }
 
-async function pasteTextToFocusedElement(text) {
+async function pasteTextToFocusedElement(text, keepClipboard = true) {
   const previousText = clipboard.readText();
 
   clipboard.writeText(text);
@@ -60,14 +60,15 @@ async function pasteTextToFocusedElement(text) {
 
     // Give the target app a brief moment to read the clipboard before restoring it.
     await sleep(120);
-    clipboard.writeText(previousText);
+
+    if (!keepClipboard) {
+      clipboard.writeText(previousText);
+    }
 
     return {
       ok: true,
     };
   } catch (error) {
-    clipboard.writeText(previousText);
-
     const msg = error.message || "";
     const isAccessibilityError = process.platform === "darwin" && (
       /not allowed/i.test(msg) ||
@@ -76,6 +77,9 @@ async function pasteTextToFocusedElement(text) {
       /apple event/i.test(msg)
     );
 
+    if (!keepClipboard) {
+      clipboard.writeText(previousText);
+    }
     return {
       ok: false,
       message: msg || "模拟粘贴失败，请检查当前焦点位置",
