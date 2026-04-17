@@ -1,5 +1,6 @@
 app:
   hotkey: Control+Space
+  remove_trailing_period: true   # 自动删除识别结果末尾的句号（。或 .）
 
 connection:
   url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async

@@ -296,7 +296,7 @@ async function finishRecordingFlow() {
       transcriptSnapshot.finalText
     ).trim();
 
-    if (currentConfig.request.remove_trailing_period !== false) {
+    if (currentConfig.app.remove_trailing_period !== false) {
       if (textToPaste.endsWith("。") || textToPaste.endsWith(".")) {
         textToPaste = textToPaste.slice(0, -1);
       }

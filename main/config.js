@@ -70,6 +70,7 @@ function loadConfig() {
     app: {
       ...(raw.app || {}),
       hotkey: raw.app?.hotkey || "F13",
+      remove_trailing_period: raw.app?.remove_trailing_period !== false,
     },
     connection: {
       ...(raw.connection || {}),
@@ -95,7 +96,6 @@ function loadConfig() {
       enable_itn: raw.request?.enable_itn !== false,
       enable_punc: raw.request?.enable_punc !== false,
       enable_ddc: raw.request?.enable_ddc !== false,
-      remove_trailing_period: raw.request?.remove_trailing_period !== false,
       show_utterances: raw.request?.show_utterances !== false,
       result_type: raw.request?.result_type || "full",
       end_window_size: Number(raw.request?.end_window_size || 800),
