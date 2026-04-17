@@ -222,6 +222,10 @@ function normalizeErrorMessage(error) {
   return text;
 }
 
+function missingConnectionFieldError(field) {
+  return new Error(`语音识别模型还未配置，缺少 ${field}`);
+}
+
 function isIgnorableRawText(text, connectId) {
   const normalized = String(text || "").trim();
 
@@ -253,19 +257,19 @@ function createAsrSession({
   onClose,
 }) {
   if (!connection?.url) {
-    throw new Error("缺少 connection.url");
+    throw missingConnectionFieldError("connection.url");
   }
 
   if (!connection?.resource_id) {
-    throw new Error("缺少 connection.resource_id");
+    throw missingConnectionFieldError("connection.resource_id");
   }
 
   if (!connection?.app_id) {
-    throw new Error("缺少 connection.app_id");
+    throw missingConnectionFieldError("connection.app_id");
   }
 
   if (!connection?.access_token) {
-    throw new Error("缺少 connection.access_token");
+    throw missingConnectionFieldError("connection.access_token");
   }
 
   const connectId = crypto.randomUUID();

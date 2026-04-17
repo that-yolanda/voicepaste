@@ -17,6 +17,8 @@ let isRecordingHotkey = false;
 let recordingCombo = new Set();
 let maxRecordingSize = 0;
 let hotkeyRecorderResolve = null;
+let isUiohookAvailable = false;
+let uiohookStartError = null;
 
 uIOhook.on("keydown", (e) => {
   pressedKeys.add(e.keycode);
@@ -59,7 +61,26 @@ uIOhook.on("keyup", (e) => {
 
   pressedKeys.delete(e.keycode);
 });
-uIOhook.start();
+
+function tryStartUiohook() {
+  if (isUiohookAvailable) {
+    return true;
+  }
+
+  try {
+    uIOhook.start();
+    isUiohookAvailable = true;
+    uiohookStartError = null;
+    logInfo("uIOhook started");
+    return true;
+  } catch (error) {
+    uiohookStartError = error;
+    logError("uIOhook start failed", {
+      message: error.message || String(error),
+    });
+    return false;
+  }
+}
 
 const keyNames = {
   [UiohookKey.Escape]: "Escape",
@@ -326,7 +347,7 @@ async function startRecordingFlow() {
     logError("start recording flow failed", { message: error.message || String(error) });
 
     const msg = error.message || String(error);
-    const isConfigError = msg.startsWith("缺少 ") || msg.includes("config");
+    const isConfigError = msg.startsWith("语音识别模型还未配置，缺少 ") || msg.includes("config");
 
     if (isConfigError) {
       hideOverlay();
@@ -334,7 +355,7 @@ async function startRecordingFlow() {
       dialog.showMessageBox({
         type: "warning",
         title: "配置错误",
-        message: `VoicePaste 配置不完整，无法开始录音。`,
+        message: "语音识别模型还未配置。",
         detail: `${msg}\n\n请打开配置页面检查识别服务和认证信息。`,
         buttons: ["知道了"],
         defaultId: 0,
@@ -491,7 +512,8 @@ function registerShortcuts() {
     const mainRegistered = globalShortcut.register(hotkey, handleHotkeyToggle);
     logInfo("register main hotkey", { hotkey, registered: mainRegistered });
   } else {
-    logInfo("register main hotkey using uIOhook", { hotkey });
+    const started = tryStartUiohook();
+    logInfo("register main hotkey using uIOhook", { hotkey, started });
   }
 }
 
@@ -585,6 +607,7 @@ app.whenReady().then(() => {
     configPath: CONFIG_PATH,
   });
   reloadRuntimeConfig();
+  tryStartUiohook();
 
   // Enable auto-start on first launch (default: on)
   const loginSettings = app.getLoginItemSettings();
@@ -632,6 +655,14 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("settings:record-hotkey", async () => {
+    if (!tryStartUiohook()) {
+      const platformHint = process.platform === "darwin"
+        ? "请先在系统设置 > 隐私与安全 > 辅助功能中授权 VoicePaste，然后重启应用。"
+        : "请确认当前系统允许全局键盘监听后重试。";
+      const detail = uiohookStartError?.message ? `\n\n底层错误：${uiohookStartError.message}` : "";
+      throw new Error(`无法录制快捷键。${platformHint}${detail}`);
+    }
+
     isRecordingHotkey = true;
     recordingCombo.clear();
     maxRecordingSize = 0;
