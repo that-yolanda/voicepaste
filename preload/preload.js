@@ -51,6 +51,12 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   stopHotkeyRecording() {
     return ipcRenderer.invoke("settings:stop-hotkey-recording");
   },
+  getLoginItemSettings() {
+    return ipcRenderer.invoke("settings:get-login-item");
+  },
+  setLoginItemSettings(enabled) {
+    return ipcRenderer.invoke("settings:set-login-item", enabled);
+  },
   onEvent(listener) {
     const wrapped = (_event, payload) => listener(payload);
     ipcRenderer.on("settings:event", wrapped);
