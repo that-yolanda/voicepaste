@@ -210,6 +210,7 @@ function hideOverlay() {
     return;
   }
 
+  sendOverlayMessage("reset");
   overlayWindow.hide();
 }
 
