@@ -6,22 +6,25 @@
 
 ## Features
 
-- **Global Hotkey** — Default F13, customizable in `config.yaml`
+- **Global Hotkey** — Default `Control+Space` from `config.yaml.example`, supports custom key recording
 - **Real-time ASR** — ByteDance Doubao streaming ASR via WebSocket
 - **Auto Paste** — Automatically pastes recognized text into the focused input field
 - **Floating Overlay** — Transparent overlay window showing real-time transcription
+- **Clipboard Options** — Can keep the recognized text in the clipboard for manual re-paste
+- **Text Cleanup** — Can automatically remove trailing `。` / `.`
+- **Auto Start** — Optional launch at login from the settings page
 - **Hotwords** — Custom hotwords to improve recognition accuracy for domain-specific terms
-- **System Tray** — Runs in the background, no Dock icon
+- **Cross-platform** — Supports both macOS and Windows
 
 ## Preview
 
 **Voice Input**
 
-![VoicePaste Demo](docs/demo.gif)
+![VoicePaste Demo](docs/screenshots/demo.gif)
 
 **Settings Page**
 
-![VoicePaste Settings](docs/config.png)
+![VoicePaste Settings](docs/screenshots/config.png)
 
 ---
 
@@ -29,34 +32,15 @@
 
 - Log in to the [Volcengine Console](https://console.volcengine.com/speech/app), create an app, and select "Doubao Streaming ASR Model 2.0 (Hourly)"
 
-![Create App](docs/api-step1.png)
+![Create App](docs/screenshots/api-step1.png)
 
 - Open the model, select your app, and enable the model package. You'll see the APP ID, Access Token, and Secret Key below
 
-![Get Credentials](docs/api-step2.png)
+![Get Credentials](docs/screenshots/api-step2.png)
 
 - Enter the credentials in the settings page and click Save
 
-![Save Config](docs/api-step3.png)
-
-## Installation
-
-### Build from Source
-
-```bash
-git clone https://github.com/that-yolanda/voicepaste.git
-cd voicepaste
-pnpm install
-pnpm start
-```
-
-### Package
-
-```bash
-pnpm pack
-```
-
-Output is in the `dist/` directory.
+![Save Config](docs/screenshots/api-step3.png)
 
 ## Configuration
 
@@ -64,7 +48,9 @@ Edit `config.yaml` in the project root and fill in your credentials:
 
 | Field | Description |
 |-------|-------------|
-| `app.hotkey` | Global hotkey, default `F13` |
+| `app.hotkey` | Global hotkey. Default template value is `Control+Space` |
+| `app.remove_trailing_period` | Remove trailing `。` / `.` from the final text |
+| `app.keep_clipboard` | Keep the result in the clipboard after paste |
 | `connection.app_id` | Volcengine App ID |
 | `connection.access_token` | Volcengine Access Token |
 | `connection.secret_key` | Volcengine Secret Key |
@@ -72,6 +58,8 @@ Edit `config.yaml` in the project root and fill in your credentials:
 | `request.context_hotwords` | Custom hotwords list |
 
 Get your credentials from [Volcengine Voice Service](https://www.volcengine.com/product/voice-service).
+
+Note: packaged builds ship `config.yaml.example` as the default config template, so the effective default hotkey is `Control+Space`. The code-level fallback `F13` is only used when `app.hotkey` is missing.
 
 ## FAQ
 
@@ -97,87 +85,11 @@ tccutil reset Microphone com.yolanda.voicepaste
 
 The non-stream (second-pass) recognition mode does not currently support hotword libraries or injected hotwords — only correction tables are supported. Create a [correction table](https://console.volcengine.com/speech/correctword) in the Volcengine console and replace `boosting_table_id` with `correct_table_id` in your config.
 
-## Project Structure
+## Docs
 
-```
-voicepaste/
-├── main/               # Electron main process
-│   ├── main.js         # App entry, state machine & hotkey management
-│   ├── asrService.js   # WebSocket ASR client (binary protocol)
-│   ├── pasteService.js # Clipboard write + AppleScript paste
-│   ├── windowManager.js# Window creation & management
-│   ├── config.js       # Config loading & hot-reload
-│   └── logger.js       # Logging module
-├── preload/            # Preload scripts
-│   └── preload.js      # contextBridge API
-├── renderer/           # Renderer process
-│   ├── index.html      # Floating overlay window
-│   ├── app.js          # Audio capture & text display
-│   ├── settings.html   # Settings page
-│   ├── settings.js     # Config editor
-│   └── settings.css    # Settings page styles
-├── build/              # Build assets (icons, etc.)
-├── config.yaml         # Configuration file (fill in credentials)
-└── package.json
-```
-
-## Tech Stack
-
-- **Electron** — Desktop app framework
-- **ByteDance Doubao ASR** — Streaming speech recognition (WebSocket + binary protocol)
-- **gzip** — Custom binary framing (4-byte header + compressed JSON)
-- **AppleScript / PowerShell** — Simulates Cmd+V / Ctrl+V paste
-
-## How It Works
-
-```
-Press hotkey → Start recording → Mic captures PCM audio → Downsample to 16kHz
-  → IPC audio chunks → WebSocket to ASR service
-  → Stream back results → Overlay displays text
-Press again → Wait for final result → Copy to clipboard → AppleScript Cmd+V paste
-```
-
-## System Requirements
-
-- macOS 12+ / Windows 10+
-- Node.js 18+
-- pnpm
-
-## Development
-
-```bash
-# Run in development mode
-pnpm dev
-
-# Package macOS app
-pnpm pack
-
-# Package Windows installer
-pnpm pack:win
-```
+- [Development Guide](docs/development.md)
+- [Changelog](docs/changelog.md)
 
 ## License
 
 [MIT](LICENSE)
-
----
-
-## Changelog
-
-### v1.1.0 (2025-04)
-
-- **UI Redesign** — New Claude-inspired interface with warm minimalism color palette
-- **Overlay Optimization** — Eliminated text flickering during speech, smooth horizontal expansion animation
-- **Cross-platform Fonts** — Unified sans-serif font stack for macOS / Windows
-- **External Links** — Settings page links now open in the system default browser
-- **Settings Page** — Added GitHub repo link, unified terra cotta section theme
-- **FAQ** — Added common questions (macOS permissions, non-stream hotwords, Windows compatibility)
-
-### v1.0.0 (2025-03)
-
-- Initial release
-- Global hotkey voice input
-- ByteDance Doubao streaming ASR
-- Auto-paste into the focused input field
-- Floating overlay with real-time transcription
-- Hotword support

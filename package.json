@@ -1,6 +1,6 @@
 {
   "name": "voicepaste",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Voice-to-text input tool — press a hotkey, speak, auto-paste.",
   "author": "that-yolanda",
   "license": "MIT",
