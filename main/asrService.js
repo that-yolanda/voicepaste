@@ -18,7 +18,6 @@ function writeUInt32BE(num) {
 }
 
 function encodeFullClientRequest(payloadObject) {
-
   console.debug(payloadObject);
 
   const payload = Buffer.from(JSON.stringify(payloadObject), "utf8");
@@ -63,7 +62,10 @@ function parseServerResponse(buffer) {
       return null;
     }
 
-    const errorText = buffer.subarray(offset, offset + errorSize).toString("utf8").trim();
+    const errorText = buffer
+      .subarray(offset, offset + errorSize)
+      .toString("utf8")
+      .trim();
 
     try {
       return {
@@ -237,8 +239,7 @@ function isIgnorableRawText(text, connectId) {
     return true;
   }
 
-  const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   if (uuidPattern.test(normalized)) {
     return true;
@@ -407,7 +408,7 @@ function createAsrSession({
       }
     } else {
       const latest = utterances[utterances.length - 1];
-      partialText = latest?.definite ? "" : (latest?.text || "");
+      partialText = latest?.definite ? "" : latest?.text || "";
     }
 
     if (isCommitted || !partialText) {

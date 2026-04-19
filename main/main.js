@@ -1,8 +1,31 @@
 const path = require("node:path");
 const fs = require("node:fs");
-const { app, Menu, Tray, nativeImage, globalShortcut, ipcMain, systemPreferences, dialog, shell, nativeTheme } = require("electron");
-const { createOverlayWindow, createSettingsWindow, positionOverlayWindow } = require("./windowManager");
-const { CONFIG_PATH, loadConfig, readConfigFile, saveConfigText, getEditableConfig, saveConfig, resetConfigToDefault } = require("./config");
+const {
+  app,
+  Menu,
+  Tray,
+  nativeImage,
+  globalShortcut,
+  ipcMain,
+  systemPreferences,
+  dialog,
+  shell,
+  nativeTheme,
+} = require("electron");
+const {
+  createOverlayWindow,
+  createSettingsWindow,
+  positionOverlayWindow,
+} = require("./windowManager");
+const {
+  CONFIG_PATH,
+  loadConfig,
+  readConfigFile,
+  saveConfigText,
+  getEditableConfig,
+  saveConfig,
+  resetConfigToDefault,
+} = require("./config");
 const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
 const { logInfo, logError, resolveLogPath } = require("./logger");
@@ -12,9 +35,9 @@ let currentConfig = loadConfig();
 const ESC_HOTKEY = "Esc";
 const DEBOUNCE_MS = 200;
 
-let pressedKeys = new Set();
+const pressedKeys = new Set();
 let isRecordingHotkey = false;
-let recordingCombo = new Set();
+const recordingCombo = new Set();
 let maxRecordingSize = 0;
 let hotkeyRecorderResolve = null;
 let isUiohookAvailable = false;
@@ -47,8 +70,8 @@ uIOhook.on("keyup", (e) => {
   if (isRecordingHotkey && maxRecordingSize > 0) {
     const finalCombo = Array.from(recordingCombo);
     isRecordingHotkey = false;
-    pressedKeys.clear(); 
-    
+    pressedKeys.clear();
+
     if (hotkeyRecorderResolve) {
       hotkeyRecorderResolve(finalCombo);
       hotkeyRecorderResolve = null;
@@ -85,10 +108,18 @@ function tryStartUiohook() {
 const keyNames = {
   [UiohookKey.Escape]: "Escape",
   [UiohookKey.F1]: "F1",
-  [UiohookKey.F2]: "F2", [UiohookKey.F3]: "F3", [UiohookKey.F4]: "F4",
-  [UiohookKey.F5]: "F5", [UiohookKey.F6]: "F6", [UiohookKey.F7]: "F7",
-  [UiohookKey.F8]: "F8", [UiohookKey.F9]: "F9", [UiohookKey.F10]: "F10",
-  [UiohookKey.F11]: "F11", [UiohookKey.F12]: "F12", [UiohookKey.F13]: "F13",
+  [UiohookKey.F2]: "F2",
+  [UiohookKey.F3]: "F3",
+  [UiohookKey.F4]: "F4",
+  [UiohookKey.F5]: "F5",
+  [UiohookKey.F6]: "F6",
+  [UiohookKey.F7]: "F7",
+  [UiohookKey.F8]: "F8",
+  [UiohookKey.F9]: "F9",
+  [UiohookKey.F10]: "F10",
+  [UiohookKey.F11]: "F11",
+  [UiohookKey.F12]: "F12",
+  [UiohookKey.F13]: "F13",
   [UiohookKey.Space]: "Space",
   [UiohookKey.Enter]: "Enter",
   [UiohookKey.Backspace]: "Backspace",
@@ -101,17 +132,36 @@ const keyNames = {
   [UiohookKey.CtrlRight]: "R-Control",
   [UiohookKey.Meta]: "L-Command",
   [UiohookKey.MetaRight]: "R-Command",
-  [UiohookKey.A]: "A", [UiohookKey.B]: "B", [UiohookKey.C]: "C",
-  [UiohookKey.D]: "D", [UiohookKey.E]: "E", [UiohookKey.F]: "F",
-  [UiohookKey.G]: "G", [UiohookKey.H]: "H", [UiohookKey.I]: "I",
-  [UiohookKey.J]: "J", [UiohookKey.K]: "K", [UiohookKey.L]: "L",
-  [UiohookKey.M]: "M", [UiohookKey.N]: "N", [UiohookKey.O]: "O",
-  [UiohookKey.P]: "P", [UiohookKey.Q]: "Q", [UiohookKey.R]: "R",
-  [UiohookKey.S]: "S", [UiohookKey.T]: "T", [UiohookKey.U]: "U",
-  [UiohookKey.V]: "V", [UiohookKey.W]: "W", [UiohookKey.X]: "X",
-  [UiohookKey.Y]: "Y", [UiohookKey.Z]: "Z",
-  [UiohookKey.ArrowUp]: "Up", [UiohookKey.ArrowDown]: "Down",
-  [UiohookKey.ArrowLeft]: "Left", [UiohookKey.ArrowRight]: "Right"
+  [UiohookKey.A]: "A",
+  [UiohookKey.B]: "B",
+  [UiohookKey.C]: "C",
+  [UiohookKey.D]: "D",
+  [UiohookKey.E]: "E",
+  [UiohookKey.F]: "F",
+  [UiohookKey.G]: "G",
+  [UiohookKey.H]: "H",
+  [UiohookKey.I]: "I",
+  [UiohookKey.J]: "J",
+  [UiohookKey.K]: "K",
+  [UiohookKey.L]: "L",
+  [UiohookKey.M]: "M",
+  [UiohookKey.N]: "N",
+  [UiohookKey.O]: "O",
+  [UiohookKey.P]: "P",
+  [UiohookKey.Q]: "Q",
+  [UiohookKey.R]: "R",
+  [UiohookKey.S]: "S",
+  [UiohookKey.T]: "T",
+  [UiohookKey.U]: "U",
+  [UiohookKey.V]: "V",
+  [UiohookKey.W]: "W",
+  [UiohookKey.X]: "X",
+  [UiohookKey.Y]: "Y",
+  [UiohookKey.Z]: "Z",
+  [UiohookKey.ArrowUp]: "Up",
+  [UiohookKey.ArrowDown]: "Down",
+  [UiohookKey.ArrowLeft]: "Left",
+  [UiohookKey.ArrowRight]: "Right",
 };
 
 function formatHotkey(hotkey) {
@@ -428,7 +478,10 @@ async function finishRecordingFlow() {
 
     if (!pasteResult.ok) {
       console.error("[Paste] failed", pasteResult.message);
-      logError("paste failed", { message: pasteResult.message, permissionError: pasteResult.permissionError });
+      logError("paste failed", {
+        message: pasteResult.message,
+        permissionError: pasteResult.permissionError,
+      });
 
       if (pasteResult.permissionError === "accessibility") {
         const result = await dialog.showMessageBox({
@@ -442,7 +495,7 @@ async function finishRecordingFlow() {
         });
         if (result.response === 0) {
           shell.openExternal(
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
           );
         }
       }
@@ -663,9 +716,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("settings:record-hotkey", async () => {
     if (!tryStartUiohook()) {
-      const platformHint = process.platform === "darwin"
-        ? "请先在系统设置 > 隐私与安全 > 辅助功能中授权 VoicePaste，然后重启应用。"
-        : "请确认当前系统允许全局键盘监听后重试。";
+      const platformHint =
+        process.platform === "darwin"
+          ? "请先在系统设置 > 隐私与安全 > 辅助功能中授权 VoicePaste，然后重启应用。"
+          : "请确认当前系统允许全局键盘监听后重试。";
       const detail = uiohookStartError?.message ? `\n\n底层错误：${uiohookStartError.message}` : "";
       throw new Error(`无法录制快捷键。${platformHint}${detail}`);
     }
@@ -674,7 +728,7 @@ app.whenReady().then(() => {
     recordingCombo.clear();
     maxRecordingSize = 0;
     pressedKeys.clear();
-    
+
     const keys = await new Promise((resolve) => {
       hotkeyRecorderResolve = resolve;
     });
@@ -686,9 +740,10 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("settings:get-data", async () => {
-    const microphoneStatus = process.platform === "darwin"
-      ? systemPreferences.getMediaAccessStatus("microphone")
-      : "granted";
+    const microphoneStatus =
+      process.platform === "darwin"
+        ? systemPreferences.getMediaAccessStatus("microphone")
+        : "granted";
 
     return {
       configPath: CONFIG_PATH,
@@ -780,15 +835,16 @@ app.whenReady().then(() => {
   ipcMain.handle("settings:open-accessibility-settings", async () => {
     if (process.platform === "darwin") {
       await shell.openExternal(
-        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
       );
     }
   });
 
   ipcMain.handle("settings:get-microphone-status", async () => {
-    const status = process.platform === "darwin"
-      ? systemPreferences.getMediaAccessStatus("microphone")
-      : "granted";
+    const status =
+      process.platform === "darwin"
+        ? systemPreferences.getMediaAccessStatus("microphone")
+        : "granted";
 
     logInfo("settings microphone status", { status });
     return { status };

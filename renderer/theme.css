@@ -3,11 +3,11 @@
 :root {
   color-scheme: dark;
 
-  --bg: #141413;
-  --surface: #1e1e1c;
-  --surface-hover: #282826;
+  --bg: #000000;
+  --surface: #141413;
+  --surface-hover: #1e1e1c;
   --input-bg: rgba(250, 249, 245, 0.04);
-  --sidebar-bg: rgba(20, 20, 19, 0.5);
+  --sidebar-bg: rgba(0, 0, 0, 0.5);
 
   --border: rgba(250, 249, 245, 0.08);
   --border-hover: rgba(250, 249, 245, 0.14);
@@ -28,13 +28,13 @@
   --text-dim: #b0aea5;
   --text-muted: #7a7870;
 
-  --success: #8faa7e;
-  --warning: #d4a46a;
-  --error: #c47060;
+  --success: #6cbf6c;
+  --warning: #e8a840;
+  --error: #e05550;
 
-  --glow-success: rgba(143, 170, 126, 0.3);
-  --glow-warning: rgba(212, 164, 106, 0.3);
-  --glow-error: rgba(196, 112, 96, 0.3);
+  --glow-success: rgba(108, 191, 108, 0.3);
+  --glow-warning: rgba(232, 168, 64, 0.3);
+  --glow-error: rgba(224, 85, 80, 0.3);
 
   --fill-subtle: rgba(250, 249, 245, 0.02);
   --fill-hover: rgba(250, 249, 245, 0.03);
@@ -51,8 +51,8 @@
   --tag-hover-bg: rgba(198, 97, 63, 0.14);
   --tag-hover-border: rgba(198, 97, 63, 0.25);
 
-  --overlay-bg: rgba(20, 20, 19, 0.94);
-  --overlay-card: rgb(20, 20, 19);
+  --overlay-bg: rgba(0, 0, 0, 0.94);
+  --overlay-card: rgb(0, 0, 0);
   --overlay-text: rgba(250, 249, 245, 0.96);
   --overlay-muted: rgba(250, 249, 245, 0.55);
   --overlay-soft: rgba(250, 249, 245, 0.38);

@@ -10,12 +10,7 @@ function resolveLogPath() {
 function writeLog(level, message, meta) {
   try {
     const logPath = resolveLogPath();
-    const line = [
-      new Date().toISOString(),
-      level,
-      message,
-      meta ? JSON.stringify(meta) : "",
-    ]
+    const line = [new Date().toISOString(), level, message, meta ? JSON.stringify(meta) : ""]
       .filter(Boolean)
       .join(" ");
 

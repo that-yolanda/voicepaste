@@ -24,19 +24,18 @@ function runAppleScript(scriptLines) {
 
 function runPowerShell(scriptContent) {
   return new Promise((resolve, reject) => {
-    execFile("powershell", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      scriptContent,
-    ], (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(stderr?.trim() || error.message));
-        return;
-      }
+    execFile(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-Command", scriptContent],
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr?.trim() || error.message));
+          return;
+        }
 
-      resolve(stdout.trim());
-    });
+        resolve(stdout.trim());
+      },
+    );
   });
 }
 
@@ -53,9 +52,7 @@ async function pasteTextToFocusedElement(text, keepClipboard = true) {
         "end tell",
       ]);
     } else {
-      await runPowerShell(
-        "(New-Object -ComObject WScript.Shell).SendKeys('^v')"
-      );
+      await runPowerShell("(New-Object -ComObject WScript.Shell).SendKeys('^v')");
     }
 
     // Give the target app a brief moment to read the clipboard before restoring it.
@@ -70,12 +67,12 @@ async function pasteTextToFocusedElement(text, keepClipboard = true) {
     };
   } catch (error) {
     const msg = error.message || "";
-    const isAccessibilityError = process.platform === "darwin" && (
-      /not allowed/i.test(msg) ||
-      /not authorized/i.test(msg) ||
-      /keystroke/i.test(msg) ||
-      /apple event/i.test(msg)
-    );
+    const isAccessibilityError =
+      process.platform === "darwin" &&
+      (/not allowed/i.test(msg) ||
+        /not authorized/i.test(msg) ||
+        /keystroke/i.test(msg) ||
+        /apple event/i.test(msg));
 
     if (!keepClipboard) {
       clipboard.writeText(previousText);

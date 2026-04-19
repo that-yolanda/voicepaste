@@ -17,7 +17,13 @@ pnpm pack             # Build macOS zip via electron-builder
 pnpm pack:win         # Build Windows NSIS installer via electron-builder
 ```
 
-No test framework or linter is configured.
+```bash
+pnpm lint          # Biome lint check (main/ preload/ renderer/)
+pnpm format        # Biome auto-format (main/ preload/ renderer/)
+pnpm check         # Biome check + auto-fix (lint + format)
+```
+
+No test framework is configured.
 
 ## Architecture
 
@@ -57,6 +63,12 @@ Contains hotkey, app-level behavior toggles (`remove_trailing_period`, `keep_cli
 - `config.yaml.example` is the sanitized template (empty credentials)
 - Packaging uses `config.yaml.example` as the source for both `config.yaml` and `config.yaml.example` in the bundle, ensuring no real tokens are shipped
 - The settings page has a "还原默认" button that overwrites `config.yaml` with `config.yaml.example` content
+
+## Code Quality
+
+- **Biome** is configured for linting and formatting (`biome.json`)
+- After any code change, you **MUST** run `pnpm check` to ensure no lint or formatting issues remain before committing
+- Fix all errors and warnings reported by Biome before considering a task complete
 
 ## Key Conventions
 

@@ -1,6 +1,6 @@
 (() => {
   let parsedConfig = {};
-  let originalConfigText = "";
+  let _originalConfigText = "";
   let hotwords = [];
   let isDirty = false;
   let currentThemePreference = "system";
@@ -91,7 +91,7 @@
   async function loadSettings() {
     try {
       const data = await window.voiceSettings.getData();
-      originalConfigText = data.configText || "";
+      _originalConfigText = data.configText || "";
       parsedConfig = data.parsedConfig || {};
       populateForm(data);
       initThemeSelector(data);
@@ -102,10 +102,12 @@
       try {
         const loginSettings = await window.voiceSettings.getLoginItemSettings();
         el.autoStart.checked = loginSettings.openAtLogin;
-      } catch (_) { /* ignore */ }
+      } catch (_) {
+        /* ignore */
+      }
       isDirty = false;
       setSaveStatus("已加载", "success");
-    } catch (err) {
+    } catch (_err) {
       setSaveStatus("加载失败", "error");
     }
   }
@@ -113,18 +115,21 @@
   function populateForm(data) {
     const c = parsedConfig;
 
-    el.hotkey.value = data.runtime?.hotkeyDisplay || (Array.isArray(c.app?.hotkey) ? "自定义快捷键" : c.app?.hotkey || "F13");
+    el.hotkey.value =
+      data.runtime?.hotkeyDisplay ||
+      (Array.isArray(c.app?.hotkey) ? "自定义快捷键" : c.app?.hotkey || "F13");
     el.configPath.textContent = data.configPath || "-";
-    el.appVersion.textContent = "v" + (data.runtime?.version || "");
+    el.appVersion.textContent = `v${data.runtime?.version || ""}`;
 
     if (data.runtime?.platform !== "darwin" && el.accessibilityRow) {
       el.accessibilityRow.style.display = "none";
     }
 
     if (el.permHint) {
-      el.permHint.textContent = data.runtime?.platform === "darwin"
-        ? "macOS 需要麦克风权限和辅助功能权限，可前往：系统设置 > 隐私与安全 > 麦克风 / 辅助功能"
-        : "当前系统无需额外权限配置。";
+      el.permHint.textContent =
+        data.runtime?.platform === "darwin"
+          ? "macOS 需要麦克风权限和辅助功能权限，可前往：系统设置 > 隐私与安全 > 麦克风 / 辅助功能"
+          : "当前系统无需额外权限配置。";
     }
 
     el.wsUrl.value = c.connection?.url || "";
@@ -142,7 +147,10 @@
 
     const raw = c.request?.corpus?.context_hotwords;
     if (typeof raw === "string") {
-      hotwords = raw.split(",").map((s) => s.trim()).filter(Boolean);
+      hotwords = raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
     } else if (Array.isArray(raw)) {
       hotwords = raw
         .map((h) => (typeof h === "string" ? h.trim() : (h?.word || "").trim()))
@@ -246,7 +254,7 @@
       .map((word, i) => {
         const isMatch = query && word.toLowerCase() === query;
         const isDimmed = query && !word.toLowerCase().includes(query);
-        const cls = "tag" + (isMatch ? " is-match" : isDimmed ? " is-dimmed" : "");
+        const cls = `tag${isMatch ? " is-match" : isDimmed ? " is-dimmed" : ""}`;
         return (
           `<span class="${cls}">` +
           `<span class="tag-word">${escapeHtml(word)}</span>` +
@@ -385,11 +393,9 @@
   });
 
   el.toggleAccessToken.addEventListener("click", () =>
-    toggleSecret("accessToken", el.toggleAccessToken)
+    toggleSecret("accessToken", el.toggleAccessToken),
   );
-  el.toggleSecretKey.addEventListener("click", () =>
-    toggleSecret("secretKey", el.toggleSecretKey)
-  );
+  el.toggleSecretKey.addEventListener("click", () => toggleSecret("secretKey", el.toggleSecretKey));
 
   el.reloadYamlBtn.addEventListener("click", loadSettings);
   el.saveYamlBtn.addEventListener("click", saveFromYaml);
@@ -427,10 +433,7 @@
     btn.addEventListener("click", () => {
       const section = btn.closest(".section");
       section.classList.toggle("is-open");
-      btn.setAttribute(
-        "aria-expanded",
-        section.classList.contains("is-open")
-      );
+      btn.setAttribute("aria-expanded", section.classList.contains("is-open"));
     });
   });
 
@@ -444,7 +447,7 @@
     const link = document.createElement("a");
     link.className = "sidebar-link";
     link.textContent = label;
-    link.href = "#" + section.id;
+    link.href = `#${section.id}`;
     link.addEventListener("click", (e) => {
       e.preventDefault();
       section.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -496,7 +499,7 @@
       const result = await window.voiceSettings.setTheme(preference);
       applyTheme(result.resolved);
       currentThemePreference = preference;
-    } catch (err) {
+    } catch (_err) {
       el.themeSelector.querySelectorAll(".theme-option").forEach((btn) => {
         btn.dataset.active = btn.dataset.value === currentThemePreference ? "true" : "false";
       });

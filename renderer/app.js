@@ -149,7 +149,10 @@ function int16ToBase64(int16Array) {
 function flushPendingAudio(force = false) {
   const targetChunkSize = 3200;
 
-  while (state.pendingSamples.length >= targetChunkSize || (force && state.pendingSamples.length > 0)) {
+  while (
+    state.pendingSamples.length >= targetChunkSize ||
+    (force && state.pendingSamples.length > 0)
+  ) {
     const chunkSize = force
       ? Math.min(state.pendingSamples.length, targetChunkSize)
       : targetChunkSize;
@@ -237,7 +240,9 @@ async function stopAudioCapture() {
   }
 
   if (state.mediaStream) {
-    state.mediaStream.getTracks().forEach((track) => track.stop());
+    for (const track of state.mediaStream.getTracks()) {
+      track.stop();
+    }
     state.mediaStream = null;
   }
 
@@ -256,7 +261,12 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       break;
     case "state":
       state.appState = payload.state;
-      if (payload.state === "idle" || payload.state === "connecting" || payload.state === "recording" || payload.state === "finishing") {
+      if (
+        payload.state === "idle" ||
+        payload.state === "connecting" ||
+        payload.state === "recording" ||
+        payload.state === "finishing"
+      ) {
         if (state.hintLevel === "info") {
           state.hintText = "";
         }

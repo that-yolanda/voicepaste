@@ -28,9 +28,13 @@
     "dev": "electron .",
     "pack": "electron-builder --mac zip",
     "pack:win": "electron-builder --win nsis --x64",
+    "lint": "biome lint ./main ./preload ./renderer",
+    "format": "biome format --write ./main ./preload ./renderer",
+    "check": "biome check --write ./main ./preload ./renderer",
     "postinstall": "node node_modules/.pnpm/electron@41.2.0/node_modules/electron/install.js"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
     "electron": "^41.2.0",
     "electron-builder": "^26.0.12"
   },
