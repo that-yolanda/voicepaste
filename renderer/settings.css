@@ -18,12 +18,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    "PingFang SC",
-    "Microsoft YaHei",
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -74,7 +69,10 @@ body {
   color: var(--text-dim);
   text-decoration: none;
   border-left: 2px solid transparent;
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    border-color 0.2s,
+    background 0.2s;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -111,15 +109,37 @@ body {
   opacity: 0.7;
 }
 
-.brand-wave span:nth-child(1) { height: 6px; animation: wave 1.4s ease-in-out infinite 0.0s; }
-.brand-wave span:nth-child(2) { height: 12px; animation: wave 1.4s ease-in-out infinite 0.12s; }
-.brand-wave span:nth-child(3) { height: 20px; animation: wave 1.4s ease-in-out infinite 0.24s; }
-.brand-wave span:nth-child(4) { height: 14px; animation: wave 1.4s ease-in-out infinite 0.36s; }
-.brand-wave span:nth-child(5) { height: 8px; animation: wave 1.4s ease-in-out infinite 0.48s; }
+.brand-wave span:nth-child(1) {
+  height: 6px;
+  animation: wave 1.4s ease-in-out infinite 0s;
+}
+.brand-wave span:nth-child(2) {
+  height: 12px;
+  animation: wave 1.4s ease-in-out infinite 0.12s;
+}
+.brand-wave span:nth-child(3) {
+  height: 20px;
+  animation: wave 1.4s ease-in-out infinite 0.24s;
+}
+.brand-wave span:nth-child(4) {
+  height: 14px;
+  animation: wave 1.4s ease-in-out infinite 0.36s;
+}
+.brand-wave span:nth-child(5) {
+  height: 8px;
+  animation: wave 1.4s ease-in-out infinite 0.48s;
+}
 
 @keyframes wave {
-  0%, 100% { transform: scaleY(0.4); opacity: 0.35; }
-  50% { transform: scaleY(1); opacity: 0.85; }
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 0.85;
+  }
 }
 
 .brand-name {
@@ -184,24 +204,49 @@ body {
   height: 6px;
   border-radius: 50%;
   background: var(--text-muted);
-  transition: background 0.2s, box-shadow 0.2s;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
 }
 
-.save-status[data-level="success"] { color: var(--success); }
-.save-status[data-level="success"]::before { background: var(--success); box-shadow: 0 0 6px var(--glow-success); }
+.save-status[data-level="success"] {
+  color: var(--success);
+}
+.save-status[data-level="success"]::before {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--glow-success);
+}
 
-.save-status[data-level="dirty"] { color: var(--warning); }
-.save-status[data-level="dirty"]::before { background: var(--warning); }
+.save-status[data-level="dirty"] {
+  color: var(--warning);
+}
+.save-status[data-level="dirty"]::before {
+  background: var(--warning);
+}
 
-.save-status[data-level="error"] { color: var(--error); }
-.save-status[data-level="error"]::before { background: var(--error); }
+.save-status[data-level="error"] {
+  color: var(--error);
+}
+.save-status[data-level="error"]::before {
+  background: var(--error);
+}
 
-.save-status[data-level="saving"] { color: var(--accent); }
-.save-status[data-level="saving"]::before { background: var(--accent); animation: pulse 1s infinite; }
+.save-status[data-level="saving"] {
+  color: var(--accent);
+}
+.save-status[data-level="saving"]::before {
+  background: var(--accent);
+  animation: pulse 1s infinite;
+}
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 /* ===== BUTTONS ===== */
@@ -217,7 +262,10 @@ body {
   cursor: pointer;
   padding: 0 16px;
   height: 34px;
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s;
   font-family: inherit;
   white-space: nowrap;
   letter-spacing: -0.005em;
@@ -342,13 +390,12 @@ body {
 }
 
 .label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-dim);
 }
 
 .static-text {
-  font-size: 13px;
   color: var(--text);
   padding: 8px 0;
   font-family: "SF Mono", "Menlo", monospace;
@@ -367,7 +414,9 @@ body {
   color: var(--text);
   font-size: 13px;
   font-family: inherit;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .input.mono {
@@ -415,7 +464,10 @@ body {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s;
   font-family: inherit;
   white-space: nowrap;
 }
@@ -509,7 +561,9 @@ body {
   color: var(--text-dim);
   font-size: 12px;
   cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
   font-family: inherit;
   white-space: nowrap;
 }
@@ -546,7 +600,9 @@ body {
   height: 8px;
   border-radius: 50%;
   background: var(--text-muted);
-  transition: background 0.3s, box-shadow 0.3s;
+  transition:
+    background 0.3s,
+    box-shadow 0.3s;
   flex-shrink: 0;
 }
 
@@ -593,7 +649,8 @@ body {
 
 .toggle {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
   cursor: pointer;
   padding: 10px 4px;
@@ -617,7 +674,6 @@ body {
   background: var(--fill-track);
   position: relative;
   transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  margin-top: 2px;
 }
 
 .toggle input:checked + .track {
@@ -632,19 +688,22 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--text);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--text-dim);
+  transition:
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .toggle input:checked + .track::after {
   transform: translateX(16px);
+  background: var(--text-on-accent);
 }
 
 .toggle-info {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -655,57 +714,58 @@ body {
   line-height: 1.4;
 }
 
-.toggle-desc {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  margin-top: 1px;
-}
-
 /* ===== THEME SELECTOR ===== */
+
+.theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
 
 .theme-selector {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
 }
 
 .theme-option {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 12px 8px;
+  padding: 5px 14px;
   border: 1px solid var(--border);
-  border-radius: 8px;
   background: var(--input-bg);
   color: var(--text-dim);
   font-size: 12px;
   font-family: inherit;
+  font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s;
+  position: relative;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+}
+
+.theme-option + .theme-option {
+  margin-left: -1px;
+}
+
+.theme-option:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.theme-option:last-child {
+  border-radius: 0 6px 6px 0;
 }
 
 .theme-option:hover {
-  border-color: var(--border-hover);
   background: var(--fill-hover);
+  color: var(--text);
+  z-index: 1;
 }
 
 .theme-option[data-active="true"] {
+  background: var(--accent);
   border-color: var(--accent);
-  background: var(--accent-dim);
-  color: var(--text);
-  box-shadow: 0 0 0 3px var(--accent-dim);
-}
-
-.theme-option-icon {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.theme-option-label {
-  font-weight: 500;
+  color: var(--text-on-accent);
+  z-index: 2;
 }
 
 /* ===== COLLAPSIBLE SECTIONS ===== */
@@ -780,7 +840,10 @@ body {
   border-radius: 6px;
   font-size: 12.5px;
   color: var(--text);
-  transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    opacity 0.2s;
   animation: tag-in 0.2s ease-out;
 }
 
@@ -827,7 +890,9 @@ body {
   line-height: 1;
   cursor: pointer;
   padding: 0;
-  transition: color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    background 0.2s;
   font-family: inherit;
 }
 
@@ -880,7 +945,9 @@ body {
   font-size: 12px;
   line-height: 1.65;
   tab-size: 2;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .yaml-editor:focus {

@@ -68,7 +68,7 @@ function createSettingsWindow() {
     show: false,
     frame: true,
     title: "VoicePaste 配置",
-    backgroundColor: "#141413",
+    backgroundColor: "#000000",
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "preload.js"),

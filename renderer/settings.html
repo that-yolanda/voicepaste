@@ -23,9 +23,9 @@
       </div>
       <div class="header-actions">
         <span class="save-status" id="saveStatus">加载中</span>
-        <button class="btn btn-ghost" id="resetBtn">还原默认</button>
-        <button class="btn btn-ghost" id="reloadBtn">刷新配置</button>
-        <button class="btn btn-accent" id="saveBtn">保存配置</button>
+        <button type="button" class="btn btn-ghost" id="resetBtn">还原默认</button>
+        <button type="button" class="btn btn-ghost" id="reloadBtn">刷新配置</button>
+        <button type="button" class="btn btn-accent" id="saveBtn">保存配置</button>
       </div>
     </header>
 
@@ -53,30 +53,19 @@
               <div class="static-text" id="configPath">-</div>
             </div>
             <label class="toggle">
-              <input type="checkbox" id="autoStart" checked />
-              <span class="track"></span>
               <div class="toggle-info">
                 <span class="toggle-name">开机自动启动</span>
-                <span class="toggle-desc">登录系统时自动启动 VoicePaste</span>
               </div>
+              <input type="checkbox" id="autoStart" checked />
+              <span class="track"></span>
             </label>
-            <div class="field" style="margin-top: 4px">
-              <label class="label">外观主题 <span class="label-path">app.theme</span></label>
+            <div class="theme-row">
+              <span class="label">外观主题 <span class="label-path">app.theme</span></span>
               <div class="theme-selector" id="themeSelector">
-                <button type="button" class="theme-option" data-value="system">
-                  <span class="theme-option-icon">&#9681;</span>
-                  <span class="theme-option-label">跟随系统</span>
-                </button>
-                <button type="button" class="theme-option" data-value="light">
-                  <span class="theme-option-icon">&#9788;</span>
-                  <span class="theme-option-label">浅色</span>
-                </button>
-                <button type="button" class="theme-option" data-value="dark">
-                  <span class="theme-option-icon">&#9789;</span>
-                  <span class="theme-option-label">深色</span>
-                </button>
+                <button type="button" class="theme-option" data-value="system">跟随系统</button>
+                <button type="button" class="theme-option" data-value="light">浅色</button>
+                <button type="button" class="theme-option" data-value="dark">深色</button>
               </div>
-              <div class="field-desc">选择浅色或深色外观，或跟随系统设置自动切换。</div>
             </div>
           </div>
         </div>
@@ -94,8 +83,8 @@
               <span class="perm-status" id="micText">检测中</span>
             </div>
             <div class="perm-btns">
-              <button class="btn btn-ghost btn-sm" id="checkMicBtn">检测权限</button>
-              <button class="btn btn-accent btn-sm" id="requestMicBtn">请求权限</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="checkMicBtn">检测权限</button>
+              <button type="button" class="btn btn-accent btn-sm" id="requestMicBtn">请求权限</button>
             </div>
           </div>
 
@@ -104,11 +93,11 @@
               <span class="perm-label">辅助功能权限</span>
             </div>
             <div class="perm-btns">
-              <button class="btn btn-accent btn-sm" id="openAccBtn">前往授权</button>
+              <button type="button" class="btn btn-accent btn-sm" id="openAccBtn">前往授权</button>
             </div>
           </div>
 
-          <p class="hint-text" id="permHint">MacOS 需要麦克风权限和辅助功能权限，可前往：系统设置 -> 隐私与隐私 -> 麦克风权限/辅助功能权限</p>
+          <p class="hint-text" id="permHint">* MacOS 需要麦克风权限和辅助功能权限，可前往：系统设置 -> 隐私与隐私 -> 麦克风权限/辅助功能权限</p>
         </div>
       </section>
 
@@ -161,52 +150,52 @@
           <h2 class="section-title">高级配置</h2>
           <div class="toggle-grid">
             <label class="toggle">
+              <div class="toggle-info">
+                <span class="toggle-name">语义顺滑</span>
+                <span class="label-path">request.enable_ddc</span>
+              </div>
               <input type="checkbox" id="enableDdc" checked />
               <span class="track"></span>
-              <div class="toggle-info">
-                <span class="toggle-name">语义顺滑 <span class="label-path">request.enable_ddc</span></span>
-                <span class="toggle-desc">让文本更像自然书面语</span>
-              </div>
             </label>
             <label class="toggle">
+              <div class="toggle-info">
+                <span class="toggle-name">二遍识别</span>
+                <span class="label-path">request.enable_nonstream</span>
+              </div>
               <input type="checkbox" id="enableNonstream" />
               <span class="track"></span>
-              <div class="toggle-info">
-                <span class="toggle-name">二遍识别 <span class="label-path">request.enable_nonstream</span></span>
-                <span class="toggle-desc">整体更准确，但可能改变专有名词</span>
-              </div>
             </label>
             <label class="toggle">
+              <div class="toggle-info">
+                <span class="toggle-name">数字格式化</span>
+                <span class="label-path">request.enable_itn</span>
+              </div>
               <input type="checkbox" id="enableItn" checked />
               <span class="track"></span>
-              <div class="toggle-info">
-                <span class="toggle-name">数字格式化 <span class="label-path">request.enable_itn</span></span>
-                <span class="toggle-desc">数字、日期等自动格式化</span>
-              </div>
             </label>
             <label class="toggle">
+              <div class="toggle-info">
+                <span class="toggle-name">自动标点</span>
+                <span class="label-path">request.enable_punc</span>
+              </div>
               <input type="checkbox" id="enablePunc" checked />
               <span class="track"></span>
-              <div class="toggle-info">
-                <span class="toggle-name">自动标点 <span class="label-path">request.enable_punc</span></span>
-                <span class="toggle-desc">自动添加标点符号</span>
-              </div>
             </label>
             <label class="toggle">
+              <div class="toggle-info">
+                <span class="toggle-name">删除句尾句号</span>
+                <span class="label-path">app.remove_trailing_period</span>
+              </div>
               <input type="checkbox" id="removeTrailingPeriod" checked />
               <span class="track"></span>
-              <div class="toggle-info">
-                <span class="toggle-name">删除句尾句号 <span class="label-path">app.remove_trailing_period</span></span>
-                <span class="toggle-desc">自动删除最终输出文本末尾的句号</span>
-              </div>
             </label>
             <label class="toggle">
+              <div class="toggle-info">
+                <span class="toggle-name">保留结果在剪贴板</span>
+                <span class="label-path">app.keep_clipboard</span>
+              </div>
               <input type="checkbox" id="keepClipboard" checked />
               <span class="track"></span>
-              <div class="toggle-info">
-                <span class="toggle-name">保留结果在剪贴板 <span class="label-path">app.keep_clipboard</span></span>
-                <span class="toggle-desc">勾选后将不再恢复原有剪贴板，方便在出现未知错误或无输入框时手动粘贴识别结果</span>
-              </div>
             </label>
           </div>
 
@@ -241,8 +230,8 @@
 
           <textarea id="yamlEditor" class="yaml-editor" spellcheck="false"></textarea>
           <div class="yaml-actions">
-            <button class="btn btn-ghost btn-sm" id="reloadYamlBtn">刷新配置</button>
-            <button class="btn btn-accent btn-sm" id="saveYamlBtn">保存 YAML</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="reloadYamlBtn">刷新配置</button>
+            <button type="button" class="btn btn-accent btn-sm" id="saveYamlBtn">保存 YAML</button>
           </div>
         </div>
       </section>
