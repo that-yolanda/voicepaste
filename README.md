@@ -15,6 +15,7 @@
 - **Auto Start** — Optional launch at login from the settings page
 - **Hotwords** — Custom hotwords to improve recognition accuracy for domain-specific terms
 - **Cross-platform** — Supports both macOS and Windows
+- **Theme** — Light / dark / system theme preference in settings
 
 ## Preview
 
@@ -51,6 +52,7 @@ Edit `config.yaml` in the project root and fill in your credentials:
 | `app.hotkey` | Global hotkey. Default template value is `Control+Space` |
 | `app.remove_trailing_period` | Remove trailing `。` / `.` from the final text |
 | `app.keep_clipboard` | Keep the result in the clipboard after paste |
+| `app.theme` | Theme preference: `dark` / `light` / `system` |
 | `connection.app_id` | Volcengine App ID |
 | `connection.access_token` | Volcengine Access Token |
 | `connection.secret_key` | Volcengine Secret Key |

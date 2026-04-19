@@ -15,6 +15,7 @@
 - **开机启动** — 可在设置页控制登录系统后自动启动
 - **热词支持** — 可自定义热词提升专业术语识别准确率
 - **跨平台支持** — 支持 macOS 与 Windows
+- **主题切换** — 支持浅色 / 深色 / 跟随系统主题偏好
 
 ## 效果预览
 
@@ -51,6 +52,7 @@
 | `app.hotkey` | 全局快捷键，默认模板值为 `Control+Space` |
 | `app.remove_trailing_period` | 自动删除最终文本末尾的 `。` / `.` |
 | `app.keep_clipboard` | 粘贴后保留识别结果在剪贴板 |
+| `app.theme` | 主题偏好：`dark` / `light` / `system` |
 | `connection.app_id` | 火山引擎 App ID |
 | `connection.access_token` | 火山引擎 Access Token |
 | `connection.secret_key` | 火山引擎 Secret Key |

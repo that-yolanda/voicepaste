@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.4 (2026-04)
+
+- **Theme Support** — Light / dark / system theme preference in settings, persisted via `app.theme`
+- **Unified Color System** — `theme.css` as the single source of truth for overlay and settings windows
+- **Settings UI Polish** — Restructured toggle layout (title left, switch right, field path below), theme selector as inline button group, removed verbose descriptions
+- **Overlay Fix** — Reset card dimensions on hide to prevent flash of stale size
+- **Build Fixes** — Disabled native rebuild for Windows packaging, fixed startup crash and ASR config error handling
+- **Code Quality** — Added @biomejs/biome for linting and formatting
+
 ## v1.0.3 (2026-04)
 
 - **Custom Hotkey Recording** — Added settings-based hotkey recording with `uIOhook`, including support for custom key combinations
