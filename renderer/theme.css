@@ -1,0 +1,106 @@
+/* ===== Dark theme (default) ===== */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #141413;
+  --surface: #1e1e1c;
+  --surface-hover: #282826;
+  --input-bg: rgba(250, 249, 245, 0.04);
+  --sidebar-bg: rgba(20, 20, 19, 0.5);
+
+  --border: rgba(250, 249, 245, 0.08);
+  --border-hover: rgba(250, 249, 245, 0.14);
+
+  --accent: #c6613f;
+  --accent-dim: rgba(198, 97, 63, 0.12);
+  --accent-glow: rgba(198, 97, 63, 0.25);
+  --accent-hover: #d97757;
+  --accent-active: #b5573a;
+  --text-on-accent: #faf9f5;
+
+  --blue: #6a9bcc;
+  --purple: #9a8abf;
+  --amber: #d4a46a;
+  --coral: #c47060;
+
+  --text: #faf9f5;
+  --text-dim: #b0aea5;
+  --text-muted: #7a7870;
+
+  --success: #8faa7e;
+  --warning: #d4a46a;
+  --error: #c47060;
+
+  --glow-success: rgba(143, 170, 126, 0.3);
+  --glow-warning: rgba(212, 164, 106, 0.3);
+  --glow-error: rgba(196, 112, 96, 0.3);
+
+  --fill-subtle: rgba(250, 249, 245, 0.02);
+  --fill-hover: rgba(250, 249, 245, 0.03);
+  --fill-interactive: rgba(250, 249, 245, 0.06);
+  --fill-track: rgba(250, 249, 245, 0.1);
+  --fill-overlay: rgba(250, 249, 245, 0.015);
+
+  --scrollbar-thumb: rgba(250, 249, 245, 0.08);
+  --scrollbar-thumb-hover: rgba(250, 249, 245, 0.16);
+
+  --tag-bg: rgba(198, 97, 63, 0.08);
+  --tag-border: rgba(198, 97, 63, 0.15);
+  --tag-match-bg: rgba(198, 97, 63, 0.18);
+  --tag-hover-bg: rgba(198, 97, 63, 0.14);
+  --tag-hover-border: rgba(198, 97, 63, 0.25);
+
+  --overlay-bg: rgba(20, 20, 19, 0.94);
+  --overlay-card: rgb(20, 20, 19);
+  --overlay-text: rgba(250, 249, 245, 0.96);
+  --overlay-muted: rgba(250, 249, 245, 0.55);
+  --overlay-soft: rgba(250, 249, 245, 0.38);
+  --overlay-spinner-border: rgba(250, 249, 245, 0.15);
+  --overlay-bar: rgba(250, 249, 245, 0.75);
+}
+
+/* ===== Light theme ===== */
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --surface-hover: #eeedea;
+  --input-bg: rgba(0, 0, 0, 0.04);
+  --sidebar-bg: rgba(247, 246, 243, 0.9);
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.14);
+
+  --accent-hover: #b5573a;
+  --accent-active: #a04830;
+
+  --text: #1a1a18;
+  --text-dim: #5a5850;
+  --text-muted: #8a887e;
+
+  --success: #5a8a4a;
+  --warning: #b8863a;
+  --error: #b05040;
+
+  --glow-success: rgba(90, 138, 74, 0.2);
+  --glow-warning: rgba(184, 134, 58, 0.2);
+  --glow-error: rgba(176, 80, 64, 0.2);
+
+  --fill-subtle: rgba(0, 0, 0, 0.02);
+  --fill-hover: rgba(0, 0, 0, 0.03);
+  --fill-interactive: rgba(0, 0, 0, 0.05);
+  --fill-track: rgba(0, 0, 0, 0.12);
+  --fill-overlay: rgba(0, 0, 0, 0.015);
+
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+
+  --tag-bg: rgba(198, 97, 63, 0.06);
+  --tag-border: rgba(198, 97, 63, 0.12);
+  --tag-match-bg: rgba(198, 97, 63, 0.12);
+  --tag-hover-bg: rgba(198, 97, 63, 0.1);
+  --tag-hover-border: rgba(198, 97, 63, 0.2);
+}

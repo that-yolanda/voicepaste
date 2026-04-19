@@ -3,6 +3,7 @@
   let originalConfigText = "";
   let hotwords = [];
   let isDirty = false;
+  let currentThemePreference = "system";
 
   const $ = (id) => document.getElementById(id);
 
@@ -47,6 +48,7 @@
     yamlEditor: $("yamlEditor"),
     reloadYamlBtn: $("reloadYamlBtn"),
     saveYamlBtn: $("saveYamlBtn"),
+    themeSelector: $("themeSelector"),
   };
 
   function setSaveStatus(text, level) {
@@ -69,12 +71,30 @@
       .replace(/"/g, "&quot;");
   }
 
+  function applyTheme(resolved) {
+    if (resolved === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }
+
+  function initThemeSelector(data) {
+    const info = data.runtime?.theme || {};
+    currentThemePreference = info.preference || "system";
+    applyTheme(info.resolved || "dark");
+    el.themeSelector.querySelectorAll(".theme-option").forEach((btn) => {
+      btn.dataset.active = btn.dataset.value === currentThemePreference ? "true" : "false";
+    });
+  }
+
   async function loadSettings() {
     try {
       const data = await window.voiceSettings.getData();
       originalConfigText = data.configText || "";
       parsedConfig = data.parsedConfig || {};
       populateForm(data);
+      initThemeSelector(data);
       el.yamlEditor.value = data.configText || "";
       updateMicStatus(data.runtime?.microphoneStatus || "unknown");
 
@@ -144,6 +164,7 @@
     config.app.hotkey = config.app.hotkey || el.hotkey.value.trim() || "F13";
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
+    config.app.theme = currentThemePreference;
 
     config.connection = config.connection || {};
     config.connection.url = el.wsUrl.value.trim();
@@ -457,6 +478,28 @@
   window.voiceSettings.onEvent((event) => {
     if (event.type === "microphone-status") {
       updateMicStatus(event.payload?.status || "unknown");
+    }
+    if (event.type === "theme-changed") {
+      applyTheme(event.payload.resolved);
+    }
+  });
+
+  // Theme selector
+  el.themeSelector.addEventListener("click", async (e) => {
+    const option = e.target.closest(".theme-option");
+    if (!option) return;
+    const preference = option.dataset.value;
+    el.themeSelector.querySelectorAll(".theme-option").forEach((btn) => {
+      btn.dataset.active = btn.dataset.value === preference ? "true" : "false";
+    });
+    try {
+      const result = await window.voiceSettings.setTheme(preference);
+      applyTheme(result.resolved);
+      currentThemePreference = preference;
+    } catch (err) {
+      el.themeSelector.querySelectorAll(".theme-option").forEach((btn) => {
+        btn.dataset.active = btn.dataset.value === currentThemePreference ? "true" : "false";
+      });
     }
   });
 

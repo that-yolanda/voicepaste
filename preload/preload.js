@@ -54,6 +54,9 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   recordHotkey() {
     return ipcRenderer.invoke("settings:record-hotkey");
   },
+  setTheme(preference) {
+    return ipcRenderer.invoke("settings:set-theme", preference);
+  },
   onEvent(listener) {
     const wrapped = (_event, payload) => listener(payload);
     ipcRenderer.on("settings:event", wrapped);

@@ -1,16 +1,17 @@
+@import url("./theme.css");
+
 :root {
   color-scheme: dark;
-  --bg: rgba(20, 20, 19, 0.94);
+
+  --bg: var(--overlay-bg);
   --border: rgba(250, 249, 245, 0.08);
-  --text: rgba(250, 249, 245, 0.96);
-  --muted: rgba(250, 249, 245, 0.55);
-  --soft: rgba(250, 249, 245, 0.38);
-  --success: #8faa7e;
-  --warning: #d4a46a;
-  --error: #c47060;
-  --idle: #c47060;
-  --recording: #8faa7e;
-  --connecting: #d4a46a;
+  --text: var(--overlay-text);
+  --muted: var(--overlay-muted);
+  --soft: var(--overlay-soft);
+
+  --idle: var(--error);
+  --recording: var(--success);
+  --connecting: var(--warning);
 }
 
 * {
@@ -47,7 +48,7 @@ body {
 .card {
   min-height: 56px;
   border: 1px solid var(--border);
-  background: rgb(20, 20, 19);
+  background: var(--overlay-card);
   border-radius: 56px;
   padding: 10px;
   display: flex;
@@ -122,7 +123,7 @@ body {
   height: 8px;
   border-radius: 999px;
   background: var(--idle);
-  box-shadow: 0 0 8px rgba(196, 112, 96, 0.3);
+  box-shadow: 0 0 8px var(--glow-error);
 }
 
 .status-spinner {
@@ -130,7 +131,7 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  border: 2px solid rgba(250, 249, 245, 0.15);
+  border: 2px solid var(--overlay-spinner-border);
   border-top-color: var(--connecting);
   animation: spin 0.8s linear infinite;
 }
@@ -146,21 +147,21 @@ body {
   width: 2px;
   height: 6px;
   border-radius: 999px;
-  background: rgba(250, 249, 245, 0.75);
+  background: var(--overlay-bar);
   opacity: 0.5;
   transform-origin: center bottom;
 }
 
 .card[data-state="recording"] .status-dot {
   background: var(--recording);
-  box-shadow: 0 0 10px rgba(143, 170, 126, 0.4);
+  box-shadow: 0 0 10px var(--glow-success);
   animation: pulse-dot 1.15s ease-in-out infinite;
 }
 
 .card[data-state="connecting"] .status-dot,
 .card[data-state="finishing"] .status-dot {
   background: var(--connecting);
-  box-shadow: 0 0 10px rgba(212, 164, 106, 0.35);
+  box-shadow: 0 0 10px var(--glow-warning);
 }
 
 .card[data-state="finishing"] .status-dot,
@@ -174,7 +175,7 @@ body {
 
 .card[data-state="error"] .status-dot {
   background: var(--error);
-  box-shadow: 0 0 10px rgba(196, 112, 96, 0.4);
+  box-shadow: 0 0 10px var(--glow-error);
 }
 
 .card[data-state="recording"] .status-bar:nth-child(1) {

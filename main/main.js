@@ -1,6 +1,6 @@
 const path = require("node:path");
 const fs = require("node:fs");
-const { app, Menu, Tray, nativeImage, globalShortcut, ipcMain, systemPreferences, dialog, shell } = require("electron");
+const { app, Menu, Tray, nativeImage, globalShortcut, ipcMain, systemPreferences, dialog, shell, nativeTheme } = require("electron");
 const { createOverlayWindow, createSettingsWindow, positionOverlayWindow } = require("./windowManager");
 const { CONFIG_PATH, loadConfig, readConfigFile, saveConfigText, getEditableConfig, saveConfig, resetConfigToDefault } = require("./config");
 const { createAsrSession } = require("./asrService");
@@ -522,6 +522,12 @@ function reloadRuntimeConfig() {
   currentConfig = loadConfig();
 }
 
+function resolveTheme() {
+  const preference = currentConfig.app?.theme || "system";
+  if (preference === "system") return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+  return preference;
+}
+
 function getTrayIconPath() {
   if (app.isPackaged) {
     if (process.platform === "win32") {
@@ -694,6 +700,10 @@ app.whenReady().then(() => {
         microphoneStatus,
         version: app.getVersion(),
         platform: process.platform,
+        theme: {
+          preference: currentConfig.app?.theme || "system",
+          resolved: resolveTheme(),
+        },
       },
     };
   });
@@ -814,6 +824,28 @@ app.whenReady().then(() => {
   ipcMain.on("renderer:diagnostic", (_event, payload) => {
     console.log("[Renderer]", payload);
     logInfo("renderer diagnostic", payload);
+  });
+
+  nativeTheme.on("updated", () => {
+    const resolved = resolveTheme();
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send("settings:event", {
+        type: "theme-changed",
+        payload: { resolved },
+      });
+    }
+  });
+
+  ipcMain.handle("settings:set-theme", async (_event, preference) => {
+    if (!["dark", "light", "system"].includes(preference)) {
+      throw new Error("Invalid theme");
+    }
+    const config = getEditableConfig();
+    config.app = config.app || {};
+    config.app.theme = preference;
+    saveConfig(config);
+    reloadRuntimeConfig();
+    return { preference, resolved: resolveTheme() };
   });
 
   ipcMain.on("renderer:audio-stopped", () => {

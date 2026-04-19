@@ -71,6 +71,7 @@ function loadConfig() {
       ...(raw.app || {}),
       hotkey: raw.app?.hotkey || "F13",
       remove_trailing_period: raw.app?.remove_trailing_period !== false,
+      theme: raw.app?.theme || "system",
     },
     connection: {
       ...(raw.connection || {}),
