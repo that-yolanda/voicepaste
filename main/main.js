@@ -28,7 +28,7 @@ const {
 } = require("./config");
 const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
-const { logInfo, logError, resolveLogPath } = require("./logger");
+const { logInfo, logError, resolveLogPath, closeLogger } = require("./logger");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
 
 let currentConfig = loadConfig();
@@ -940,4 +940,5 @@ app.on("before-quit", () => {
 app.on("will-quit", () => {
   logInfo("app will quit");
   globalShortcut.unregisterAll();
+  closeLogger();
 });
