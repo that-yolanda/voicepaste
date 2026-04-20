@@ -1,23 +1,42 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { app } = require("electron");
 const YAML = require("yaml");
 
-function getConfigCandidates() {
-  const candidates = [];
-
+function resolveConfigExamplePath() {
   if (process.resourcesPath) {
-    candidates.push(path.join(process.resourcesPath, "config.yaml"));
+    const p = path.join(process.resourcesPath, "config.yaml.example");
+    if (fs.existsSync(p)) return p;
   }
 
-  candidates.push(path.join(process.cwd(), "config.yaml"));
-  candidates.push(path.join(__dirname, "..", "config.yaml"));
+  const local = path.join(__dirname, "..", "config.yaml.example");
+  if (fs.existsSync(local)) return local;
 
-  return [...new Set(candidates)];
+  return null;
 }
 
 function resolveConfigPath() {
-  const matched = getConfigCandidates().find((candidate) => fs.existsSync(candidate));
+  if (app.isPackaged) {
+    const userConfigPath = path.join(app.getPath("userData"), "config.yaml");
 
+    if (!fs.existsSync(userConfigPath)) {
+      const examplePath = resolveConfigExamplePath();
+      if (examplePath) {
+        fs.copyFileSync(examplePath, userConfigPath);
+      } else {
+        fs.writeFileSync(userConfigPath, "", "utf8");
+      }
+    }
+
+    return userConfigPath;
+  }
+
+  const candidates = [
+    path.join(process.cwd(), "config.yaml"),
+    path.join(__dirname, "..", "config.yaml"),
+  ];
+
+  const matched = candidates.find((candidate) => fs.existsSync(candidate));
   if (!matched) {
     throw new Error("未找到 config.yaml");
   }
@@ -89,7 +108,6 @@ function loadConfig() {
     },
     request: {
       ...(raw.request || {}),
-      // 需要类型转换的已知字段默认值
       model_name: raw.request?.model_name || "bigmodel",
       model_version: String(raw.request?.model_version || "400"),
       operation: raw.request?.operation || "submit",
@@ -103,7 +121,6 @@ function loadConfig() {
       force_to_speech_time: Number(raw.request?.force_to_speech_time || 1000),
       accelerate_score: Number(raw.request?.accelerate_score || 0),
       vad_segment_duration: Number(raw.request?.vad_segment_duration || 3000),
-      // corpus 单独处理（context_hotwords 需要解析）
       corpus: {
         ...(raw.request?.corpus || {}),
       },
@@ -130,15 +147,7 @@ function saveConfigText(text) {
 }
 
 function getConfigExamplePath() {
-  if (process.resourcesPath) {
-    const p = path.join(process.resourcesPath, "config.yaml.example");
-    if (fs.existsSync(p)) return p;
-  }
-
-  const local = path.join(__dirname, "..", "config.yaml.example");
-  if (fs.existsSync(local)) return local;
-
-  return null;
+  return resolveConfigExamplePath();
 }
 
 function resetConfigToDefault() {

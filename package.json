@@ -57,10 +57,6 @@
     "extraResources": [
       {
         "from": "config.yaml.example",
-        "to": "config.yaml"
-      },
-      {
-        "from": "config.yaml.example",
         "to": "config.yaml.example"
       },
       {

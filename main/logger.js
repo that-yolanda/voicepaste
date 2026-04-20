@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { app } = require("electron");
 
-const MAX_LOG_SIZE = 1024 * 1024; // 1MB
+const MAX_LOG_SIZE = 1024 * 512; // 528KB
 const FLUSH_INTERVAL_MS = 1000;
 
 let logPath = null;
