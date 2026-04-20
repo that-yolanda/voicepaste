@@ -17,6 +17,30 @@ pnpm pack
 pnpm pack:win
 ```
 
+### Code Signing & Notarization (macOS)
+
+Without any configuration, the build will use ad-hoc signing and skip notarization. This works for personal use but macOS will reset permissions (microphone, accessibility) on each reinstall.
+
+To enable proper code signing and notarization:
+
+1. Obtain a **Developer ID Application** certificate from [developer.apple.com](https://developer.apple.com) and install it in Keychain.
+2. Generate an **App Specific Password** at [appleid.apple.com](https://appleid.apple.com) → App Specific Passwords.
+3. Copy `.env.example` to `.env` and fill in your credentials:
+
+```bash
+cp .env.example .env
+```
+
+```env
+APPLE_ID=your-apple-id@example.com
+APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx
+APPLE_TEAM_ID=XXXXXXXXXX
+```
+
+4. Run `pnpm pack` — the build will automatically detect the certificate in Keychain for signing and use `.env` for notarization.
+
+The `.env` file is already in `.gitignore` and will not be committed.
+
 ## Notes
 
 - The project uses Electron with plain CommonJS and no frontend bundler.

@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
+    "@electron/notarize": "^3.1.1",
     "electron": "^41.2.0",
     "electron-builder": "^26.0.12"
   },
@@ -48,6 +49,7 @@
     "appId": "com.yolanda.voicepaste",
     "productName": "VoicePaste",
     "npmRebuild": false,
+    "afterSign": "build/afterSign.js",
     "files": [
       "main/**/*",
       "preload/**/*",

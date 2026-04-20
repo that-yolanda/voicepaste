@@ -17,6 +17,30 @@ pnpm pack
 pnpm pack:win
 ```
 
+### 代码签名与公证（macOS）
+
+不做任何配置时，打包使用 ad-hoc 签名并跳过公证，可以正常使用，但每次重装 macOS 会重置权限（麦克风、辅助功能等）。
+
+如需启用正式签名和公证：
+
+1. 从 [developer.apple.com](https://developer.apple.com) 获取 **Developer ID Application** 证书，安装到 Keychain。
+2. 在 [appleid.apple.com](https://appleid.apple.com) → 应用专用密码 中生成一个密码。
+3. 将 `.env.example` 复制为 `.env` 并填写凭据：
+
+```bash
+cp .env.example .env
+```
+
+```env
+APPLE_ID=你的AppleID邮箱
+APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx
+APPLE_TEAM_ID=你的团队ID
+```
+
+4. 运行 `pnpm pack` — 构建会自动从 Keychain 读取证书进行签名，并使用 `.env` 完成公证。
+
+`.env` 文件已在 `.gitignore` 中，不会被提交。
+
 ## 说明
 
 - 项目基于 Electron，使用 CommonJS，不使用前端 bundler。

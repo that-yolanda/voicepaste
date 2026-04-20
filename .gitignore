@@ -2,5 +2,9 @@ node_modules
 dist
 .DS_Store
 
-config.yaml
+
 .claude
+
+# local configuration
+.env
+config.yaml
