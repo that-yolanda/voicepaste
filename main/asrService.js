@@ -320,6 +320,12 @@ function createAsrSession({
     return /[，。！？、；：…—·\s,.!?;:'"()（）【】《》]/.test(ch);
   }
 
+  function cleanAsrText(text) {
+    if (!text) return "";
+    // 移除两个中文字符之间的空格
+    return text.replace(/([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g, "$1$2");
+  }
+
   /**
    * punctuation-agnostic prefix matching:
    * 逐字符比较 baseText 与 resultText，跳过标点差异，
@@ -358,7 +364,7 @@ function createAsrSession({
 
   function handleRecognitionPayload(payload) {
     const utterances = payload?.result?.utterances;
-    const resultText = (payload?.result?.text || "").trim();
+    const resultText = cleanAsrText((payload?.result?.text || "").trim());
     latestResultText = resultText || latestResultText;
 
     if (!Array.isArray(utterances) || utterances.length === 0) {
@@ -383,7 +389,7 @@ function createAsrSession({
 
     const completedText = utterances
       .filter((item) => item?.definite)
-      .map((item) => item?.text || "")
+      .map((item) => (item?.text || "").trim())
       .join("")
       .trim();
 
@@ -401,7 +407,7 @@ function createAsrSession({
         // 用 non-definite utterance 文本作为 partial
         partialText = utterances
           .filter((item) => !item?.definite)
-          .map((item) => item?.text || "")
+          .map((item) => (item?.text || "").trim())
           .join("")
           .trim();
       } else {
@@ -468,7 +474,7 @@ function createAsrSession({
       }
 
       if (payload.raw_text) {
-        const rawText = payload.raw_text.trim();
+        const rawText = cleanAsrText(payload.raw_text.trim());
         console.log("[ASR] raw payload", rawText);
 
         if (isIgnorableRawText(rawText, connectId)) {
@@ -504,7 +510,7 @@ function createAsrSession({
 
       if (isCommitted && pendingCommitResolve) {
         const lastUtterance = payload?.result?.utterances?.at?.(-1);
-        const resultText = (payload?.result?.text || "").trim();
+        const resultText = cleanAsrText((payload?.result?.text || "").trim());
         const hasStableFinal = Boolean(lastUtterance?.definite);
 
         if (hasStableFinal) {
