@@ -49,7 +49,19 @@
     reloadYamlBtn: $("reloadYamlBtn"),
     saveYamlBtn: $("saveYamlBtn"),
     themeSelector: $("themeSelector"),
+    updateCurrentVersion: $("updateCurrentVersion"),
+    updateLatestVersion: $("updateLatestVersion"),
+    updateStatus: $("updateStatus"),
+    updateProgressWrap: $("updateProgressWrap"),
+    updateProgressBar: $("updateProgressBar"),
+    updateProgressText: $("updateProgressText"),
+    updateCheckBtn: $("updateCheckBtn"),
+    updateDownloadBtn: $("updateDownloadBtn"),
+    updateInstallBtn: $("updateInstallBtn"),
   };
+
+  let _updateState = "idle";
+  let latestVersion = "";
 
   function setSaveStatus(text, level) {
     el.saveStatus.textContent = text;
@@ -107,6 +119,9 @@
       }
       isDirty = false;
       setSaveStatus("已加载", "success");
+
+      el.updateCurrentVersion.textContent = `v${data.runtime?.version || ""}`;
+      handleCheckUpdate();
     } catch (_err) {
       setSaveStatus("加载失败", "error");
     }
@@ -347,6 +362,71 @@
     }
   }
 
+  // ===== UPDATE =====
+
+  function setUpdateState(state, data) {
+    _updateState = state;
+    el.updateCheckBtn.disabled = state === "checking" || state === "downloading";
+    el.updateDownloadBtn.style.display = "none";
+    el.updateInstallBtn.style.display = "none";
+    el.updateProgressWrap.style.display = "none";
+
+    switch (state) {
+      case "checking":
+        el.updateStatus.textContent = "检查中...";
+        break;
+      case "not-available":
+        el.updateStatus.textContent = "当前已是最新版本";
+        el.updateLatestVersion.textContent = el.updateCurrentVersion.textContent;
+        break;
+      case "available":
+        latestVersion = data?.version || "";
+        el.updateLatestVersion.textContent = `v${latestVersion}`;
+        el.updateStatus.textContent = `发现新版本 v${latestVersion}`;
+        el.updateDownloadBtn.style.display = "";
+        break;
+      case "downloading":
+        el.updateStatus.textContent = "下载更新中...";
+        el.updateProgressWrap.style.display = "";
+        break;
+      case "progress":
+        el.updateStatus.textContent = "下载更新中...";
+        el.updateProgressWrap.style.display = "";
+        el.updateProgressBar.style.width = `${data?.percent || 0}%`;
+        el.updateProgressText.textContent = `${data?.percent || 0}%`;
+        break;
+      case "downloaded":
+        el.updateStatus.textContent = `v${data?.version || latestVersion} 已下载完成`;
+        el.updateInstallBtn.style.display = "";
+        break;
+      case "error":
+        el.updateStatus.textContent = data?.message || "检查更新失败";
+        break;
+    }
+  }
+
+  async function handleCheckUpdate() {
+    setUpdateState("checking");
+    try {
+      await window.voiceSettings.checkForUpdates();
+    } catch (err) {
+      setUpdateState("error", { message: err.message || "检查更新失败" });
+    }
+  }
+
+  async function handleDownloadUpdate() {
+    setUpdateState("downloading");
+    try {
+      await window.voiceSettings.downloadUpdate();
+    } catch (err) {
+      setUpdateState("error", { message: err.message || "下载更新失败" });
+    }
+  }
+
+  function handleInstallUpdate() {
+    window.voiceSettings.installUpdate();
+  }
+
   // ===== EVENT LISTENERS =====
 
   el.saveBtn.addEventListener("click", saveFromForm);
@@ -428,6 +508,10 @@
 
   el.yamlEditor.addEventListener("input", markDirty);
 
+  el.updateCheckBtn.addEventListener("click", handleCheckUpdate);
+  el.updateDownloadBtn.addEventListener("click", handleDownloadUpdate);
+  el.updateInstallBtn.addEventListener("click", handleInstallUpdate);
+
   // Collapsible sections
   document.querySelectorAll(".collapse-toggle").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -484,6 +568,9 @@
     }
     if (event.type === "theme-changed") {
       applyTheme(event.payload.resolved);
+    }
+    if (event.type === "update-status") {
+      setUpdateState(event.payload.type, event.payload);
     }
   });
 

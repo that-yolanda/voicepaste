@@ -41,6 +41,7 @@
     "electron-builder": "^26.0.12"
   },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "uiohook-napi": "^1.5.0",
     "ws": "^8.20.0",
     "yaml": "^2.8.3"
@@ -50,6 +51,11 @@
     "productName": "VoicePaste",
     "npmRebuild": false,
     "afterSign": "build/afterSign.js",
+    "publish": {
+      "provider": "github",
+      "owner": "that-yolanda",
+      "repo": "voicepaste"
+    },
     "files": [
       "main/**/*",
       "preload/**/*",

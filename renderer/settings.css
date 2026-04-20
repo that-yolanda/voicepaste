@@ -971,6 +971,70 @@ body {
   margin: 12px 0;
 }
 
+/* ===== UPDATE ===== */
+
+.update-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.update-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.update-label {
+  font-size: 13px;
+  color: var(--text-dim);
+  min-width: 60px;
+}
+
+.update-value {
+  font-weight: 500;
+  color: var(--text);
+  font-family: "SF Mono", "Menlo", monospace;
+  font-size: 12.5px;
+}
+
+.update-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-height: 18px;
+  line-height: 1.4;
+}
+
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.update-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.update-progress-text {
+  font-size: 12px;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: var(--text-dim);
+  min-width: 36px;
+  text-align: right;
+}
+
+.update-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 /* ===== FOCUS VISIBLE ===== */
 
 .btn:focus-visible,

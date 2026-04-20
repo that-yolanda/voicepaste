@@ -30,6 +30,12 @@ const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
 const { logInfo, logError, resolveLogPath, closeLogger } = require("./logger");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
+const {
+  initUpdateService,
+  checkForUpdates,
+  downloadUpdate,
+  quitAndInstall,
+} = require("./updateService");
 
 let currentConfig = loadConfig();
 const ESC_HOTKEY = "Esc";
@@ -683,6 +689,27 @@ app.whenReady().then(() => {
   createTray();
   registerShortcuts();
   showSettingsWindow();
+
+  initUpdateService((type, payload) => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send("settings:event", {
+        type: "update-status",
+        payload: { type, ...payload },
+      });
+    }
+  });
+
+  ipcMain.handle("update:check", async () => {
+    await checkForUpdates();
+  });
+
+  ipcMain.handle("update:download", async () => {
+    await downloadUpdate();
+  });
+
+  ipcMain.handle("update:install", async () => {
+    quitAndInstall();
+  });
 
   ipcMain.handle("asr:audio-chunk", (_event, base64Chunk) => {
     receivedAudioChunkCount += 1;

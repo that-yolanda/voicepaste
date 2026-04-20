@@ -65,4 +65,13 @@ contextBridge.exposeInMainWorld("voiceSettings", {
       ipcRenderer.removeListener("settings:event", wrapped);
     };
   },
+  checkForUpdates() {
+    return ipcRenderer.invoke("update:check");
+  },
+  downloadUpdate() {
+    return ipcRenderer.invoke("update:download");
+  },
+  installUpdate() {
+    return ipcRenderer.invoke("update:install");
+  },
 });

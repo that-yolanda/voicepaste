@@ -71,6 +71,33 @@
         </div>
       </section>
 
+      <!-- 检查更新 -->
+      <section class="section" id="sectionUpdate" data-nav="检查更新" style="--c: var(--accent)">
+        <div class="section-pad">
+          <h2 class="section-title">检查更新</h2>
+          <div class="update-info">
+            <div class="update-row">
+              <span class="update-label">当前版本</span>
+              <span class="update-value" id="updateCurrentVersion">-</span>
+            </div>
+            <div class="update-row">
+              <span class="update-label">最新版本</span>
+              <span class="update-value" id="updateLatestVersion">-</span>
+            </div>
+            <div class="update-status" id="updateStatus"></div>
+            <div class="update-progress" id="updateProgressWrap" style="display:none">
+              <div class="update-progress-bar" id="updateProgressBar"></div>
+              <span class="update-progress-text" id="updateProgressText">0%</span>
+            </div>
+          </div>
+          <div class="update-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="updateCheckBtn">检查更新</button>
+            <button type="button" class="btn btn-accent btn-sm" id="updateDownloadBtn" style="display:none">立即更新</button>
+            <button type="button" class="btn btn-accent btn-sm" id="updateInstallBtn" style="display:none">重启安装</button>
+          </div>
+        </div>
+      </section>
+
       <!-- 系统权限 -->
       <section class="section" id="sectionPermissions" data-nav="系统权限" style="--c: var(--accent)">
         <div class="section-pad">
