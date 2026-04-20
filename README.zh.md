@@ -90,7 +90,8 @@ tccutil reset Microphone com.yolanda.voicepaste
 ## 文档
 
 - [开发说明](docs/development.zh.md)
-- [更新说明](docs/changelog.zh.md)
+- [更新说明](CHANGELOG.zh.md)
+
 
 ## License
 

@@ -90,7 +90,7 @@ The non-stream (second-pass) recognition mode does not currently support hotword
 ## Docs
 
 - [Development Guide](docs/development.md)
-- [Changelog](docs/changelog.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 

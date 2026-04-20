@@ -75,9 +75,10 @@ Contains hotkey, app-level behavior toggles (`remove_trailing_period`, `keep_cli
 在发布新版本前，必须按顺序完成以下检查：
 
 1. **确认版本号与文档已更新** — 检查 `package.json` 的 `version`、`README.md` 和 `CHANGELOG.md` 是否已同步更新为新版本内容
-2. **确认代码已全部提交** — 运行 `git status` 确保没有未提交的变更
-3. **确认安装包已打包并通过验证** — 分别执行 `pnpm pack`（macOS）和 `pnpm pack:win`（Windows），然后询问用户：安装包是否已在目标平台上实际运行并通过验证
-4. **确认是否推送发布** — 向用户确认是否需要将代码推送到 GitHub 并创建 Release 上传安装包
+2. **确认代码校验通过** — 运行 `pnpm check` 确保无 lint 或格式问题
+3. **确认代码已全部提交** — 运行 `git status` 确保没有未提交的变更
+4. **确认安装包已打包并通过验证** — 分别执行 `pnpm pack`（macOS）和 `pnpm pack:win`（Windows），然后询问用户：安装包是否已在目标平台上实际运行并通过验证
+5. **确认是否推送发布** — 向用户确认是否需要将代码推送到 GitHub 并创建 Release 上传安装包
 
 以上每一步都需要用户确认后才可继续下一步。
 
