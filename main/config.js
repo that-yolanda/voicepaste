@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { app } = require("electron");
 const YAML = require("yaml");
 
 function getConfigCandidates() {
@@ -16,13 +17,33 @@ function getConfigCandidates() {
 }
 
 function resolveConfigPath() {
-  const matched = getConfigCandidates().find((candidate) => fs.existsSync(candidate));
+  const userDataPath = app.getPath("userData");
+  const persistentPath = path.join(userDataPath, "config.yaml");
 
-  if (!matched) {
-    throw new Error("未找到 config.yaml");
+  if (fs.existsSync(persistentPath)) {
+    return persistentPath;
   }
 
-  return matched;
+  // If not in userData, search in bundled candidates
+  const candidates = getConfigCandidates();
+  let matched = candidates.find((candidate) => fs.existsSync(candidate));
+
+  // If no config.yaml found, look for config.yaml.example as a template
+  if (!matched) {
+    matched = getConfigExamplePath();
+  }
+
+  if (matched) {
+    // Copy bundled config or example to userData to persist it across updates
+    if (!fs.existsSync(userDataPath)) {
+      fs.mkdirSync(userDataPath, { recursive: true });
+    }
+    fs.copyFileSync(matched, persistentPath);
+    console.log(`[Config] Initialized user config at: ${persistentPath} (copied from ${matched})`);
+    return persistentPath;
+  }
+
+  throw new Error("未找到 config.yaml 或 config.yaml.example，无法初始化用户配置");
 }
 
 const CONFIG_PATH = resolveConfigPath();
