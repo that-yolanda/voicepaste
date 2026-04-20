@@ -1,6 +1,6 @@
 {
   "name": "voicepaste",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Voice-to-text input tool — press a hotkey, speak, auto-paste.",
   "author": "that-yolanda",
   "license": "MIT",
@@ -27,6 +27,7 @@
     "start": "electron .",
     "dev": "electron .",
     "pack": "electron-builder --mac zip",
+    "prepack:win": "rm -rf node_modules/uiohook-napi/build",
     "pack:win": "electron-builder --win nsis --x64",
     "lint": "biome lint ./main ./preload ./renderer",
     "format": "biome format --write ./main ./preload ./renderer",
