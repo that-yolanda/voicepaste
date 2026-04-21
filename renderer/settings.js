@@ -4,6 +4,7 @@
   let hotwords = [];
   let isDirty = false;
   let currentThemePreference = "system";
+  let currentHotkeyMode = "toggle";
 
   const $ = (id) => document.getElementById(id);
 
@@ -16,6 +17,8 @@
     hotkeyRecorder: $("hotkeyRecorder"),
     hotkeyRecordBtn: $("hotkeyRecordBtn"),
     hotkeyHint: $("hotkeyHint"),
+    hotkeyDesc: $("hotkeyDesc"),
+    hotkeyModeSelector: $("hotkeyModeSelector"),
     configPath: $("configPath"),
     autoStart: $("autoStart"),
     micDot: $("micDot"),
@@ -94,6 +97,17 @@
     });
   }
 
+  function setHotkeyMode(mode) {
+    currentHotkeyMode = mode === "hold" ? "hold" : "toggle";
+    el.hotkeyModeSelector.querySelectorAll(".hotkey-mode-option").forEach((btn) => {
+      btn.dataset.active = btn.dataset.value === currentHotkeyMode ? "true" : "false";
+    });
+    el.hotkeyDesc.textContent =
+      currentHotkeyMode === "hold"
+        ? "按住热键开始语音输入，松开后自动粘贴到当前输入框。点击“录制”可捕获组合键，录制期间按 Esc 取消。"
+        : "按一次开始语音输入，再按一次自动粘贴到当前输入框。点击“录制”可捕获组合键，录制期间按 Esc 取消。";
+  }
+
   async function loadSettings() {
     try {
       const data = await window.voiceSettings.getData();
@@ -127,7 +141,8 @@
     el.hotkey.value =
       data.runtime?.hotkeyDisplay ||
       (Array.isArray(c.app?.hotkey) ? "自定义快捷键" : c.app?.hotkey || "F13");
-    el.configPath.textContent = data.configPath || "-";
+    setHotkeyMode(c.app?.hotkey_mode);
+    el.configPath.value = data.configPath || "-";
     if (data.runtime?.platform !== "darwin" && el.accessibilityRow) {
       el.accessibilityRow.style.display = "none";
     }
@@ -177,6 +192,7 @@
 
     config.app = config.app || {};
     config.app.hotkey = config.app.hotkey || el.hotkey.value.trim() || "F13";
+    config.app.hotkey_mode = currentHotkeyMode;
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
     config.app.theme = currentThemePreference;
@@ -347,7 +363,7 @@
         parsedConfig.app = parsedConfig.app || {};
         parsedConfig.app.hotkey = keys;
         el.hotkey.value = displayString;
-        setHotkeyHint("已录制，点击右上角“保存配置”生效", "success");
+        setHotkeyHint("", "");
         markDirty();
       } else {
         el.hotkey.value = hotkeyBackup;
@@ -442,6 +458,12 @@
   });
 
   el.hotkeyRecordBtn.addEventListener("click", recordHotkey);
+  el.hotkeyModeSelector.addEventListener("click", (e) => {
+    const option = e.target.closest(".hotkey-mode-option");
+    if (!option) return;
+    setHotkeyMode(option.dataset.value);
+    markDirty();
+  });
   document.addEventListener("keydown", suppressKeyboardDuringHotkeyRecording, true);
   document.addEventListener("keyup", suppressKeyboardDuringHotkeyRecording, true);
 

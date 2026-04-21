@@ -41,6 +41,7 @@ let currentConfig = loadConfig();
 const ESC_HOTKEY = "Esc";
 const DEBOUNCE_MS = 200;
 const STALE_KEY_MS = 5000;
+const HOLD_TRIGGER_DELAY_MS = 150;
 
 const pressedKeys = new Map();
 
@@ -57,6 +58,156 @@ let maxRecordingSize = 0;
 let hotkeyRecorderResolve = null;
 let isUiohookAvailable = false;
 let uiohookStartError = null;
+let registeredMainShortcut = null;
+let hotkeyChordActive = false;
+let holdStartTimer = null;
+let holdTriggered = false;
+
+function acceleratorTokenToKeycode(token) {
+  const normalized = String(token || "")
+    .trim()
+    .toLowerCase();
+
+  const simpleMap = {
+    ctrl: UiohookKey.Ctrl,
+    control: UiohookKey.Ctrl,
+    commandorcontrol: process.platform === "darwin" ? UiohookKey.Meta : UiohookKey.Ctrl,
+    cmdorctrl: process.platform === "darwin" ? UiohookKey.Meta : UiohookKey.Ctrl,
+    shift: UiohookKey.Shift,
+    alt: UiohookKey.Alt,
+    option: UiohookKey.Alt,
+    command: UiohookKey.Meta,
+    cmd: UiohookKey.Meta,
+    meta: UiohookKey.Meta,
+    super: UiohookKey.Meta,
+    space: UiohookKey.Space,
+    enter: UiohookKey.Enter,
+    return: UiohookKey.Enter,
+    tab: UiohookKey.Tab,
+    backspace: UiohookKey.Backspace,
+    esc: UiohookKey.Escape,
+    escape: UiohookKey.Escape,
+    up: UiohookKey.ArrowUp,
+    down: UiohookKey.ArrowDown,
+    left: UiohookKey.ArrowLeft,
+    right: UiohookKey.ArrowRight,
+  };
+
+  if (simpleMap[normalized]) {
+    return simpleMap[normalized];
+  }
+
+  if (/^f\d{1,2}$/.test(normalized)) {
+    const index = Number(normalized.slice(1));
+    return UiohookKey[`F${index}`] || null;
+  }
+
+  if (/^[a-z]$/.test(normalized)) {
+    return UiohookKey[normalized.toUpperCase()] || null;
+  }
+
+  if (/^[0-9]$/.test(normalized)) {
+    return UiohookKey[`Num${normalized}`] || null;
+  }
+
+  return null;
+}
+
+function parseAcceleratorToKeycodes(accelerator) {
+  if (typeof accelerator !== "string" || !accelerator.trim()) {
+    return null;
+  }
+
+  const parts = accelerator
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  const codes = parts.map(acceleratorTokenToKeycode);
+  return codes.every(Boolean) ? codes : null;
+}
+
+function getHotkeyMode() {
+  return currentConfig.app?.hotkey_mode === "hold" ? "hold" : "toggle";
+}
+
+function getConfiguredHotkeyKeycodes() {
+  const hotkey = getHotkey();
+  if (Array.isArray(hotkey)) {
+    return hotkey;
+  }
+  return parseAcceleratorToKeycodes(hotkey);
+}
+
+function shouldUseUiohookForHotkey() {
+  return getHotkeyMode() === "hold" || Array.isArray(getHotkey());
+}
+
+function isConfiguredHotkeyPressed() {
+  const hotkey = getConfiguredHotkeyKeycodes();
+  if (!Array.isArray(hotkey) || hotkey.length === 0) {
+    return false;
+  }
+
+  const normalizedPressed = new Set([...pressedKeys.keys()].map(normalizeKey));
+  const normalizedHotkey = new Set(hotkey.map(normalizeKey));
+  return [...normalizedHotkey].every((key) => normalizedPressed.has(key));
+}
+
+function clearHoldStartTimer() {
+  if (!holdStartTimer) {
+    return;
+  }
+
+  clearTimeout(holdStartTimer);
+  holdStartTimer = null;
+}
+
+function resetHotkeyGestureState() {
+  hotkeyChordActive = false;
+  holdTriggered = false;
+  clearHoldStartTimer();
+}
+
+function handleHoldHotkeyPress() {
+  if (appState !== "idle" || holdTriggered || holdStartTimer) {
+    return;
+  }
+
+  holdStartTimer = setTimeout(() => {
+    holdStartTimer = null;
+
+    if (getHotkeyMode() !== "hold" || !isConfiguredHotkeyPressed() || appState !== "idle") {
+      return;
+    }
+
+    holdTriggered = true;
+    startRecordingFlow();
+  }, HOLD_TRIGGER_DELAY_MS);
+}
+
+function handleHoldHotkeyRelease() {
+  clearHoldStartTimer();
+
+  if (!holdTriggered) {
+    return;
+  }
+
+  holdTriggered = false;
+
+  if (appState === "recording") {
+    finishRecordingFlow();
+    return;
+  }
+
+  if (appState === "connecting") {
+    cancelRecordingFlow();
+  }
+}
 
 uIOhook.on("keydown", (e) => {
   const now = Date.now();
@@ -74,12 +225,15 @@ uIOhook.on("keydown", (e) => {
     return;
   }
 
-  const currentHotkey = getHotkey();
-  if (Array.isArray(currentHotkey)) {
-    const normalizedPressed = new Set([...pressedKeys.keys()].map(normalizeKey));
-    const normalizedHotkey = new Set(currentHotkey.map(normalizeKey));
+  if (!shouldUseUiohookForHotkey()) {
+    return;
+  }
 
-    if (normalizedHotkey.size > 0 && [...normalizedHotkey].every((k) => normalizedPressed.has(k))) {
+  if (isConfiguredHotkeyPressed() && !hotkeyChordActive) {
+    hotkeyChordActive = true;
+    if (getHotkeyMode() === "hold") {
+      handleHoldHotkeyPress();
+    } else {
       handleHotkeyToggle();
     }
   }
@@ -102,6 +256,17 @@ uIOhook.on("keyup", (e) => {
   }
 
   pressedKeys.delete(e.keycode);
+
+  if (!shouldUseUiohookForHotkey()) {
+    return;
+  }
+
+  if (!isConfiguredHotkeyPressed()) {
+    hotkeyChordActive = false;
+    if (getHotkeyMode() === "hold") {
+      handleHoldHotkeyRelease();
+    }
+  }
 });
 
 function tryStartUiohook() {
@@ -551,6 +716,7 @@ async function cancelRecordingFlow() {
 
   sendOverlayMessage("recording:stop");
   expectingSessionClose = true;
+  resetHotkeyGestureState();
   await cleanupSession();
   resetTranscript();
   sendOverlayMessage("reset");
@@ -580,13 +746,28 @@ function handleHotkeyToggle() {
 }
 
 function registerShortcuts() {
+  if (registeredMainShortcut) {
+    globalShortcut.unregister(registeredMainShortcut);
+    registeredMainShortcut = null;
+  }
+
+  resetHotkeyGestureState();
+
   const hotkey = getHotkey();
-  if (typeof hotkey === "string" && hotkey.trim() !== "") {
+  if (!shouldUseUiohookForHotkey() && typeof hotkey === "string" && hotkey.trim() !== "") {
     const mainRegistered = globalShortcut.register(hotkey, handleHotkeyToggle);
+    if (mainRegistered) {
+      registeredMainShortcut = hotkey;
+    }
     logInfo("register main hotkey", { hotkey, registered: mainRegistered });
   } else {
     const started = tryStartUiohook();
-    logInfo("register main hotkey using uIOhook", { hotkey, started });
+    logInfo("register main hotkey using uIOhook", {
+      hotkey,
+      mode: getHotkeyMode(),
+      started,
+      parsed: getConfiguredHotkeyKeycodes(),
+    });
   }
 }
 
@@ -758,9 +939,9 @@ app.whenReady().then(() => {
       throw new Error(`无法录制快捷键。${platformHint}${detail}`);
     }
 
-    const previousHotkey = getHotkey();
-    if (typeof previousHotkey === "string" && previousHotkey.trim() !== "") {
-      globalShortcut.unregister(previousHotkey);
+    if (registeredMainShortcut) {
+      globalShortcut.unregister(registeredMainShortcut);
+      registeredMainShortcut = null;
     }
 
     isRecordingHotkey = true;
@@ -807,13 +988,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("settings:save-config", async (_event, payload) => {
-    const previousHotkey = getHotkey();
     saveConfigText(String(payload?.configText || ""));
     reloadRuntimeConfig();
-
-    if (previousHotkey !== getHotkey() && typeof previousHotkey === "string") {
-      globalShortcut.unregister(previousHotkey);
-    }
     registerShortcuts();
 
     logInfo("settings saved", {
@@ -831,13 +1007,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("settings:save-config-object", async (_event, configObject) => {
-    const previousHotkey = getHotkey();
     saveConfig(configObject);
     reloadRuntimeConfig();
-
-    if (previousHotkey !== getHotkey() && typeof previousHotkey === "string") {
-      globalShortcut.unregister(previousHotkey);
-    }
     registerShortcuts();
 
     logInfo("settings saved (object)", { hotkey: getHotkey() });
@@ -854,14 +1025,9 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("settings:reset-config", async () => {
-    const previousHotkey = getHotkey();
     resetConfigToDefault();
     reloadRuntimeConfig();
-
-    if (previousHotkey !== getHotkey()) {
-      globalShortcut.unregister(previousHotkey);
-      registerShortcuts();
-    }
+    registerShortcuts();
 
     logInfo("config reset to default");
 

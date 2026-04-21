@@ -47,23 +47,39 @@
     </nav>
 
     <main class="content">
-      <!-- 常规 -->
-      <section class="section" id="sectionGeneral" data-nav="常规" style="--c: var(--accent)">
+      <!-- 快捷键 -->
+      <section class="section" id="sectionHotkey" data-nav="快捷键" style="--c: var(--accent)">
         <div class="section-pad">
-          <h2 class="section-title">常规</h2>
+          <h2 class="section-title">快捷键</h2>
           <div class="fields">
             <div class="field">
-              <label class="label" for="hotkey">全局热键 <span class="label-path">app.hotkey</span></label>
+              <label class="label" for="hotkey">快捷键 <span class="label-path">app.hotkey</span></label>
               <div class="hotkey-recorder" id="hotkeyRecorder">
                 <input type="text" id="hotkey" class="input" placeholder="点击「录制」设置热键" readonly />
                 <button type="button" class="btn btn-ghost btn-sm hotkey-record-btn" id="hotkeyRecordBtn">录制</button>
               </div>
+              <div class="hotkey-mode-row">
+                <span class="label">触发方式 <span class="label-path">app.hotkey_mode</span></span>
+                <div class="hotkey-mode-selector" id="hotkeyModeSelector">
+                  <button type="button" class="hotkey-mode-option" data-value="toggle">点击切换</button>
+                  <button type="button" class="hotkey-mode-option" data-value="hold">按住说话</button>
+                </div>
+              </div>
               <div class="hotkey-hint" id="hotkeyHint"></div>
-              <div class="field-desc">按一次开始语音输入，再按一次自动粘贴到当前输入框。点击“录制”可捕获组合键，录制期间按 Esc 取消。</div>
+              <div class="field-desc" id="hotkeyDesc">按一次开始语音输入，再按一次自动粘贴到当前输入框。点击“录制”可捕获组合键，录制期间按 Esc 取消。</div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- App 配置 -->
+      <section class="section" id="sectionApp" data-nav="App 配置" style="--c: var(--accent)">
+        <div class="section-pad">
+          <h2 class="section-title">App 配置</h2>
+          <div class="fields">
             <div class="field">
               <label class="label">配置文件</label>
-              <div class="static-text" id="configPath">-</div>
+              <input type="text" id="configPath" class="input mono" value="-" readonly />
             </div>
             <div class="setting-row">
               <span class="label">开机自动启动</span>

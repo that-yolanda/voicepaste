@@ -1,5 +1,6 @@
 app:
   hotkey: Control+Space
+  hotkey_mode: toggle             # 热键模式：toggle=按一次开始再按一次结束，hold=按住说话松开结束
   remove_trailing_period: true   # 自动删除识别结果末尾的句号（。或 .）
   keep_clipboard: true           # 保留识别结果在剪贴板，便于失败后手动再次粘贴
   theme: system                  # 外观主题：dark / light / system（跟随系统）
