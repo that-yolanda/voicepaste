@@ -40,8 +40,17 @@ const {
 let currentConfig = loadConfig();
 const ESC_HOTKEY = "Esc";
 const DEBOUNCE_MS = 200;
+const STALE_KEY_MS = 5000;
 
-const pressedKeys = new Set();
+const pressedKeys = new Map();
+
+function normalizeKey(keycode) {
+  if (keycode === UiohookKey.CtrlRight) return UiohookKey.Ctrl;
+  if (keycode === UiohookKey.ShiftRight) return UiohookKey.Shift;
+  if (keycode === UiohookKey.AltRight) return UiohookKey.Alt;
+  if (keycode === UiohookKey.MetaRight) return UiohookKey.Meta;
+  return keycode;
+}
 let isRecordingHotkey = false;
 const recordingCombo = new Set();
 let maxRecordingSize = 0;
@@ -50,7 +59,12 @@ let isUiohookAvailable = false;
 let uiohookStartError = null;
 
 uIOhook.on("keydown", (e) => {
-  pressedKeys.add(e.keycode);
+  const now = Date.now();
+  pressedKeys.set(e.keycode, now);
+
+  for (const [key, time] of pressedKeys) {
+    if (now - time > STALE_KEY_MS) pressedKeys.delete(key);
+  }
 
   if (isRecordingHotkey) {
     recordingCombo.add(e.keycode);
@@ -62,11 +76,10 @@ uIOhook.on("keydown", (e) => {
 
   const currentHotkey = getHotkey();
   if (Array.isArray(currentHotkey)) {
-    if (
-      currentHotkey.length > 0 &&
-      pressedKeys.size === currentHotkey.length &&
-      currentHotkey.every((k) => pressedKeys.has(k))
-    ) {
+    const normalizedPressed = new Set([...pressedKeys.keys()].map(normalizeKey));
+    const normalizedHotkey = new Set(currentHotkey.map(normalizeKey));
+
+    if (normalizedHotkey.size > 0 && [...normalizedHotkey].every((k) => normalizedPressed.has(k))) {
       handleHotkeyToggle();
     }
   }
