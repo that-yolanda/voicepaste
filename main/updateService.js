@@ -6,6 +6,20 @@ autoUpdater.autoInstallOnAppQuit = false;
 
 let onUpdateEvent = null;
 
+function getUserFriendlyUpdateMessage(err, fallback = "检查更新失败，请稍后重试") {
+  const rawMessage = err?.message || String(err || "");
+
+  if (
+    rawMessage.includes("status code 404") ||
+    rawMessage.includes("HttpError: 404") ||
+    rawMessage.includes("latest-mac.yml")
+  ) {
+    return "暂未找到可用的更新信息";
+  }
+
+  return fallback;
+}
+
 function initUpdateService(onEvent) {
   onUpdateEvent = onEvent;
 
@@ -27,8 +41,11 @@ function initUpdateService(onEvent) {
   });
 
   autoUpdater.on("error", (err) => {
-    logError("update error", { message: err.message || String(err) });
-    emit("error", { message: err.message || "检查更新失败" });
+    logError("update error", {
+      message: err?.message || String(err),
+      stack: err?.stack || "",
+    });
+    emit("error", { message: getUserFriendlyUpdateMessage(err) });
   });
 
   autoUpdater.on("download-progress", (progress) => {
@@ -56,8 +73,11 @@ async function checkForUpdates() {
   try {
     await autoUpdater.checkForUpdates();
   } catch (err) {
-    logError("check for updates failed", { message: err.message || String(err) });
-    emit("error", { message: err.message || "检查更新失败" });
+    logError("check for updates failed", {
+      message: err?.message || String(err),
+      stack: err?.stack || "",
+    });
+    emit("error", { message: getUserFriendlyUpdateMessage(err) });
   }
 }
 
@@ -65,8 +85,11 @@ async function downloadUpdate() {
   try {
     await autoUpdater.downloadUpdate();
   } catch (err) {
-    logError("download update failed", { message: err.message || String(err) });
-    emit("error", { message: err.message || "下载更新失败" });
+    logError("download update failed", {
+      message: err?.message || String(err),
+      stack: err?.stack || "",
+    });
+    emit("error", { message: "下载更新失败，请稍后重试" });
   }
 }
 

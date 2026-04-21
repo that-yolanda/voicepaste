@@ -17,15 +17,28 @@
           <span></span><span></span><span></span><span></span><span></span>
         </div>
         <div class="brand-text">
-          <div class="brand-name">VoicePaste <span class="brand-version" id="appVersion"></span></div>
+          <div class="brand-name">VoicePaste</div>
           <div class="brand-sub"><a class="repo-link" href="https://github.com/that-yolanda/voicepaste" target="_blank">GitHub: @that-yolanda/voicepaste</a></div>
         </div>
       </div>
       <div class="header-actions">
-        <span class="save-status" id="saveStatus">加载中</span>
-        <button type="button" class="btn btn-ghost" id="resetBtn">还原默认</button>
-        <button type="button" class="btn btn-ghost" id="reloadBtn">刷新配置</button>
-        <button type="button" class="btn btn-accent" id="saveBtn">保存配置</button>
+        <div class="header-update">
+          <div class="header-update-text">
+            <span class="header-update-label">当前版本</span>
+            <span class="header-version" id="updateCurrentVersion">-</span>
+          </div>
+          <div class="header-update-actions">
+            <button type="button" class="btn btn-ghost" id="updateCheckBtn">检查更新</button>
+            <button type="button" class="btn btn-accent" id="updateDownloadBtn" style="display:none">立即更新</button>
+            <button type="button" class="btn btn-accent" id="updateInstallBtn" style="display:none">重启安装</button>
+          </div>
+        </div>
+        <div class="header-config-actions">
+          <span class="save-status" id="saveStatus">加载中</span>
+          <button type="button" class="btn btn-ghost" id="resetBtn">还原默认</button>
+          <button type="button" class="btn btn-ghost" id="reloadBtn">刷新配置</button>
+          <button type="button" class="btn btn-accent" id="saveBtn">保存配置</button>
+        </div>
       </div>
     </header>
 
@@ -52,13 +65,13 @@
               <label class="label">配置文件</label>
               <div class="static-text" id="configPath">-</div>
             </div>
-            <label class="toggle">
-              <div class="toggle-info">
-                <span class="toggle-name">开机自动启动</span>
-              </div>
-              <input type="checkbox" id="autoStart" checked />
-              <span class="track"></span>
-            </label>
+            <div class="setting-row">
+              <span class="label">开机自动启动</span>
+              <label class="toggle toggle-compact">
+                <input type="checkbox" id="autoStart" checked />
+                <span class="track"></span>
+              </label>
+            </div>
             <div class="theme-row">
               <span class="label">外观主题 <span class="label-path">app.theme</span></span>
               <div class="theme-selector" id="themeSelector">
@@ -67,33 +80,6 @@
                 <button type="button" class="theme-option" data-value="dark">深色</button>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 检查更新 -->
-      <section class="section" id="sectionUpdate" data-nav="检查更新" style="--c: var(--accent)">
-        <div class="section-pad">
-          <h2 class="section-title">检查更新</h2>
-          <div class="update-info">
-            <div class="update-row">
-              <span class="update-label">当前版本</span>
-              <span class="update-value" id="updateCurrentVersion">-</span>
-            </div>
-            <div class="update-row">
-              <span class="update-label">最新版本</span>
-              <span class="update-value" id="updateLatestVersion">-</span>
-            </div>
-            <div class="update-status" id="updateStatus"></div>
-            <div class="update-progress" id="updateProgressWrap" style="display:none">
-              <div class="update-progress-bar" id="updateProgressBar"></div>
-              <span class="update-progress-text" id="updateProgressText">0%</span>
-            </div>
-          </div>
-          <div class="update-actions">
-            <button type="button" class="btn btn-ghost btn-sm" id="updateCheckBtn">检查更新</button>
-            <button type="button" class="btn btn-accent btn-sm" id="updateDownloadBtn" style="display:none">立即更新</button>
-            <button type="button" class="btn btn-accent btn-sm" id="updateInstallBtn" style="display:none">重启安装</button>
           </div>
         </div>
       </section>
@@ -176,54 +162,66 @@
         <div class="section-pad">
           <h2 class="section-title">高级配置</h2>
           <div class="toggle-grid">
-            <label class="toggle">
-              <div class="toggle-info">
-                <span class="toggle-name">语义顺滑</span>
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="label">语义顺滑</span>
                 <span class="label-path">request.enable_ddc</span>
               </div>
-              <input type="checkbox" id="enableDdc" checked />
-              <span class="track"></span>
-            </label>
-            <label class="toggle">
-              <div class="toggle-info">
-                <span class="toggle-name">二遍识别</span>
+              <label class="toggle toggle-compact">
+                <input type="checkbox" id="enableDdc" checked />
+                <span class="track"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="label">二遍识别</span>
                 <span class="label-path">request.enable_nonstream</span>
               </div>
-              <input type="checkbox" id="enableNonstream" />
-              <span class="track"></span>
-            </label>
-            <label class="toggle">
-              <div class="toggle-info">
-                <span class="toggle-name">数字格式化</span>
+              <label class="toggle toggle-compact">
+                <input type="checkbox" id="enableNonstream" />
+                <span class="track"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="label">数字格式化</span>
                 <span class="label-path">request.enable_itn</span>
               </div>
-              <input type="checkbox" id="enableItn" checked />
-              <span class="track"></span>
-            </label>
-            <label class="toggle">
-              <div class="toggle-info">
-                <span class="toggle-name">自动标点</span>
+              <label class="toggle toggle-compact">
+                <input type="checkbox" id="enableItn" checked />
+                <span class="track"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="label">自动标点</span>
                 <span class="label-path">request.enable_punc</span>
               </div>
-              <input type="checkbox" id="enablePunc" checked />
-              <span class="track"></span>
-            </label>
-            <label class="toggle">
-              <div class="toggle-info">
-                <span class="toggle-name">删除句尾句号</span>
+              <label class="toggle toggle-compact">
+                <input type="checkbox" id="enablePunc" checked />
+                <span class="track"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="label">删除句尾句号</span>
                 <span class="label-path">app.remove_trailing_period</span>
               </div>
-              <input type="checkbox" id="removeTrailingPeriod" checked />
-              <span class="track"></span>
-            </label>
-            <label class="toggle">
-              <div class="toggle-info">
-                <span class="toggle-name">保留结果在剪贴板</span>
+              <label class="toggle toggle-compact">
+                <input type="checkbox" id="removeTrailingPeriod" checked />
+                <span class="track"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="label">保留结果在剪贴板</span>
                 <span class="label-path">app.keep_clipboard</span>
               </div>
-              <input type="checkbox" id="keepClipboard" checked />
-              <span class="track"></span>
-            </label>
+              <label class="toggle toggle-compact">
+                <input type="checkbox" id="keepClipboard" checked />
+                <span class="track"></span>
+              </label>
+            </div>
           </div>
 
           <div class="field-sep"></div>

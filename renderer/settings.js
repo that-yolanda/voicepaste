@@ -16,7 +16,6 @@
     hotkeyRecorder: $("hotkeyRecorder"),
     hotkeyRecordBtn: $("hotkeyRecordBtn"),
     hotkeyHint: $("hotkeyHint"),
-    appVersion: $("appVersion"),
     configPath: $("configPath"),
     autoStart: $("autoStart"),
     micDot: $("micDot"),
@@ -50,11 +49,6 @@
     saveYamlBtn: $("saveYamlBtn"),
     themeSelector: $("themeSelector"),
     updateCurrentVersion: $("updateCurrentVersion"),
-    updateLatestVersion: $("updateLatestVersion"),
-    updateStatus: $("updateStatus"),
-    updateProgressWrap: $("updateProgressWrap"),
-    updateProgressBar: $("updateProgressBar"),
-    updateProgressText: $("updateProgressText"),
     updateCheckBtn: $("updateCheckBtn"),
     updateDownloadBtn: $("updateDownloadBtn"),
     updateInstallBtn: $("updateInstallBtn"),
@@ -134,8 +128,6 @@
       data.runtime?.hotkeyDisplay ||
       (Array.isArray(c.app?.hotkey) ? "自定义快捷键" : c.app?.hotkey || "F13");
     el.configPath.textContent = data.configPath || "-";
-    el.appVersion.textContent = `v${data.runtime?.version || ""}`;
-
     if (data.runtime?.platform !== "darwin" && el.accessibilityRow) {
       el.accessibilityRow.style.display = "none";
     }
@@ -321,6 +313,12 @@
   let isRecordingHotkey = false;
   let hotkeyBackup = "";
 
+  function suppressKeyboardDuringHotkeyRecording(event) {
+    if (!isRecordingHotkey) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   function setHotkeyHint(text, level) {
     el.hotkeyHint.textContent = text;
     el.hotkeyHint.dataset.level = level || "";
@@ -330,7 +328,11 @@
     if (isRecordingHotkey) return;
     hotkeyBackup = el.hotkey.value;
     isRecordingHotkey = true;
+    if (document.activeElement && typeof document.activeElement.blur === "function") {
+      document.activeElement.blur();
+    }
     el.hotkeyRecorder.classList.add("is-recording");
+    el.hotkeyRecordBtn.disabled = true;
     el.hotkey.value = "";
     el.hotkey.placeholder = "请按下快捷键组合并松开...";
     el.hotkeyRecordBtn.textContent = "录制中...";
@@ -357,6 +359,7 @@
     } finally {
       isRecordingHotkey = false;
       el.hotkeyRecorder.classList.remove("is-recording");
+      el.hotkeyRecordBtn.disabled = false;
       el.hotkey.placeholder = "点击「录制」设置热键";
       el.hotkeyRecordBtn.textContent = "录制";
     }
@@ -369,38 +372,24 @@
     el.updateCheckBtn.disabled = state === "checking" || state === "downloading";
     el.updateDownloadBtn.style.display = "none";
     el.updateInstallBtn.style.display = "none";
-    el.updateProgressWrap.style.display = "none";
 
     switch (state) {
       case "checking":
-        el.updateStatus.textContent = "检查中...";
         break;
       case "not-available":
-        el.updateStatus.textContent = "当前已是最新版本";
-        el.updateLatestVersion.textContent = el.updateCurrentVersion.textContent;
         break;
       case "available":
         latestVersion = data?.version || "";
-        el.updateLatestVersion.textContent = `v${latestVersion}`;
-        el.updateStatus.textContent = `发现新版本 v${latestVersion}`;
         el.updateDownloadBtn.style.display = "";
         break;
       case "downloading":
-        el.updateStatus.textContent = "下载更新中...";
-        el.updateProgressWrap.style.display = "";
         break;
       case "progress":
-        el.updateStatus.textContent = "下载更新中...";
-        el.updateProgressWrap.style.display = "";
-        el.updateProgressBar.style.width = `${data?.percent || 0}%`;
-        el.updateProgressText.textContent = `${data?.percent || 0}%`;
         break;
       case "downloaded":
-        el.updateStatus.textContent = `v${data?.version || latestVersion} 已下载完成`;
         el.updateInstallBtn.style.display = "";
         break;
       case "error":
-        el.updateStatus.textContent = data?.message || "检查更新失败";
         break;
     }
   }
@@ -453,6 +442,8 @@
   });
 
   el.hotkeyRecordBtn.addEventListener("click", recordHotkey);
+  document.addEventListener("keydown", suppressKeyboardDuringHotkeyRecording, true);
+  document.addEventListener("keyup", suppressKeyboardDuringHotkeyRecording, true);
 
   el.addHotwordBtn.addEventListener("click", addHotword);
   el.newHotword.addEventListener("keydown", (e) => {

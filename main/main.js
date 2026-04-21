@@ -688,12 +688,6 @@ app.whenReady().then(() => {
   reloadRuntimeConfig();
   tryStartUiohook();
 
-  // Enable auto-start on first launch (default: on)
-  const loginSettings = app.getLoginItemSettings();
-  if (!loginSettings.openAtLogin) {
-    app.setLoginItemSettings({ openAtLogin: true });
-  }
-
   overlayWindow = createOverlayWindow();
   overlayWindow.on("closed", () => {
     overlayWindow = null;
@@ -764,19 +758,28 @@ app.whenReady().then(() => {
       throw new Error(`无法录制快捷键。${platformHint}${detail}`);
     }
 
+    const previousHotkey = getHotkey();
+    if (typeof previousHotkey === "string" && previousHotkey.trim() !== "") {
+      globalShortcut.unregister(previousHotkey);
+    }
+
     isRecordingHotkey = true;
     recordingCombo.clear();
     maxRecordingSize = 0;
     pressedKeys.clear();
 
-    const keys = await new Promise((resolve) => {
-      hotkeyRecorderResolve = resolve;
-    });
+    try {
+      const keys = await new Promise((resolve) => {
+        hotkeyRecorderResolve = resolve;
+      });
 
-    return {
-      keys,
-      displayString: formatHotkey(keys),
-    };
+      return {
+        keys,
+        displayString: formatHotkey(keys),
+      };
+    } finally {
+      registerShortcuts();
+    }
   });
 
   ipcMain.handle("settings:get-data", async () => {
