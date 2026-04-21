@@ -31,28 +31,6 @@ No test framework or linter is configured.
   - `feat(settings): support hold-to-talk for users who prefer press-and-release input`
 - All code comments must be written in English
 
-## Release Checklist
-
-Before publishing a new release, complete the following checks in order:
-
-1. **Confirm version and docs are updated** — Check whether `package.json` version, `README.md`, `README.zh.md`, `CHANGELOG.md`, and `CHANGELOG.zh.md` have all been updated for the new release
-2. **Confirm code checks pass** — If the project has code quality checks configured, run the relevant commands and ensure they pass
-3. **Confirm all code is committed** — Run `git status` and make sure there are no uncommitted changes
-4. **Confirm whether packaging is required** — Ask the user whether this release needs packaged builds; if yes, run `pnpm pack` (macOS) and `pnpm pack:win` (Windows)
-5. **Confirm packaged builds were validated by the user** — Ask the user whether the packaged app has been run and validated on the target platform
-6. **Confirm whether to push and publish** — Ask the user whether the code should be pushed to GitHub and whether a Release / installer upload should be created
-
-Each step requires explicit user confirmation before continuing.
-
-## Release Artifacts
-
-When publishing a GitHub Release, upload both the installer packages and the platform-specific update metadata files required by `electron-updater`.
-
-- **macOS artifacts** — Upload the macOS package plus `latest-mac.yml`
-- **Windows artifacts** — Upload the Windows installer package plus `latest.yml`
-- **Do not omit metadata files** — If `latest.yml` or `latest-mac.yml` is missing from the Release, in-app update checks may fail even if the installer itself was uploaded
-- **Keep artifacts in the same GitHub Release** — The packaged binaries and their corresponding `latest*.yml` files must belong to the same published version
-
 ## Architecture
 
 ### Main Process (`main/`)

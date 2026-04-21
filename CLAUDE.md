@@ -67,20 +67,16 @@ Contains hotkey, app-level behavior toggles (`remove_trailing_period`, `keep_cli
 ## Code Quality
 
 - **Biome** is configured for linting and formatting (`biome.json`)
-- After any code change, you **MUST** run `pnpm check` to ensure no lint or formatting issues remain before committing
+- After any code change, run `pnpm check` to ensure no lint or formatting issues remain before committing — this catches problems early and keeps the codebase consistent
 - Fix all errors and warnings reported by Biome before considering a task complete
 
-## Release Checklist
+## Release
 
-Before publishing a new release, complete the following checks in order:
+For release work, use the project skill at `.claude/skills/github-release`. It is the source of truth for the full workflow, release notes format, and artifact upload steps.
 
-1. **Confirm version and docs are updated** — Check whether `package.json` version, `README.md`, and `CHANGELOG.md` have all been updated for the new release
-2. **Confirm code checks pass** — Run `pnpm check` and ensure there are no lint or formatting issues
-3. **Confirm all code is committed** — Run `git status` and make sure there are no uncommitted changes
-4. **Confirm packaged builds were created and validated** — Run `pnpm pack` (macOS) and `pnpm pack:win` (Windows), then ask the user whether the packaged app has been run and validated on the target platform
-5. **Confirm whether to push and publish** — Ask the user whether the code should be pushed to GitHub and whether a Release with uploaded installers should be created
-
-Each step requires explicit user confirmation before continuing.
+- Do not push, publish, or upload artifacts without explicit user confirmation
+- Ensure version, docs, and artifacts all match the target release version before uploading
+- Do not upload partial release assets
 
 ## Key Conventions
 
