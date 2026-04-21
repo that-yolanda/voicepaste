@@ -327,6 +327,28 @@ body {
   color: var(--text);
 }
 
+.btn:disabled,
+.btn[disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.btn-ghost:disabled,
+.btn-ghost[disabled] {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.btn-accent:disabled,
+.btn-accent[disabled] {
+  background: var(--fill-interactive);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
 /* ===== CONTENT ===== */
 
 .content {

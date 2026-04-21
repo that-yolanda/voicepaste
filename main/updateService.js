@@ -1,3 +1,4 @@
+const { app } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { logInfo, logError } = require("./logger");
 
@@ -14,7 +15,7 @@ function getUserFriendlyUpdateMessage(err, fallback = "检查更新失败，请�
     rawMessage.includes("HttpError: 404") ||
     rawMessage.includes("latest-mac.yml")
   ) {
-    return "暂未找到可用的更新信息";
+    return "已是最新版本";
   }
 
   return fallback;
@@ -70,6 +71,11 @@ function emit(type, payload) {
 }
 
 async function checkForUpdates() {
+  if (!app.isPackaged) {
+    emit("disabled", { message: "开发模式不检查更新" });
+    return;
+  }
+
   try {
     await autoUpdater.checkForUpdates();
   } catch (err) {
@@ -82,6 +88,11 @@ async function checkForUpdates() {
 }
 
 async function downloadUpdate() {
+  if (!app.isPackaged) {
+    emit("disabled", { message: "开发模式不检查更新" });
+    return;
+  }
+
   try {
     await autoUpdater.downloadUpdate();
   } catch (err) {

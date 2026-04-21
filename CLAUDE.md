@@ -62,7 +62,7 @@ Contains hotkey, app-level behavior toggles (`remove_trailing_period`, `keep_cli
 - `config.yaml` is in `.gitignore` — used for local development with real credentials
 - `config.yaml.example` is the sanitized template (empty credentials)
 - Packaging uses `config.yaml.example` as the source for both `config.yaml` and `config.yaml.example` in the bundle, ensuring no real tokens are shipped
-- The settings page has a "还原默认" button that overwrites `config.yaml` with `config.yaml.example` content
+- The settings page has a "Reset to Defaults" button that overwrites `config.yaml` with `config.yaml.example` content
 
 ## Code Quality
 
@@ -72,15 +72,15 @@ Contains hotkey, app-level behavior toggles (`remove_trailing_period`, `keep_cli
 
 ## Release Checklist
 
-在发布新版本前，必须按顺序完成以下检查：
+Before publishing a new release, complete the following checks in order:
 
-1. **确认版本号与文档已更新** — 检查 `package.json` 的 `version`、`README.md` 和 `CHANGELOG.md` 是否已同步更新为新版本内容
-2. **确认代码校验通过** — 运行 `pnpm check` 确保无 lint 或格式问题
-3. **确认代码已全部提交** — 运行 `git status` 确保没有未提交的变更
-4. **确认安装包已打包并通过验证** — 分别执行 `pnpm pack`（macOS）和 `pnpm pack:win`（Windows），然后询问用户：安装包是否已在目标平台上实际运行并通过验证
-5. **确认是否推送发布** — 向用户确认是否需要将代码推送到 GitHub 并创建 Release 上传安装包
+1. **Confirm version and docs are updated** — Check whether `package.json` version, `README.md`, and `CHANGELOG.md` have all been updated for the new release
+2. **Confirm code checks pass** — Run `pnpm check` and ensure there are no lint or formatting issues
+3. **Confirm all code is committed** — Run `git status` and make sure there are no uncommitted changes
+4. **Confirm packaged builds were created and validated** — Run `pnpm pack` (macOS) and `pnpm pack:win` (Windows), then ask the user whether the packaged app has been run and validated on the target platform
+5. **Confirm whether to push and publish** — Ask the user whether the code should be pushed to GitHub and whether a Release with uploaded installers should be created
 
-以上每一步都需要用户确认后才可继续下一步。
+Each step requires explicit user confirmation before continuing.
 
 ## Key Conventions
 

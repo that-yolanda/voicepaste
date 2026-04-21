@@ -51,7 +51,7 @@
     reloadYamlBtn: $("reloadYamlBtn"),
     saveYamlBtn: $("saveYamlBtn"),
     themeSelector: $("themeSelector"),
-    updateCurrentVersion: $("updateCurrentVersion"),
+    updateStatus: $("updateStatus"),
     updateCheckBtn: $("updateCheckBtn"),
     updateDownloadBtn: $("updateDownloadBtn"),
     updateInstallBtn: $("updateInstallBtn"),
@@ -59,6 +59,11 @@
 
   let _updateState = "idle";
   let latestVersion = "";
+
+  function setWindowTitle(version) {
+    const versionText = version ? ` v${version}` : "";
+    document.title = `VoicePaste 语音输入${versionText}`;
+  }
 
   function setSaveStatus(text, level) {
     el.saveStatus.textContent = text;
@@ -128,7 +133,7 @@
       isDirty = false;
       setSaveStatus("已加载", "success");
 
-      el.updateCurrentVersion.textContent = `v${data.runtime?.version || ""}`;
+      setWindowTitle(data.runtime?.version || "");
       handleCheckUpdate();
     } catch (_err) {
       setSaveStatus("加载失败", "error");
@@ -385,27 +390,41 @@
 
   function setUpdateState(state, data) {
     _updateState = state;
-    el.updateCheckBtn.disabled = state === "checking" || state === "downloading";
+    el.updateCheckBtn.disabled =
+      state === "checking" || state === "downloading" || state === "disabled";
     el.updateDownloadBtn.style.display = "none";
     el.updateInstallBtn.style.display = "none";
+    el.updateCheckBtn.textContent = state === "disabled" ? "调试状态" : "检查更新";
 
     switch (state) {
       case "checking":
+        el.updateStatus.textContent = "版本检查中";
         break;
       case "not-available":
+        el.updateStatus.textContent = "已更新到最新版本";
         break;
       case "available":
         latestVersion = data?.version || "";
+        el.updateStatus.textContent = "检测到新版本";
         el.updateDownloadBtn.style.display = "";
         break;
       case "downloading":
+        el.updateStatus.textContent = "检测到新版本";
+        el.updateDownloadBtn.style.display = "";
         break;
       case "progress":
+        el.updateStatus.textContent = "检测到新版本";
+        el.updateDownloadBtn.style.display = "";
         break;
       case "downloaded":
+        el.updateStatus.textContent = "检测到新版本";
         el.updateInstallBtn.style.display = "";
         break;
+      case "disabled":
+        el.updateStatus.textContent = "";
+        break;
       case "error":
+        el.updateStatus.textContent = data?.message || "检查更新失败";
         break;
     }
   }
