@@ -322,8 +322,14 @@ function createAsrSession({
 
   function cleanAsrText(text) {
     if (!text) return "";
-    // 移除两个中文字符之间的空格
-    return text.replace(/([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g, "$1$2");
+    let cleaned = text;
+    const pattern = /([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g;
+    while (true) {
+      const next = cleaned.replace(pattern, "$1$2");
+      if (next === cleaned) break;
+      cleaned = next;
+    }
+    return cleaned;
   }
 
   /**
