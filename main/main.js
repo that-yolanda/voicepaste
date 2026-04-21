@@ -148,13 +148,19 @@ function shouldUseUiohookForHotkey() {
 }
 
 function isConfiguredHotkeyPressed() {
-  const hotkey = getConfiguredHotkeyKeycodes();
-  if (!Array.isArray(hotkey) || hotkey.length === 0) {
+  const hotkey = getHotkey();
+  const keycodes = Array.isArray(hotkey) ? hotkey : parseAcceleratorToKeycodes(hotkey);
+  if (!Array.isArray(keycodes) || keycodes.length === 0) {
     return false;
   }
 
+  if (Array.isArray(hotkey)) {
+    const exactPressed = new Set(pressedKeys.keys());
+    return keycodes.every((key) => exactPressed.has(key));
+  }
+
   const normalizedPressed = new Set([...pressedKeys.keys()].map(normalizeKey));
-  const normalizedHotkey = new Set(hotkey.map(normalizeKey));
+  const normalizedHotkey = new Set(keycodes.map(normalizeKey));
   return [...normalizedHotkey].every((key) => normalizedPressed.has(key));
 }
 
