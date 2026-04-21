@@ -4,6 +4,7 @@ const state = {
   hintText: "",
   hintLevel: "info",
   appState: "idle",
+  audioReady: false,
   mediaStream: null,
   audioContext: null,
   sourceNode: null,
@@ -75,7 +76,9 @@ function scheduleResize() {
 }
 
 function updateView() {
-  elements.card.dataset.state = state.appState;
+  const visualState =
+    state.appState === "recording" && !state.audioReady ? "connecting" : state.appState;
+  elements.card.dataset.state = visualState;
   elements.finalText.textContent = state.finalText;
   elements.partialText.textContent = state.partialText;
   elements.hint.textContent = state.hintText;
@@ -88,6 +91,7 @@ function resetState() {
   state.partialText = "";
   state.hintText = "";
   state.hintLevel = "info";
+  state.audioReady = false;
   state.layoutWidth = 0;
   state.layoutWrap = false;
   state.renderedWidth = 0;
@@ -147,7 +151,7 @@ function int16ToBase64(int16Array) {
 }
 
 function flushPendingAudio(force = false) {
-  const targetChunkSize = 3200;
+  const targetChunkSize = 1600;
 
   while (
     state.pendingSamples.length >= targetChunkSize ||
@@ -159,6 +163,11 @@ function flushPendingAudio(force = false) {
     const chunk = state.pendingSamples.splice(0, chunkSize);
     const pcm16 = floatTo16BitPCM(new Float32Array(chunk));
     const base64Chunk = int16ToBase64(pcm16);
+
+    if (!state.audioReady) {
+      state.audioReady = true;
+      updateView();
+    }
 
     window.voiceOverlay.sendAudioChunk(base64Chunk).catch(() => {
       state.hintText = "音频发送失败";
@@ -195,6 +204,7 @@ async function startAudioCapture() {
   const sourceNode = audioContext.createMediaStreamSource(stream);
   const processorNode = audioContext.createScriptProcessor(4096, 1, 1);
   state.pendingSamples = [];
+  state.audioReady = false;
 
   processorNode.onaudioprocess = (event) => {
     if (state.appState !== "recording") {
@@ -261,6 +271,9 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       break;
     case "state":
       state.appState = payload.state;
+      if (payload.state === "idle" || payload.state === "connecting") {
+        state.audioReady = false;
+      }
       if (
         payload.state === "idle" ||
         payload.state === "connecting" ||
@@ -275,6 +288,7 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       break;
     case "recording:start":
       try {
+        state.audioReady = false;
         await startAudioCapture();
         state.hintText = "";
         state.hintLevel = "info";

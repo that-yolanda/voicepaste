@@ -280,6 +280,7 @@ function createAsrSession({
   let isReady = false;
   let isCommitted = false;
   let isClosed = false;
+  let isClosingExpected = false;
   let partialText = "";
   let finalText = "";
   let latestResultText = "";
@@ -524,6 +525,10 @@ function createAsrSession({
   });
 
   socket.on("error", (error) => {
+    if (isClosingExpected) {
+      return;
+    }
+
     console.error("[ASR] websocket error", error);
     const message = normalizeErrorMessage(error);
     onError?.(message);
@@ -543,7 +548,7 @@ function createAsrSession({
       resolvePendingCommitWithServerFinal();
     }
 
-    if (!isCommitted && code !== 1000) {
+    if (!isClosingExpected && !isCommitted && code !== 1000) {
       const message = `ASR 连接已断开${reason ? `：${reason}` : ""}`;
       onError?.(message);
       clearPendingCommit(message);
@@ -621,9 +626,15 @@ function createAsrSession({
     },
     close() {
       isReady = false;
+      isClosingExpected = true;
 
-      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      if (socket.readyState === WebSocket.OPEN) {
         socket.close(1000);
+        return;
+      }
+
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.terminate();
       }
     },
   };

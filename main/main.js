@@ -41,7 +41,7 @@ let currentConfig = loadConfig();
 const ESC_HOTKEY = "Esc";
 const DEBOUNCE_MS = 200;
 const STALE_KEY_MS = 5000;
-const HOLD_TRIGGER_DELAY_MS = 150;
+const HOLD_TRIGGER_DELAY_MS = 300;
 
 const pressedKeys = new Map();
 
