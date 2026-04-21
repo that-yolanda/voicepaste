@@ -1,12 +1,13 @@
 # VoicePaste
 
-> macOS & Windows 语音输入工具 — 按下快捷键，说话，松开即粘贴。
+> macOS & Windows 语音输入工具 — 通过快捷键触发语音输入并自动粘贴。
 
 **[English](README.md)**
 
 ## 功能特性
 
 - **全局快捷键** — 默认采用 `config.yaml.example` 中的 `Control+Space`，并支持录制自定义组合键
+- **快捷键模式** — 支持 `toggle`（按一次开始、再按一次结束）和 `hold`（按住说话、松开结束）两种触发方式
 - **实时语音识别** — 使用字节跳动豆包大模型 ASR，流式返回识别结果
 - **自动粘贴** — 识别完成后自动将文本粘贴到当前输入位置
 - **浮动窗口** — 透明悬浮窗实时显示识别进度
@@ -50,6 +51,7 @@
 | 配置项 | 说明 |
 |--------|------|
 | `app.hotkey` | 全局快捷键，默认模板值为 `Control+Space` |
+| `app.hotkey_mode` | 快捷键触发模式：`toggle` 或 `hold` |
 | `app.remove_trailing_period` | 自动删除最终文本末尾的 `。` / `.` |
 | `app.keep_clipboard` | 粘贴后保留识别结果在剪贴板 |
 | `app.theme` | 主题偏好：`dark` / `light` / `system` |

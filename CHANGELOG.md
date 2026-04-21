@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.6 (2026-04)
+
+- **Hold-to-talk Mode** — Added `app.hotkey_mode` with `toggle` and `hold` modes, including settings UI support for press-and-hold voice input.
+- **Hotkey Precision** — Recorded left/right modifier keys are now matched exactly, so left and right `Ctrl` / `Shift` / `Alt` / `Command` no longer trigger each other.
+- **Overlay Readiness** — The overlay now turns green only after audio capture actually starts sending data, making the status indicator closer to real recording readiness.
+- **Hold-mode Stability** — Short hold cancellation no longer emits a spurious WebSocket error while the ASR connection is still opening.
+- **Faster Startup** — Reduced audio chunk size to improve perceived startup latency when recording begins.
+- **Settings UI Cleanup** — Split the old “General” section into “Hotkey” and “App Settings”, simplified hotkey hints, and updated the config-path field presentation.
+
 ## v1.0.5 (2026-04)
 
 - **Windows Fix** — Resolved "not a valid Win32 application" error caused by macOS-compiled `uiohook-napi` native module being packaged into the Windows installer. Added `prepack:win` script to clean the build directory before packaging, allowing the correct Windows prebuild to load at runtime.

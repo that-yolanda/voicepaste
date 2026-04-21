@@ -1,12 +1,13 @@
 # VoicePaste
 
-> A voice input tool for macOS & Windows — press a hotkey, speak, auto-paste.
+> A voice input tool for macOS & Windows — trigger with a hotkey, speak, auto-paste.
 
 **[中文](README.zh.md)**
 
 ## Features
 
 - **Global Hotkey** — Default `Control+Space` from `config.yaml.example`, supports custom key recording
+- **Hotkey Modes** — Supports both `toggle` (press once to start, press again to finish) and `hold` (hold to speak, release to finish)
 - **Real-time ASR** — ByteDance Doubao streaming ASR via WebSocket
 - **Auto Paste** — Automatically pastes recognized text into the focused input field
 - **Floating Overlay** — Transparent overlay window showing real-time transcription
@@ -50,6 +51,7 @@ Edit `config.yaml` in the project root and fill in your credentials:
 | Field | Description |
 |-------|-------------|
 | `app.hotkey` | Global hotkey. Default template value is `Control+Space` |
+| `app.hotkey_mode` | Hotkey trigger mode: `toggle` or `hold` |
 | `app.remove_trailing_period` | Remove trailing `。` / `.` from the final text |
 | `app.keep_clipboard` | Keep the result in the clipboard after paste |
 | `app.theme` | Theme preference: `dark` / `light` / `system` |
