@@ -19,6 +19,12 @@ pnpm pack:win         # Build Windows NSIS installer via electron-builder
 
 No test framework or linter is configured.
 
+## Code Quality
+
+- **Biome** is configured for linting and formatting (`biome.json`)
+- After any code change, run `pnpm check` to ensure no lint or formatting issues remain before committing — this catches problems early and keeps the codebase consistent
+- Fix all errors and warnings reported by Biome before considering a task complete
+
 ## Code Commit Convention
 
 - Commit message prefixes must use Conventional Commit style, such as `fix:`, `feat:`, `refactor:`, `docs:`

@@ -70,6 +70,18 @@ Contains hotkey, app-level behavior toggles (`remove_trailing_period`, `keep_cli
 - After any code change, run `pnpm check` to ensure no lint or formatting issues remain before committing — this catches problems early and keeps the codebase consistent
 - Fix all errors and warnings reported by Biome before considering a task complete
 
+## Code Commit Convention
+
+- Commit message prefixes must use Conventional Commit style, such as `fix:`, `feat:`, `refactor:`, `docs:`
+- When helpful, include the module scope, for example: `fix(hotkey): ...`, `feat(settings): ...`
+- The message body after the prefix must explain **why**, not just **what**
+- Keep commit messages short, clear, and traceable
+- Avoid vague descriptions such as "improve performance", "optimize code", "fix issue"
+- Preferred examples:
+  - `fix(hotkey): avoid accidental hold trigger while pressing modifier combos`
+  - `feat(settings): support hold-to-talk for users who prefer press-and-release input`
+- All code comments must be written in English
+
 ## Release
 
 For release work, use the project skill at `.claude/skills/github-release`. It is the source of truth for the full workflow, release notes format, and artifact upload steps.
