@@ -35,9 +35,16 @@ cp .env.example .env
 APPLE_ID=your-apple-id@example.com
 APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx
 APPLE_TEAM_ID=XXXXXXXXXX
+CSC_NAME=Developer ID Application: Your Name (TEAMID)
+# Optional: set to false to fail fast instead of auto-picking a different cert
+# CSC_IDENTITY_AUTO_DISCOVERY=false
 ```
 
-4. Run `pnpm pack` — the build will automatically detect the certificate in Keychain for signing and use `.env` for notarization.
+4. Run `pnpm pack`:
+   - If `CSC_NAME` is set, the build will pin signing to that Keychain certificate.
+   - If `CSC_NAME` is not set, the build will auto-discover a valid certificate from Keychain.
+   - If no distribution certificate is installed, the build can still continue with ad-hoc signing.
+   - The `APPLE_*` variables in `.env` are used for notarization.
 
 The `.env` file is already in `.gitignore` and will not be committed.
 

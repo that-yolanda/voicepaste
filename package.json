@@ -26,9 +26,9 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "pack": "electron-builder --mac zip",
+    "pack": "node build/run-builder.js --mac zip",
     "prepack:win": "rm -rf node_modules/uiohook-napi/build",
-    "pack:win": "electron-builder --win nsis --x64",
+    "pack:win": "node build/run-builder.js --win nsis --x64",
     "lint": "biome lint ./main ./preload ./renderer",
     "format": "biome format --write ./main ./preload ./renderer",
     "check": "biome check --write ./main ./preload ./renderer",

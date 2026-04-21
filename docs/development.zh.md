@@ -35,9 +35,16 @@ cp .env.example .env
 APPLE_ID=你的AppleID邮箱
 APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx
 APPLE_TEAM_ID=你的团队ID
+CSC_NAME=Developer ID Application: 你的名字 (团队ID)
+# 可选：设为 false 后，未命中指定证书时直接失败，避免误选其他证书
+# CSC_IDENTITY_AUTO_DISCOVERY=false
 ```
 
-4. 运行 `pnpm pack` — 构建会自动从 Keychain 读取证书进行签名，并使用 `.env` 完成公证。
+4. 运行 `pnpm pack`：
+   - 若设置了 `CSC_NAME`，构建会固定使用这张 Keychain 证书签名。
+   - 若未设置 `CSC_NAME`，构建会自动从 Keychain 查找可用证书。
+   - 若本机没有正式证书，构建仍可继续，但会退回 ad-hoc 签名。
+   - `.env` 中的 `APPLE_*` 变量会用于公证。
 
 `.env` 文件已在 `.gitignore` 中，不会被提交。
 
