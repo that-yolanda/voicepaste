@@ -1,8 +1,16 @@
+<div align="center">
+
+![VoicePaste Demo](docs/screenshots/demo.gif)
+
+**[中文](README.zh.md)** | **[English](README.md)**
+
 # VoicePaste
 
-> macOS & Windows 语音输入工具 — 通过快捷键触发语音输入并自动粘贴。
+macOS & Windows 语音输入工具 — 通过快捷键触发语音输入并自动粘贴。
 
-**[English](README.md)**
+[![Download](https://img.shields.io/badge/Download-Now-green.svg?style=flat&logo=github)](https://github.com/that-yolanda/voicepaste/releases/latest) [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/thatyolanda)
+
+</div>
 
 ## 功能特性
 
@@ -18,13 +26,7 @@
 - **跨平台支持** — 支持 macOS 与 Windows
 - **主题切换** — 支持浅色 / 深色 / 跟随系统主题偏好
 
-## 效果预览
-
-**语音输入**
-
-![VoicePaste Demo](docs/screenshots/demo.gif)
-
-**配置页面**
+## 配置页面
 
 ![VoicePaste Settings](docs/screenshots/config.png)
 
