@@ -377,6 +377,8 @@ let expectingSessionClose = false;
 let receivedAudioChunkCount = 0;
 let pendingAudioStopResolve = null;
 let isQuitting = false;
+let wsReady = false;
+let audioWarmupReady = false;
 
 function getHotkey() {
   return currentConfig.app.hotkey;
@@ -461,6 +463,12 @@ function setState(nextState) {
   sendOverlayMessage("state", { state: nextState });
 }
 
+function tryTransitionToRecording() {
+  if (wsReady && audioWarmupReady && appState === "connecting") {
+    setState("recording");
+  }
+}
+
 function shouldEnableEscapeShortcut() {
   return appState === "connecting" || appState === "recording" || appState === "finishing";
 }
@@ -527,6 +535,9 @@ async function startRecordingFlow() {
   showOverlay();
   setState("connecting");
   receivedAudioChunkCount = 0;
+  wsReady = false;
+  audioWarmupReady = false;
+  sendOverlayMessage("audio:warmup");
 
   try {
     suppressCloseError = false;
@@ -536,8 +547,8 @@ async function startRecordingFlow() {
       audio: currentConfig.audio,
       request: currentConfig.request,
       onOpen: () => {
-        setState("recording");
-        sendOverlayMessage("recording:start");
+        wsReady = true;
+        tryTransitionToRecording();
       },
       onTranscript: (final, partial) => {
         updateTranscript({
@@ -547,6 +558,9 @@ async function startRecordingFlow() {
         sendOverlayMessage("transcript", latestTranscript);
       },
       onError: (message) => {
+        wsReady = false;
+        audioWarmupReady = false;
+        sendOverlayMessage("recording:stop");
         setState("error");
         sendOverlayMessage("hint", {
           level: "error",
@@ -562,6 +576,8 @@ async function startRecordingFlow() {
       },
       onClose: ({ code, reason }) => {
         asrSession = null;
+        wsReady = false;
+        audioWarmupReady = false;
 
         if (suppressCloseError || expectingSessionClose) {
           suppressCloseError = false;
@@ -719,6 +735,9 @@ async function cancelRecordingFlow() {
   }
 
   logInfo("cancel recording flow", { appState });
+
+  wsReady = false;
+  audioWarmupReady = false;
 
   sendOverlayMessage("recording:stop");
   expectingSessionClose = true;
@@ -1123,6 +1142,30 @@ app.whenReady().then(() => {
     if (pendingAudioStopResolve) {
       pendingAudioStopResolve();
     }
+  });
+
+  ipcMain.on("renderer:audio-warmup-ready", () => {
+    audioWarmupReady = true;
+    tryTransitionToRecording();
+  });
+
+  ipcMain.on("renderer:audio-warmup-failed", (_event, payload) => {
+    logError("audio warmup failed", { message: payload?.message });
+    wsReady = false;
+    audioWarmupReady = false;
+    sendOverlayMessage("recording:stop");
+    cleanupSession();
+    setState("error");
+    sendOverlayMessage("hint", {
+      level: "error",
+      text: payload?.message || "音频设备初始化失败",
+    });
+    setTimeout(() => {
+      if (appState === "error") {
+        setState("idle");
+        hideOverlay();
+      }
+    }, 1400);
   });
 
   app.on("activate", () => {

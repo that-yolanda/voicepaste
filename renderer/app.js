@@ -286,6 +286,20 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       }
       updateView();
       break;
+    case "audio:warmup":
+      try {
+        state.audioReady = false;
+        await startAudioCapture();
+        window.voiceOverlay.sendAudioWarmupReady();
+      } catch (error) {
+        window.voiceOverlay.sendAudioWarmupFailed({
+          message: error.message || String(error),
+        });
+        state.hintText = error.message || "无法获取麦克风权限";
+        state.hintLevel = "error";
+        updateView();
+      }
+      break;
     case "recording:start":
       try {
         state.audioReady = false;

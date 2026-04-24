@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld("voiceOverlay", {
   notifyAudioStopped() {
     ipcRenderer.send("renderer:audio-stopped");
   },
+  sendAudioWarmupReady() {
+    ipcRenderer.send("renderer:audio-warmup-ready");
+  },
+  sendAudioWarmupFailed(payload) {
+    ipcRenderer.send("renderer:audio-warmup-failed", payload);
+  },
 });
 
 contextBridge.exposeInMainWorld("voiceSettings", {
