@@ -1,8 +1,16 @@
+<div align="center">
+
+![VoicePaste Demo](docs/screenshots/demo.gif)
+
+**[中文](README.zh.md)** | **[English](README.md)**
+
 # VoicePaste
 
-> A voice input tool for macOS & Windows — trigger with a hotkey, speak, auto-paste.
+A voice input tool for macOS & Windows — trigger with a hotkey, speak, auto-paste.
 
-**[中文](README.zh.md)**
+[![Download](https://img.shields.io/badge/Download-Now-green.svg?style=flat&logo=github)](https://github.com/that-yolanda/voicepaste/releases/latest) [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/thatyolanda)
+
+</div>
 
 ## Features
 
@@ -18,15 +26,10 @@
 - **Cross-platform** — Supports both macOS and Windows
 - **Theme** — Light / dark / system theme preference in settings
 
-## Preview
-
-**Voice Input**
-
-![VoicePaste Demo](docs/screenshots/demo.gif)
-
-**Settings Page**
+## Settings Page
 
 ![VoicePaste Settings](docs/screenshots/config.png)
+
 
 ---
 
@@ -93,6 +96,7 @@ The non-stream (second-pass) recognition mode does not currently support hotword
 
 - [Development Guide](docs/development.md)
 - [Changelog](CHANGELOG.md)
+
 
 ## License
 

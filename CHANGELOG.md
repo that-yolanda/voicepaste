@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.7 (2026-04)
+
+- **Faster Startup** — WebSocket connection and audio device initialization now run in parallel during the "connecting" phase, reducing the delay from hotkey press to recording start.
+- **CJK Text Fix** — Removed unwanted spaces between consecutive Chinese/CJK characters in ASR recognition results.
+
 ## v1.0.6 (2026-04)
 
 - **Hold-to-talk Mode** — Added `app.hotkey_mode` with `toggle` and `hold` modes, including settings UI support for press-and-hold voice input.
