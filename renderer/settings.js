@@ -51,14 +51,10 @@
     reloadYamlBtn: $("reloadYamlBtn"),
     saveYamlBtn: $("saveYamlBtn"),
     themeSelector: $("themeSelector"),
-    updateStatus: $("updateStatus"),
-    updateCheckBtn: $("updateCheckBtn"),
-    updateDownloadBtn: $("updateDownloadBtn"),
-    updateInstallBtn: $("updateInstallBtn"),
+    updateBtn: $("updateBtn"),
   };
 
   let _updateState = "idle";
-  let latestVersion = "";
 
   function setWindowTitle(version) {
     const versionText = version ? ` v${version}` : "";
@@ -134,7 +130,7 @@
       setSaveStatus("已加载", "success");
 
       setWindowTitle(data.runtime?.version || "");
-      handleCheckUpdate();
+      handleUpdateClick();
     } catch (_err) {
       setSaveStatus("加载失败", "error");
     }
@@ -388,67 +384,92 @@
 
   // ===== UPDATE =====
 
+  let _errorTimer = null;
+
   function setUpdateState(state, data) {
     _updateState = state;
-    el.updateCheckBtn.disabled =
-      state === "checking" || state === "downloading" || state === "disabled";
-    el.updateDownloadBtn.style.display = "none";
-    el.updateInstallBtn.style.display = "none";
-    el.updateCheckBtn.textContent = state === "disabled" ? "调试状态" : "检查更新";
+
+    if (_errorTimer) {
+      clearTimeout(_errorTimer);
+      _errorTimer = null;
+    }
 
     switch (state) {
       case "checking":
-        el.updateStatus.textContent = "版本检查中";
+        el.updateBtn.textContent = "检查中…";
+        el.updateBtn.disabled = true;
+        el.updateBtn.className = "btn btn-ghost";
         break;
       case "not-available":
-        el.updateStatus.textContent = "已更新到最新版本";
+        el.updateBtn.textContent = "已是最新版本";
+        el.updateBtn.disabled = true;
+        el.updateBtn.className = "btn btn-ghost";
+        _errorTimer = setTimeout(() => {
+          setUpdateState("idle");
+        }, 2000);
         break;
       case "available":
-        latestVersion = data?.version || "";
-        el.updateStatus.textContent = "检测到新版本";
-        el.updateDownloadBtn.style.display = "";
+        el.updateBtn.textContent = "立即更新";
+        el.updateBtn.disabled = false;
+        el.updateBtn.className = "btn btn-accent";
         break;
       case "downloading":
-        el.updateStatus.textContent = "检测到新版本";
-        el.updateDownloadBtn.style.display = "";
-        break;
       case "progress":
-        el.updateStatus.textContent = "检测到新版本";
-        el.updateDownloadBtn.style.display = "";
+        el.updateBtn.textContent = `下载中 ${data?.percent ?? 0}%`;
+        el.updateBtn.disabled = true;
+        el.updateBtn.className = "btn btn-accent";
         break;
       case "downloaded":
-        el.updateStatus.textContent = "检测到新版本";
-        el.updateInstallBtn.style.display = "";
+        el.updateBtn.textContent = "重启安装";
+        el.updateBtn.disabled = false;
+        el.updateBtn.className = "btn btn-accent";
+        break;
+      case "installing":
+        el.updateBtn.textContent = "正在安装…";
+        el.updateBtn.disabled = true;
+        el.updateBtn.className = "btn btn-accent";
         break;
       case "disabled":
-        el.updateStatus.textContent = "";
+        el.updateBtn.textContent = "调试模式";
+        el.updateBtn.disabled = true;
+        el.updateBtn.className = "btn btn-ghost";
         break;
       case "error":
-        el.updateStatus.textContent = data?.message || "检查更新失败";
+        el.updateBtn.textContent = data?.message || "检查更新失败";
+        el.updateBtn.disabled = true;
+        el.updateBtn.className = "btn btn-ghost";
+        _errorTimer = setTimeout(() => {
+          setUpdateState("idle");
+        }, 3000);
+        break;
+      default:
+        el.updateBtn.textContent = "检查更新";
+        el.updateBtn.disabled = false;
+        el.updateBtn.className = "btn btn-ghost";
         break;
     }
   }
 
-  async function handleCheckUpdate() {
-    setUpdateState("checking");
-    try {
-      await window.voiceSettings.checkForUpdates();
-    } catch (err) {
-      setUpdateState("error", { message: err.message || "检查更新失败" });
+  function handleUpdateClick() {
+    switch (_updateState) {
+      case "idle":
+      case "error":
+        setUpdateState("checking");
+        window.voiceSettings
+          .checkForUpdates()
+          .catch((err) => setUpdateState("error", { message: err.message || "检查更新失败" }));
+        break;
+      case "available":
+        setUpdateState("downloading");
+        window.voiceSettings
+          .downloadUpdate()
+          .catch((err) => setUpdateState("error", { message: err.message || "下载更新失败" }));
+        break;
+      case "downloaded":
+        setUpdateState("installing");
+        window.voiceSettings.installUpdate();
+        break;
     }
-  }
-
-  async function handleDownloadUpdate() {
-    setUpdateState("downloading");
-    try {
-      await window.voiceSettings.downloadUpdate();
-    } catch (err) {
-      setUpdateState("error", { message: err.message || "下载更新失败" });
-    }
-  }
-
-  function handleInstallUpdate() {
-    window.voiceSettings.installUpdate();
   }
 
   // ===== EVENT LISTENERS =====
@@ -540,9 +561,7 @@
 
   el.yamlEditor.addEventListener("input", markDirty);
 
-  el.updateCheckBtn.addEventListener("click", handleCheckUpdate);
-  el.updateDownloadBtn.addEventListener("click", handleDownloadUpdate);
-  el.updateInstallBtn.addEventListener("click", handleInstallUpdate);
+  el.updateBtn.addEventListener("click", handleUpdateClick);
 
   // Collapsible sections
   document.querySelectorAll(".collapse-toggle").forEach((btn) => {

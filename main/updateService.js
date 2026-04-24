@@ -1,11 +1,20 @@
-const { app } = require("electron");
+const { app, autoUpdater: nativeUpdater } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { logInfo, logError } = require("./logger");
 
 autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = false;
 
 let onUpdateEvent = null;
+let squirrelMacReady = false;
+
+nativeUpdater.on("update-downloaded", () => {
+  squirrelMacReady = true;
+  logInfo("native Squirrel.Mac update-downloaded");
+});
+
+nativeUpdater.on("error", (err) => {
+  logError("native Squirrel.Mac error", { message: err?.message || String(err) });
+});
 
 function getUserFriendlyUpdateMessage(err, fallback = "检查更新失败，请稍后重试") {
   const rawMessage = err?.message || String(err || "");
@@ -105,7 +114,20 @@ async function downloadUpdate() {
 }
 
 function quitAndInstall() {
-  autoUpdater.quitAndInstall();
+  logInfo("quitAndInstall triggered", {
+    squirrelMacReady,
+    autoInstallOnAppQuit: autoUpdater.autoInstallOnAppQuit,
+    autoRunAppAfterInstall: autoUpdater.autoRunAppAfterInstall,
+  });
+
+  try {
+    autoUpdater.quitAndInstall();
+    logInfo("autoUpdater.quitAndInstall() returned");
+  } catch (err) {
+    logError("autoUpdater.quitAndInstall() threw", {
+      message: err?.message || String(err),
+    });
+  }
 }
 
 module.exports = {

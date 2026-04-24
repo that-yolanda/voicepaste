@@ -921,7 +921,20 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("update:install", async () => {
-    quitAndInstall();
+    if (tray) {
+      tray.destroy();
+      tray = null;
+    }
+
+    try {
+      quitAndInstall();
+    } catch (err) {
+      logError("update:install failed", { message: err?.message || String(err) });
+    }
+
+    // nativeUpdater.quitAndInstall() on macOS (Electron 41) returns without
+    // error but doesn't actually quit the app. Call app.quit() explicitly.
+    app.quit();
   });
 
   ipcMain.handle("asr:audio-chunk", (_event, base64Chunk) => {
@@ -1193,6 +1206,10 @@ process.on("unhandledRejection", (error) => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
 });
 
 app.on("will-quit", () => {
