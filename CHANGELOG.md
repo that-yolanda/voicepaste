@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.8 (2026-04)
+
+- **Update Install Fix** — Fixed auto-update restart not quitting on macOS (Electron 41) by explicitly calling `app.quit()` after `quitAndInstall()`.
+- **Tray Cleanup** — Destroy the system tray before restart to prevent the app from hanging during auto-update install.
+- **Simplified Update UI** — Consolidated check/download/install into a single state-driven button with progress and auto-recovery.
+- **Update Diagnostics** — Added Squirrel.Mac native updater event listeners and install-flow logging for troubleshooting.
+
 ## v1.0.7 (2026-04)
 
 - **Faster Startup** — WebSocket connection and audio device initialization now run in parallel during the "connecting" phase, reducing the delay from hotkey press to recording start.
