@@ -32,6 +32,7 @@
     "lint": "biome lint ./main ./preload ./renderer",
     "format": "biome format --write ./main ./preload ./renderer",
     "check": "biome check --write ./main ./preload ./renderer",
+    "build:icons": "node build/extract-icons.js",
     "postinstall": "node node_modules/.pnpm/electron@41.2.0/node_modules/electron/install.js"
   },
   "devDependencies": {
@@ -42,6 +43,7 @@
   },
   "dependencies": {
     "electron-updater": "^6.8.3",
+    "lucide": "^1.14.0",
     "uiohook-napi": "^1.5.0",
     "ws": "^8.20.0",
     "yaml": "^2.8.3"

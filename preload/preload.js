@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   getMicrophoneStatus() {
     return ipcRenderer.invoke("settings:get-microphone-status");
   },
+  getAccessibilityStatus() {
+    return ipcRenderer.invoke("settings:get-accessibility-status");
+  },
   requestMicrophoneAccess() {
     return ipcRenderer.invoke("settings:request-microphone-access");
   },

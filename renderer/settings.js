@@ -8,29 +8,51 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // ===== Icon helper =====
+
+  function icon(name) {
+    const svg = window.LucideIcons?.[name];
+    if (!svg) return "";
+    return svg;
+  }
+
+  function initIcons() {
+    document.querySelectorAll("[data-icon]").forEach((el) => {
+      const name = el.dataset.icon;
+      const svg = icon(name);
+      if (svg) {
+        el.innerHTML = svg;
+      }
+    });
+  }
+
+  // ===== Element refs =====
+
   const el = {
-    saveBtn: $("saveBtn"),
-    resetBtn: $("resetBtn"),
-    reloadBtn: $("reloadBtn"),
-    saveStatus: $("saveStatus"),
-    hotkey: $("hotkey"),
-    hotkeyRecorder: $("hotkeyRecorder"),
+    hotkeyDisplay: $("hotkeyDisplay"),
     hotkeyRecordBtn: $("hotkeyRecordBtn"),
     hotkeyHint: $("hotkeyHint"),
-    hotkeyDesc: $("hotkeyDesc"),
+    hotkeyHintRow: $("hotkeyHintRow"),
     hotkeyModeSelector: $("hotkeyModeSelector"),
     configPath: $("configPath"),
     autoStart: $("autoStart"),
     micDot: $("micDot"),
     micText: $("micText"),
     checkMicBtn: $("checkMicBtn"),
-    requestMicBtn: $("requestMicBtn"),
     accessibilityRow: $("accessibilityRow"),
-    permHint: $("permHint"),
+    accDot: $("accDot"),
+    accText: $("accText"),
     openAccBtn: $("openAccBtn"),
+    permHint: $("permHint"),
+    permBadge: $("permBadge"),
     wsUrl: $("wsUrl"),
     resourceId: $("resourceId"),
     language: $("language"),
+    appId: $("appId"),
+    accessToken: $("accessToken"),
+    secretKey: $("secretKey"),
+    toggleAccessToken: $("toggleAccessToken"),
+    toggleSecretKey: $("toggleSecretKey"),
     enableDdc: $("enableDdc"),
     enableNonstream: $("enableNonstream"),
     enableItn: $("enableItn"),
@@ -42,44 +64,49 @@
     hotwordHint: $("hotwordHint"),
     newHotword: $("newHotword"),
     addHotwordBtn: $("addHotwordBtn"),
-    appId: $("appId"),
-    accessToken: $("accessToken"),
-    secretKey: $("secretKey"),
-    toggleAccessToken: $("toggleAccessToken"),
-    toggleSecretKey: $("toggleSecretKey"),
     yamlEditor: $("yamlEditor"),
     reloadYamlBtn: $("reloadYamlBtn"),
+    resetBtn: $("resetBtn"),
     saveYamlBtn: $("saveYamlBtn"),
-    themeSelector: $("themeSelector"),
-    updateBtn: $("updateBtn"),
+    versionText: $("versionText"),
+    aboutUpdateBtn: $("aboutUpdateBtn"),
+    aboutUpdateStatus: $("aboutUpdateStatus"),
+    updateBadge: $("updateBadge"),
+    licenseBtn: $("licenseBtn"),
+    licenseOverlay: $("licenseOverlay"),
+    licenseCloseBtn: $("licenseCloseBtn"),
+    licenseText: $("licenseText"),
   };
 
-  let _updateState = "idle";
+  // ===== Dirty state & auto-save =====
 
-  function setWindowTitle(version) {
-    const versionText = version ? ` v${version}` : "";
-    document.title = `VoicePaste 语音输入${versionText}`;
+  let _saveTimer = null;
+
+  function autoSaveForm() {
+    isDirty = true;
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+      saveFromForm();
+    }, 500);
   }
 
-  function setSaveStatus(text, level) {
-    el.saveStatus.textContent = text;
-    el.saveStatus.dataset.level = level || "";
+  function saveFormNow() {
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+    }
+    saveFromForm();
   }
 
-  function markDirty() {
-    if (!isDirty) {
-      isDirty = true;
-      setSaveStatus("未保存", "dirty");
+  function clearDirty() {
+    isDirty = false;
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
     }
   }
 
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
+  // ===== Theme =====
 
   function applyTheme(resolved) {
     if (resolved === "light") {
@@ -93,21 +120,51 @@
     const info = data.runtime?.theme || {};
     currentThemePreference = info.preference || "system";
     applyTheme(info.resolved || "dark");
-    el.themeSelector.querySelectorAll(".theme-option").forEach((btn) => {
-      btn.dataset.active = btn.dataset.value === currentThemePreference ? "true" : "false";
+    document.querySelectorAll(".theme-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.themeVal === currentThemePreference);
     });
+  }
+
+  // ===== Hotkey display =====
+
+  function renderHotkeyDisplay(displayString) {
+    el.hotkeyDisplay.innerHTML = "";
+    if (!displayString) {
+      const kbd = document.createElement("kbd");
+      kbd.textContent = "未设置";
+      el.hotkeyDisplay.appendChild(kbd);
+      return;
+    }
+    displayString
+      .split("+")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((key) => {
+        const kbd = document.createElement("kbd");
+        kbd.textContent = key;
+        el.hotkeyDisplay.appendChild(kbd);
+      });
   }
 
   function setHotkeyMode(mode) {
     currentHotkeyMode = mode === "hold" ? "hold" : "toggle";
-    el.hotkeyModeSelector.querySelectorAll(".hotkey-mode-option").forEach((btn) => {
-      btn.dataset.active = btn.dataset.value === currentHotkeyMode ? "true" : "false";
+    el.hotkeyModeSelector.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.val === currentHotkeyMode);
     });
-    el.hotkeyDesc.textContent =
-      currentHotkeyMode === "hold"
-        ? "按住热键开始语音输入，松开后自动粘贴到当前输入框。点击“录制”可捕获组合键，录制期间按 Esc 取消。"
-        : "按一次开始语音输入，再按一次自动粘贴到当前输入框。点击“录制”可捕获组合键，录制期间按 Esc 取消。";
   }
+
+  function setHotkeyHint(text, level) {
+    el.hotkeyHint.textContent = text;
+    el.hotkeyHintRow.style.display = text ? "" : "none";
+    if (level) {
+      el.hotkeyHint.style.color =
+        level === "error" ? "var(--error)" : level === "warn" ? "var(--warning)" : "";
+    } else {
+      el.hotkeyHint.style.color = "";
+    }
+  }
+
+  // ===== Config load/save =====
 
   async function loadSettings() {
     try {
@@ -117,33 +174,38 @@
       populateForm(data);
       initThemeSelector(data);
       el.yamlEditor.value = data.configText || "";
+      autoResizeYamlEditor();
       updateMicStatus(data.runtime?.microphoneStatus || "unknown");
+      updateAccessibilityStatus(data.runtime?.accessibilityStatus || "unknown");
 
-      // Load auto-start state from system login items
       try {
         const loginSettings = await window.voiceSettings.getLoginItemSettings();
         el.autoStart.checked = loginSettings.openAtLogin;
       } catch (_) {
         /* ignore */
       }
-      isDirty = false;
-      setSaveStatus("已加载", "success");
 
-      setWindowTitle(data.runtime?.version || "");
+      el.versionText.textContent = data.runtime?.version ? `v${data.runtime.version}` : "-";
+      document.title = data.runtime?.version ? `VoicePaste v${data.runtime.version}` : "VoicePaste";
+
+      clearDirty();
       handleUpdateClick();
     } catch (_err) {
-      setSaveStatus("加载失败", "error");
+      /* ignore */
     }
   }
 
   function populateForm(data) {
     const c = parsedConfig;
 
-    el.hotkey.value =
+    const hotkeyDisplay =
       data.runtime?.hotkeyDisplay ||
       (Array.isArray(c.app?.hotkey) ? "自定义快捷键" : c.app?.hotkey || "F13");
+    renderHotkeyDisplay(hotkeyDisplay);
     setHotkeyMode(c.app?.hotkey_mode);
-    el.configPath.value = data.configPath || "-";
+
+    el.configPath.textContent = data.configPath || "-";
+
     if (data.runtime?.platform !== "darwin" && el.accessibilityRow) {
       el.accessibilityRow.style.display = "none";
     }
@@ -192,7 +254,7 @@
     const config = JSON.parse(JSON.stringify(parsedConfig));
 
     config.app = config.app || {};
-    config.app.hotkey = config.app.hotkey || el.hotkey.value.trim() || "F13";
+    config.app.hotkey = config.app.hotkey || "F13";
     config.app.hotkey_mode = currentHotkeyMode;
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
@@ -228,27 +290,36 @@
   }
 
   async function saveFromForm() {
-    setSaveStatus("保存中...", "saving");
     try {
       const config = collectConfig();
       await window.voiceSettings.saveConfigObject(config);
       await loadSettings();
-    } catch (err) {
-      setSaveStatus(err.message || "保存失败", "error");
+    } catch (_err) {
+      /* ignore */
     }
   }
 
   async function saveFromYaml() {
-    setSaveStatus("保存中...", "saving");
     try {
       await window.voiceSettings.saveConfig({
         configText: el.yamlEditor.value,
       });
       await loadSettings();
-    } catch (err) {
-      setSaveStatus(err.message || "保存失败", "error");
+    } catch (_err) {
+      /* ignore */
     }
   }
+
+  async function syncFormToYaml() {
+    // If there are unsaved form changes, save them first so YAML reflects current state
+    if (isDirty) {
+      await saveFromForm();
+    } else {
+      await loadSettings();
+    }
+  }
+
+  // ===== Microphone =====
 
   function updateMicStatus(status) {
     const labels = {
@@ -260,16 +331,71 @@
     };
     el.micText.textContent = labels[status] || status;
     el.micDot.dataset.status = status;
+
+    const isGranted = status === "granted";
+    el.micDot.classList.toggle("green", isGranted);
+    el.micDot.classList.toggle("yellow", status === "not-determined");
+    el.micDot.classList.toggle("red", status === "denied");
+    updatePermissionBadge();
   }
 
   async function checkMic() {
-    const result = await window.voiceSettings.getMicrophoneStatus();
+    let result = await window.voiceSettings.getMicrophoneStatus();
+    if (result.status !== "granted") {
+      result = await window.voiceSettings.requestMicrophoneAccess();
+    }
     updateMicStatus(result.status || "unknown");
   }
 
-  async function requestMic() {
-    const result = await window.voiceSettings.requestMicrophoneAccess();
-    updateMicStatus(result.status || "unknown");
+  function updateAccessibilityStatus(status) {
+    const labels = {
+      granted: "已授权",
+      denied: "未授权",
+      unknown: "未知",
+    };
+    el.accText.textContent = labels[status] || status;
+    el.accDot.dataset.status = status;
+    el.accDot.classList.toggle("green", status === "granted");
+    el.accDot.classList.toggle("yellow", false);
+    el.accDot.classList.toggle("red", status !== "granted" && status !== "unknown");
+    updatePermissionBadge();
+  }
+
+  function updatePermissionBadge() {
+    if (!el.permBadge) {
+      return;
+    }
+
+    let issues = 0;
+    if (el.micDot.dataset.status !== "granted") {
+      issues += 1;
+    }
+    if (el.accessibilityRow.style.display !== "none" && el.accDot.dataset.status !== "granted") {
+      issues += 1;
+    }
+
+    if (issues > 0) {
+      el.permBadge.textContent = String(issues);
+      el.permBadge.style.display = "";
+      return;
+    }
+
+    el.permBadge.style.display = "none";
+  }
+
+  async function refreshAccessibilityStatus() {
+    const result = await window.voiceSettings.getAccessibilityStatus();
+    updateAccessibilityStatus(result.status || "unknown");
+  }
+
+  // ===== Hotwords =====
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   function renderHotwords(filter = "") {
@@ -281,7 +407,7 @@
         const cls = `tag${isMatch ? " is-match" : isDimmed ? " is-dimmed" : ""}`;
         return (
           `<span class="${cls}">` +
-          `<span class="tag-word">${escapeHtml(word)}</span>` +
+          `<span>${escapeHtml(word)}</span>` +
           `<button type="button" class="tag-remove" data-index="${i}" title="移除">&times;</button>` +
           `</span>`
         );
@@ -305,30 +431,28 @@
     el.newHotword.value = "";
     setHotwordHint("", "");
     renderHotwords();
-    markDirty();
+    saveFormNow();
   }
 
   function removeHotword(index) {
     hotwords.splice(index, 1);
     renderHotwords();
-    markDirty();
+    saveFormNow();
   }
+
+  // ===== Password toggle =====
 
   function toggleSecret(inputId, btn) {
     const input = $(inputId);
-    if (input.type === "password") {
-      input.type = "text";
-      btn.textContent = "隐藏";
-    } else {
-      input.type = "password";
-      btn.textContent = "显示";
-    }
+    const isPassword = input.type === "password";
+    input.type = isPassword ? "text" : "password";
+    const iconName = isPassword ? "eye-off" : "eye";
+    btn.innerHTML = `<span class="nav-icon">${icon(iconName)}</span>`;
   }
 
-  // ===== HOTKEY RECORDING =====
+  // ===== Hotkey recording =====
 
   let isRecordingHotkey = false;
-  let hotkeyBackup = "";
 
   function suppressKeyboardDuringHotkeyRecording(event) {
     if (!isRecordingHotkey) return;
@@ -336,23 +460,17 @@
     event.stopPropagation();
   }
 
-  function setHotkeyHint(text, level) {
-    el.hotkeyHint.textContent = text;
-    el.hotkeyHint.dataset.level = level || "";
-  }
-
   async function recordHotkey() {
     if (isRecordingHotkey) return;
-    hotkeyBackup = el.hotkey.value;
     isRecordingHotkey = true;
+
     if (document.activeElement && typeof document.activeElement.blur === "function") {
       document.activeElement.blur();
     }
-    el.hotkeyRecorder.classList.add("is-recording");
+
+    el.hotkeyDisplay.classList.add("is-recording");
     el.hotkeyRecordBtn.disabled = true;
-    el.hotkey.value = "";
-    el.hotkey.placeholder = "请按下快捷键组合并松开...";
-    el.hotkeyRecordBtn.textContent = "录制中...";
+    el.hotkeyRecordBtn.innerHTML = "录制中…";
     setHotkeyHint("按下快捷键组合并松开，Esc 取消", "");
 
     try {
@@ -363,27 +481,25 @@
       if (keys && keys.length > 0) {
         parsedConfig.app = parsedConfig.app || {};
         parsedConfig.app.hotkey = keys;
-        el.hotkey.value = displayString;
+        renderHotkeyDisplay(displayString);
         setHotkeyHint("", "");
-        markDirty();
+        saveFormNow();
       } else {
-        el.hotkey.value = hotkeyBackup;
         setHotkeyHint("", "");
       }
     } catch (err) {
-      el.hotkey.value = hotkeyBackup;
       setHotkeyHint(err?.message || "", err?.message ? "error" : "");
     } finally {
       isRecordingHotkey = false;
-      el.hotkeyRecorder.classList.remove("is-recording");
+      el.hotkeyDisplay.classList.remove("is-recording");
       el.hotkeyRecordBtn.disabled = false;
-      el.hotkey.placeholder = "点击「录制」设置热键";
-      el.hotkeyRecordBtn.textContent = "录制";
+      el.hotkeyRecordBtn.innerHTML = `<span class="nav-icon">${icon("keyboard")}</span> 录制`;
     }
   }
 
-  // ===== UPDATE =====
+  // ===== Update state machine =====
 
+  let _updateState = "idle";
   let _errorTimer = null;
 
   function setUpdateState(state, data) {
@@ -396,56 +512,60 @@
 
     switch (state) {
       case "checking":
-        el.updateBtn.textContent = "检查中…";
-        el.updateBtn.disabled = true;
-        el.updateBtn.className = "btn btn-ghost";
+        el.aboutUpdateBtn.textContent = "检查中…";
+        el.aboutUpdateBtn.disabled = true;
+        el.aboutUpdateStatus.textContent = "正在检查更新...";
         break;
       case "not-available":
-        el.updateBtn.textContent = "已是最新版本";
-        el.updateBtn.disabled = true;
-        el.updateBtn.className = "btn btn-ghost";
+        el.aboutUpdateBtn.textContent = "检查更新";
+        el.aboutUpdateBtn.disabled = false;
+        el.aboutUpdateStatus.textContent = "当前已是最新版本";
         _errorTimer = setTimeout(() => {
           setUpdateState("idle");
         }, 2000);
         break;
       case "available":
-        el.updateBtn.textContent = "立即更新";
-        el.updateBtn.disabled = false;
-        el.updateBtn.className = "btn btn-accent";
+        el.aboutUpdateBtn.textContent = "立即更新";
+        el.aboutUpdateBtn.disabled = false;
+        el.aboutUpdateBtn.className = "btn btn-sm btn-accent";
+        el.aboutUpdateStatus.textContent = `发现新版本`;
+        if (el.updateBadge) el.updateBadge.style.display = "";
         break;
       case "downloading":
       case "progress":
-        el.updateBtn.textContent = `下载中 ${data?.percent ?? 0}%`;
-        el.updateBtn.disabled = true;
-        el.updateBtn.className = "btn btn-accent";
+        el.aboutUpdateBtn.textContent = `下载中 ${data?.percent ?? 0}%`;
+        el.aboutUpdateBtn.disabled = true;
+        el.aboutUpdateStatus.textContent = `下载中 ${data?.percent ?? 0}%`;
         break;
       case "downloaded":
-        el.updateBtn.textContent = "重启安装";
-        el.updateBtn.disabled = false;
-        el.updateBtn.className = "btn btn-accent";
+        el.aboutUpdateBtn.textContent = "重启安装";
+        el.aboutUpdateBtn.disabled = false;
+        el.aboutUpdateBtn.className = "btn btn-sm btn-accent";
+        el.aboutUpdateStatus.textContent = "更新已下载，点击重启安装";
         break;
       case "installing":
-        el.updateBtn.textContent = "正在安装…";
-        el.updateBtn.disabled = true;
-        el.updateBtn.className = "btn btn-accent";
+        el.aboutUpdateBtn.textContent = "正在安装…";
+        el.aboutUpdateBtn.disabled = true;
+        el.aboutUpdateStatus.textContent = "正在安装更新…";
         break;
       case "disabled":
-        el.updateBtn.textContent = "调试模式";
-        el.updateBtn.disabled = true;
-        el.updateBtn.className = "btn btn-ghost";
+        el.aboutUpdateBtn.textContent = "调试模式";
+        el.aboutUpdateBtn.disabled = true;
+        el.aboutUpdateStatus.textContent = "调试模式下不支持自动更新";
         break;
       case "error":
-        el.updateBtn.textContent = data?.message || "检查更新失败";
-        el.updateBtn.disabled = true;
-        el.updateBtn.className = "btn btn-ghost";
+        el.aboutUpdateBtn.textContent = "检查更新";
+        el.aboutUpdateBtn.disabled = false;
+        el.aboutUpdateStatus.textContent = data?.message || "检查更新失败";
         _errorTimer = setTimeout(() => {
           setUpdateState("idle");
         }, 3000);
         break;
       default:
-        el.updateBtn.textContent = "检查更新";
-        el.updateBtn.disabled = false;
-        el.updateBtn.className = "btn btn-ghost";
+        el.aboutUpdateBtn.textContent = "检查更新";
+        el.aboutUpdateBtn.disabled = false;
+        el.aboutUpdateBtn.className = "btn btn-sm";
+        el.aboutUpdateStatus.textContent = "-";
         break;
     }
   }
@@ -472,41 +592,108 @@
     }
   }
 
-  // ===== EVENT LISTENERS =====
+  // ===== Section navigation =====
 
-  el.saveBtn.addEventListener("click", saveFromForm);
-  el.resetBtn.addEventListener("click", async () => {
-    if (!confirm("确定要还原为默认配置吗？当前配置将被覆盖。")) return;
-    setSaveStatus("还原中...", "saving");
-    try {
-      await window.voiceSettings.resetConfig();
-      await loadSettings();
-    } catch (err) {
-      setSaveStatus(err.message || "还原失败", "error");
+  function switchSection(id) {
+    document.querySelectorAll(".section").forEach((s) => {
+      s.classList.toggle("hidden", s.id !== `section-${id}`);
+    });
+    document.querySelectorAll(".nav-item[data-section]").forEach((n) => {
+      n.classList.toggle("active", n.dataset.section === id);
+    });
+
+    if (id === "yaml") {
+      syncFormToYaml();
     }
-  });
-  el.reloadBtn.addEventListener("click", loadSettings);
 
+    document.querySelector(".main").scrollTop = 0;
+  }
+
+  // ===== License =====
+
+  const LICENSE_TEXT = `MIT License
+
+Copyright (c) ${new Date().getFullYear()} that-yolanda
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.`;
+
+  // ===== Event Listeners =====
+
+  // Navigation
+  document.querySelectorAll(".nav-item[data-section]").forEach((item) => {
+    item.addEventListener("click", () => switchSection(item.dataset.section));
+  });
+
+  // Theme buttons
+  document.querySelectorAll(".theme-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const preference = btn.dataset.themeVal;
+      document.querySelectorAll(".theme-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.themeVal === preference);
+      });
+      try {
+        const result = await window.voiceSettings.setTheme(preference);
+        applyTheme(result.resolved);
+        currentThemePreference = preference;
+      } catch (_err) {
+        document.querySelectorAll(".theme-btn").forEach((b) => {
+          b.classList.toggle("active", b.dataset.themeVal === currentThemePreference);
+        });
+      }
+    });
+  });
+
+  // Hotkey recording
+  el.hotkeyRecordBtn.addEventListener("click", recordHotkey);
+  document.addEventListener("keydown", suppressKeyboardDuringHotkeyRecording, true);
+  document.addEventListener("keyup", suppressKeyboardDuringHotkeyRecording, true);
+
+  // Hotkey mode selector
+  el.hotkeyModeSelector.addEventListener("click", (e) => {
+    const btn = e.target.closest(".seg-btn");
+    if (!btn) return;
+    setHotkeyMode(btn.dataset.val);
+    saveFormNow();
+  });
+
+  // Auto-start
   el.autoStart.addEventListener("change", async () => {
     await window.voiceSettings.setLoginItemSettings(el.autoStart.checked);
   });
 
+  // Permissions
   el.checkMicBtn.addEventListener("click", checkMic);
-  el.requestMicBtn.addEventListener("click", requestMic);
-  el.openAccBtn.addEventListener("click", () => {
+  el.openAccBtn.addEventListener("click", async () => {
+    await refreshAccessibilityStatus();
+    if (el.accDot.dataset.status === "granted") {
+      return;
+    }
     window.voiceSettings.openAccessibilitySettings();
   });
 
-  el.hotkeyRecordBtn.addEventListener("click", recordHotkey);
-  el.hotkeyModeSelector.addEventListener("click", (e) => {
-    const option = e.target.closest(".hotkey-mode-option");
-    if (!option) return;
-    setHotkeyMode(option.dataset.value);
-    markDirty();
-  });
-  document.addEventListener("keydown", suppressKeyboardDuringHotkeyRecording, true);
-  document.addEventListener("keyup", suppressKeyboardDuringHotkeyRecording, true);
+  // Save bar
+  el.toggleAccessToken.addEventListener("click", () =>
+    toggleSecret("accessToken", el.toggleAccessToken),
+  );
+  el.toggleSecretKey.addEventListener("click", () => toggleSecret("secretKey", el.toggleSecretKey));
 
+  // Hotwords
   el.addHotwordBtn.addEventListener("click", addHotword);
   el.newHotword.addEventListener("keydown", (e) => {
     if (e.key === "Enter") addHotword();
@@ -525,13 +712,46 @@
     if (btn) removeHotword(parseInt(btn.dataset.index, 10));
   });
 
-  el.toggleAccessToken.addEventListener("click", () =>
-    toggleSecret("accessToken", el.toggleAccessToken),
-  );
-  el.toggleSecretKey.addEventListener("click", () => toggleSecret("secretKey", el.toggleSecretKey));
-
+  // YAML section
   el.reloadYamlBtn.addEventListener("click", loadSettings);
   el.saveYamlBtn.addEventListener("click", saveFromYaml);
+  el.resetBtn.addEventListener("click", async () => {
+    if (!confirm("确定要还原为默认配置吗？当前配置将被覆盖。")) return;
+    try {
+      await window.voiceSettings.resetConfig();
+      await loadSettings();
+    } catch (_err) {
+      /* ignore */
+    }
+  });
+
+  function autoResizeYamlEditor() {
+    el.yamlEditor.style.height = "auto";
+    const maxHeight = Math.round(window.innerHeight * 0.6);
+    el.yamlEditor.style.height = `${Math.min(el.yamlEditor.scrollHeight, maxHeight)}px`;
+  }
+
+  el.yamlEditor.addEventListener("input", () => {
+    isDirty = true;
+    autoResizeYamlEditor();
+  });
+
+  // Update
+  el.aboutUpdateBtn.addEventListener("click", handleUpdateClick);
+
+  // License
+  el.licenseBtn.addEventListener("click", () => {
+    el.licenseText.textContent = LICENSE_TEXT;
+    el.licenseOverlay.style.display = "";
+  });
+  el.licenseCloseBtn.addEventListener("click", () => {
+    el.licenseOverlay.style.display = "none";
+  });
+  el.licenseOverlay.addEventListener("click", (e) => {
+    if (e.target === el.licenseOverlay) {
+      el.licenseOverlay.style.display = "none";
+    }
+  });
 
   // Track changes on all form inputs
   const inputs = [
@@ -544,7 +764,7 @@
     el.secretKey,
   ];
   inputs.forEach((input) => {
-    if (input) input.addEventListener("input", markDirty);
+    if (input) input.addEventListener("input", autoSaveForm);
   });
 
   const toggles = [
@@ -556,63 +776,10 @@
     el.keepClipboard,
   ];
   toggles.forEach((toggle) => {
-    if (toggle) toggle.addEventListener("change", markDirty);
+    if (toggle) toggle.addEventListener("change", saveFormNow);
   });
 
-  el.yamlEditor.addEventListener("input", markDirty);
-
-  el.updateBtn.addEventListener("click", handleUpdateClick);
-
-  // Collapsible sections
-  document.querySelectorAll(".collapse-toggle").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const section = btn.closest(".section");
-      section.classList.toggle("is-open");
-      btn.setAttribute("aria-expanded", section.classList.contains("is-open"));
-    });
-  });
-
-  // Sidebar navigation
-  const sidebarNav = $("sidebarNav");
-  const contentEl = document.querySelector(".content");
-  const sections = document.querySelectorAll(".content .section[data-nav]");
-
-  sections.forEach((section) => {
-    const label = section.dataset.nav;
-    const link = document.createElement("a");
-    link.className = "sidebar-link";
-    link.textContent = label;
-    link.href = `#${section.id}`;
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      section.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    sidebarNav.appendChild(link);
-  });
-
-  const sidebarLinks = sidebarNav.querySelectorAll(".sidebar-link");
-
-  function updateActiveNav() {
-    const scrollTop = contentEl.scrollTop;
-    const offset = 80;
-    let activeIndex = 0;
-
-    sections.forEach((section, i) => {
-      const top = section.offsetTop - contentEl.offsetTop - offset;
-      if (scrollTop >= top) {
-        activeIndex = i;
-      }
-    });
-
-    sidebarLinks.forEach((link, i) => {
-      link.classList.toggle("active", i === activeIndex);
-    });
-  }
-
-  contentEl.addEventListener("scroll", updateActiveNav, { passive: true });
-  updateActiveNav();
-
-  // Mic status events from main process
+  // IPC events from main process
   window.voiceSettings.onEvent((event) => {
     if (event.type === "microphone-status") {
       updateMicStatus(event.payload?.status || "unknown");
@@ -625,25 +792,7 @@
     }
   });
 
-  // Theme selector
-  el.themeSelector.addEventListener("click", async (e) => {
-    const option = e.target.closest(".theme-option");
-    if (!option) return;
-    const preference = option.dataset.value;
-    el.themeSelector.querySelectorAll(".theme-option").forEach((btn) => {
-      btn.dataset.active = btn.dataset.value === preference ? "true" : "false";
-    });
-    try {
-      const result = await window.voiceSettings.setTheme(preference);
-      applyTheme(result.resolved);
-      currentThemePreference = preference;
-    } catch (_err) {
-      el.themeSelector.querySelectorAll(".theme-option").forEach((btn) => {
-        btn.dataset.active = btn.dataset.value === currentThemePreference ? "true" : "false";
-      });
-    }
-  });
-
-  // Init
+  // ===== Init =====
+  initIcons();
   loadSettings();
 })();

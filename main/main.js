@@ -224,6 +224,15 @@ uIOhook.on("keydown", (e) => {
   }
 
   if (isRecordingHotkey) {
+    if (e.keycode === UiohookKey.Escape && recordingCombo.size === 0) {
+      isRecordingHotkey = false;
+      pressedKeys.clear();
+      if (hotkeyRecorderResolve) {
+        hotkeyRecorderResolve([]);
+        hotkeyRecorderResolve = null;
+      }
+      return;
+    }
     recordingCombo.add(e.keycode);
     if (recordingCombo.size > maxRecordingSize) {
       maxRecordingSize = recordingCombo.size;
@@ -384,6 +393,41 @@ function getHotkey() {
   return currentConfig.app.hotkey;
 }
 
+function getAccessibilityStatus() {
+  if (process.platform !== "darwin") {
+    return "granted";
+  }
+
+  return systemPreferences.isTrustedAccessibilityClient(false) ? "granted" : "denied";
+}
+
+async function ensureAccessibilityAccess() {
+  const status = getAccessibilityStatus();
+  logInfo("accessibility access status", { status });
+
+  if (status === "granted") {
+    return true;
+  }
+
+  const result = await dialog.showMessageBox({
+    type: "warning",
+    title: "需要辅助功能权限",
+    message: "VoicePaste 需要辅助功能权限才能将识别结果自动粘贴到其他应用。",
+    detail: "请前往 系统设置 > 隐私与安全 > 辅助功能，将 VoicePaste 添加到允许列表，然后重启应用。",
+    buttons: ["打开系统设置", "取消"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+
+  if (result.response === 0) {
+    await shell.openExternal(
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+    );
+  }
+
+  return false;
+}
+
 async function ensureMicrophoneAccess() {
   if (process.platform !== "darwin") {
     return true;
@@ -527,6 +571,13 @@ async function startRecordingFlow() {
   if (!hasMicrophoneAccess) {
     console.error("[ASR] microphone access denied");
     logError("microphone access denied");
+    return;
+  }
+
+  const hasAccessibilityAccess = await ensureAccessibilityAccess();
+  if (!hasAccessibilityAccess) {
+    console.error("[Paste] accessibility access denied");
+    logError("accessibility access denied");
     return;
   }
 
@@ -1006,6 +1057,7 @@ app.whenReady().then(() => {
       process.platform === "darwin"
         ? systemPreferences.getMediaAccessStatus("microphone")
         : "granted";
+    const accessibilityStatus = getAccessibilityStatus();
 
     return {
       configPath: CONFIG_PATH,
@@ -1015,6 +1067,7 @@ app.whenReady().then(() => {
         hotkey: getHotkey(),
         hotkeyDisplay: formatHotkey(getHotkey()),
         microphoneStatus,
+        accessibilityStatus,
         version: app.getVersion(),
         platform: process.platform,
         theme: {
@@ -1094,6 +1147,12 @@ app.whenReady().then(() => {
         : "granted";
 
     logInfo("settings microphone status", { status });
+    return { status };
+  });
+
+  ipcMain.handle("settings:get-accessibility-status", async () => {
+    const status = getAccessibilityStatus();
+    logInfo("settings accessibility status", { status });
     return { status };
   });
 
