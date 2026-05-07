@@ -602,11 +602,233 @@
       n.classList.toggle("active", n.dataset.section === id);
     });
 
+    if (id === "home") {
+      loadHomeData();
+    }
     if (id === "yaml") {
       syncFormToYaml();
     }
 
     document.querySelector(".main").scrollTop = 0;
+  }
+
+  // ===== Home Module =====
+
+  let _historyDaysBack = 3;
+
+  function formatCompact(n) {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+    return String(n);
+  }
+
+  function formatDuration(totalSeconds) {
+    const s = Math.round(totalSeconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = s / 3600;
+    return h < 10 ? `${h.toFixed(1)}h` : `${Math.round(h)}h`;
+  }
+
+  function renderGreeting() {
+    const h = new Date().getHours();
+    const g =
+      h < 6 ? "夜深了" : h < 11 ? "早上好" : h < 13 ? "中午好" : h < 18 ? "下午好" : "晚上好";
+    const el = $("greetingText");
+    if (el) el.textContent = g;
+  }
+
+  function renderAchievements(stats) {
+    const daysUsed = stats.dailyCounts ? Object.keys(stats.dailyCounts).length : 0;
+
+    const daysEl = $("achDaysUsed");
+    const sessionsEl = $("achSessions");
+    const charsEl = $("achCharacters");
+    const timeEl = $("achTimeSaved");
+
+    if (daysEl) daysEl.textContent = formatCompact(daysUsed);
+    if (sessionsEl) sessionsEl.textContent = formatCompact(stats.totalSessions || 0);
+    if (charsEl) charsEl.textContent = formatCompact(stats.totalCharacters || 0);
+
+    const secondsSaved = Math.round((stats.totalCharacters || 0) * 0.67);
+    if (timeEl) timeEl.textContent = formatDuration(secondsSaved);
+  }
+
+  function renderHeatmap(dailyCounts) {
+    const grid = $("heatmapGrid");
+    const monthsEl = $("heatmapMonths");
+    const totalEl = $("heatmapTotal");
+    if (!grid) return;
+
+    grid.innerHTML = "";
+    if (monthsEl) monthsEl.innerHTML = "";
+
+    const weeks = 26;
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - startDate.getDay());
+    startDate.setDate(startDate.getDate() - (weeks - 1) * 7);
+
+    const allCounts = Object.values(dailyCounts || {}).filter((c) => c > 0);
+    allCounts.sort((a, b) => a - b);
+
+    function getLevel(count) {
+      if (!count || count === 0) return 0;
+      if (allCounts.length === 0) return 1;
+      const p25 = allCounts[Math.floor(allCounts.length * 0.25)];
+      const p50 = allCounts[Math.floor(allCounts.length * 0.5)];
+      const p75 = allCounts[Math.floor(allCounts.length * 0.75)];
+      if (count <= p25) return 1;
+      if (count <= p50) return 2;
+      if (count <= p75) return 3;
+      return 4;
+    }
+
+    let totalChars = 0;
+    const monthPositions = {};
+    let currentMonth = -1;
+
+    for (let w = 0; w < weeks; w++) {
+      for (let d = 0; d < 7; d++) {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + w * 7 + d);
+
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        const count = dailyCounts[key] || 0;
+        totalChars += count;
+
+        const cell = document.createElement("div");
+        if (date > now) {
+          cell.className = "heatmap-cell";
+          cell.style.visibility = "hidden";
+        } else {
+          cell.className = `heatmap-cell level-${getLevel(count)}`;
+          cell.title = `${date.getMonth() + 1}月${date.getDate()}日: ${count} 字`;
+        }
+        grid.appendChild(cell);
+
+        const m = date.getMonth();
+        if (m !== currentMonth && d === 0) {
+          monthPositions[m] = w;
+          currentMonth = m;
+        }
+      }
+    }
+
+    const monthNames = [
+      "1月",
+      "2月",
+      "3月",
+      "4月",
+      "5月",
+      "6月",
+      "7月",
+      "8月",
+      "9月",
+      "10月",
+      "11月",
+      "12月",
+    ];
+    const cellSize = 14;
+    const rendered = {};
+    if (monthsEl) {
+      for (let mw = 0; mw < weeks; mw++) {
+        for (const mKey in monthPositions) {
+          if (monthPositions[mKey] === mw && !rendered[mKey]) {
+            const label = document.createElement("span");
+            label.className = "heatmap-month-label";
+            label.style.left = `${mw * cellSize}px`;
+            label.textContent = monthNames[mKey];
+            monthsEl.appendChild(label);
+            rendered[mKey] = true;
+          }
+        }
+      }
+    }
+
+    if (totalEl) {
+      totalEl.innerHTML = `共输入 <strong>${totalChars.toLocaleString()}</strong> 字`;
+    }
+  }
+
+  function renderHistory(items) {
+    const container = $("historyContainer");
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (!items || items.length === 0) {
+      container.innerHTML =
+        '<div class="history-item"><span style="color:var(--text-muted);font-size:12px">暂无输入记录</span></div>';
+      return;
+    }
+
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+
+    function dateLabel(dateStr) {
+      if (dateStr === todayKey) return "今天";
+      if (dateStr === yesterdayKey) return "昨天";
+      const d = new Date(dateStr);
+      const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+      return `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
+    }
+
+    let lastDate = "";
+    for (const item of items) {
+      const d = new Date(item.ts);
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+      if (dateKey !== lastDate) {
+        const divider = document.createElement("div");
+        divider.className = "history-date-divider";
+        divider.innerHTML = `<span class="history-date-label">${dateLabel(dateKey)}</span>`;
+        container.appendChild(divider);
+        lastDate = dateKey;
+      }
+
+      const row = document.createElement("div");
+      row.className = "history-item";
+      const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      row.innerHTML = `<span class="history-time">${time}</span><div class="history-content"><div class="history-text">${escapeHtml(item.text)}</div></div>`;
+      container.appendChild(row);
+    }
+
+    const moreBtn = document.createElement("div");
+    moreBtn.className = "history-more";
+    moreBtn.innerHTML = "<span>加载更多</span>";
+    moreBtn.addEventListener("click", () => {
+      _historyDaysBack += 3;
+      loadHistory(_historyDaysBack);
+    });
+    container.appendChild(moreBtn);
+  }
+
+  async function loadHistory(daysBack) {
+    try {
+      const items = await window.voiceSettings.getHistory(daysBack);
+      renderHistory(items);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  async function loadHomeData() {
+    renderGreeting();
+
+    try {
+      const stats = await window.voiceSettings.getStats();
+      renderAchievements(stats);
+      renderHeatmap(stats.dailyCounts || {});
+    } catch (_err) {
+      /* ignore */
+    }
+
+    _historyDaysBack = 3;
+    await loadHistory(_historyDaysBack);
   }
 
   // ===== License =====
@@ -795,4 +1017,5 @@ SOFTWARE.`;
   // ===== Init =====
   initIcons();
   loadSettings();
+  loadHomeData();
 })();

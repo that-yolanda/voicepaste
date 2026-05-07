@@ -83,4 +83,10 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   installUpdate() {
     return ipcRenderer.invoke("update:install");
   },
+  getStats() {
+    return ipcRenderer.invoke("stats:get");
+  },
+  getHistory(daysBack) {
+    return ipcRenderer.invoke("stats:get-history", daysBack);
+  },
 });

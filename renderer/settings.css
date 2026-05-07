@@ -821,3 +821,259 @@ kbd {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ===== Home: Welcome ===== */
+
+.welcome-text {
+  font-family: "Iowan Old Style", "Charter", Georgia, serif;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* ===== Home: Achievements ===== */
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.achievement-item {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+.achievement-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.achievement-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.achievement-text {
+  padding: 8px 10px 10px;
+  text-align: center;
+}
+
+.achievement-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.achievement-label {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* ===== Home: Heatmap ===== */
+
+.heatmap-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.heatmap-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.heatmap-months {
+  display: flex;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  margin-left: 22px;
+  height: 14px;
+  position: relative;
+}
+
+.heatmap-month-label {
+  position: absolute;
+}
+
+.heatmap-body {
+  display: flex;
+  gap: 8px;
+}
+
+.heatmap-days {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 14px;
+}
+
+.heatmap-days span {
+  height: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  line-height: 1;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-flow: column;
+  grid-auto-columns: 11px;
+  gap: 3px;
+}
+
+.heatmap-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+}
+
+.heatmap-cell.level-0 {
+  background: var(--heatmap-0);
+}
+
+.heatmap-cell.level-1 {
+  background: var(--heatmap-1);
+}
+
+.heatmap-cell.level-2 {
+  background: var(--heatmap-2);
+}
+
+.heatmap-cell.level-3 {
+  background: var(--heatmap-3);
+}
+
+.heatmap-cell.level-4 {
+  background: var(--heatmap-4);
+}
+
+.heatmap-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding-bottom: 2px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.heatmap-stats-range {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.heatmap-stats-total {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.heatmap-stats-total strong {
+  font-weight: 500;
+}
+
+/* ===== Home: History ===== */
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  min-height: 40px;
+  transition: background 0.2s ease;
+}
+
+.history-item:hover {
+  background: var(--sidebar-active-bg);
+}
+
+.history-time {
+  font-size: 11px;
+  font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 38px;
+}
+
+.history-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-text {
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.history-date-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  margin-top: -1px;
+}
+
+.history-date-divider:first-child {
+  margin-top: 0;
+}
+
+.history-date-divider::before,
+.history-date-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.history-date-label {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 10px 0 6px;
+}
+
+.history-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease;
+  gap: 4px;
+}
+
+.history-more:hover {
+  color: var(--text-dim);
+}
+
+.history-more svg {
+  width: 14px;
+  height: 14px;
+}

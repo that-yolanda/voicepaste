@@ -62,6 +62,12 @@
   --overlay-soft: rgba(250, 249, 245, 0.38);
   --overlay-spinner-border: rgba(250, 249, 245, 0.15);
   --overlay-bar: rgba(250, 249, 245, 0.75);
+
+  --heatmap-0: #2a2a28;
+  --heatmap-1: rgba(217, 119, 87, 0.15);
+  --heatmap-2: rgba(217, 119, 87, 0.3);
+  --heatmap-3: rgba(217, 119, 87, 0.5);
+  --heatmap-4: #d97757;
 }
 
 /* ===== Light theme ===== */
@@ -120,4 +126,10 @@
 
   --sidebar-bg: #ffffff;
   --sidebar-active-bg: rgba(201, 100, 66, 0.08);
+
+  --heatmap-0: #ededeb;
+  --heatmap-1: rgba(201, 100, 66, 0.18);
+  --heatmap-2: rgba(201, 100, 66, 0.38);
+  --heatmap-3: rgba(201, 100, 66, 0.58);
+  --heatmap-4: #c96442;
 }

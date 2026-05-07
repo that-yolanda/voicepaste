@@ -29,6 +29,7 @@ const {
 const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
 const { logInfo, logError, resolveLogPath, closeLogger } = require("./logger");
+const { initStatsService, recordSession, getStats, getHistory } = require("./statsService");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
 const {
   initUpdateService,
@@ -766,6 +767,8 @@ async function finishRecordingFlow() {
     resetTranscript();
     hideOverlay();
     setState("idle");
+
+    recordSession(textToPaste);
   } catch (error) {
     logError("finish recording flow failed", { message: error.message || String(error) });
     expectingSessionClose = false;
@@ -943,6 +946,7 @@ app.whenReady().then(() => {
     configPath: CONFIG_PATH,
   });
   reloadRuntimeConfig();
+  initStatsService();
   tryStartUiohook();
 
   overlayWindow = createOverlayWindow();
@@ -1208,6 +1212,14 @@ app.whenReady().then(() => {
     saveConfig(config);
     reloadRuntimeConfig();
     return { preference, resolved: resolveTheme() };
+  });
+
+  ipcMain.handle("stats:get", async () => {
+    return getStats();
+  });
+
+  ipcMain.handle("stats:get-history", async (_event, daysBack) => {
+    return getHistory(daysBack || 3);
   });
 
   ipcMain.on("renderer:audio-stopped", () => {

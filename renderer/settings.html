@@ -18,8 +18,14 @@
           <span class="app-name">VoicePaste</span>
         </div>
         <nav class="sidebar-nav">
+          <div class="nav-group-label">概览</div>
+          <div class="nav-item active" data-section="home">
+            <span class="nav-icon" data-icon="home"></span>
+            <span>首页</span>
+          </div>
+          <div class="nav-divider"></div>
           <div class="nav-group-label">设置</div>
-          <div class="nav-item active" data-section="hotkey">
+          <div class="nav-item" data-section="hotkey">
             <span class="nav-icon" data-icon="keyboard"></span>
             <span>快捷键</span>
           </div>
@@ -90,8 +96,82 @@
 
       <main class="main">
         <div class="main-inner">
+          <!-- 首页 -->
+          <section class="section" id="section-home">
+            <div class="welcome-text"><span id="greetingText">下午好</span></div>
+
+            <div style="margin-top: 20px">
+              <div class="achievements-grid">
+                <div class="achievement-item">
+                  <div class="achievement-thumb"><img src="./calendar.jpg" alt="" /></div>
+                  <div class="achievement-text">
+                    <div class="achievement-value" id="achDaysUsed">0</div>
+                    <div class="achievement-label">已使用天数</div>
+                  </div>
+                </div>
+                <div class="achievement-item">
+                  <div class="achievement-thumb"><img src="./mic.jpg" alt="" /></div>
+                  <div class="achievement-text">
+                    <div class="achievement-value" id="achSessions">0</div>
+                    <div class="achievement-label">会话次数</div>
+                  </div>
+                </div>
+                <div class="achievement-item">
+                  <div class="achievement-thumb"><img src="./keyboard.jpg" alt="" /></div>
+                  <div class="achievement-text">
+                    <div class="achievement-value" id="achCharacters">0</div>
+                    <div class="achievement-label">总输入字数</div>
+                  </div>
+                </div>
+                <div class="achievement-item">
+                  <div class="achievement-thumb"><img src="./time.jpg" alt="" /></div>
+                  <div class="achievement-text">
+                    <div class="achievement-value" id="achTimeSaved">0s</div>
+                    <div class="achievement-label">节省时间</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top: 20px">
+              <div class="section-header">
+                <div><div class="section-title">使用统计</div></div>
+              </div>
+              <div class="section-card" style="padding: 16px 18px">
+                <div class="heatmap-layout">
+                  <div class="heatmap-left">
+                    <div class="heatmap-months" id="heatmapMonths"></div>
+                    <div class="heatmap-body">
+                      <div class="heatmap-days">
+                        <span></span>
+                        <span>一</span>
+                        <span></span>
+                        <span>三</span>
+                        <span></span>
+                        <span>五</span>
+                        <span></span>
+                      </div>
+                      <div class="heatmap-grid" id="heatmapGrid"></div>
+                    </div>
+                  </div>
+                  <div class="heatmap-stats">
+                    <span class="heatmap-stats-range">过去 26 周</span>
+                    <span class="heatmap-stats-total" id="heatmapTotal">共输入 <strong>0</strong> 字</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top: 20px">
+              <div class="section-header">
+                <div><div class="section-title">输入记录</div></div>
+              </div>
+              <div class="section-card" id="historyContainer"></div>
+            </div>
+          </section>
+
           <!-- 快捷键 -->
-          <section class="section" id="section-hotkey">
+          <section class="section hidden" id="section-hotkey">
             <div class="section-header">
               <div>
                 <div class="section-title">快捷键</div>
