@@ -13,14 +13,19 @@ Uses ByteDance Doubao streaming ASR via WebSocket with a custom binary framing p
 ```bash
 pnpm install          # Install dependencies
 pnpm start            # Run the app in development (electron .)
-pnpm pack             # Build macOS zip via electron-builder
-pnpm pack:win         # Build Windows NSIS installer via electron-builder
+pnpm pack             # Build all platforms without signing
+pnpm pack -s          # Build all platforms with signing and notarization
+pnpm pack -p mac-arm64              # Build macOS Apple Silicon only
+pnpm pack -p mac-x64                # Build macOS Intel only
+pnpm pack -p win-x64                # Build Windows x64 only
+pnpm pack -p mac-arm64,mac-x64      # Build macOS dual architecture
 ```
 
 ```bash
 pnpm lint          # Biome lint check (main/ preload/ renderer/)
 pnpm format        # Biome auto-format (main/ preload/ renderer/)
 pnpm check         # Biome check + auto-fix (lint + format)
+pnpm lint:ci       # Biome CI check (read-only, for CI pipelines)
 ```
 
 No test framework is configured.

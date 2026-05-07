@@ -1,64 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <version> <previous-version>" >&2
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <version> [previous-version]" >&2
   exit 1
 fi
 
 version="$1"
-previous="$2"
+shift
+
+previous="${1:-}"
+
+# Auto-detect previous version from git tags if not provided
+if [[ -z "$previous" ]]; then
+  previous=$(git tag --sort=-v:refname | head -1 || true)
+  if [[ "$previous" == "v${version}" ]]; then
+    previous=$(git tag --sort=-v:refname | sed -n '2p' || true)
+    previous="${previous#v}"
+  else
+    previous="${previous#v}"
+  fi
+fi
+
 compare_url="https://github.com/that-yolanda/voicepaste/compare/v${previous}...v${version}"
 
-# Try to extract changelog section for this version
-changelog_file=""
-for f in CHANGELOG.md CHANGELOG.zh.md; do
-  if [[ -f "$f" ]]; then
-    changelog_file="$f"
-    break
-  fi
-done
-
-if [[ -n "$changelog_file" ]]; then
-  # Extract the section between the target version header and the next version header
-  section=$(awk -v ver="$version" '
-    tolower($0) ~ "##.*" ver { found=1; next }
-    found && tolower($0) ~ /^## / { exit }
-    found { print }
-  ' "$changelog_file" | sed '/^$/d; /^$/d')
+# Extract changelog section from CHANGELOG.md
+if [[ ! -f CHANGELOG.md ]]; then
+  echo "Error: CHANGELOG.md not found" >&2
+  exit 1
 fi
 
-# Extract commit log between versions
-if git rev-parse "v${previous}" >/dev/null 2>&1; then
-  commit_log=$(git log "v${previous}..HEAD" --pretty=format:"- %s" 2>/dev/null || true)
-else
-  commit_log=$(git log -10 --pretty=format:"- %s" 2>/dev/null || true)
+section=$(awk -v ver="$version" '
+  tolower($0) ~ "##.*" ver { found=1; next }
+  found && tolower($0) ~ /^## / { exit }
+  found { print }
+' CHANGELOG.md | sed '/^$/d')
+
+if [[ -z "$section" ]]; then
+  echo "Error: CHANGELOG.md has no entry for version ${version}" >&2
+  exit 1
 fi
 
-cat <<EOF
-## What's New
-
-EOF
-
-if [[ -n "${section:-}" ]]; then
-  echo "$section"
-  echo ""
-elif [[ -n "$commit_log" ]]; then
-  echo "$commit_log"
-  echo ""
-else
-  cat <<EOF
-- **Title** — user-facing benefit
-- **Title** — user-facing benefit
-
-EOF
-fi
-
-cat <<EOF
-## Downloads
-
-- \`VoicePaste-${version}-arm64.zip\` — macOS (Apple Silicon)
-- \`VoicePaste-${version}-win-x64.exe\` — Windows (x64 NSIS installer)
-
-**Full Changelog**: ${compare_url}
-EOF
+echo "## What's New"
+echo
+echo "$section"
+echo
+echo "## Downloads"
+echo
+echo "- \`VoicePaste-${version}-arm64.zip\` — macOS (Apple Silicon)"
+echo "- \`VoicePaste-${version}-x64.zip\` — macOS (Intel)"
+echo "- \`VoicePaste-${version}-win-x64.exe\` — Windows (x64 NSIS installer)"
+echo
+echo "**Full Changelog**: ${compare_url}"

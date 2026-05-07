@@ -10,16 +10,17 @@ pnpm dev
 ## Package
 
 ```bash
-# Package macOS app
-pnpm pack
-
-# Package Windows installer
-pnpm pack:win
+pnpm pack                                 # Build all platforms without signing
+pnpm pack -s                              # Build all platforms with signing & notarization
+pnpm pack -p mac-arm64                    # macOS Apple Silicon only
+pnpm pack -p mac-x64                      # macOS Intel only
+pnpm pack -p win-x64                      # Windows x64 only
+pnpm pack -p mac-arm64,mac-x64            # macOS dual architecture
 ```
 
 ### Code Signing & Notarization (macOS)
 
-Without any configuration, the build will use ad-hoc signing and skip notarization. This works for personal use but macOS will reset permissions (microphone, accessibility) on each reinstall.
+Without the `-s` flag, the build will skip code signing and notarization. This works for personal use but macOS will reset permissions (microphone, accessibility) on each reinstall.
 
 To enable proper code signing and notarization:
 
@@ -40,11 +41,11 @@ CSC_NAME=Developer ID Application: Your Name (TEAMID)
 # CSC_IDENTITY_AUTO_DISCOVERY=false
 ```
 
-4. Run `pnpm pack`:
+4. Run `pnpm pack -s`:
    - If `CSC_NAME` is set, the build will pin signing to that Keychain certificate.
    - If `CSC_NAME` is not set, the build will auto-discover a valid certificate from Keychain.
-   - If no distribution certificate is installed, the build can still continue with ad-hoc signing.
    - The `APPLE_*` variables in `.env` are used for notarization.
+   - Without `-s`, signing is disabled and `CSC_IDENTITY_AUTO_DISCOVERY` is set to `false`.
 
 The `.env` file is already in `.gitignore` and will not be committed.
 

@@ -10,16 +10,17 @@ pnpm dev
 ## 打包
 
 ```bash
-# 打包 macOS 应用
-pnpm pack
-
-# 打包 Windows 安装包
-pnpm pack:win
+pnpm pack                                 # 全量打包（不含签名）
+pnpm pack -s                              # 全量打包 + 签名与公证
+pnpm pack -p mac-arm64                    # 仅 macOS Apple Silicon
+pnpm pack -p mac-x64                      # 仅 macOS Intel
+pnpm pack -p win-x64                      # 仅 Windows x64
+pnpm pack -p mac-arm64,mac-x64            # macOS 双架构
 ```
 
 ### 代码签名与公证（macOS）
 
-不做任何配置时，打包使用 ad-hoc 签名并跳过公证，可以正常使用，但每次重装 macOS 会重置权限（麦克风、辅助功能等）。
+不加 `-s` 参数时，打包会跳过代码签名和公证，可以正常使用，但每次重装 macOS 会重置权限（麦克风、辅助功能等）。
 
 如需启用正式签名和公证：
 
@@ -40,11 +41,11 @@ CSC_NAME=Developer ID Application: 你的名字 (团队ID)
 # CSC_IDENTITY_AUTO_DISCOVERY=false
 ```
 
-4. 运行 `pnpm pack`：
+4. 运行 `pnpm pack -s`：
    - 若设置了 `CSC_NAME`，构建会固定使用这张 Keychain 证书签名。
    - 若未设置 `CSC_NAME`，构建会自动从 Keychain 查找可用证书。
-   - 若本机没有正式证书，构建仍可继续，但会退回 ad-hoc 签名。
    - `.env` 中的 `APPLE_*` 变量会用于公证。
+   - 不加 `-s` 时签名被禁用，会自动设置 `CSC_IDENTITY_AUTO_DISCOVERY=false`。
 
 `.env` 文件已在 `.gitignore` 中，不会被提交。
 
