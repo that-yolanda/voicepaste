@@ -93,7 +93,7 @@ Run `pnpm check` — this project requires Biome lint + format to pass before an
 ### Step 6: Build Artifacts
 
 ```bash
-pnpm pack -s
+pnpm run pack -s
 ```
 
 This builds all platforms with signing and notarization. Validate artifacts:
@@ -184,7 +184,7 @@ Always upload the platform installers and update metadata files required by `ele
 
 ```bash
 pnpm check
-pnpm pack -s
+pnpm run pack -s
 git status --short
 git log --oneline origin/main..HEAD
 git push origin main

@@ -10,12 +10,12 @@ pnpm dev
 ## 打包
 
 ```bash
-pnpm pack                                 # 全量打包（不含签名）
-pnpm pack -s                              # 全量打包 + 签名与公证
-pnpm pack -p mac-arm64                    # 仅 macOS Apple Silicon
-pnpm pack -p mac-x64                      # 仅 macOS Intel
-pnpm pack -p win-x64                      # 仅 Windows x64
-pnpm pack -p mac-arm64,mac-x64            # macOS 双架构
+pnpm run pack                                 # 全量打包（不含签名）
+pnpm run pack -s                              # 全量打包 + 签名与公证
+pnpm run pack -p mac-arm64                    # 仅 macOS Apple Silicon
+pnpm run pack -p mac-x64                      # 仅 macOS Intel
+pnpm run pack -p win-x64                      # 仅 Windows x64
+pnpm run pack -p mac-arm64,mac-x64            # macOS 双架构
 ```
 
 ### 代码签名与公证（macOS）
@@ -41,7 +41,7 @@ CSC_NAME=Developer ID Application: 你的名字 (团队ID)
 # CSC_IDENTITY_AUTO_DISCOVERY=false
 ```
 
-4. 运行 `pnpm pack -s`：
+4. 运行 `pnpm run pack -s`：
    - 若设置了 `CSC_NAME`，构建会固定使用这张 Keychain 证书签名。
    - 若未设置 `CSC_NAME`，构建会自动从 Keychain 查找可用证书。
    - `.env` 中的 `APPLE_*` 变量会用于公证。

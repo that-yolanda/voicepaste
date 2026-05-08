@@ -13,12 +13,12 @@ Uses ByteDance Doubao streaming ASR via WebSocket with a custom binary framing p
 ```bash
 pnpm install          # Install dependencies
 pnpm start            # Run the app in development (electron .)
-pnpm pack             # Build all platforms without signing
-pnpm pack -s          # Build all platforms with signing and notarization
-pnpm pack -p mac-arm64              # Build macOS Apple Silicon only
-pnpm pack -p mac-x64                # Build macOS Intel only
-pnpm pack -p win-x64                # Build Windows x64 only
-pnpm pack -p mac-arm64,mac-x64      # Build macOS dual architecture
+pnpm run pack             # Build all platforms without signing
+pnpm run pack -s          # Build all platforms with signing and notarization
+pnpm run pack -p mac-arm64              # Build macOS Apple Silicon only
+pnpm run pack -p mac-x64                # Build macOS Intel only
+pnpm run pack -p win-x64                # Build Windows x64 only
+pnpm run pack -p mac-arm64,mac-x64      # Build macOS dual architecture
 ```
 
 ```bash

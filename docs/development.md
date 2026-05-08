@@ -10,12 +10,12 @@ pnpm dev
 ## Package
 
 ```bash
-pnpm pack                                 # Build all platforms without signing
-pnpm pack -s                              # Build all platforms with signing & notarization
-pnpm pack -p mac-arm64                    # macOS Apple Silicon only
-pnpm pack -p mac-x64                      # macOS Intel only
-pnpm pack -p win-x64                      # Windows x64 only
-pnpm pack -p mac-arm64,mac-x64            # macOS dual architecture
+pnpm run pack                                 # Build all platforms without signing
+pnpm run pack -s                              # Build all platforms with signing & notarization
+pnpm run pack -p mac-arm64                    # macOS Apple Silicon only
+pnpm run pack -p mac-x64                      # macOS Intel only
+pnpm run pack -p win-x64                      # Windows x64 only
+pnpm run pack -p mac-arm64,mac-x64            # macOS dual architecture
 ```
 
 ### Code Signing & Notarization (macOS)
@@ -41,7 +41,7 @@ CSC_NAME=Developer ID Application: Your Name (TEAMID)
 # CSC_IDENTITY_AUTO_DISCOVERY=false
 ```
 
-4. Run `pnpm pack -s`:
+4. Run `pnpm run pack -s`:
    - If `CSC_NAME` is set, the build will pin signing to that Keychain certificate.
    - If `CSC_NAME` is not set, the build will auto-discover a valid certificate from Keychain.
    - The `APPLE_*` variables in `.env` are used for notarization.

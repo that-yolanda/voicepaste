@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.0 (2026-05)
+
+- **Settings Home Page** — Added a home page with usage statistics, activity heatmap, and input history for a quick overview of your voice input activity.
+- **Unified Pack Command** — Build macOS arm64 and x64 in a single `pnpm run pack` command, simplifying the release process.
+- **Settings Redesign** — Reorganized settings page with sidebar navigation and auto-save for a cleaner editing experience.
+- **Auto-Update Fix** — Prevented the auto-update check from re-triggering when saving config, avoiding unnecessary network requests.
+- **CI & Release Overhaul** — Unified the pack script, added CI pipeline, and revamped the release skill for a more reliable build process.
+
 ## v1.0.8 (2026-04)
 
 - **Update Install Fix** — Fixed auto-update restart not quitting on macOS (Electron 41) by explicitly calling `app.quit()` after `quitAndInstall()`.

@@ -54,7 +54,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`Usage: pnpm pack [options]
+  console.log(`Usage: pnpm run pack [options]
 
 Options:
   -p, --platform <list>   Target platforms (comma-separated)
@@ -64,11 +64,11 @@ Options:
   -h, --help              Show this help
 
 Examples:
-  pnpm pack                           # Build all platforms without signing
-  pnpm pack -p mac-arm64              # macOS Apple Silicon only
-  pnpm pack -p mac-arm64,mac-x64      # macOS dual architecture
-  pnpm pack -s                        # Build all + sign
-  pnpm pack -s -p mac-arm64           # Sign + single platform`);
+  pnpm run pack                           # Build all platforms without signing
+  pnpm run pack -p mac-arm64              # macOS Apple Silicon only
+  pnpm run pack -p mac-arm64,mac-x64      # macOS dual architecture
+  pnpm run pack -s                        # Build all + sign
+  pnpm run pack -s -p mac-arm64           # Sign + single platform`);
 }
 
 function getElectronBuilderBin() {
