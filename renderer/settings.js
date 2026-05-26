@@ -750,7 +750,11 @@
         setHotkeyHint("", "");
         saveFormNow();
       } else {
-        setHotkeyHint("", "");
+        parsedConfig.app = parsedConfig.app || {};
+        parsedConfig.app.hotkey = "";
+        renderHotkeyDisplay("");
+        setHotkeyHint("快捷键已清除", "");
+        saveFormNow();
       }
     } catch (err) {
       setHotkeyHint(err?.message || "", err?.message ? "error" : "");
@@ -1368,14 +1372,15 @@ SOFTWARE.`;
     try {
       const result = await window.voiceSettings.recordHotkey();
       const keys = Array.isArray(result) ? result : result?.keys;
-      const displayString = result?.displayString || formatPromptHotkey(keys);
 
       if (keys && keys.length > 0) {
         promptsData[index].hotkey = keys;
         await savePromptsNow();
         renderPromptHotkeys();
       } else {
-        renderHotkeyParts(hotkeyDisplay, displayString || "");
+        promptsData[index].hotkey = [];
+        await savePromptsNow();
+        renderPromptHotkeys();
       }
     } finally {
       isRecordingHotkey = false;
