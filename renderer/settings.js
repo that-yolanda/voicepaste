@@ -77,6 +77,13 @@
     licenseOverlay: $("licenseOverlay"),
     licenseCloseBtn: $("licenseCloseBtn"),
     licenseText: $("licenseText"),
+    llmEnabled: $("llmEnabled"),
+    llmUrl: $("llmUrl"),
+    llmApiKey: $("llmApiKey"),
+    llmModel: $("llmModel"),
+    toggleLlmApiKey: $("toggleLlmApiKey"),
+    promptsList: $("promptsList"),
+    addPromptBtn: $("addPromptBtn"),
   };
 
   // ===== Dirty state & auto-save =====
@@ -259,6 +266,14 @@
     el.appId.value = c.connection?.app_id || "";
     el.accessToken.value = c.connection?.access_token || "";
     el.secretKey.value = c.connection?.secret_key || "";
+
+    el.llmEnabled.checked = Boolean(c.llm?.enabled);
+    el.llmUrl.value = c.llm?.url || "";
+    el.llmApiKey.value = c.llm?.api_key || "";
+    el.llmModel.value = c.llm?.model || "";
+    activePromptId = c.llm?.prompt_id || "";
+
+    loadAndRenderPrompts();
   }
 
   function collectConfig() {
@@ -296,6 +311,13 @@
     config.request.corpus = config.request.corpus || {};
     config.request.corpus.boosting_table_id = el.boostingTableId.value.trim();
     config.request.corpus.context_hotwords = hotwords.join(", ");
+
+    config.llm = config.llm || {};
+    config.llm.enabled = el.llmEnabled.checked;
+    config.llm.url = el.llmUrl.value.trim();
+    config.llm.api_key = el.llmApiKey.value.trim();
+    config.llm.model = el.llmModel.value.trim();
+    config.llm.prompt_id = getEffectivePromptId();
 
     return config;
   }
@@ -925,6 +947,151 @@ SOFTWARE.`;
     toggleSecret("accessToken", el.toggleAccessToken),
   );
   el.toggleSecretKey.addEventListener("click", () => toggleSecret("secretKey", el.toggleSecretKey));
+
+  // LLM fields
+  el.llmEnabled.addEventListener("change", saveFormNow);
+  el.llmUrl.addEventListener("input", autoSaveForm);
+  el.llmApiKey.addEventListener("input", autoSaveForm);
+  el.llmModel.addEventListener("input", autoSaveForm);
+  el.toggleLlmApiKey.addEventListener("click", () => toggleSecret("llmApiKey", el.toggleLlmApiKey));
+
+  // Prompts
+  let promptsData = [];
+  let promptsSaveTimer = null;
+  let activePromptId = "";
+
+  function createPromptId() {
+    return `prompt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function getEffectivePromptId() {
+    const hasActivePrompt = promptsData.some((item) => item.id === activePromptId);
+    if (hasActivePrompt) {
+      return activePromptId;
+    }
+    const firstPromptWithText = promptsData.find((item) => item.prompt?.trim());
+    return firstPromptWithText?.id || promptsData[0]?.id || "";
+  }
+
+  function syncActivePromptSelection() {
+    activePromptId = getEffectivePromptId();
+  }
+
+  async function loadAndRenderPrompts() {
+    try {
+      promptsData = await window.voiceSettings.loadPrompts();
+    } catch {
+      promptsData = [];
+    }
+    promptsData = promptsData.map((item, index) => ({
+      id: item.id || `prompt-${index + 1}`,
+      title: item.title || "",
+      prompt: item.prompt || "",
+    }));
+    syncActivePromptSelection();
+    renderPrompts();
+  }
+
+  function renderPrompts() {
+    if (!el.promptsList) return;
+    el.promptsList.innerHTML = "";
+    const effectivePromptId = getEffectivePromptId();
+    promptsData.forEach((item, index) => {
+      const card = document.createElement("div");
+      card.className = "prompt-item";
+
+      const actionRow = document.createElement("div");
+      actionRow.className = "prompt-item-head";
+      const statusText = document.createElement("div");
+      statusText.className = "prompt-item-status";
+      statusText.textContent = item.id === effectivePromptId ? "当前生效" : "未生效";
+      if (item.id === effectivePromptId) {
+        statusText.classList.add("is-active");
+      }
+      const actions = document.createElement("div");
+      actions.className = "prompt-item-actions";
+      const useBtn = document.createElement("button");
+      useBtn.type = "button";
+      useBtn.className = "seg-btn";
+      useBtn.textContent = item.id === effectivePromptId ? "当前使用中" : "设为当前使用";
+      useBtn.disabled = item.id === effectivePromptId;
+      useBtn.style.cssText = "padding: 3px 10px; font-size: 11px";
+      useBtn.addEventListener("click", async () => {
+        activePromptId = item.id;
+        await savePromptsNow();
+        saveFormNow();
+        renderPrompts();
+      });
+      actions.appendChild(useBtn);
+
+      const titleInput = document.createElement("input");
+      titleInput.type = "text";
+      titleInput.className = "input-field";
+      titleInput.placeholder = "提示词标题";
+      titleInput.value = item.title || "";
+      titleInput.style.cssText = "width: 100%; font-size: 12.5px";
+      titleInput.addEventListener("input", () => {
+        promptsData[index].title = titleInput.value;
+        scheduleSavePrompts();
+      });
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "seg-btn prompt-item-delete";
+      delBtn.textContent = "删除";
+      delBtn.style.cssText = "font-size: 11px";
+      delBtn.addEventListener("click", async () => {
+        promptsData.splice(index, 1);
+        syncActivePromptSelection();
+        renderPrompts();
+        await savePromptsNow();
+        saveFormNow();
+      });
+      actions.appendChild(delBtn);
+      actionRow.appendChild(statusText);
+      actionRow.appendChild(actions);
+
+      const titleRow = document.createElement("div");
+      titleRow.className = "prompt-item-title";
+      titleRow.appendChild(titleInput);
+
+      const promptArea = document.createElement("textarea");
+      promptArea.className = "prompt-item-body";
+      promptArea.placeholder = "输入系统提示词...";
+      promptArea.value = item.prompt || "";
+      promptArea.addEventListener("input", () => {
+        promptsData[index].prompt = promptArea.value;
+        scheduleSavePrompts();
+      });
+
+      card.appendChild(actionRow);
+      card.appendChild(titleRow);
+      card.appendChild(promptArea);
+      el.promptsList.appendChild(card);
+    });
+  }
+
+  function scheduleSavePrompts() {
+    if (promptsSaveTimer) clearTimeout(promptsSaveTimer);
+    promptsSaveTimer = setTimeout(() => {
+      window.voiceSettings.savePrompts(promptsData).catch(() => {});
+    }, 500);
+  }
+
+  async function savePromptsNow() {
+    if (promptsSaveTimer) {
+      clearTimeout(promptsSaveTimer);
+      promptsSaveTimer = null;
+    }
+    await window.voiceSettings.savePrompts(promptsData);
+  }
+
+  el.addPromptBtn.addEventListener("click", async () => {
+    promptsData.push({ id: createPromptId(), title: "", prompt: "" });
+    syncActivePromptSelection();
+    renderPrompts();
+    await savePromptsNow();
+    saveFormNow();
+  });
 
   // Hotwords
   el.addHotwordBtn.addEventListener("click", addHotword);

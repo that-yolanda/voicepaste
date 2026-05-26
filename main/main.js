@@ -20,14 +20,17 @@ const {
 const {
   CONFIG_PATH,
   loadConfig,
+  loadPrompts,
   readConfigFile,
   saveConfigText,
   getEditableConfig,
   saveConfig,
+  savePrompts,
   resetConfigToDefault,
 } = require("./config");
 const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
+const { structureText } = require("./llmService");
 const { logInfo, logError, resolveLogPath, closeLogger } = require("./logger");
 const { initStatsService, recordSession, getStats, getHistory } = require("./statsService");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
@@ -386,6 +389,7 @@ let suppressCloseError = false;
 let expectingSessionClose = false;
 let receivedAudioChunkCount = 0;
 let pendingAudioStopResolve = null;
+let pendingSoundPlayedResolve = null;
 let isQuitting = false;
 let wsReady = false;
 let audioWarmupReady = false;
@@ -553,6 +557,24 @@ function waitForRendererAudioStop(timeoutMs = 1200) {
     };
 
     pendingAudioStopResolve = finish;
+    setTimeout(finish, timeoutMs);
+  });
+}
+
+function waitForRendererSoundPlayed(timeoutMs = 350) {
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      pendingSoundPlayedResolve = null;
+      resolve();
+    };
+
+    pendingSoundPlayedResolve = finish;
     setTimeout(finish, timeoutMs);
   });
 }
@@ -731,6 +753,15 @@ async function finishRecordingFlow() {
       return;
     }
 
+    if (currentConfig.llm?.enabled && currentConfig.llm?.url) {
+      sendOverlayMessage("hint", {
+        level: "info",
+        text: "Thinking",
+        variant: "progress",
+      });
+      textToPaste = await structureText(currentConfig.llm, textToPaste);
+    }
+
     const keepClipboard = currentConfig.app?.keep_clipboard !== false;
     const pasteResult = await pasteTextToFocusedElement(textToPaste, keepClipboard);
 
@@ -764,6 +795,8 @@ async function finishRecordingFlow() {
       return;
     }
     await cleanupSession();
+    sendOverlayMessage("paste:done");
+    await waitForRendererSoundPlayed();
     resetTranscript();
     hideOverlay();
     setState("idle");
@@ -1222,9 +1255,23 @@ app.whenReady().then(() => {
     return getHistory(daysBack || 3);
   });
 
+  ipcMain.handle("prompts:load", () => {
+    return loadPrompts();
+  });
+
+  ipcMain.handle("prompts:save", (_event, prompts) => {
+    savePrompts(prompts);
+  });
+
   ipcMain.on("renderer:audio-stopped", () => {
     if (pendingAudioStopResolve) {
       pendingAudioStopResolve();
+    }
+  });
+
+  ipcMain.on("renderer:sound-played", (_event, payload) => {
+    if (payload?.name === "end" && pendingSoundPlayedResolve) {
+      pendingSoundPlayedResolve();
     }
   });
 

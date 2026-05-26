@@ -69,6 +69,10 @@
         "to": "config.yaml.example"
       },
       {
+        "from": "prompts.json.example",
+        "to": "prompts.json.example"
+      },
+      {
         "from": "build/icon.png",
         "to": "icon.png"
       },

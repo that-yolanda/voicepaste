@@ -48,3 +48,11 @@ request:
     correct_table_id: ""          # 替换词表 ID（自学习平台）
     correct_table_name: ""        # 替换词表名称
     context_hotwords: Claude Code, Claude, mermaid, AGENTS.md, skills, codex, OpenAI, ChatGPT, GLM, cronjob, hermes, openclaw, obsidian, schema, skill, agent  # 逗号分隔的热词列表
+
+llm:
+  enabled: false              # 启用 LLM 文本整理
+  url: ""                     # OpenAI 兼容 API 地址，如 https://api.openai.com/v1/chat/completions
+  api_key: ""                 # API Key（Bearer Token）
+  model: ""                   # 模型名称，如 gpt-4o-mini
+  prompt_id: "prompt-1"       # 当前生效的提示词 ID，对应 prompts.json 里的 id
+                              # 提示词配置见 prompts.json（与 config.yaml 同目录）

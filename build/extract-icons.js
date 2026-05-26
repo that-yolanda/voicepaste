@@ -28,6 +28,7 @@ const ICONS = [
   "RefreshCw",
   "X",
   "CircleDot",
+  "Sparkles",
 ];
 
 const attrs = {

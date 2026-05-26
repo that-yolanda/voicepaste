@@ -42,6 +42,10 @@
             <span class="nav-icon" data-icon="cloud"></span>
             <span>模型接入</span>
           </div>
+          <div class="nav-item" data-section="llm">
+            <span class="nav-icon" data-icon="sparkles"></span>
+            <span>文本整理</span>
+          </div>
           <div class="nav-divider"></div>
           <div class="nav-group-label">高级</div>
           <div class="nav-item" data-section="advanced">
@@ -407,6 +411,90 @@
                   </button>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <!-- 文本整理 -->
+          <section class="section hidden" id="section-llm">
+            <div class="section-header">
+              <div>
+                <div class="section-title">文本整理</div>
+                <div class="section-subtitle">使用 LLM 对识别结果进行自动格式化</div>
+              </div>
+            </div>
+            <div class="section-card">
+              <div class="row">
+                <div class="row-label">
+                  <div class="title">启用文本整理</div>
+                  <div class="desc">语音识别后自动调用 LLM 整理文本格式</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="llmEnabled" />
+                  <span class="track"></span>
+                  <span class="thumb"></span>
+                </label>
+              </div>
+              <div class="row vertical">
+                <div class="row-label">
+                  <div class="title">
+                    API 地址
+                    <span class="dev-path" title="配置路径：llm.url">llm.url</span>
+                  </div>
+                  <div class="desc">OpenAI 兼容的 Chat Completions 接口地址</div>
+                </div>
+                <input
+                  type="text"
+                  id="llmUrl"
+                  class="input-field mono"
+                  placeholder="https://api.openai.com/v1/chat/completions"
+                />
+              </div>
+              <div class="row vertical">
+                <div class="row-label">
+                  <div class="title">
+                    API Key
+                    <span class="dev-path" title="配置路径：llm.api_key">llm.api_key</span>
+                  </div>
+                </div>
+                <div class="input-group">
+                  <input
+                    type="password"
+                    id="llmApiKey"
+                    class="input-field mono"
+                    placeholder="sk-..."
+                  />
+                  <button type="button" class="pw-toggle" id="toggleLlmApiKey">
+                    <span class="nav-icon" data-icon="eye"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="row vertical">
+                <div class="row-label">
+                  <div class="title">
+                    模型名称
+                    <span class="dev-path" title="配置路径：llm.model">llm.model</span>
+                  </div>
+                  <div class="desc">如 gpt-4o-mini, deepseek-chat 等</div>
+                </div>
+                <input
+                  type="text"
+                  id="llmModel"
+                  class="input-field mono"
+                  placeholder="gpt-4o-mini"
+                />
+              </div>
+            </div>
+            <div class="section-card prompt-config-card" style="margin-top: 12px">
+              <div class="row vertical prompt-config-head">
+                <div class="row-label">
+                  <div class="title">提示词配置</div>
+                  <div class="desc">配置用于文本整理的系统提示词，支持多条，但同一时间只会使用一条</div>
+                </div>
+                <button type="button" class="seg-btn prompt-add-btn" id="addPromptBtn">
+                  + 添加提示词
+                </button>
+              </div>
+              <div id="promptsList" class="prompt-list"></div>
             </div>
           </section>
 

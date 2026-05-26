@@ -46,6 +46,51 @@ function resolveConfigPath() {
 
 const CONFIG_PATH = resolveConfigPath();
 
+function resolvePromptsPath() {
+  if (app.isPackaged) {
+    return path.join(app.getPath("userData"), "prompts.json");
+  }
+  return path.join(__dirname, "..", "prompts.json");
+}
+
+const PROMPTS_PATH = resolvePromptsPath();
+
+function normalizePromptItem(item, index) {
+  const fallbackId = `prompt-${index + 1}`;
+  return {
+    id: typeof item?.id === "string" && item.id.trim() ? item.id.trim() : fallbackId,
+    title: typeof item?.title === "string" ? item.title : "",
+    prompt: typeof item?.prompt === "string" ? item.prompt : "",
+  };
+}
+
+function ensurePromptsFile() {
+  if (!fs.existsSync(PROMPTS_PATH)) {
+    const examplePath = path.join(__dirname, "..", "prompts.json.example");
+    if (fs.existsSync(examplePath)) {
+      fs.copyFileSync(examplePath, PROMPTS_PATH);
+    } else {
+      fs.writeFileSync(PROMPTS_PATH, "[]", "utf8");
+    }
+  }
+}
+
+function loadPrompts() {
+  ensurePromptsFile();
+  try {
+    const content = fs.readFileSync(PROMPTS_PATH, "utf8");
+    const parsed = JSON.parse(content);
+    return Array.isArray(parsed) ? parsed.map(normalizePromptItem) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePrompts(prompts) {
+  const normalized = Array.isArray(prompts) ? prompts.map(normalizePromptItem) : [];
+  fs.writeFileSync(PROMPTS_PATH, JSON.stringify(normalized, null, 2), "utf8");
+}
+
 function readConfigFile() {
   return fs.readFileSync(CONFIG_PATH, "utf8");
 }
@@ -127,6 +172,14 @@ function loadConfig() {
       },
       context_hotwords: parseContextHotwords(raw.request?.corpus?.context_hotwords),
     },
+    llm: {
+      ...(raw.llm || {}),
+      enabled: Boolean(raw.llm?.enabled),
+      url: raw.llm?.url || "",
+      api_key: raw.llm?.api_key || "",
+      model: raw.llm?.model || "",
+      prompt_id: raw.llm?.prompt_id || "",
+    },
   };
 }
 
@@ -163,10 +216,13 @@ function resetConfigToDefault() {
 
 module.exports = {
   CONFIG_PATH,
+  PROMPTS_PATH,
   getEditableConfig,
   loadConfig,
+  loadPrompts,
   readConfigFile,
   resetConfigToDefault,
   saveConfig,
   saveConfigText,
+  savePrompts,
 };

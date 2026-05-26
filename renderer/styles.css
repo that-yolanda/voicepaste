@@ -56,6 +56,13 @@ body {
     border-radius 0.2s ease-out;
 }
 
+.card[data-mode="wave-only"] {
+  justify-content: center;
+  padding: 14px 22px;
+  min-height: 52px;
+  min-width: 92px;
+}
+
 .card[data-wrap="multi"] {
   border-radius: 30px;
   overflow: visible;
@@ -65,10 +72,14 @@ body {
   min-width: 0px;
   max-width: 620px;
   display: grid;
-  gap: 0;
+  gap: 4px;
   align-content: center;
   flex: 1 1 auto;
   overflow: visible;
+}
+
+.card[data-mode="wave-only"] .content {
+  display: none;
 }
 
 .transcript {
@@ -98,97 +109,149 @@ body {
 
 .hint {
   display: none;
-  font-size: 10px;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  font-size: 11px;
   line-height: 1.2;
   color: var(--muted);
-  opacity: 0.92;
+  opacity: 0.96;
+}
+
+.hint[data-visible="true"] {
+  display: inline-flex;
+}
+
+.hint[data-variant="text"] {
+  padding: 0;
+}
+
+.hint[data-variant="progress"] {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(250, 249, 245, 0.88);
+}
+
+.hint-label {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  text-align: center;
+}
+
+.hint-progress {
+  display: none;
+}
+
+.hint[data-variant="progress"] .hint-progress {
+  display: block;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.hint-progress-bar {
+  position: absolute;
+  inset: 0 auto 0 -38%;
+  width: 38%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.08) 18%,
+    rgba(255, 255, 255, 0.28) 48%,
+    rgba(255, 255, 255, 0.42) 62%,
+    rgba(255, 255, 255, 0.12) 82%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: thinking-slide 1.15s linear infinite;
 }
 
 .status-pill {
   flex: 0 0 auto;
   align-self: center;
-  height: 34px;
-  width: 48px;
+  height: 24px;
+  width: auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--idle);
-  box-shadow: 0 0 8px var(--glow-error);
-}
-
-.status-spinner {
-  display: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  border: 2px solid var(--overlay-spinner-border);
-  border-top-color: var(--connecting);
-  animation: spin 0.8s linear infinite;
+  gap: 0;
 }
 
 .status-bars {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
-  height: 12px;
+  height: 18px;
+  padding: 0 6px;
 }
 
 .status-bar {
-  width: 2px;
-  height: 6px;
+  width: 2.5px;
+  height: 5px;
   border-radius: 999px;
-  background: var(--overlay-bar);
-  opacity: 0.5;
-  transform-origin: center bottom;
-}
-
-.card[data-state="recording"] .status-dot {
   background: var(--recording);
-  box-shadow: 0 0 10px var(--glow-success);
-  animation: pulse-dot 1.15s ease-in-out infinite;
+  opacity: 0.78;
+  transform-origin: center center;
+  transition:
+    height 0.11s ease-out,
+    opacity 0.11s ease-out,
+    transform 0.11s ease-out;
 }
 
-.card[data-state="connecting"] .status-dot,
-.card[data-state="finishing"] .status-dot {
-  background: var(--connecting);
-  box-shadow: 0 0 10px var(--glow-warning);
+.status-bars[data-active="false"] .status-bar {
+  background: var(--overlay-bar);
 }
 
-.card[data-state="finishing"] .status-dot,
-.card[data-state="finishing"] .status-bars {
+.status-bars[data-active="true"] .status-bar {
+  opacity: 1;
+}
+
+.card[data-state="finishing"] {
+  align-items: stretch;
+  min-height: 56px;
+  padding: 0;
+}
+
+.card[data-state="finishing"] .status-pill,
+.card[data-state="finishing"] .transcript {
   display: none;
 }
 
-.card[data-state="finishing"] .status-spinner {
-  display: block;
+.card[data-state="finishing"] .content {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  justify-content: stretch;
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  max-width: none;
 }
 
-.card[data-state="error"] .status-dot {
-  background: var(--error);
-  box-shadow: 0 0 10px var(--glow-error);
+.card[data-state="finishing"] .hint[data-variant="progress"] {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  align-self: stretch;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.card[data-state="recording"] .status-bar:nth-child(1) {
-  animation: equalize 0.9s ease-in-out infinite 0.05s;
-}
-
-.card[data-state="recording"] .status-bar:nth-child(2) {
-  animation: equalize 0.9s ease-in-out infinite 0.18s;
-}
-
-.card[data-state="recording"] .status-bar:nth-child(3) {
-  animation: equalize 0.9s ease-in-out infinite 0.31s;
-}
-
-.card[data-state="recording"] .status-bar:nth-child(4) {
-  animation: equalize 0.9s ease-in-out infinite 0.44s;
+.card[data-state="finishing"] .hint-label {
+  font-weight: 520;
 }
 
 .hint[data-level="success"] {
@@ -218,43 +281,12 @@ body {
   font-weight: 500;
 }
 
-@keyframes equalize {
-  0%,
+@keyframes thinking-slide {
+  0% {
+    transform: translateX(0%);
+  }
+
   100% {
-    height: 5px;
-    opacity: 0.4;
-  }
-
-  45% {
-    height: 14px;
-    opacity: 1;
-  }
-
-  75% {
-    height: 8px;
-    opacity: 0.7;
-  }
-}
-
-@keyframes pulse-dot {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-
-  50% {
-    transform: scale(1.18);
-    opacity: 0.78;
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
+    transform: translateX(395%);
   }
 }

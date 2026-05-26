@@ -14,24 +14,32 @@
     <main class="overlay">
       <section class="card" id="card" data-state="idle">
         <div class="status-pill" id="statusPill" aria-hidden="true">
-          <div class="status-dot" id="statusDot"></div>
-          <div class="status-spinner" id="statusSpinner"></div>
-          <div class="status-bars">
+          <div class="status-bars" id="statusBars" data-active="false">
+            <span class="status-bar"></span>
+            <span class="status-bar"></span>
+            <span class="status-bar"></span>
+            <span class="status-bar"></span>
+            <span class="status-bar"></span>
+            <span class="status-bar"></span>
             <span class="status-bar"></span>
             <span class="status-bar"></span>
             <span class="status-bar"></span>
             <span class="status-bar"></span>
           </div>
         </div>
-        
+
         <div class="content">
           <div class="transcript" id="transcript">
             <span class="final-text" id="finalText"></span>
             <span class="partial-text" id="partialText"></span>
           </div>
-          <div class="hint" id="hint"></div>
+          <div class="hint" id="hint" data-variant="text" data-visible="false">
+            <span class="hint-label" id="hintLabel"></span>
+            <span class="hint-progress" id="hintProgress" aria-hidden="true">
+              <span class="hint-progress-bar"></span>
+            </span>
+          </div>
         </div>
-        
       </section>
     </main>
     <div class="measure-text" id="measureText"></div>

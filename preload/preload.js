@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld("voiceOverlay", {
   notifyAudioStopped() {
     ipcRenderer.send("renderer:audio-stopped");
   },
+  notifySoundPlayed(name) {
+    ipcRenderer.send("renderer:sound-played", { name });
+  },
   sendAudioWarmupReady() {
     ipcRenderer.send("renderer:audio-warmup-ready");
   },
@@ -88,5 +91,11 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   },
   getHistory(daysBack) {
     return ipcRenderer.invoke("stats:get-history", daysBack);
+  },
+  loadPrompts() {
+    return ipcRenderer.invoke("prompts:load");
+  },
+  savePrompts(prompts) {
+    return ipcRenderer.invoke("prompts:save", prompts);
   },
 });
