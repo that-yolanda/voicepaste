@@ -5,6 +5,9 @@
   let isDirty = false;
   let currentThemePreference = "system";
   let currentHotkeyMode = "toggle";
+  let currentOverlayStyle = "liquid";
+  let currentOverlayGlassMode = "auto";
+  let currentPlatform = "";
   let currentLlmProvider = "deepseek";
   let hasAutoCheckedUpdates = false;
 
@@ -98,6 +101,10 @@
     promptHotkeyList: $("promptHotkeyList"),
     configPath: $("configPath"),
     autoStart: $("autoStart"),
+    overlayStyleRow: $("overlayStyleRow"),
+    overlayStyleSelector: $("overlayStyleSelector"),
+    overlayGlassModeRow: $("overlayGlassModeRow"),
+    overlayGlassModeSelector: $("overlayGlassModeSelector"),
     micDot: $("micDot"),
     micText: $("micText"),
     checkMicBtn: $("checkMicBtn"),
@@ -352,6 +359,32 @@
     });
   }
 
+  function updateOverlayGlassModeVisibility() {
+    if (!el.overlayGlassModeRow) return;
+    // The light/dark glass variant only applies to the macOS Liquid Glass UI,
+    // so hide it on non-macOS and when the Vibrancy backup is selected.
+    const show = currentPlatform === "darwin" && currentOverlayStyle === "liquid";
+    el.overlayGlassModeRow.style.display = show ? "" : "none";
+  }
+
+  function setOverlayStyle(style) {
+    currentOverlayStyle = style === "vibrancy" ? "vibrancy" : "liquid";
+    if (el.overlayStyleSelector) {
+      el.overlayStyleSelector.querySelectorAll(".seg-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.val === currentOverlayStyle);
+      });
+    }
+    updateOverlayGlassModeVisibility();
+  }
+
+  function setOverlayGlassMode(mode) {
+    currentOverlayGlassMode = ["light", "dark"].includes(mode) ? mode : "auto";
+    if (!el.overlayGlassModeSelector) return;
+    el.overlayGlassModeSelector.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.val === currentOverlayGlassMode);
+    });
+  }
+
   function setHotkeyHint(text, level) {
     el.hotkeyHint.textContent = text;
     el.hotkeyHintRow.style.display = text ? "" : "none";
@@ -451,6 +484,13 @@
 
     el.configPath.textContent = data.configPath || "-";
 
+    currentPlatform = data.runtime?.platform || currentPlatform;
+    setOverlayGlassMode(c.app?.overlay_glass_mode);
+    setOverlayStyle(c.app?.overlay_style); // also refreshes glass-mode row visibility
+    if (currentPlatform !== "darwin" && el.overlayStyleRow) {
+      el.overlayStyleRow.style.display = "none";
+    }
+
     if (data.runtime?.platform !== "darwin" && el.accessibilityRow) {
       el.accessibilityRow.style.display = "none";
     }
@@ -515,6 +555,8 @@
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
     config.app.theme = currentThemePreference;
+    config.app.overlay_style = currentOverlayStyle;
+    config.app.overlay_glass_mode = currentOverlayGlassMode;
 
     config.connection = config.connection || {};
     config.connection.url = el.wsUrl.value.trim();
@@ -1162,6 +1204,26 @@ SOFTWARE.`;
     setHotkeyMode(btn.dataset.val);
     saveFormNow();
   });
+
+  // Overlay glass style (macOS only)
+  if (el.overlayStyleSelector) {
+    el.overlayStyleSelector.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      setOverlayStyle(btn.dataset.val);
+      saveFormNow();
+    });
+  }
+
+  // Liquid Glass light/dark mode (macOS Liquid Glass only)
+  if (el.overlayGlassModeSelector) {
+    el.overlayGlassModeSelector.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      setOverlayGlassMode(btn.dataset.val);
+      saveFormNow();
+    });
+  }
 
   // Auto-start
   el.autoStart.addEventListener("change", async () => {

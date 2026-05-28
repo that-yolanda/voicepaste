@@ -247,6 +247,43 @@
                   <span class="thumb"></span>
                 </label>
               </div>
+              <div class="row" id="overlayStyleRow">
+                <div class="row-label">
+                  <div class="title">
+                    悬浮窗外观
+                    <span class="dev-path" title="配置路径：app.overlay_style">app.overlay_style</span>
+                  </div>
+                  <div class="desc">液态玻璃更通透；不喜欢可切换到普通毛玻璃</div>
+                </div>
+                <div class="seg-control" id="overlayStyleSelector">
+                  <button type="button" class="seg-btn active" data-val="liquid">
+                    液态玻璃
+                  </button>
+                  <button type="button" class="seg-btn" data-val="vibrancy">
+                    普通毛玻璃
+                  </button>
+                </div>
+              </div>
+              <div class="row" id="overlayGlassModeRow">
+                <div class="row-label">
+                  <div class="title">
+                    液态玻璃明暗
+                    <span class="dev-path" title="配置路径：app.overlay_glass_mode">app.overlay_glass_mode</span>
+                  </div>
+                  <div class="desc">跟随系统会随深浅色实时切换；也可固定为浅色或深色</div>
+                </div>
+                <div class="seg-control" id="overlayGlassModeSelector">
+                  <button type="button" class="seg-btn active" data-val="auto">
+                    跟随系统
+                  </button>
+                  <button type="button" class="seg-btn" data-val="light">
+                    浅色
+                  </button>
+                  <button type="button" class="seg-btn" data-val="dark">
+                    深色
+                  </button>
+                </div>
+              </div>
               <div class="row">
                 <div class="row-label">
                   <div class="title">配置文件路径</div>

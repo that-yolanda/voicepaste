@@ -206,6 +206,21 @@ const statusBarItems = elements.statusBars
   ? Array.from(elements.statusBars.querySelectorAll(".status-bar"))
   : [];
 
+// Swap the glass treatment without touching any recording/ASR logic.
+// platform: "darwin" → macOS, anything else → Windows-style Mica.
+// overlayStyle (macOS only): "liquid" (default) | "vibrancy" (backup).
+function applyAppearance({ platform, overlayStyle, glass } = {}) {
+  const isMac = platform === "darwin";
+  const isVibrancy = isMac && overlayStyle === "vibrancy";
+  elements.bubble.classList.toggle("platform-mac", isMac);
+  elements.bubble.classList.toggle("platform-win", !isMac);
+  elements.bubble.classList.toggle("is-vibrancy", isVibrancy);
+  // Liquid Glass switches to its Light variant (dark text + light glass body)
+  // when the resolved glass variant is light, so it stays legible over pale
+  // backgrounds. Vibrancy keeps its classic dark look regardless.
+  elements.bubble.classList.toggle("is-light", isMac && !isVibrancy && glass === "light");
+}
+
 // --- Waveform animation ---
 let waveformRaf = 0;
 
@@ -265,16 +280,18 @@ function stopWaveformAnimation() {
   state.smoothedLevel = 0;
 }
 
+const isZhLocale = (navigator.language || "").toLowerCase().startsWith("zh");
+
 function getVisibleHintText() {
   const visualState =
     state.appState === "recording" && !state.audioReady ? "connecting" : state.appState;
 
   if (visualState === "connecting") {
-    return "Preparing";
+    return isZhLocale ? "准备中…" : "Preparing…";
   }
 
   if (visualState === "finishing" && state.hintVariant === "progress") {
-    return "Thinking";
+    return isZhLocale ? "思考中…" : "Thinking…";
   }
 
   return state.hintText || "";
@@ -317,21 +334,26 @@ function scheduleResize() {
       hintWidth = Math.ceil(elements.measureText.getBoundingClientRect().width);
     }
 
-    const horizontalPadding = 16;
-    const borderWidth = 2;
+    // Pill chrome surrounding the text: paddings + border + left indicator
+    // (always reserved) + right waveform (reserved while recording, so the
+    // pill doesn't jump width when the bars fade in/out).
+    const indicatorWidth = 22 + 12; // indicator + gap to body
+    const waveformWidth = state.appState === "recording" ? 18 + 12 : 0; // 4 bars + gap
+    const chrome = 14 + 16 + 2 + indicatorWidth + waveformWidth;
+    // Small slack added to the measured text width: measureText uses a slightly
+    // different font metric than the rendered pill (letter-spacing / family), so
+    // without it a single line that should fit can still trip the ellipsis.
+    const textSlack = 10;
     const singleLineLimit = 520;
     const multiLineWidth = 520;
     const lockLayout =
       !shouldMeasureHintOnly && (state.appState === "recording" || state.appState === "finishing");
     const shouldWrap =
       !shouldMeasureHintOnly && (state.layoutWrap || measuredWidth > singleLineLimit);
-    const textWidth = Math.max(measuredWidth, hintWidth);
+    const textWidth = Math.max(measuredWidth, hintWidth) + textSlack;
     const nextWidth = shouldWrap
-      ? multiLineWidth + horizontalPadding + borderWidth
-      : Math.min(
-          singleLineLimit + horizontalPadding + borderWidth,
-          Math.max(116, textWidth + horizontalPadding + borderWidth),
-        );
+      ? multiLineWidth + chrome
+      : Math.min(singleLineLimit + chrome, Math.max(116, textWidth + chrome));
 
     if (!lockLayout) {
       state.layoutWidth = nextWidth;
@@ -343,14 +365,27 @@ function scheduleResize() {
 
     elements.bubble.dataset.wrap = state.layoutWrap ? "multi" : "single";
 
-    const width = state.layoutWidth || nextWidth;
+    let width = state.layoutWidth || nextWidth;
 
-    if (width === state.renderedWidth) {
-      return;
+    if (width !== state.renderedWidth) {
+      state.renderedWidth = width;
+      elements.bubble.style.width = `${width}px`;
     }
 
-    state.renderedWidth = width;
-    elements.bubble.style.width = `${width}px`;
+    // Self-correct single-line truncation: measureText can underestimate the
+    // rendered text width (font family / letter-spacing differ from the pill),
+    // which trips the ellipsis and drops the last character(s). Read the real
+    // overflow off the live transcript and grow the pill so every character
+    // stays visible. Only for single-line transcript (not hint, not multi).
+    if (!state.layoutWrap && !shouldMeasureHintOnly && elements.transcript) {
+      const overflow = elements.transcript.scrollWidth - elements.transcript.clientWidth;
+      if (overflow > 0) {
+        width += overflow + 6;
+        state.layoutWidth = Math.max(state.layoutWidth || 0, width);
+        state.renderedWidth = width;
+        elements.bubble.style.width = `${width}px`;
+      }
+    }
   });
 }
 
@@ -378,6 +413,7 @@ function updateView() {
   elements.hintLabel.textContent = getVisibleHintText();
   elements.hint.dataset.visible = shouldShowHint() ? "true" : "false";
   elements.hint.dataset.level = state.hintLevel;
+  elements.stage.dataset.level = hasHint ? state.hintLevel : "info";
   elements.hint.dataset.variant =
     visualState === "connecting" ||
     (visualState === "finishing" && state.hintVariant === "progress")
@@ -662,6 +698,9 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
     case "paste:done":
       void playSound("end");
       break;
+    case "appearance":
+      applyAppearance(payload || {});
+      break;
     default:
       break;
   }
@@ -671,6 +710,7 @@ window.addEventListener("beforeunload", () => {
   stopAudioCapture();
 });
 
-window.voiceOverlay.getConfig().then(() => {
+window.voiceOverlay.getConfig().then((config) => {
+  applyAppearance(config || {});
   updateView();
 });
