@@ -545,7 +545,6 @@ let suppressCloseError = false;
 let expectingSessionClose = false;
 let receivedAudioChunkCount = 0;
 let pendingAudioStopResolve = null;
-let pendingSoundPlayedResolve = null;
 let isQuitting = false;
 let wsReady = false;
 let audioWarmupReady = false;
@@ -713,24 +712,6 @@ function waitForRendererAudioStop(timeoutMs = 1200) {
     };
 
     pendingAudioStopResolve = finish;
-    setTimeout(finish, timeoutMs);
-  });
-}
-
-function waitForRendererSoundPlayed(timeoutMs = 2600) {
-  return new Promise((resolve) => {
-    let settled = false;
-
-    const finish = () => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      pendingSoundPlayedResolve = null;
-      resolve();
-    };
-
-    pendingSoundPlayedResolve = finish;
     setTimeout(finish, timeoutMs);
   });
 }
@@ -979,9 +960,12 @@ async function finishRecordingFlow() {
       return;
     }
     await cleanupSession();
-    const soundPlayed = waitForRendererSoundPlayed();
+    // Return to idle and hide the overlay right after the paste so the next
+    // recording can start immediately. The end sound is fire-and-forget: the
+    // overlay window is only hidden (not destroyed), so it keeps playing in
+    // the background. Blocking on the sound here used to keep the overlay up
+    // for up to 2.6s after paste, stalling back-to-back dictation.
     sendOverlayMessage("paste:done");
-    await soundPlayed;
     resetTranscript();
     hideOverlay();
     setState("idle");
@@ -1466,12 +1450,6 @@ app.whenReady().then(() => {
   ipcMain.on("renderer:audio-stopped", () => {
     if (pendingAudioStopResolve) {
       pendingAudioStopResolve();
-    }
-  });
-
-  ipcMain.on("renderer:sound-played", (_event, payload) => {
-    if (payload?.name === "end" && pendingSoundPlayedResolve) {
-      pendingSoundPlayedResolve();
     }
   });
 

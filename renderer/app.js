@@ -14,17 +14,6 @@ function reportSoundIssue(type, payload = {}) {
   });
 }
 
-function notifySoundPlayed(name) {
-  if (name === "end") {
-    window.voiceOverlay.notifySoundPlayed(name);
-  }
-}
-
-function getSoundFallbackMs(audio) {
-  const durationMs = Number.isFinite(audio.duration) ? audio.duration * 1000 : 1200;
-  return Math.max(1600, durationMs + 450);
-}
-
 async function loadSound(name, url) {
   return new Promise((resolve) => {
     const audio = new Audio(url);
@@ -76,21 +65,7 @@ async function loadSound(name, url) {
 }
 
 async function playSound(name) {
-  let fallbackTimer = 0;
-  let didNotify = false;
   let audio = null;
-
-  const finishEndSound = () => {
-    if (didNotify) {
-      return;
-    }
-    didNotify = true;
-    clearTimeout(fallbackTimer);
-    if (audio) {
-      activeSounds.delete(audio);
-    }
-    notifySoundPlayed(name);
-  };
 
   try {
     if (soundTasks[name]) {
@@ -99,7 +74,6 @@ async function playSound(name) {
     const template = soundPool[name] || new Audio(soundUrls[name]);
     if (!template) {
       reportSoundIssue("skip-not-ready", { name });
-      finishEndSound();
       return;
     }
     audio = template.cloneNode(true);
@@ -120,29 +94,8 @@ async function playSound(name) {
       },
       { once: true },
     );
-    if (name === "end") {
-      audio.addEventListener(
-        "ended",
-        () => {
-          finishEndSound();
-        },
-        { once: true },
-      );
-      audio.addEventListener(
-        "error",
-        () => {
-          finishEndSound();
-        },
-        { once: true },
-      );
-    }
     await audio.play();
     reportSoundIssue("play-started", { name });
-    if (name !== "end") {
-      notifySoundPlayed(name);
-    } else {
-      fallbackTimer = setTimeout(finishEndSound, getSoundFallbackMs(audio));
-    }
   } catch (error) {
     if (audio) {
       activeSounds.delete(audio);
@@ -151,7 +104,6 @@ async function playSound(name) {
       name,
       message: error.message || String(error),
     });
-    finishEndSound();
   }
 }
 
