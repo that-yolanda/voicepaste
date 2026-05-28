@@ -888,10 +888,26 @@ async function finishRecordingFlow() {
   sendOverlayMessage("recording:stop");
   await waitForRendererAudioStop();
 
+  // Capture the session locally: the global asrSession can be nulled by the
+  // onClose handler while we await the commit (e.g. when the user stops right
+  // after starting and the socket closes early). The closure keeps the
+  // transcript readable even after the global reference is cleared.
+  const session = asrSession;
+  if (!session?.isReady()) {
+    // Session dropped before any audio was recognized — nothing to paste.
+    // End quietly instead of surfacing it as an error.
+    await cleanupSession();
+    resetTranscript();
+    hideOverlay();
+    setState("idle");
+    activeSessionPromptId = null;
+    return;
+  }
+
   try {
-    const finalText = await asrSession.commitAndAwaitFinal();
+    const finalText = await session.commitAndAwaitFinal();
     expectingSessionClose = true;
-    const transcriptSnapshot = asrSession.getTranscriptSnapshot();
+    const transcriptSnapshot = session.getTranscriptSnapshot();
     let textToPaste = (
       transcriptSnapshot.latestResultText ||
       finalText ||
