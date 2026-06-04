@@ -254,9 +254,42 @@
                 <span class="mono-text" id="configPath">-</span>
               </div>
             </div>
+            <div class="section-card" style="margin-top: 16px">
+              <div class="row">
+                <div class="row-label">
+                  <div class="title">提示音</div>
+                  <div class="desc">录音开始和粘贴完成时播放音效提醒</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="soundEnabled" checked />
+                  <span class="track"></span>
+                  <span class="thumb"></span>
+                </label>
+              </div>
+              <div class="row vertical" id="soundFilesRow">
+                <div class="row-label">
+                  <div class="title">就绪提示音</div>
+                  <div class="desc">按下快捷键开始录音时播放</div>
+                </div>
+                <div class="sound-file-row">
+                  <span class="mono-text sound-file-name" id="startSoundName">内置默认</span>
+                  <button type="button" class="btn btn-sm" id="startSoundSelect">选择文件</button>
+                  <button type="button" class="btn btn-sm" id="startSoundReset" style="display:none">重置</button>
+                </div>
+              </div>
+              <div class="row vertical" id="endSoundFilesRow">
+                <div class="row-label">
+                  <div class="title">完成提示音</div>
+                  <div class="desc">语音识别完成并粘贴后播放</div>
+                </div>
+                <div class="sound-file-row">
+                  <span class="mono-text sound-file-name" id="endSoundName">内置默认</span>
+                  <button type="button" class="btn btn-sm" id="endSoundSelect">选择文件</button>
+                  <button type="button" class="btn btn-sm" id="endSoundReset" style="display:none">重置</button>
+                </div>
+              </div>
+            </div>
           </section>
-
-          <!-- 系统权限 -->
           <section class="section hidden" id="section-permissions">
             <div class="section-header">
               <div>

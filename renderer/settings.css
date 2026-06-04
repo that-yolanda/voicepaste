@@ -726,6 +726,23 @@ kbd {
   font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
 }
 
+/* Sound file selector */
+
+.sound-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+}
+
+.sound-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ===== Status Indicators ===== */
 
 .status-dot {

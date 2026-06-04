@@ -98,4 +98,7 @@ contextBridge.exposeInMainWorld("voiceSettings", {
   savePrompts(prompts) {
     return ipcRenderer.invoke("prompts:save", prompts);
   },
+  selectSoundFile() {
+    return ipcRenderer.invoke("settings:select-sound-file");
+  },
 });
