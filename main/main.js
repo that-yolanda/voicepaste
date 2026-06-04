@@ -1257,6 +1257,11 @@ app.whenReady().then(() => {
   ipcMain.handle("app:get-config", () => ({
     hotkey: getHotkey(),
     ...getOverlayAppearance(),
+    sound: {
+      enabled: currentConfig.app?.sound?.enabled !== false,
+      start_sound: currentConfig.app?.sound?.start_sound || "",
+      end_sound: currentConfig.app?.sound?.end_sound || "",
+    },
   }));
 
   ipcMain.handle("settings:get-login-item", () => {
@@ -1266,6 +1271,21 @@ app.whenReady().then(() => {
   ipcMain.handle("settings:set-login-item", (_event, enabled) => {
     app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
     return app.getLoginItemSettings();
+  });
+
+  ipcMain.handle("settings:select-sound-file", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "选择提示音文件",
+      properties: ["openFile"],
+      filters: [
+        {
+          name: "音频文件",
+          extensions: ["mp3", "wav", "ogg", "m4a", "aac", "flac"],
+        },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
   });
 
   ipcMain.handle("settings:record-hotkey", async () => {
@@ -1337,6 +1357,12 @@ app.whenReady().then(() => {
       hotkey: getHotkey(),
     });
 
+    sendOverlayMessage("sound:config", {
+      enabled: currentConfig.app?.sound?.enabled !== false,
+      start_sound: currentConfig.app?.sound?.start_sound || "",
+      end_sound: currentConfig.app?.sound?.end_sound || "",
+    });
+
     return {
       ok: true,
       configText: readConfigFile(),
@@ -1353,6 +1379,13 @@ app.whenReady().then(() => {
     registerShortcuts();
 
     logInfo("settings saved (object)", { hotkey: getHotkey() });
+
+    // Push updated sound config to overlay renderer
+    sendOverlayMessage("sound:config", {
+      enabled: currentConfig.app?.sound?.enabled !== false,
+      start_sound: currentConfig.app?.sound?.start_sound || "",
+      end_sound: currentConfig.app?.sound?.end_sound || "",
+    });
 
     return {
       ok: true,
@@ -1371,6 +1404,12 @@ app.whenReady().then(() => {
     registerShortcuts();
 
     logInfo("config reset to default");
+
+    sendOverlayMessage("sound:config", {
+      enabled: currentConfig.app?.sound?.enabled !== false,
+      start_sound: currentConfig.app?.sound?.start_sound || "",
+      end_sound: currentConfig.app?.sound?.end_sound || "",
+    });
 
     return {
       ok: true,

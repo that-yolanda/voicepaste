@@ -2,6 +2,7 @@
 const soundPool = {};
 const soundTasks = {};
 const activeSounds = new Set();
+let soundEnabled = true;
 const soundUrls = {
   start: "./assets/start.mp3",
   end: "./assets/end.mp3",
@@ -76,6 +77,10 @@ async function loadSound(name, url) {
 }
 
 async function playSound(name) {
+  if (!soundEnabled) {
+    notifySoundPlayed(name);
+    return;
+  }
   let fallbackTimer = 0;
   let didNotify = false;
   let audio = null;
@@ -156,6 +161,7 @@ async function playSound(name) {
 }
 
 function initSounds() {
+  if (!soundEnabled) return;
   soundTasks.start = loadSound("start", soundUrls.start);
   soundTasks.end = loadSound("end", soundUrls.end);
   Promise.all(Object.values(soundTasks)).then((results) => {
@@ -166,7 +172,49 @@ function initSounds() {
   });
 }
 
-initSounds();
+// Apply runtime sound config changes (e.g. from settings page)
+function applySoundConfig(config) {
+  if (!config) return;
+  soundEnabled = config.enabled !== false;
+  if (config.start_sound) {
+    soundUrls.start = `file://${config.start_sound}`;
+  } else {
+    soundUrls.start = "./assets/start.mp3";
+  }
+  if (config.end_sound) {
+    soundUrls.end = `file://${config.end_sound}`;
+  } else {
+    soundUrls.end = "./assets/end.mp3";
+  }
+  // Clear cached sounds and reload
+  for (const audio of activeSounds) {
+    try {
+      audio.pause();
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  activeSounds.clear();
+  soundPool.start = null;
+  soundPool.end = null;
+  delete soundTasks.start;
+  delete soundTasks.end;
+  initSounds();
+}
+
+// Load sound config before initializing sounds
+window.voiceOverlay.getConfig().then((config) => {
+  if (config?.sound) {
+    soundEnabled = config.sound.enabled !== false;
+    if (config.sound.start_sound) {
+      soundUrls.start = `file://${config.sound.start_sound}`;
+    }
+    if (config.sound.end_sound) {
+      soundUrls.end = `file://${config.sound.end_sound}`;
+    }
+  }
+  initSounds();
+});
 
 // --- App state ---
 const state = {
@@ -700,6 +748,9 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       break;
     case "appearance":
       applyAppearance(payload || {});
+      break;
+    case "sound:config":
+      applySoundConfig(payload);
       break;
     default:
       break;

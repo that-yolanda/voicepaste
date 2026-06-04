@@ -6,6 +6,10 @@ app:
   theme: system                  # 外观主题：dark / light / system（跟随系统）
   overlay_style: liquid          # macOS 悬浮窗外观：liquid=液态玻璃(默认) / vibrancy=普通毛玻璃(备用)，仅 macOS 生效
   overlay_glass_mode: auto       # 液态玻璃明暗：auto=跟随系统 / light=浅色 / dark=深色，仅 macOS 液态玻璃生效
+  sound:
+    enabled: true                # 录音开始和粘贴完成时播放提示音
+    start_sound: ""              # 就绪提示音文件路径，留空使用内置音效
+    end_sound: ""                # 完成提示音文件路径，留空使用内置音效
 
 connection:
   url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async

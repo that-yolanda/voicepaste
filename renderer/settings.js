@@ -155,6 +155,15 @@
     toggleLlmApiKey: $("toggleLlmApiKey"),
     promptsList: $("promptsList"),
     addPromptBtn: $("addPromptBtn"),
+    soundEnabled: $("soundEnabled"),
+    soundFilesRow: $("soundFilesRow"),
+    endSoundFilesRow: $("endSoundFilesRow"),
+    startSoundName: $("startSoundName"),
+    startSoundSelect: $("startSoundSelect"),
+    startSoundReset: $("startSoundReset"),
+    endSoundName: $("endSoundName"),
+    endSoundSelect: $("endSoundSelect"),
+    endSoundReset: $("endSoundReset"),
   };
 
   // ===== Dirty state & auto-save =====
@@ -540,6 +549,13 @@
     const activeProviderDefault = LLM_PROVIDERS[currentLlmProvider];
     el.llmBaseUrl.value = activeProviderConfig.url || c.llm?.base_url || c.llm?.url || "";
     el.llmApiKey.value = activeProviderConfig.api_key || c.llm?.api_key || "";
+
+    // Sound settings
+    const soundConfig = c.app?.sound || {};
+    el.soundEnabled.checked = soundConfig.enabled !== false;
+    updateSoundFileDisplay("start", soundConfig.start_sound || "");
+    updateSoundFileDisplay("end", soundConfig.end_sound || "");
+    updateSoundRowsVisibility();
     el.llmModel.value = activeProviderConfig.model || c.llm?.model || activeProviderDefault.model;
 
     loadAndRenderPrompts();
@@ -557,6 +573,11 @@
     config.app.theme = currentThemePreference;
     config.app.overlay_style = currentOverlayStyle;
     config.app.overlay_glass_mode = currentOverlayGlassMode;
+    config.app.sound = {
+      enabled: el.soundEnabled.checked,
+      start_sound: el.startSoundName.dataset.path || "",
+      end_sound: el.endSoundName.dataset.path || "",
+    };
 
     config.connection = config.connection || {};
     config.connection.url = el.wsUrl.value.trim();
@@ -748,6 +769,52 @@
   }
 
   // ===== Password toggle =====
+
+  // ===== Sound settings =====
+
+  function soundFileName(path) {
+    if (!path) return "内置默认";
+    try {
+      return path.split(/[\\/]/).pop();
+    } catch (_) {
+      return path;
+    }
+  }
+
+  function updateSoundFileDisplay(which, filePath) {
+    const nameEl = which === "start" ? el.startSoundName : el.endSoundName;
+    const resetBtn = which === "start" ? el.startSoundReset : el.endSoundReset;
+    if (!nameEl) return;
+    nameEl.textContent = soundFileName(filePath);
+    nameEl.dataset.path = filePath || "";
+    nameEl.title = filePath || "";
+    if (resetBtn) {
+      resetBtn.style.display = filePath ? "" : "none";
+    }
+  }
+
+  function updateSoundRowsVisibility() {
+    const show = el.soundEnabled.checked;
+    if (el.soundFilesRow) el.soundFilesRow.style.display = show ? "" : "none";
+    if (el.endSoundFilesRow) el.endSoundFilesRow.style.display = show ? "" : "none";
+  }
+
+  async function selectSoundFile(which) {
+    try {
+      const filePath = await window.voiceSettings.selectSoundFile();
+      if (filePath) {
+        updateSoundFileDisplay(which, filePath);
+        saveFormNow();
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function resetSoundFile(which) {
+    updateSoundFileDisplay(which, "");
+    saveFormNow();
+  }
 
   function toggleSecret(inputId, btn) {
     const input = $(inputId);
@@ -1285,6 +1352,16 @@ SOFTWARE.`;
   el.autoStart.addEventListener("change", async () => {
     await window.voiceSettings.setLoginItemSettings(el.autoStart.checked);
   });
+
+  // Sound settings
+  el.soundEnabled.addEventListener("change", () => {
+    updateSoundRowsVisibility();
+    saveFormNow();
+  });
+  el.startSoundSelect.addEventListener("click", () => selectSoundFile("start"));
+  el.startSoundReset.addEventListener("click", () => resetSoundFile("start"));
+  el.endSoundSelect.addEventListener("click", () => selectSoundFile("end"));
+  el.endSoundReset.addEventListener("click", () => resetSoundFile("end"));
 
   // Permissions
   el.checkMicBtn.addEventListener("click", checkMic);
