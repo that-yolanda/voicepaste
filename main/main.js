@@ -720,10 +720,20 @@ function waitForRendererAudioStop(timeoutMs = 1200) {
 
 // --- Sound playback (main process, fire-and-forget) ---
 
-const SOUND_ASSETS_DIR = path.join(__dirname, "..", "renderer", "assets");
+// Resolve sound file path: packaged app uses extraResources, dev uses project dir
+function resolveSoundFile(filename) {
+  const packaged = path.join(process.resourcesPath, "sounds", filename);
+  try {
+    if (fs.existsSync(packaged)) return packaged;
+  } catch (_) {
+    /* ignore */
+  }
+  return path.join(__dirname, "..", "renderer", "assets", filename);
+}
+
 const DEFAULT_SOUNDS = {
-  start: path.join(SOUND_ASSETS_DIR, "start.mp3"),
-  end: path.join(SOUND_ASSETS_DIR, "end.mp3"),
+  start: resolveSoundFile("start.mp3"),
+  end: resolveSoundFile("end.mp3"),
 };
 
 function playSound(name) {

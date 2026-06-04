@@ -95,6 +95,14 @@
       {
         "from": "build/trayIcon.ico",
         "to": "trayIcon.ico"
+      },
+      {
+        "from": "renderer/assets/start.mp3",
+        "to": "sounds/start.mp3"
+      },
+      {
+        "from": "renderer/assets/end.mp3",
+        "to": "sounds/end.mp3"
       }
     ],
     "mac": {
