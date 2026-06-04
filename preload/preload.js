@@ -21,9 +21,6 @@ contextBridge.exposeInMainWorld("voiceOverlay", {
   notifyAudioStopped() {
     ipcRenderer.send("renderer:audio-stopped");
   },
-  notifySoundPlayed(name) {
-    ipcRenderer.send("renderer:sound-played", { name });
-  },
   sendAudioWarmupReady() {
     ipcRenderer.send("renderer:audio-warmup-ready");
   },
