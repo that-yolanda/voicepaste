@@ -1,5 +1,6 @@
 const path = require("node:path");
 const fs = require("node:fs");
+const { execFile } = require("node:child_process");
 const {
   app,
   Menu,
@@ -551,7 +552,6 @@ let suppressCloseError = false;
 let expectingSessionClose = false;
 let receivedAudioChunkCount = 0;
 let pendingAudioStopResolve = null;
-let pendingSoundPlayedResolve = null;
 let isQuitting = false;
 let wsReady = false;
 let audioWarmupReady = false;
@@ -693,6 +693,7 @@ function setState(nextState) {
   appState = nextState;
   logInfo("state changed", { state: nextState });
   syncEscapeShortcut();
+  if (nextState === "recording") playSound("start");
   sendOverlayMessage("state", { state: nextState });
 }
 
@@ -745,22 +746,34 @@ function waitForRendererAudioStop(timeoutMs = 1200) {
   });
 }
 
-function waitForRendererSoundPlayed(timeoutMs = 2600) {
-  return new Promise((resolve) => {
-    let settled = false;
+// --- Sound playback (main process, fire-and-forget) ---
 
-    const finish = () => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      pendingSoundPlayedResolve = null;
-      resolve();
-    };
+const SOUND_ASSETS_DIR = path.join(__dirname, "..", "renderer", "assets");
+const DEFAULT_SOUNDS = {
+  start: path.join(SOUND_ASSETS_DIR, "start.mp3"),
+  end: path.join(SOUND_ASSETS_DIR, "end.mp3"),
+};
 
-    pendingSoundPlayedResolve = finish;
-    setTimeout(finish, timeoutMs);
-  });
+function playSound(name) {
+  const soundConfig = currentConfig.app?.sound;
+  if (soundConfig?.enabled === false) return;
+
+  const customPath = name === "start" ? soundConfig?.start_sound : soundConfig?.end_sound;
+  const filePath = customPath || DEFAULT_SOUNDS[name];
+  if (!filePath) return;
+
+  if (process.platform === "darwin") {
+    execFile("afplay", [filePath], (err) => {
+      if (err) logError("sound play failed", { name, message: err.message });
+    });
+  } else {
+    // Windows: use PowerShell to play audio
+    const escaped = filePath.replace(/'/g, "''");
+    const ps = `(New-Object Media.SoundPlayer '${escaped}').PlaySync()`;
+    execFile("powershell.exe", ["-NoProfile", "-Command", ps], (err) => {
+      if (err) logError("sound play failed", { name, message: err.message });
+    });
+  }
 }
 
 async function startRecordingFlow(options = {}) {
@@ -991,9 +1004,7 @@ async function finishRecordingFlow() {
       return;
     }
     await cleanupSession();
-    const soundPlayed = waitForRendererSoundPlayed();
-    sendOverlayMessage("paste:done");
-    await soundPlayed;
+    playSound("end");
     resetTranscript();
     hideOverlay();
     setState("idle");
@@ -1357,12 +1368,6 @@ app.whenReady().then(() => {
       hotkey: getHotkey(),
     });
 
-    sendOverlayMessage("sound:config", {
-      enabled: currentConfig.app?.sound?.enabled !== false,
-      start_sound: currentConfig.app?.sound?.start_sound || "",
-      end_sound: currentConfig.app?.sound?.end_sound || "",
-    });
-
     return {
       ok: true,
       configText: readConfigFile(),
@@ -1379,13 +1384,6 @@ app.whenReady().then(() => {
     registerShortcuts();
 
     logInfo("settings saved (object)", { hotkey: getHotkey() });
-
-    // Push updated sound config to overlay renderer
-    sendOverlayMessage("sound:config", {
-      enabled: currentConfig.app?.sound?.enabled !== false,
-      start_sound: currentConfig.app?.sound?.start_sound || "",
-      end_sound: currentConfig.app?.sound?.end_sound || "",
-    });
 
     return {
       ok: true,
@@ -1404,12 +1402,6 @@ app.whenReady().then(() => {
     registerShortcuts();
 
     logInfo("config reset to default");
-
-    sendOverlayMessage("sound:config", {
-      enabled: currentConfig.app?.sound?.enabled !== false,
-      start_sound: currentConfig.app?.sound?.start_sound || "",
-      end_sound: currentConfig.app?.sound?.end_sound || "",
-    });
 
     return {
       ok: true,
@@ -1529,12 +1521,6 @@ app.whenReady().then(() => {
   ipcMain.on("renderer:audio-stopped", () => {
     if (pendingAudioStopResolve) {
       pendingAudioStopResolve();
-    }
-  });
-
-  ipcMain.on("renderer:sound-played", (_event, payload) => {
-    if (payload?.name === "end" && pendingSoundPlayedResolve) {
-      pendingSoundPlayedResolve();
     }
   });
 
