@@ -98,6 +98,7 @@
     promptHotkeyList: $("promptHotkeyList"),
     configPath: $("configPath"),
     autoStart: $("autoStart"),
+    playSound: $("playSound"),
     micDot: $("micDot"),
     micText: $("micText"),
     checkMicBtn: $("checkMicBtn"),
@@ -470,6 +471,7 @@
     el.enableNonstream.checked = Boolean(c.request?.enable_nonstream);
     el.enableItn.checked = c.request?.enable_itn !== false;
     el.enablePunc.checked = c.request?.enable_punc !== false;
+    el.playSound.checked = c.app?.play_sound !== false;
     el.removeTrailingPeriod.checked = c.app?.remove_trailing_period !== false;
     el.keepClipboard.checked = c.app?.keep_clipboard !== false;
 
@@ -512,6 +514,7 @@
     config.app = config.app || {};
     config.app.hotkey = config.app.hotkey || "F13";
     config.app.hotkey_mode = currentHotkeyMode;
+    config.app.play_sound = el.playSound.checked;
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
     config.app.theme = currentThemePreference;
@@ -1497,6 +1500,7 @@ SOFTWARE.`;
     el.enableNonstream,
     el.enableItn,
     el.enablePunc,
+    el.playSound,
     el.removeTrailingPeriod,
     el.keepClipboard,
   ];

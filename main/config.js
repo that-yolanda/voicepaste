@@ -170,6 +170,7 @@ function loadConfig() {
       ...(raw.app || {}),
       hotkey: raw.app?.hotkey || "F13",
       hotkey_mode: raw.app?.hotkey_mode === "hold" ? "hold" : "toggle",
+      play_sound: raw.app?.play_sound !== false,
       remove_trailing_period: raw.app?.remove_trailing_period !== false,
       theme: raw.app?.theme || "system",
     },

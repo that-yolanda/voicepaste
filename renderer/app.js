@@ -76,6 +76,12 @@ async function loadSound(name, url) {
 }
 
 async function playSound(name) {
+  if (state.playSound === false) {
+    if (name === "end") {
+      notifySoundPlayed(name);
+    }
+    return;
+  }
   let fallbackTimer = 0;
   let didNotify = false;
   let audio = null;
@@ -170,6 +176,7 @@ initSounds();
 
 // --- App state ---
 const state = {
+  playSound: true,
   finalText: "",
   partialText: "",
   hintText: "",
@@ -662,6 +669,9 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
     case "paste:done":
       void playSound("end");
       break;
+    case "config_update":
+      state.playSound = payload.playSound;
+      break;
     default:
       break;
   }
@@ -671,6 +681,7 @@ window.addEventListener("beforeunload", () => {
   stopAudioCapture();
 });
 
-window.voiceOverlay.getConfig().then(() => {
+window.voiceOverlay.getConfig().then((config) => {
+  state.playSound = config?.playSound !== false;
   updateView();
 });

@@ -62,6 +62,7 @@ Edit `config.yaml` in the project root and fill in your credentials:
 |-------|-------------|
 | `app.hotkey` | Global hotkey. Default template value is `Control+Space` |
 | `app.hotkey_mode` | Hotkey trigger mode: `toggle` or `hold` |
+| `app.play_sound` | Play notification sound when recording starts and paste finishes |
 | `app.remove_trailing_period` | Remove trailing `。` / `.` from the final text |
 | `app.keep_clipboard` | Keep the result in the clipboard after paste |
 | `app.theme` | Theme preference: `dark` / `light` / `system` |
