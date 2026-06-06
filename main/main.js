@@ -32,7 +32,13 @@ const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
 const { structureText } = require("./llmService");
 const { logInfo, logError, resolveLogPath, closeLogger } = require("./logger");
-const { initStatsService, recordSession, getStats, getHistory } = require("./statsService");
+const {
+  initStatsService,
+  recordSession,
+  getStats,
+  getHistory,
+  deleteHistory,
+} = require("./statsService");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
 const {
   initUpdateService,
@@ -1067,6 +1073,7 @@ function registerShortcuts() {
 
 function reloadRuntimeConfig() {
   currentConfig = loadConfig();
+
 }
 
 function resolveTheme() {
@@ -1226,6 +1233,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("app:get-config", () => ({
     hotkey: getHotkey(),
+
   }));
 
   ipcMain.handle("settings:get-login-item", () => {
@@ -1435,6 +1443,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("stats:get-history", async (_event, daysBack) => {
     return getHistory(daysBack || 3);
+  });
+
+  ipcMain.handle("stats:delete-history", async (_event, ts) => {
+    return deleteHistory(ts);
   });
 
   ipcMain.handle("prompts:load", () => {

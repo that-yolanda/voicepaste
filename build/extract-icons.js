@@ -30,6 +30,8 @@ const ICONS = [
   "X",
   "CircleDot",
   "Sparkles",
+  "Copy",
+  "Trash2",
 ];
 
 const attrs = {

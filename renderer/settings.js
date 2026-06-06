@@ -1062,7 +1062,63 @@
       const row = document.createElement("div");
       row.className = "history-item";
       const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-      row.innerHTML = `<span class="history-time">${time}</span><div class="history-content"><div class="history-text">${escapeHtml(item.text)}</div></div>`;
+      row.innerHTML = `
+        <span class="history-time">${time}</span>
+        <div class="history-content">
+          <div class="history-text">${escapeHtml(item.text)}</div>
+        </div>
+        <div class="history-actions">
+          <button type="button" class="history-btn copy-btn" title="复制">
+            <span class="nav-icon" data-icon="copy"></span>
+          </button>
+          <button type="button" class="history-btn delete-btn" title="删除">
+            <span class="nav-icon" data-icon="trash-2"></span>
+          </button>
+        </div>
+      `;
+
+      // Wait for elements to be inserted or query them directly from the unattached row
+      const copyBtn = row.querySelector(".copy-btn");
+      const deleteBtn = row.querySelector(".delete-btn");
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(item.text);
+          const iconSpan = copyBtn.querySelector(".nav-icon");
+          const originalHTML = iconSpan.innerHTML;
+          iconSpan.innerHTML = '<span style="font-size:12px;font-weight:bold;">✓</span>';
+          setTimeout(() => {
+            iconSpan.innerHTML = originalHTML;
+          }, 1500);
+        } catch (err) {
+          console.error("Failed to copy", err);
+        }
+      });
+
+      deleteBtn.addEventListener("click", async () => {
+        try {
+          await window.voiceSettings.deleteHistory(item.ts);
+          row.style.opacity = "0";
+          row.style.height = "0";
+          row.style.padding = "0";
+          row.style.minHeight = "0";
+          row.style.overflow = "hidden";
+          setTimeout(() => {
+            row.remove();
+          }, 200);
+        } catch (err) {
+          console.error("Failed to delete", err);
+        }
+      });
+
+      // Must call initIcons on the row so Lucide SVG is injected
+      const icons = row.querySelectorAll("[data-icon]");
+      icons.forEach((el) => {
+        const name = el.dataset.icon;
+        const svg = icon(name);
+        if (svg) el.innerHTML = svg;
+      });
+
       container.appendChild(row);
     }
 
