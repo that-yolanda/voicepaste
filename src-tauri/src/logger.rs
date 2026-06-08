@@ -2,7 +2,6 @@ use chrono::Utc;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 const MAX_LOG_SIZE: u64 = 1024 * 512; // 512KB
 
@@ -75,11 +74,4 @@ impl Logger {
     pub fn log_path(&self) -> &PathBuf {
         &self.log_path
     }
-}
-
-// Global logger accessor
-#[allow(dead_code)]
-pub fn init_logger(data_dir: &PathBuf) -> Mutex<Logger> {
-    let log_path = data_dir.join("voicepaste.log");
-    Mutex::new(Logger::new(log_path))
 }

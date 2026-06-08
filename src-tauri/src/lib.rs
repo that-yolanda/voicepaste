@@ -177,7 +177,6 @@ fn app_state_name(state: &app_state::AppState) -> &'static str {
         app_state::AppState::Connecting => "connecting",
         app_state::AppState::Recording => "recording",
         app_state::AppState::Finishing => "finishing",
-        app_state::AppState::Error => "error",
     }
 }
 
@@ -374,22 +373,15 @@ fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Register global shortcuts based on the current configuration.
-/// Reads the hotkey from config.yaml and registers it via the global-shortcut plugin.
+/// Reads the hotkey from the cached config and registers it via the global-shortcut plugin.
 fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-    // Load config to get the hotkey
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .expect("Failed to resolve app data dir");
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .expect("Failed to resolve resource dir");
-    let config_manager = config::ConfigManager::new(&data_dir, &resource_dir);
+    // Use the shared ConfigManager from managed state (cached in memory)
+    let app_inner: std::sync::Arc<app_state::AppInner> =
+        (*app.state::<std::sync::Arc<app_state::AppInner>>()).clone();
 
-    if let Ok(config) = config_manager.load_config() {
+    if let Ok(config) = app_inner.config_manager.load_config() {
         let hotkey_value = &config.app.hotkey;
         let hotkey_mode = config.app.hotkey_mode.as_str();
         eprintln!("[shortcut] config loaded, hotkey value: {:?}, mode: {}", hotkey_value, hotkey_mode);
@@ -408,7 +400,6 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
                         move |_triggered_app, _triggered_shortcut, event| {
                             let handle = app_handle.clone();
                             let mode = mode.clone();
-                            #[allow(unreachable_patterns)]
                             match event.state {
                                 ShortcutState::Pressed => {
                                     tauri::async_runtime::spawn(async move {
@@ -420,7 +411,6 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
                                         on_hotkey_released(handle, &mode).await;
                                     });
                                 }
-                                _ => {}
                             }
                         },
                     )?;
@@ -434,8 +424,8 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
         eprintln!("[shortcut] failed to load config");
     }
 
-    // Register prompt shortcuts
-    let prompts = config_manager.load_prompts();
+    // Register prompt shortcuts (from cached prompts)
+    let prompts = app_inner.config_manager.load_prompts();
     for prompt in &prompts {
         let hotkey = &prompt.hotkey;
         let shortcut = parse_prompt_hotkey(hotkey);
@@ -450,7 +440,6 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
                     let handle = app_handle.clone();
                     let mode = prompt_mode.clone();
                     let pid = prompt_id.clone();
-                    #[allow(unreachable_patterns)]
                     match event.state {
                         ShortcutState::Pressed => {
                             eprintln!(
@@ -466,7 +455,6 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
                                 on_hotkey_released(handle, &mode).await;
                             });
                         }
-                        _ => {}
                     }
                 })
                 .ok();
@@ -915,7 +903,6 @@ pub fn reload_shortcuts(
                 move |_triggered_app, _triggered, event| {
                     let handle = app_handle.clone();
                     let m = mode_clone.clone();
-                    #[allow(unreachable_patterns)]
                     match event.state {
                         ShortcutState::Pressed => {
                             tauri::async_runtime::spawn(async move {
@@ -927,7 +914,6 @@ pub fn reload_shortcuts(
                                 on_hotkey_released(handle, &m).await;
                             });
                         }
-                        _ => {}
                     }
                 },
             )?;
@@ -937,39 +923,34 @@ pub fn reload_shortcuts(
     }
 
     // Re-register prompt shortcuts (unregister_all above removed them)
-    let data_dir = app.path().app_data_dir().ok();
-    let resource_dir = app.path().resource_dir().ok();
-    if let (Some(dd), Some(rd)) = (data_dir, resource_dir) {
-        let cm = config::ConfigManager::new(&dd, &rd);
-        let prompts = cm.load_prompts();
-        for prompt in &prompts {
-            let shortcut = parse_prompt_hotkey(&prompt.hotkey);
-            if let Some(shortcut) = shortcut {
-                let app_handle = app.clone();
-                let prompt_id = prompt.id.clone();
-                let prompt_mode = prompt.hotkey_mode.clone();
-                app.global_shortcut()
-                    .on_shortcut(shortcut, move |_app, _shortcut, event| {
-                        let handle = app_handle.clone();
-                        let mode = prompt_mode.clone();
-                        let pid = prompt_id.clone();
-                        #[allow(unreachable_patterns)]
-                        match event.state {
-                            ShortcutState::Pressed => {
-                                tauri::async_runtime::spawn(async move {
-                                    on_hotkey_pressed(handle, &mode, Some(pid)).await;
-                                });
-                            }
-                            ShortcutState::Released => {
-                                tauri::async_runtime::spawn(async move {
-                                    on_hotkey_released(handle, &mode).await;
-                                });
-                            }
-                            _ => {}
+    // Use the shared ConfigManager from managed state (cached in memory)
+    let app_inner = app.state::<std::sync::Arc<app_state::AppInner>>();
+    let prompts = app_inner.config_manager.load_prompts();
+    for prompt in &prompts {
+        let shortcut = parse_prompt_hotkey(&prompt.hotkey);
+        if let Some(shortcut) = shortcut {
+            let app_handle = app.clone();
+            let prompt_id = prompt.id.clone();
+            let prompt_mode = prompt.hotkey_mode.clone();
+            app.global_shortcut()
+                .on_shortcut(shortcut, move |_app, _shortcut, event| {
+                    let handle = app_handle.clone();
+                    let mode = prompt_mode.clone();
+                    let pid = prompt_id.clone();
+                    match event.state {
+                        ShortcutState::Pressed => {
+                            tauri::async_runtime::spawn(async move {
+                                on_hotkey_pressed(handle, &mode, Some(pid)).await;
+                            });
                         }
-                    })
-                    .ok();
-            }
+                        ShortcutState::Released => {
+                            tauri::async_runtime::spawn(async move {
+                                on_hotkey_released(handle, &mode).await;
+                            });
+                        }
+                    }
+                })
+                .ok();
         }
     }
 

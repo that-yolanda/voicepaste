@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[allow(dead_code)]
 const MAX_DAILY_COUNTS_DAYS: i64 = 182;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,7 +38,6 @@ pub struct HistoryEntry {
 }
 
 pub struct StatsService {
-    #[allow(dead_code)]
     data_dir: PathBuf,
     history_dir: PathBuf,
     stats: Stats,
@@ -67,7 +65,6 @@ impl StatsService {
         }
     }
 
-    #[allow(dead_code)]
     pub fn record_session(&mut self, text: &str) {
         if text.is_empty() {
             return;
@@ -154,7 +151,6 @@ impl StatsService {
         }
     }
 
-    #[allow(dead_code)]
     fn flush_stats(&mut self) {
         self.prune_daily_counts();
         let path = self.data_dir.join("stats.json");
@@ -163,14 +159,12 @@ impl StatsService {
         }
     }
 
-    #[allow(dead_code)]
     fn prune_daily_counts(&mut self) {
         let cutoff = Local::now() - chrono::Duration::days(MAX_DAILY_COUNTS_DAYS);
         let cutoff_key = cutoff.format("%Y-%m-%d").to_string();
         self.stats.daily_counts.retain(|k, _| k >= &cutoff_key);
     }
 
-    #[allow(dead_code)]
     fn append_history(&self, entry: &HistoryEntry) {
         let _ = fs::create_dir_all(&self.history_dir);
 

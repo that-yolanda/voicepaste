@@ -26,7 +26,6 @@ fn build_header(message_type: u8, flags: u8, serialization: u8, compression: u8)
     ]
 }
 
-#[allow(dead_code)]
 /// Encode a full client request (initial message with JSON payload, gzip compressed).
 fn encode_full_client_request(payload: &Value) -> Vec<u8> {
     let json_str = serde_json::to_string(payload).unwrap_or_default();
@@ -60,7 +59,6 @@ fn encode_audio_only_request(audio: &[u8], is_last: bool) -> Vec<u8> {
     result
 }
 
-#[allow(dead_code)]
 /// Parse a binary server response frame.
 fn parse_server_response(buffer: &[u8]) -> Option<Value> {
     if buffer.len() < 12 {
@@ -184,8 +182,7 @@ fn parse_server_response(buffer: &[u8]) -> Option<Value> {
     }
 }
 
-#[allow(dead_code)]
-/// Build the API request body from config.
+/// Check if a YAML value is effectively empty.
 fn is_empty_yaml_value(value: &serde_yaml::Value) -> bool {
     match value {
         serde_yaml::Value::Null => true,
@@ -314,7 +311,6 @@ fn build_api_request_body(audio_config: &AudioConfig, request_config: &RequestCo
     })
 }
 
-#[allow(dead_code)]
 /// Clean ASR text: remove extra spaces between CJK characters.
 fn clean_asr_text(text: &str) -> String {
     let re = regex::Regex::new(r"([\u{4e00}-\u{9fa5}])\s+([\u{4e00}-\u{9fa5}])").unwrap();
@@ -329,40 +325,7 @@ fn clean_asr_text(text: &str) -> String {
     result
 }
 
-#[allow(dead_code)]
-fn is_punctuation(ch: char) -> bool {
-    matches!(
-        ch,
-        '，' | '。'
-            | '！'
-            | '？'
-            | '、'
-            | '；'
-            | '：'
-            | '…'
-            | '—'
-            | '·'
-            | ' '
-            | ','
-            | '.'
-            | '!'
-            | '?'
-            | ';'
-            | ':'
-            | '\''
-            | '"'
-            | '('
-            | ')'
-            | '（'
-            | '）'
-            | '【'
-            | '】'
-            | '《'
-            | '》'
-    )
-}
-
-#[allow(dead_code)]
+/// Check if raw ASR text should be ignored (empty, UUID, or connect ID).
 fn is_ignorable_raw_text(text: &str, connect_id: &str) -> bool {
     let normalized = text.trim();
     if normalized.is_empty() {
@@ -372,21 +335,13 @@ fn is_ignorable_raw_text(text: &str, connect_id: &str) -> bool {
         return true;
     }
     // UUID pattern check
-    if let Ok(_) = Uuid::parse_str(normalized) {
+    if Uuid::parse_str(normalized).is_ok() {
         return true;
     }
     false
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct TranscriptUpdate {
-    pub final_text: String,
-    pub partial_text: String,
-}
-
 /// Events sent from the ASR session to the app.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum AsrEvent {
     Open,
@@ -405,11 +360,7 @@ pub enum AsrEvent {
 pub struct AsrSession {
     is_ready: Arc<std::sync::atomic::AtomicBool>,
     is_committed: Arc<std::sync::atomic::AtomicBool>,
-    #[allow(dead_code)]
     final_text: Arc<Mutex<String>>,
-    #[allow(dead_code)]
-    partial_text: Arc<Mutex<String>>,
-    #[allow(dead_code)]
     latest_result_text: Arc<Mutex<String>>,
     sender: Arc<
         Mutex<
@@ -421,13 +372,9 @@ pub struct AsrSession {
             >,
         >,
     >,
-    #[allow(dead_code)]
-    event_tx: mpsc::UnboundedSender<AsrEvent>,
-    #[allow(dead_code)]
     commit_tx: Arc<Mutex<Option<tokio::sync::oneshot::Sender<String>>>>,
 }
 
-#[allow(dead_code)]
 impl AsrSession {
     pub fn is_ready(&self) -> bool {
         self.is_ready.load(std::sync::atomic::Ordering::SeqCst)
@@ -493,22 +440,8 @@ impl AsrSession {
             }
         });
     }
-
-    pub fn events(&self) -> mpsc::UnboundedReceiver<AsrEvent> {
-        // This is a one-time use; caller should keep the original receiver.
-        // In practice, the event receiver is returned from create_asr_session.
-        unimplemented!("Use the receiver returned from create_asr_session")
-    }
-
-    pub async fn get_transcript(&self) -> TranscriptUpdate {
-        TranscriptUpdate {
-            final_text: self.final_text.lock().await.clone(),
-            partial_text: self.partial_text.lock().await.clone(),
-        }
-    }
 }
 
-#[allow(dead_code)]
 /// Create a new ASR session connecting to the Doubao WebSocket API.
 pub async fn create_asr_session(
     connection: &ConnectionConfig,
@@ -579,10 +512,8 @@ pub async fn create_asr_session(
         is_ready: is_ready.clone(),
         is_committed: is_committed.clone(),
         final_text: final_text.clone(),
-        partial_text: partial_text.clone(),
         latest_result_text: latest_result_text.clone(),
         sender: sink.clone(),
-        event_tx: event_tx.clone(),
         commit_tx: commit_tx.clone(),
     });
 
@@ -823,7 +754,6 @@ pub async fn create_asr_session(
     Ok((session, event_rx))
 }
 
-#[allow(dead_code)]
 fn normalize_error_message(error: &str) -> String {
     if error.contains("401") || error.contains("403") {
         return "ASR 鉴权失败，请检查 AppID / Token / Resource ID".to_string();

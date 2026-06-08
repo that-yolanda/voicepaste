@@ -156,10 +156,24 @@ pub async fn save_config_object(
     }))
 }
 
-/// Reset config to default.
+/// Reset config to default and reload shortcuts.
 #[tauri::command]
-pub async fn reset_config(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+pub async fn reset_config(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
     state.config_manager.reset_to_default()?;
+
+    // Reload shortcuts with the default hotkey
+    let config = state.config_manager.load_config()?;
+    if let Some(hotkey_mode) = app.try_state::<HotkeyMode>() {
+        *hotkey_mode.0.lock().unwrap() = config.app.hotkey_mode.clone();
+    }
+    let hotkey_str = match &config.app.hotkey {
+        serde_yaml::Value::String(s) => s.clone(),
+        _ => String::new(),
+    };
+    crate::reload_shortcuts(&app, &hotkey_str).ok();
 
     let config_text = state.config_manager.read_config_text()?;
     let parsed = state.config_manager.get_editable_config()?;
@@ -177,13 +191,23 @@ pub async fn load_prompts(state: State<'_, AppState>) -> Result<Vec<PromptItem>,
     Ok(state.config_manager.load_prompts())
 }
 
-/// Save prompts.
+/// Save prompts and reload shortcuts so prompt hotkeys take effect immediately.
 #[tauri::command]
 pub async fn save_prompts(
+    app: AppHandle,
     state: State<'_, AppState>,
     prompts: Vec<PromptItem>,
 ) -> Result<serde_json::Value, String> {
     state.config_manager.save_prompts(&prompts)?;
+
+    // Reload shortcuts so changed prompt hotkeys take effect immediately
+    let config = state.config_manager.load_config()?;
+    let hotkey_str = match &config.app.hotkey {
+        serde_yaml::Value::String(s) => s.clone(),
+        _ => String::new(),
+    };
+    crate::reload_shortcuts(&app, &hotkey_str).ok();
+
     Ok(serde_json::json!({ "ok": true }))
 }
 

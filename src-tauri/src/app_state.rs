@@ -8,13 +8,11 @@ use crate::stats::StatsService;
 
 /// Application recording state.
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum AppState {
     Idle,
     Connecting,
     Recording,
     Finishing,
-    Error,
 }
 
 /// Global application state shared across all Tauri commands.

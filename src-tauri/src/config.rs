@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -311,12 +312,38 @@ fn normalize_prompt_item(item: &serde_yaml::Value, index: usize) -> PromptItem {
     }
 }
 
+/// Load default prompts from the example file.
+fn load_default_prompts(example_path: &Option<PathBuf>) -> Vec<PromptItem> {
+    let path = match example_path {
+        Some(p) if p.exists() => p,
+        _ => return vec![],
+    };
+
+    let content = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+
+    let parsed: Vec<serde_yaml::Value> = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+
+    parsed
+        .iter()
+        .enumerate()
+        .map(|(i, v)| normalize_prompt_item(v, i))
+        .collect()
+}
+
 /// ConfigManager handles loading, saving, and managing the application configuration.
+/// Configuration is cached in memory for fast access and synchronized with disk on write.
 pub struct ConfigManager {
     config_path: PathBuf,
     prompts_path: PathBuf,
     config_example_path: Option<PathBuf>,
-    prompts_example_path: Option<PathBuf>,
+    cached_config: RwLock<AppConfig>,
+    cached_prompts: RwLock<Vec<PromptItem>>,
 }
 
 impl ConfigManager {
@@ -352,83 +379,57 @@ impl ConfigManager {
             }
         }
 
+        // Load config into memory cache
+        let config = Self::read_config_from_disk(&config_path);
+
+        // Load prompts into memory cache (with default merge logic)
+        let prompts = Self::read_and_merge_prompts(&prompts_path, &prompts_example_path);
+
         Self {
             config_path,
             prompts_path,
             config_example_path,
-            prompts_example_path,
+            cached_config: RwLock::new(config),
+            cached_prompts: RwLock::new(prompts),
         }
     }
 
-    pub fn load_config(&self) -> Result<AppConfig, String> {
-        let content = fs::read_to_string(&self.config_path)
-            .map_err(|e| format!("Failed to read config: {}", e))?;
-
-        let raw: serde_yaml::Value = serde_yaml::from_str(&content)
-            .map_err(|e| format!("Failed to parse config YAML: {}", e))?;
-
-        let config: AppConfig = serde_yaml::from_value(raw).unwrap_or_default();
-        Ok(config)
-    }
-
-    pub fn read_config_text(&self) -> Result<String, String> {
-        fs::read_to_string(&self.config_path).map_err(|e| format!("Failed to read config: {}", e))
-    }
-
-    pub fn save_config_text(&self, text: &str) -> Result<(), String> {
-        // Validate YAML first
-        let _: serde_yaml::Value =
-            serde_yaml::from_str(text).map_err(|e| format!("Invalid YAML: {}", e))?;
-        fs::write(&self.config_path, text).map_err(|e| format!("Failed to write config: {}", e))
-    }
-
-    pub fn save_config(&self, config: &serde_yaml::Value) -> Result<(), String> {
-        let yaml = serde_yaml::to_string(config)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        fs::write(&self.config_path, yaml).map_err(|e| format!("Failed to write config: {}", e))
-    }
-
-    pub fn get_editable_config(&self) -> Result<serde_yaml::Value, String> {
-        let content = fs::read_to_string(&self.config_path)
-            .map_err(|e| format!("Failed to read config: {}", e))?;
-        serde_yaml::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
-    }
-
-    pub fn reset_to_default(&self) -> Result<(), String> {
-        let example_path = self
-            .config_example_path
-            .as_ref()
-            .ok_or("config.yaml.example not found")?;
-        let content = fs::read_to_string(example_path)
-            .map_err(|e| format!("Failed to read example config: {}", e))?;
-        fs::write(&self.config_path, content).map_err(|e| format!("Failed to write config: {}", e))
-    }
-
-    pub fn config_path(&self) -> &PathBuf {
-        &self.config_path
-    }
-
-    // -- Prompts --
-
-    pub fn load_prompts(&self) -> Vec<PromptItem> {
-        let content = match fs::read_to_string(&self.prompts_path) {
+    /// Read config from disk and parse into AppConfig.
+    fn read_config_from_disk(config_path: &Path) -> AppConfig {
+        let content = match fs::read_to_string(config_path) {
             Ok(c) => c,
-            Err(_) => return self.load_default_prompts(),
+            Err(_) => return AppConfig::default(),
+        };
+        let raw: serde_yaml::Value = match serde_yaml::from_str(&content) {
+            Ok(v) => v,
+            Err(_) => return AppConfig::default(),
+        };
+        serde_yaml::from_value(raw).unwrap_or_default()
+    }
+
+    /// Read prompts from disk, merge with defaults, and optionally save merged result.
+    fn read_and_merge_prompts(
+        prompts_path: &Path,
+        example_path: &Option<PathBuf>,
+    ) -> Vec<PromptItem> {
+        let content = match fs::read_to_string(prompts_path) {
+            Ok(c) => c,
+            Err(_) => return load_default_prompts(example_path),
         };
 
         let parsed: Vec<serde_yaml::Value> = match serde_json::from_str(&content) {
             Ok(v) => v,
-            Err(_) => return self.load_default_prompts(),
+            Err(_) => return load_default_prompts(example_path),
         };
 
-        let prompts: Vec<PromptItem> = parsed
+        let mut prompts: Vec<PromptItem> = parsed
             .iter()
             .enumerate()
             .map(|(i, v)| normalize_prompt_item(v, i))
             .collect();
 
         // Merge missing defaults
-        let defaults = self.load_default_prompts();
+        let defaults = load_default_prompts(example_path);
         let existing_ids: std::collections::HashSet<String> =
             prompts.iter().map(|p| p.id.clone()).collect();
         let missing: Vec<PromptItem> = defaults
@@ -437,41 +438,84 @@ impl ConfigManager {
             .collect();
 
         if !missing.is_empty() {
-            let mut merged = prompts.clone();
-            merged.extend(missing);
-            let _ = self.save_prompts(&merged);
-            return merged;
+            prompts.extend(missing);
+            if let Ok(json) = serde_json::to_string_pretty(&prompts) {
+                let _ = fs::write(prompts_path, json);
+            }
         }
 
         prompts
     }
 
+    /// Load config from memory cache (no disk I/O).
+    pub fn load_config(&self) -> Result<AppConfig, String> {
+        Ok(self.cached_config.read().unwrap().clone())
+    }
+
+    /// Read raw YAML text from disk (used by settings UI).
+    pub fn read_config_text(&self) -> Result<String, String> {
+        fs::read_to_string(&self.config_path).map_err(|e| format!("Failed to read config: {}", e))
+    }
+
+    /// Save config as raw YAML text, update memory cache and disk.
+    pub fn save_config_text(&self, text: &str) -> Result<(), String> {
+        let raw: serde_yaml::Value =
+            serde_yaml::from_str(text).map_err(|e| format!("Invalid YAML: {}", e))?;
+        let config: AppConfig = serde_yaml::from_value(raw).unwrap_or_default();
+        fs::write(&self.config_path, text).map_err(|e| format!("Failed to write config: {}", e))?;
+        *self.cached_config.write().unwrap() = config;
+        Ok(())
+    }
+
+    /// Save config as a parsed YAML value, update memory cache and disk.
+    pub fn save_config(&self, config: &serde_yaml::Value) -> Result<(), String> {
+        let yaml = serde_yaml::to_string(config)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+        let parsed: AppConfig =
+            serde_yaml::from_value(config.clone()).unwrap_or_default();
+        fs::write(&self.config_path, yaml).map_err(|e| format!("Failed to write config: {}", e))?;
+        *self.cached_config.write().unwrap() = parsed;
+        Ok(())
+    }
+
+    /// Get config as editable YAML value (reads from disk for settings UI).
+    pub fn get_editable_config(&self) -> Result<serde_yaml::Value, String> {
+        let content = fs::read_to_string(&self.config_path)
+            .map_err(|e| format!("Failed to read config: {}", e))?;
+        serde_yaml::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
+    }
+
+    /// Reset config to default, update memory cache and disk.
+    pub fn reset_to_default(&self) -> Result<(), String> {
+        let example_path = self
+            .config_example_path
+            .as_ref()
+            .ok_or("config.yaml.example not found")?;
+        let content = fs::read_to_string(example_path)
+            .map_err(|e| format!("Failed to read example config: {}", e))?;
+        fs::write(&self.config_path, &content).map_err(|e| format!("Failed to write config: {}", e))?;
+        let config: AppConfig = serde_yaml::from_str(&content).unwrap_or_default();
+        *self.cached_config.write().unwrap() = config;
+        Ok(())
+    }
+
+    pub fn config_path(&self) -> &PathBuf {
+        &self.config_path
+    }
+
+    // -- Prompts --
+
+    /// Load prompts from memory cache (no disk I/O).
+    pub fn load_prompts(&self) -> Vec<PromptItem> {
+        self.cached_prompts.read().unwrap().clone()
+    }
+
+    /// Save prompts, update memory cache and disk.
     pub fn save_prompts(&self, prompts: &[PromptItem]) -> Result<(), String> {
         let json = serde_json::to_string_pretty(prompts)
             .map_err(|e| format!("Failed to serialize prompts: {}", e))?;
-        fs::write(&self.prompts_path, json).map_err(|e| format!("Failed to write prompts: {}", e))
-    }
-
-    fn load_default_prompts(&self) -> Vec<PromptItem> {
-        let example_path = match &self.prompts_example_path {
-            Some(p) if p.exists() => p,
-            _ => return vec![],
-        };
-
-        let content = match fs::read_to_string(example_path) {
-            Ok(c) => c,
-            Err(_) => return vec![],
-        };
-
-        let parsed: Vec<serde_yaml::Value> = match serde_json::from_str(&content) {
-            Ok(v) => v,
-            Err(_) => return vec![],
-        };
-
-        parsed
-            .iter()
-            .enumerate()
-            .map(|(i, v)| normalize_prompt_item(v, i))
-            .collect()
+        fs::write(&self.prompts_path, json).map_err(|e| format!("Failed to write prompts: {}", e))?;
+        *self.cached_prompts.write().unwrap() = prompts.to_vec();
+        Ok(())
     }
 }
