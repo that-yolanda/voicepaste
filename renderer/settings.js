@@ -358,7 +358,13 @@
 
   function formatPromptHotkey(hotkey) {
     if (!Array.isArray(hotkey) || hotkey.length === 0) return "";
-    return hotkey.map((key) => keyDisplayNames[key] || `Key(${key})`).join(" + ");
+    // Support both old uIOhook keycode format (numbers) and new string format ("Control+Shift+A")
+    return hotkey
+      .map((key) => {
+        if (typeof key === "string") return key;
+        return keyDisplayNames[key] || `Key(${key})`;
+      })
+      .join(" + ");
   }
 
   function setHotkeyMode(mode) {
@@ -1576,14 +1582,22 @@ SOFTWARE.`;
 
     try {
       const result = await window.voiceSettings.recordHotkey();
-      const keys = Array.isArray(result) ? result : result?.keys;
+      // recordHotkey returns { hotkey, displayString, keys }
+      // Use the hotkey string (e.g. "Control+Shift+A") for compatibility with
+      // the global-shortcut plugin. Store as a single-element array for backward
+      // compat with the prompts.json format.
+      const hotkeyStr = result?.hotkey || "";
+      const displayStr = result?.displayString || "";
 
-      if (keys && keys.length > 0) {
-        promptsData[index].hotkey = keys;
+      if (hotkeyStr) {
+        // Store as string array for global-shortcut compatibility
+        promptsData[index].hotkey = [hotkeyStr];
+        promptsData[index]._displayString = displayStr;
         await savePromptsNow();
         renderPromptHotkeys();
       } else {
         promptsData[index].hotkey = [];
+        delete promptsData[index]._displayString;
         await savePromptsNow();
         renderPromptHotkeys();
       }

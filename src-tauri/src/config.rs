@@ -152,8 +152,11 @@ pub struct PromptItem {
     pub id: String,
     #[serde(default)]
     pub title: String,
+    /// Hotkey array — supports two formats:
+    /// - Legacy uIOhook keycodes: `[29, 54, 4]` (numbers)
+    /// - New accelerator strings: `["Control+Shift+A"]` (strings)
     #[serde(default)]
-    pub hotkey: Vec<u32>,
+    pub hotkey: serde_yaml::Value,
     #[serde(default = "default_hotkey_mode")]
     pub hotkey_mode: String,
     #[serde(default)]
@@ -272,6 +275,11 @@ impl Default for AppConfig {
 
 fn normalize_prompt_item(item: &serde_yaml::Value, index: usize) -> PromptItem {
     let fallback_id = format!("prompt-{}", index + 1);
+    let hotkey_value = item
+        .get("hotkey")
+        .cloned()
+        .unwrap_or(serde_yaml::Value::Sequence(vec![]));
+
     PromptItem {
         id: item
             .get("id")
@@ -284,15 +292,7 @@ fn normalize_prompt_item(item: &serde_yaml::Value, index: usize) -> PromptItem {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
-        hotkey: item
-            .get("hotkey")
-            .and_then(|v| v.as_sequence())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_u64().map(|n| n as u32))
-                    .collect()
-            })
-            .unwrap_or_default(),
+        hotkey: hotkey_value,
         hotkey_mode: if item
             .get("hotkey_mode")
             .and_then(|v| v.as_str())

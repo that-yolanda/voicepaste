@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**VoicePaste** — an Electron desktop app that provides voice-to-text input via a global hotkey. The packaged default config uses `Control+Space`, supports recorded custom key combinations, and auto-pastes recognized text into the currently focused input field. Supports macOS and Windows.
+**VoicePaste** — a Tauri v2 desktop app that provides voice-to-text input via a global hotkey. The default hotkey is `F13` (configurable), supports both toggle and hold-to-talk modes, and auto-pastes recognized text into the currently focused input field. Supports macOS and Windows.
 
 Uses ByteDance Doubao streaming ASR via WebSocket with a custom binary framing protocol (gzip-compressed JSON payloads).
 
@@ -12,68 +12,67 @@ Uses ByteDance Doubao streaming ASR via WebSocket with a custom binary framing p
 
 ```bash
 pnpm install          # Install dependencies
-pnpm start            # Run the app in development (electron .)
-pnpm run pack             # Build all platforms without signing
-pnpm run pack -s          # Build all platforms with signing and notarization
-pnpm run pack -p mac-arm64              # Build macOS Apple Silicon only
-pnpm run pack -p mac-x64                # Build macOS Intel only
-pnpm run pack -p win-x64                # Build Windows x64 only
-pnpm run pack -p mac-arm64,mac-x64      # Build macOS dual architecture
-```
-
-```bash
-pnpm lint          # Biome lint check (main/ preload/ renderer/)
-pnpm format        # Biome auto-format (main/ preload/ renderer/)
-pnpm check         # Biome check + auto-fix (lint + format)
-pnpm lint:ci       # Biome CI check (read-only, for CI pipelines)
+pnpm dev              # Run the app in development (tauri dev)
+pnpm build            # Build for production (tauri build)
+pnpm check            # Biome check + auto-fix (lint + format) on renderer/
+pnpm lint             # Biome lint check
+pnpm lint:ci          # Biome CI check (read-only, for CI pipelines)
 ```
 
 No test framework is configured.
 
 ## Architecture
 
-### Main Process (`main/`)
+### Rust Backend (`src-tauri/src/`)
 
-- **`main.js`** — App entry point. Manages the state machine (`idle → connecting → recording → finishing → idle`), global hotkey registration, custom hotkey recording via `uIOhook`, login-item toggle handlers, and orchestrates the recording lifecycle.
-- **`asrService.js`** — WebSocket client for Doubao ASR. Implements the binary protocol (4-byte header + payload size + gzip payload). Handles partial/final recognition results, commit-and-await-final flow, and error normalization.
-- **`pasteService.js`** — Writes text to clipboard, then simulates paste via platform-specific keystroke (macOS: AppleScript `Cmd+V`, Windows: PowerShell `Ctrl+V`). Restores previous clipboard content after paste.
-- **`windowManager.js`** — Creates the frameless overlay window (always-on-top, non-focusable, positioned at screen bottom center) and the settings window.
-- **`config.js`** — Loads and parses `config.yaml`. Supports reading, saving, hot-reloading config at runtime, and resetting to defaults from `config.yaml.example`.
-- **`logger.js`** — Appends timestamped log lines to `~/Library/Application Support/voicepaste/voicepaste.log`.
+- **`lib.rs`** — App entry point. Manages the state machine (`idle → connecting → recording → finishing → idle`), global hotkey registration via `tauri-plugin-global-shortcut`, system tray, overlay window positioning, and orchestrates the recording lifecycle (start/stop/hold modes).
+- **`asr.rs`** — WebSocket client for Doubao ASR. Implements the binary protocol (4-byte header + payload size + gzip payload). Handles partial/final recognition results, commit-and-await-final flow, and error normalization.
+- **`paste.rs`** — Writes text to clipboard, then simulates paste via platform-specific keystroke (macOS: AppleScript `Cmd+V`, Windows: PowerShell `Ctrl+V`). Also handles sound playback.
+- **`config.rs`** — Loads and parses `config.yaml`. Supports reading, saving, and resetting to defaults from `config.yaml.example`. Manages prompt templates (`prompts.json`).
+- **`commands.rs`** — Tauri command handlers (IPC). Exposes config, audio, stats, and system commands to the frontend.
+- **`llm.rs`** — LLM text polishing integration supporting 8 providers (DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, SiliconFlow, Ollama, custom).
+- **`logger.rs`** — Appends timestamped log lines to the app data directory.
+- **`stats.rs`** — Usage statistics tracking (session count, character count, daily heatmap).
+- **`app_state.rs`** — Shared application state (AppState enum, ASR session, audio channels).
 
-### Preload (`preload/preload.js`)
+### Frontend Bridge (`renderer/tauri-bridge.js`)
 
-Exposes two `contextBridge` APIs:
-- `window.voiceOverlay` — for the overlay renderer (events, audio chunks, config)
-- `window.voiceSettings` — for the settings renderer (load/save config YAML, microphone status, reset, accessibility, login item state, custom hotkey recording)
+Provides `window.voiceOverlay` and `window.voiceSettings` APIs that route through Tauri's `invoke`/`listen` mechanism, replacing the old Electron preload `contextBridge` API.
 
-### Renderer (`renderer/`)
+### Frontend (`renderer/`)
 
-Vanilla JS, no framework. Two BrowserWindows:
-- **Overlay** (`index.html` + `app.js`) — Floating transparent window. Captures microphone audio via `getUserMedia`, downsamples to 16kHz PCM, sends chunks to main process via IPC. Displays final text (dark) and partial text (light). Auto-resizes window based on text measurement.
-- **Settings** (`settings.html` + `settings.js`) — YAML editor for `config.yaml`, microphone permission check, custom hotkey recording, auto-start toggle, and app-level behavior toggles.
+Vanilla JS, no framework. Two windows:
+- **Overlay** (`index.html` + `app.js`) — Floating transparent window. Captures microphone audio via `getUserMedia`, downsamples to 16kHz PCM, sends chunks to backend via IPC. Displays final text and partial text with real-time waveform.
+- **Settings** (`settings.html` + `settings.js`) — Full settings UI with home page (statistics/heatmap), hotkey recording, LLM config, sound customization, auto-start toggle, and YAML config editor.
+
+### Hotkey Modes
+
+- **Toggle mode** (default): Press once to start recording, press again to stop and paste.
+- **Hold mode**: Hold the key to record, release to stop and paste.
+- Supports both simple accelerator strings (`"F13"`, `"Control+Space"`) and recorded custom combinations.
+- Prompt templates can have their own hotkeys with independent mode settings.
 
 ### Data Flow
 
-1. Global hotkey → main process state toggle
-2. `recording` state → IPC `recording:start` → renderer `getUserMedia` → PCM audio → IPC `asr:audio-chunk` → main process → WebSocket to ASR
-3. ASR responses → main process → IPC `overlay:event` → renderer updates text display
-4. Second hotkey → `commitAndAwaitFinal()` → wait for final ASR result → clipboard write + simulated paste (AppleScript/PowerShell)
+1. Global hotkey → backend state change (start/stop based on mode)
+2. `recording` state → `audio:warmup` event → frontend `getUserMedia` → PCM audio → `send_audio_chunk` command → backend → WebSocket to ASR
+3. ASR responses → `overlay:event` → frontend updates text display
+4. Stop → `commitAndAwaitFinal()` → wait for final ASR result → optional LLM processing → clipboard write + simulated paste
 
 ### Configuration (`config.yaml`)
 
-Contains hotkey, app-level behavior toggles (`remove_trailing_period`, `keep_clipboard`), ASR WebSocket URL, resource ID, language settings, hotwords, and auth credentials (app_id, access_token). Bundled as `extraResources` in the built app and loaded at runtime.
+Contains hotkey, hotkey mode, app-level behavior toggles (`remove_trailing_period`, `keep_clipboard`), overlay style, sound settings, ASR WebSocket URL, resource ID, language settings, hotwords, and auth credentials. Bundled as Tauri resources.
 
 - `config.yaml` is in `.gitignore` — used for local development with real credentials
 - `config.yaml.example` is the sanitized template (empty credentials)
-- Packaging uses `config.yaml.example` as the source for both `config.yaml` and `config.yaml.example` in the bundle, ensuring no real tokens are shipped
-- The settings page has a "Reset to Defaults" button that overwrites `config.yaml` with `config.yaml.example` content
+- The settings page has a "Reset to Defaults" button
 
 ## Code Quality
 
 - **Biome** is configured for linting and formatting (`biome.json`)
-- After any code change, run `pnpm check` to ensure no lint or formatting issues remain before committing — this catches problems early and keeps the codebase consistent
+- After any code change, run `pnpm check` to ensure no lint or formatting issues remain
 - Fix all errors and warnings reported by Biome before considering a task complete
+- Rust code must compile with zero warnings (`cargo check`)
 
 ## Code Commit Convention
 
@@ -81,10 +80,6 @@ Contains hotkey, app-level behavior toggles (`remove_trailing_period`, `keep_cli
 - When helpful, include the module scope, for example: `fix(hotkey): ...`, `feat(settings): ...`
 - The message body after the prefix must explain **why**, not just **what**
 - Keep commit messages short, clear, and traceable
-- Avoid vague descriptions such as "improve performance", "optimize code", "fix issue"
-- Preferred examples:
-  - `fix(hotkey): avoid accidental hold trigger while pressing modifier combos`
-  - `feat(settings): support hold-to-talk for users who prefer press-and-release input`
 - All code comments must be written in English
 
 ## Release
@@ -97,8 +92,8 @@ For release work, use the project skill at `.claude/skills/github-release`. It i
 
 ## Key Conventions
 
-- Pure CommonJS (`require`/`module.exports`), no ES modules or TypeScript
-- No bundler — renderer files are loaded directly by Electron
-- Uses `ws` package for WebSocket in main process (Node.js side)
-- Cross-platform: paste via AppleScript (macOS) / PowerShell (Windows), mic permissions via `systemPreferences` (macOS only, Windows handled by getUserMedia), hotkeys via Electron `globalShortcut` for string accelerators and `uIOhook` for recorded keycode arrays
-- Binary protocol in `asrService.js`: protocol byte `0x11`, message types `0x01` (full request), `0x02` (audio-only), `0x09` (server ack), `0x0f` (error)
+- Rust backend with Tauri v2 plugins (global-shortcut, clipboard-manager, shell, dialog, autostart, updater, process)
+- Vanilla JS frontend (no bundler, loaded directly by Tauri WebView)
+- `withGlobalTauri: true` — `window.__TAURI__` is available in frontend
+- Cross-platform: paste via AppleScript (macOS) / PowerShell (Windows)
+- Binary protocol in `asr.rs`: protocol byte `0x11`, message types `0x01` (full request), `0x02` (audio-only), `0x09` (server ack), `0x0f` (error)

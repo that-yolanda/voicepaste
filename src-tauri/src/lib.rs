@@ -2,7 +2,6 @@ mod app_state;
 mod asr;
 mod commands;
 mod config;
-mod hotkey;
 mod llm;
 mod logger;
 mod paste;
@@ -55,25 +54,24 @@ pub fn run() {
             let logger_instance = logger::Logger::new(log_path);
             let stats_service = stats::StatsService::new(&data_dir);
 
+            // Read hotkey mode before config_manager is moved into app state
+            let hotkey_mode = config_manager
+                .load_config()
+                .map(|c| c.app.hotkey_mode.clone())
+                .unwrap_or_else(|_| "toggle".to_string());
+
             let app_state = create_app_state(config_manager, logger_instance, stats_service);
             app.manage(app_state);
 
             // Recording state toggle (used by global shortcut handler)
             app.manage(RecordingState(std::sync::Mutex::new(false)));
 
+            // Hotkey mode: "toggle" or "hold"
+            app.manage(HotkeyMode(std::sync::Mutex::new(hotkey_mode)));
+
             eprintln!("[voicepaste] setup: starting...");
             eprintln!("[voicepaste] data_dir: {:?}", data_dir);
             eprintln!("[voicepaste] resource_dir: {:?}", resource_dir);
-
-            // rdev (global keyboard hook for hotkey recording / hold-to-talk) is
-            // disabled on macOS 26+ because the rdev crate calls TSM APIs
-            // (string_from_code) inside the CGEventTap callback, which triggers a
-            // dispatch_assert_queue failure → SIGTRAP.
-            // TODO: Replace rdev with a native CGEventTap or global-shortcut API.
-            // let recorder = Arc::new(hotkey::HotkeyRecorder::new());
-            // app.manage(recorder.clone());
-            // let _ = hotkey::start_keyboard_listener(recorder);
-            eprintln!("[voicepaste] rdev keyboard listener DISABLED (macOS 26 compat)");
 
             // Setup overlay window properties
             setup_overlay_window(app);
@@ -390,7 +388,8 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
 
     if let Ok(config) = config_manager.load_config() {
         let hotkey_value = &config.app.hotkey;
-        eprintln!("[shortcut] config loaded, hotkey value: {:?}", hotkey_value);
+        let hotkey_mode = config.app.hotkey_mode.as_str();
+        eprintln!("[shortcut] config loaded, hotkey value: {:?}, mode: {}", hotkey_value, hotkey_mode);
 
         // For simple string hotkeys (like "Control+Space", "F13"), register via plugin
         if let serde_yaml::Value::String(hotkey_str) = hotkey_value {
@@ -398,16 +397,27 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
             if !hotkey_str.is_empty() {
                 // Parse the accelerator string and register
                 if let Some(shortcut) = parse_accelerator_to_shortcut(hotkey_str) {
-                    eprintln!("[shortcut] registering shortcut for: {}", hotkey_str);
+                    eprintln!("[shortcut] registering shortcut for: {} (mode: {})", hotkey_str, hotkey_mode);
                     let app_handle = app.handle().clone();
+                    let mode = hotkey_mode.to_string();
                     app.global_shortcut().on_shortcut(
                         shortcut,
                         move |_triggered_app, _triggered_shortcut, event| {
-                            if event.state == ShortcutState::Pressed {
-                                let handle = app_handle.clone();
-                                tauri::async_runtime::spawn(async move {
-                                    toggle_recording(handle).await;
-                                });
+                            let handle = app_handle.clone();
+                            let mode = mode.clone();
+                            #[allow(unreachable_patterns)]
+                            match event.state {
+                                ShortcutState::Pressed => {
+                                    tauri::async_runtime::spawn(async move {
+                                        on_hotkey_pressed(handle, &mode).await;
+                                    });
+                                }
+                                ShortcutState::Released => {
+                                    tauri::async_runtime::spawn(async move {
+                                        on_hotkey_released(handle, &mode).await;
+                                    });
+                                }
+                                _ => {}
                             }
                         },
                     )?;
@@ -424,31 +434,43 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
     // Register prompt shortcuts
     let prompts = config_manager.load_prompts();
     for prompt in &prompts {
-        if !prompt.hotkey.is_empty() {
-            if let Some(shortcut) = keycode_array_to_shortcut(&prompt.hotkey) {
-                let app_handle = app.handle().clone();
-                let prompt_id = prompt.id.clone();
-                let prompt_title = prompt.title.clone();
-                app.global_shortcut()
-                    .on_shortcut(shortcut, move |_triggered_app, _triggered, event| {
-                        if event.state == ShortcutState::Pressed {
+        let hotkey = &prompt.hotkey;
+        let shortcut = parse_prompt_hotkey(hotkey);
+
+        if let Some(shortcut) = shortcut {
+            let app_handle = app.handle().clone();
+            let prompt_id = prompt.id.clone();
+            let prompt_title = prompt.title.clone();
+            let prompt_mode = prompt.hotkey_mode.clone();
+            app.global_shortcut()
+                .on_shortcut(shortcut, move |_triggered_app, _triggered, event| {
+                    let handle = app_handle.clone();
+                    let mode = prompt_mode.clone();
+                    #[allow(unreachable_patterns)]
+                    match event.state {
+                        ShortcutState::Pressed => {
                             eprintln!(
                                 "[shortcut] prompt shortcut triggered: {} ({})",
                                 prompt_title, prompt_id
                             );
-                            let handle = app_handle.clone();
                             tauri::async_runtime::spawn(async move {
-                                toggle_recording(handle).await;
+                                on_hotkey_pressed(handle, &mode).await;
                             });
                         }
-                    })
-                    .ok();
-            } else {
-                eprintln!(
-                    "[shortcut] prompt '{}' hotkey {:?} uses unsupported keycodes, skipping",
-                    prompt.title, prompt.hotkey
-                );
-            }
+                        ShortcutState::Released => {
+                            tauri::async_runtime::spawn(async move {
+                                on_hotkey_released(handle, &mode).await;
+                            });
+                        }
+                        _ => {}
+                    }
+                })
+                .ok();
+        } else if !hotkey.is_sequence() || !hotkey.as_sequence().unwrap().is_empty() {
+            eprintln!(
+                "[shortcut] prompt '{}' hotkey {:?} uses unsupported keycodes, skipping",
+                prompt.title, hotkey
+            );
         }
     }
 
@@ -458,11 +480,231 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
 /// Simple recording toggle state managed by Tauri.
 struct RecordingState(std::sync::Mutex<bool>);
 
-/// Toggle the recording state: manage the full recording lifecycle (ASR session
-/// creation, audio event forwarding, text commit, clipboard write, paste).
-/// Called from global shortcut handlers via tauri::async_runtime::spawn.
-pub async fn toggle_recording(app_handle: AppHandle) {
+/// Hotkey mode: "toggle" (press once to start, press again to stop) or "hold" (hold to speak).
+struct HotkeyMode(std::sync::Mutex<String>);
+
+/// Handle hotkey press event. In toggle mode, toggles recording. In hold mode, starts recording.
+async fn on_hotkey_pressed(app_handle: AppHandle, mode: &str) {
+    if mode == "hold" {
+        // Hold mode: press starts recording (only if not already recording)
+        let recording_state = app_handle.state::<RecordingState>();
+        let is_recording = *recording_state.0.lock().unwrap();
+        if !is_recording {
+            start_recording(app_handle).await;
+        }
+    } else {
+        // Toggle mode: press toggles recording state
+        toggle_recording(app_handle).await;
+    }
+}
+
+/// Handle hotkey release event. In hold mode, stops recording. In toggle mode, does nothing.
+async fn on_hotkey_released(app_handle: AppHandle, mode: &str) {
+    if mode == "hold" {
+        // Hold mode: release stops recording
+        let recording_state = app_handle.state::<RecordingState>();
+        let is_recording = *recording_state.0.lock().unwrap();
+        if is_recording {
+            stop_recording(app_handle).await;
+        }
+    }
+    // Toggle mode: release is ignored
+}
+
+/// Start recording from idle state. Used by both toggle and hold modes.
+async fn start_recording(app_handle: AppHandle) {
     let app_inner = app_handle.state::<Arc<app_state::AppInner>>();
+    let recording_state = app_handle.state::<RecordingState>();
+
+    // Mark as recording
+    *recording_state.0.lock().unwrap() = true;
+
+    // 1. Load config
+    let config = match app_inner.config_manager.load_config() {
+        Ok(c) => c,
+        Err(e) => {
+            *recording_state.0.lock().unwrap() = false;
+            eprintln!("[recording] failed to load config: {}", e);
+            let _ = app_handle.emit("overlay:event", serde_json::json!({
+                "type": "hint",
+                "payload": { "text": format!("配置加载失败: {}", e), "level": "error", "variant": "text" }
+            }));
+            return;
+        }
+    };
+
+    *app_inner.latest_transcript.lock().await = (String::new(), String::new());
+    let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
+    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+        let _ = overlay.show();
+    }
+
+    // 2. Warm up microphone capture
+    set_app_state(&app_handle, &app_inner, app_state::AppState::Connecting).await;
+    let _ = app_handle.emit(
+        "overlay:event",
+        serde_json::json!({
+            "type": "audio:warmup",
+        }),
+    );
+    if let Err(e) = wait_for_audio_warmup(&app_inner, 8000).await {
+        *recording_state.0.lock().unwrap() = false;
+        stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+        set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+        if let Some(overlay) = app_handle.get_webview_window("overlay") {
+            let _ = overlay.hide();
+        }
+        eprintln!("[recording] audio warmup failed: {}", e);
+        let _ = app_handle.emit(
+            "overlay:event",
+            serde_json::json!({
+                "type": "hint",
+                "payload": { "text": e, "level": "error", "variant": "text" }
+            }),
+        );
+        return;
+    }
+
+    // 3. Create ASR session
+    match crate::asr::create_asr_session(&config.connection, &config.audio, &config.request)
+        .await
+    {
+        Ok((session, event_rx)) => {
+            *app_inner.asr_session.lock().await = Some(session.clone());
+            set_app_state(&app_handle, &app_inner, app_state::AppState::Recording).await;
+
+            let _ = app_handle.emit(
+                "overlay:event",
+                serde_json::json!({
+                    "type": "recording:start",
+                }),
+            );
+
+            let app_for_events = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                forward_asr_events(app_for_events, event_rx).await;
+            });
+        }
+        Err(e) => {
+            eprintln!("[recording] ASR connection failed: {}", e);
+            *recording_state.0.lock().unwrap() = false;
+            stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+            set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+            let _ = app_handle.emit("overlay:event", serde_json::json!({
+                "type": "hint",
+                "payload": { "text": format!("ASR 连接失败: {}", e), "level": "error", "variant": "text" }
+            }));
+        }
+    }
+}
+
+/// Stop recording and finalize (paste text). Used by both toggle and hold modes.
+async fn stop_recording(app_handle: AppHandle) {
+    let app_inner = app_handle.state::<Arc<app_state::AppInner>>();
+    let recording_state = app_handle.state::<RecordingState>();
+
+    // Mark as not recording
+    *recording_state.0.lock().unwrap() = false;
+
+    // 1. Set state to finishing
+    set_app_state(&app_handle, &app_inner, app_state::AppState::Finishing).await;
+
+    // 2. Stop renderer audio first so the final buffered chunk is flushed.
+    stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+
+    // 3. Take the ASR session (removes it from state)
+    let session = app_inner.asr_session.lock().await.take();
+    *app_inner.asr_events.lock().await = None;
+
+    if let Some(session) = session {
+        // 4. Commit and get final text
+        let text = match session.commit_and_await_final().await {
+            Ok(t) => t,
+            Err(_) => {
+                let (final_t, partial_t) = app_inner.latest_transcript.lock().await.clone();
+                if !final_t.is_empty() {
+                    final_t
+                } else {
+                    partial_t
+                }
+            }
+        };
+
+        let trimmed = text.trim().to_string();
+        if !trimmed.is_empty() {
+            let preview = trimmed.chars().take(60).collect::<String>();
+            eprintln!(
+                "[recording] final text ({} chars): {:?}",
+                trimmed.chars().count(),
+                preview
+            );
+
+            // 5. Load config for LLM / behavior settings
+            let config = app_inner.config_manager.load_config().ok();
+
+            let mut trimmed = trimmed;
+            if config
+                .as_ref()
+                .map(|config| config.app.remove_trailing_period)
+                .unwrap_or(true)
+                && (trimmed.ends_with('。') || trimmed.ends_with('.'))
+            {
+                trimmed.pop();
+            }
+
+            // 6. Apply LLM structure_text if enabled
+            let final_text = if let Some(ref config) = config {
+                if config.llm.enabled {
+                    let prompts = app_inner.config_manager.load_prompts();
+                    let system_prompt = prompts
+                        .first()
+                        .map(|p| p.prompt.clone())
+                        .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
+                    eprintln!("[recording] applying LLM structure_text...");
+                    crate::llm::structure_text(&config.llm, &trimmed, &system_prompt).await
+                } else {
+                    trimmed.clone()
+                }
+            } else {
+                trimmed.clone()
+            };
+
+            // 7. Write to clipboard
+            use tauri_plugin_clipboard_manager::ClipboardExt;
+            if let Err(e) = app_handle.clipboard().write_text(&final_text) {
+                eprintln!("[recording] clipboard write failed: {}", e);
+                let _ = app_handle.emit("overlay:event", serde_json::json!({
+                    "type": "hint",
+                    "payload": { "text": format!("剪贴板写入失败: {}", e), "level": "error", "variant": "text" }
+                }));
+            }
+
+            // 8. Simulate paste keystroke
+            let _result = crate::paste::simulate_paste();
+
+            // 9. Record usage stats
+            app_inner.stats.lock().await.record_session(&final_text);
+            play_configured_sound(&app_handle, &app_inner, "end");
+        } else {
+            eprintln!("[recording] final text is empty, skipping paste");
+        }
+
+        // 10. Close the WebSocket session
+        session.close();
+    }
+
+    // 11. Hide overlay
+    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+        let _ = overlay.hide();
+    }
+
+    // 12. Set state back to idle
+    set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+}
+
+/// Toggle the recording state: if idle, start recording; if recording, stop.
+/// Used by toggle-mode hotkey handlers.
+pub async fn toggle_recording(app_handle: AppHandle) {
     let recording_state = app_handle.state::<RecordingState>();
     let is_recording = {
         let mut recording = recording_state.0.lock().unwrap();
@@ -471,188 +713,9 @@ pub async fn toggle_recording(app_handle: AppHandle) {
     };
 
     if is_recording {
-        // ===== START RECORDING =====
-
-        // 1. Load config
-        let config = match app_inner.config_manager.load_config() {
-            Ok(c) => c,
-            Err(e) => {
-                *recording_state.0.lock().unwrap() = false;
-                eprintln!("[recording] failed to load config: {}", e);
-                let _ = app_handle.emit("overlay:event", serde_json::json!({
-                    "type": "hint",
-                    "payload": { "text": format!("配置加载失败: {}", e), "level": "error", "variant": "text" }
-                }));
-                return;
-            }
-        };
-
-        *app_inner.latest_transcript.lock().await = (String::new(), String::new());
-        let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
-        if let Some(overlay) = app_handle.get_webview_window("overlay") {
-            let _ = overlay.show();
-        }
-
-        // 2. Warm up microphone capture before ASR starts its 8s packet timer.
-        set_app_state(&app_handle, &app_inner, app_state::AppState::Connecting).await;
-        let _ = app_handle.emit(
-            "overlay:event",
-            serde_json::json!({
-                "type": "audio:warmup",
-            }),
-        );
-        if let Err(e) = wait_for_audio_warmup(&app_inner, 8000).await {
-            *recording_state.0.lock().unwrap() = false;
-            stop_renderer_audio(&app_handle, &app_inner, 1200).await;
-            set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-            if let Some(overlay) = app_handle.get_webview_window("overlay") {
-                let _ = overlay.hide();
-            }
-            eprintln!("[recording] audio warmup failed: {}", e);
-            let _ = app_handle.emit(
-                "overlay:event",
-                serde_json::json!({
-                    "type": "hint",
-                    "payload": { "text": e, "level": "error", "variant": "text" }
-                }),
-            );
-            return;
-        }
-
-        // 3. Create ASR session after audio is ready to send the first packet.
-        match crate::asr::create_asr_session(&config.connection, &config.audio, &config.request)
-            .await
-        {
-            Ok((session, event_rx)) => {
-                // Store session in state
-                *app_inner.asr_session.lock().await = Some(session.clone());
-
-                // Set state to recording
-                set_app_state(&app_handle, &app_inner, app_state::AppState::Recording).await;
-
-                // Emit recording:start event
-                let _ = app_handle.emit(
-                    "overlay:event",
-                    serde_json::json!({
-                        "type": "recording:start",
-                    }),
-                );
-
-                // Spawn event forwarding task
-                let app_for_events = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    forward_asr_events(app_for_events, event_rx).await;
-                });
-            }
-            Err(e) => {
-                eprintln!("[recording] ASR connection failed: {}", e);
-                *recording_state.0.lock().unwrap() = false;
-                stop_renderer_audio(&app_handle, &app_inner, 1200).await;
-                set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-                let _ = app_handle.emit("overlay:event", serde_json::json!({
-                    "type": "hint",
-                    "payload": { "text": format!("ASR 连接失败: {}", e), "level": "error", "variant": "text" }
-                }));
-            }
-        }
+        start_recording(app_handle).await;
     } else {
-        // ===== STOP RECORDING =====
-
-        // 1. Set state to finishing
-        set_app_state(&app_handle, &app_inner, app_state::AppState::Finishing).await;
-
-        // 2. Stop renderer audio first so the final buffered chunk is flushed.
-        stop_renderer_audio(&app_handle, &app_inner, 1200).await;
-
-        // 3. Take the ASR session (removes it from state)
-        let session = app_inner.asr_session.lock().await.take();
-        *app_inner.asr_events.lock().await = None;
-
-        if let Some(session) = session {
-            // 4. Commit and get final text
-            let text = match session.commit_and_await_final().await {
-                Ok(t) => t,
-                Err(_) => {
-                    // Fall back to latest transcript on error
-                    let (final_t, partial_t) = app_inner.latest_transcript.lock().await.clone();
-                    if !final_t.is_empty() {
-                        final_t
-                    } else {
-                        partial_t
-                    }
-                }
-            };
-
-            let trimmed = text.trim().to_string();
-            if !trimmed.is_empty() {
-                let preview = trimmed.chars().take(60).collect::<String>();
-                eprintln!(
-                    "[recording] final text ({} chars): {:?}",
-                    trimmed.chars().count(),
-                    preview
-                );
-
-                // 5. Load config for LLM / behavior settings
-                let config = app_inner.config_manager.load_config().ok();
-
-                let mut trimmed = trimmed;
-                if config
-                    .as_ref()
-                    .map(|config| config.app.remove_trailing_period)
-                    .unwrap_or(true)
-                    && (trimmed.ends_with('。') || trimmed.ends_with('.'))
-                {
-                    trimmed.pop();
-                }
-
-                // 6. Apply LLM structure_text if enabled
-                let final_text = if let Some(ref config) = config {
-                    if config.llm.enabled {
-                        let prompts = app_inner.config_manager.load_prompts();
-                        let system_prompt = prompts
-                            .first()
-                            .map(|p| p.prompt.clone())
-                            .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
-                        eprintln!("[recording] applying LLM structure_text...");
-                        crate::llm::structure_text(&config.llm, &trimmed, &system_prompt).await
-                    } else {
-                        trimmed.clone()
-                    }
-                } else {
-                    trimmed.clone()
-                };
-
-                // 7. Write to clipboard
-                use tauri_plugin_clipboard_manager::ClipboardExt;
-                if let Err(e) = app_handle.clipboard().write_text(&final_text) {
-                    eprintln!("[recording] clipboard write failed: {}", e);
-                    let _ = app_handle.emit("overlay:event", serde_json::json!({
-                        "type": "hint",
-                        "payload": { "text": format!("剪贴板写入失败: {}", e), "level": "error", "variant": "text" }
-                    }));
-                }
-
-                // 8. Simulate paste keystroke (Cmd+V / Ctrl+V)
-                let _result = crate::paste::simulate_paste();
-
-                // 9. Record usage stats
-                app_inner.stats.lock().await.record_session(&final_text);
-                play_configured_sound(&app_handle, &app_inner, "end");
-            } else {
-                eprintln!("[recording] final text is empty, skipping paste");
-            }
-
-            // 10. Close the WebSocket session
-            session.close();
-        }
-
-        // 11. Hide overlay
-        if let Some(overlay) = app_handle.get_webview_window("overlay") {
-            let _ = overlay.hide();
-        }
-
-        // 12. Set state back to idle
-        set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+        stop_recording(app_handle).await;
     }
 }
 
@@ -789,18 +852,35 @@ pub fn reload_shortcuts(
     // Unregister all current shortcuts
     let _ = app.global_shortcut().unregister_all();
 
+    // Read the current hotkey mode from managed state
+    let mode = app
+        .try_state::<HotkeyMode>()
+        .map(|m| m.0.lock().unwrap().clone())
+        .unwrap_or_else(|| "toggle".to_string());
+
     // Register the new hotkey
     if !hotkey_str.is_empty() {
         if let Some(shortcut) = parse_accelerator_to_shortcut(hotkey_str) {
             let app_handle = app.clone();
+            let mode_clone = mode.clone();
             app.global_shortcut().on_shortcut(
                 shortcut,
                 move |_triggered_app, _triggered, event| {
-                    if event.state == ShortcutState::Pressed {
-                        let handle = app_handle.clone();
-                        tauri::async_runtime::spawn(async move {
-                            toggle_recording(handle).await;
-                        });
+                    let handle = app_handle.clone();
+                    let m = mode_clone.clone();
+                    #[allow(unreachable_patterns)]
+                    match event.state {
+                        ShortcutState::Pressed => {
+                            tauri::async_runtime::spawn(async move {
+                                on_hotkey_pressed(handle, &m).await;
+                            });
+                        }
+                        ShortcutState::Released => {
+                            tauri::async_runtime::spawn(async move {
+                                on_hotkey_released(handle, &m).await;
+                            });
+                        }
+                        _ => {}
                     }
                 },
             )?;
@@ -810,6 +890,27 @@ pub fn reload_shortcuts(
     }
 
     Ok(())
+}
+
+/// Parse a prompt hotkey value that can be either:
+/// - A string array like `["Control+Shift+A"]` (new format, from DOM recording)
+/// - A number array like `[29, 54, 4]` (legacy uIOhook format)
+fn parse_prompt_hotkey(hotkey: &serde_yaml::Value) -> Option<Shortcut> {
+    let seq = hotkey.as_sequence()?;
+
+    // Try string format first: ["Control+Shift+A"]
+    if let Some(first) = seq.first() {
+        if let Some(s) = first.as_str() {
+            return parse_accelerator_to_shortcut(s);
+        }
+    }
+
+    // Fall back to uIOhook keycode format: [29, 54, 4]
+    let keycodes: Vec<u32> = seq.iter().filter_map(|v| v.as_u64().map(|n| n as u32)).collect();
+    if keycodes.is_empty() {
+        return None;
+    }
+    keycode_array_to_shortcut(&keycodes)
 }
 
 /// Convert a uIOhook keycode array (used in prompt hotkeys) to a Tauri

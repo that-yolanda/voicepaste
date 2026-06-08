@@ -34,7 +34,6 @@ uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 log = "0.4"
 dirs = "6"
-rdev = "0.5"
 base64 = "0.22"
 regex = "1"
 url = "2"

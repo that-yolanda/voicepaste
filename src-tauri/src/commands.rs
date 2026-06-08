@@ -1,7 +1,8 @@
 use crate::app_state::AppHandle as AppState;
 use crate::config::PromptItem;
 use crate::paste;
-use tauri::{AppHandle, State};
+use crate::HotkeyMode;
+use tauri::{AppHandle, Manager, State};
 
 // Re-export paste::PasteResult for use in commands
 use paste::PasteResult;
@@ -85,6 +86,12 @@ pub async fn save_config(
 
     // Re-register shortcuts with the new hotkey from the saved config
     let updated_config = state.config_manager.load_config()?;
+
+    // Sync hotkey mode
+    if let Some(hotkey_mode) = app.try_state::<HotkeyMode>() {
+        *hotkey_mode.0.lock().unwrap() = updated_config.app.hotkey_mode.clone();
+    }
+
     let hotkey_str = match &updated_config.app.hotkey {
         serde_yaml::Value::String(s) => s.clone(),
         _ => String::new(),
@@ -116,6 +123,12 @@ pub async fn save_config_object(
     config_object: serde_yaml::Value,
 ) -> Result<serde_json::Value, String> {
     state.config_manager.save_config(&config_object)?;
+
+    // Sync hotkey mode from saved config
+    let updated_config = state.config_manager.load_config()?;
+    if let Some(hotkey_mode) = app.try_state::<HotkeyMode>() {
+        *hotkey_mode.0.lock().unwrap() = updated_config.app.hotkey_mode.clone();
+    }
 
     // Re-register shortcuts with the new hotkey from the config object
     let hotkey_str = match config_object.get("app").and_then(|a| a.get("hotkey")) {
