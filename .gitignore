@@ -9,3 +9,4 @@ dist
 # local configuration
 .env
 config.yaml
+prompts.json

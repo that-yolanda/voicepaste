@@ -172,6 +172,10 @@ function loadConfig() {
       hotkey_mode: raw.app?.hotkey_mode === "hold" ? "hold" : "toggle",
       remove_trailing_period: raw.app?.remove_trailing_period !== false,
       theme: raw.app?.theme || "system",
+      overlay_style: raw.app?.overlay_style === "vibrancy" ? "vibrancy" : "liquid",
+      overlay_glass_mode: ["light", "dark"].includes(raw.app?.overlay_glass_mode)
+        ? raw.app.overlay_glass_mode
+        : "auto",
     },
     connection: {
       ...(raw.connection || {}),

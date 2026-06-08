@@ -560,6 +560,28 @@ function getHotkey() {
   return currentConfig.app.hotkey;
 }
 
+function getOverlayStyle() {
+  return currentConfig.app?.overlay_style === "vibrancy" ? "vibrancy" : "liquid";
+}
+
+// Resolved light/dark variant for the macOS Liquid Glass overlay.
+// "auto" follows the live system appearance; "light"/"dark" pin it so an
+// in-progress transcription is never affected by a system theme switch.
+function getOverlayGlassVariant() {
+  const mode = currentConfig.app?.overlay_glass_mode;
+  if (mode === "light") return "light";
+  if (mode === "dark") return "dark";
+  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+}
+
+function getOverlayAppearance() {
+  return {
+    platform: process.platform,
+    overlayStyle: getOverlayStyle(),
+    glass: getOverlayGlassVariant(),
+  };
+}
+
 function getAccessibilityStatus() {
   if (process.platform !== "darwin") {
     return "granted";
@@ -1073,7 +1095,8 @@ function registerShortcuts() {
 
 function reloadRuntimeConfig() {
   currentConfig = loadConfig();
-
+  // Reflect overlay appearance changes live without restarting recording logic.
+  sendOverlayMessage("appearance", getOverlayAppearance());
 }
 
 function resolveTheme() {
@@ -1233,7 +1256,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("app:get-config", () => ({
     hotkey: getHotkey(),
-
+    ...getOverlayAppearance(),
   }));
 
   ipcMain.handle("settings:get-login-item", () => {
@@ -1423,6 +1446,11 @@ app.whenReady().then(() => {
         payload: { resolved },
       });
     }
+    // Keep the overlay's Liquid Glass light/dark variant in sync when the
+    // system appearance flips (only changes anything in "auto" glass mode).
+    // This is a pure CSS class swap in the overlay — it never interrupts an
+    // in-progress transcription.
+    sendOverlayMessage("appearance", getOverlayAppearance());
   });
 
   ipcMain.handle("settings:set-theme", async (_event, preference) => {
