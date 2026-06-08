@@ -1,0 +1,41 @@
+[package]
+name = "voicepaste"
+version = "1.2.0"
+description = "Voice-to-text input tool — press a hotkey, speak, auto-paste."
+authors = ["that-yolanda"]
+license = "MIT"
+repository = "https://github.com/that-yolanda/voicepaste"
+edition = "2021"
+
+[lib]
+name = "voicepaste_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+flate2 = "1"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+log = "0.4"
+dirs = "6"
+rdev = "0.5"
+base64 = "0.22"
+regex = "1"
+url = "2"
+futures-util = "0.3"

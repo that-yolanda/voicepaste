@@ -1,0 +1,90 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/config.schema.json",
+  "productName": "VoicePaste",
+  "version": "1.2.0",
+  "identifier": "com.yolanda.voicepaste",
+  "build": {
+    "frontendDist": "../renderer",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "overlay",
+        "url": "index.html",
+        "title": "VoicePaste",
+        "width": 720,
+        "height": 300,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "visible": false,
+        "skipTaskbar": true,
+        "focusable": false,
+        "shadow": false
+      },
+      {
+        "label": "settings",
+        "url": "settings.html",
+        "title": "VoicePaste 配置",
+        "width": 860,
+        "height": 760,
+        "minWidth": 760,
+        "minHeight": 680,
+        "visible": true,
+        "decorations": true
+      }
+    ],
+    "trayIcon": {
+      "iconPath": "icons/trayTemplate.png",
+      "iconAsTemplate": true,
+      "id": "main-tray"
+    },
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' asset: https://asset.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../config.yaml.example": "config.yaml.example",
+      "../prompts.json.example": "prompts.json.example",
+      "../renderer/assets/start.mp3": "sounds/start.mp3",
+      "../renderer/assets/end.mp3": "sounds/end.mp3",
+      "icons/trayTemplate.png": "icons/trayTemplate.png",
+      "icons/trayTemplate@2x.png": "icons/trayTemplate@2x.png",
+      "icons/trayIcon.ico": "icons/trayIcon.ico"
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "entitlements": "entitlements.plist",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": []
+    }
+  }
+}

@@ -849,12 +849,14 @@
 
     try {
       const result = await window.voiceSettings.recordHotkey();
-      const keys = Array.isArray(result) ? result : result?.keys;
       const displayString = result?.displayString || "自定义快捷键";
+      // If result.hotkey is a string, save as string (compatible with global-shortcut plugin).
+      // Otherwise fall back to result.keys array (legacy uIOhook keycode format).
+      const hotkey = result?.hotkey || (Array.isArray(result) ? result : result?.keys);
 
-      if (keys && keys.length > 0) {
+      if (hotkey && (typeof hotkey === "string" || (Array.isArray(hotkey) && hotkey.length > 0))) {
         parsedConfig.app = parsedConfig.app || {};
-        parsedConfig.app.hotkey = keys;
+        parsedConfig.app.hotkey = typeof hotkey === "string" ? hotkey : hotkey;
         renderHotkeyDisplay(displayString);
         setHotkeyHint("", "");
         saveFormNow();

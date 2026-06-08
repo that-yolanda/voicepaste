@@ -374,6 +374,11 @@ async function startAudioCapture() {
 
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   const audioContext = new AudioContextCtor();
+  // WKWebView enforces autoplay policy — AudioContext starts suspended.
+  // Resume it explicitly so onaudioprocess will fire.
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
   const sourceNode = audioContext.createMediaStreamSource(stream);
   const processorNode = audioContext.createScriptProcessor(4096, 1, 1);
   state.pendingSamples = [];

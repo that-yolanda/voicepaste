@@ -13,7 +13,7 @@
     "url": "https://github.com/that-yolanda/voicepaste/issues"
   },
   "keywords": [
-    "electron",
+    "tauri",
     "voice",
     "speech-to-text",
     "asr",
@@ -22,120 +22,22 @@
     "doubao",
     "volcengine"
   ],
-  "main": "main/main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron .",
-    "pack": "node build/pack.js",
-    "lint": "biome lint ./main ./preload ./renderer",
-    "format": "biome format --write ./main ./preload ./renderer",
-    "check": "biome check --write ./main ./preload ./renderer",
-    "lint:ci": "biome ci ./main ./preload ./renderer",
-    "build:icons": "node build/extract-icons.js",
-    "postinstall": "node node_modules/.pnpm/electron@41.2.0/node_modules/electron/install.js"
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "start": "tauri dev",
+    "pack": "tauri build",
+    "lint": "biome lint ./renderer",
+    "format": "biome format --write ./renderer",
+    "check": "biome check --write ./renderer",
+    "lint:ci": "biome ci ./renderer"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
-    "@electron/notarize": "^3.1.1",
-    "electron": "^41.2.0",
-    "electron-builder": "^26.0.12"
+    "@tauri-apps/cli": "^2"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.79",
-    "@ai-sdk/deepseek": "^2.0.35",
-    "@ai-sdk/google": "^3.0.79",
-    "@ai-sdk/openai": "^3.0.65",
-    "@ai-sdk/openai-compatible": "^2.0.48",
-    "ai": "^6.0.191",
-    "electron-updater": "^6.8.3",
-    "eventsource-parser": "^3.0.8",
-    "lucide": "^1.14.0",
-    "ollama-ai-provider-v2": "^3.5.1",
-    "uiohook-napi": "^1.5.0",
-    "ws": "^8.20.0",
-    "yaml": "^2.8.3"
-  },
-  "build": {
-    "appId": "com.yolanda.voicepaste",
-    "productName": "VoicePaste",
-    "npmRebuild": false,
-    "afterSign": "build/afterSign.js",
-    "publish": {
-      "provider": "github",
-      "owner": "that-yolanda",
-      "repo": "voicepaste"
-    },
-    "files": [
-      "main/**/*",
-      "preload/**/*",
-      "renderer/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "config.yaml.example",
-        "to": "config.yaml.example"
-      },
-      {
-        "from": "prompts.json.example",
-        "to": "prompts.json.example"
-      },
-      {
-        "from": "build/icon.png",
-        "to": "icon.png"
-      },
-      {
-        "from": "build/trayTemplate.png",
-        "to": "trayTemplate.png"
-      },
-      {
-        "from": "build/trayTemplate@2x.png",
-        "to": "trayTemplate@2x.png"
-      },
-      {
-        "from": "build/trayIcon.ico",
-        "to": "trayIcon.ico"
-      },
-      {
-        "from": "renderer/assets/start.mp3",
-        "to": "sounds/start.mp3"
-      },
-      {
-        "from": "renderer/assets/end.mp3",
-        "to": "sounds/end.mp3"
-      }
-    ],
-    "mac": {
-      "icon": "build/icon.png",
-      "extendInfo": {
-        "NSMicrophoneUsageDescription": "用于录制你的语音并将识别结果粘贴到当前输入位置。"
-      },
-      "category": "public.app-category.productivity",
-      "hardenedRuntime": true,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
-    },
-    "win": {
-      "icon": "build/icon.ico",
-      "target": [
-        "nsis"
-      ],
-      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "VoicePaste",
-      "runAfterFinish": true,
-      "deleteAppDataOnUninstall": true
-    }
+    "lucide": "^1.14.0"
   }
 }

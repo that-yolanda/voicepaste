@@ -10,3 +10,7 @@ dist
 .env
 config.yaml
 prompts.json
+
+# Tauri build output
+src-tauri/target/
+src-tauri/Cargo.lock
