@@ -1,7 +1,7 @@
-use tauri::{AppHandle, State};
 use crate::app_state::AppHandle as AppState;
 use crate::config::PromptItem;
 use crate::paste;
+use tauri::{AppHandle, State};
 
 // Re-export paste::PasteResult for use in commands
 use paste::PasteResult;
@@ -13,7 +13,10 @@ pub async fn get_app_config(state: State<'_, AppState>) -> Result<serde_json::Va
     let hotkey = match &config.app.hotkey {
         serde_yaml::Value::String(s) => s.clone(),
         serde_yaml::Value::Sequence(arr) => {
-            let keys: Vec<String> = arr.iter().filter_map(|v| v.as_u64().map(|n| n.to_string())).collect();
+            let keys: Vec<String> = arr
+                .iter()
+                .filter_map(|v| v.as_u64().map(|n| n.to_string()))
+                .collect();
             keys.join("+")
         }
         _ => String::new(),
@@ -41,7 +44,10 @@ pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json:
     let hotkey = match &config.app.hotkey {
         serde_yaml::Value::String(s) => s.clone(),
         serde_yaml::Value::Sequence(arr) => {
-            let keys: Vec<String> = arr.iter().filter_map(|v| v.as_u64().map(|n| n.to_string())).collect();
+            let keys: Vec<String> = arr
+                .iter()
+                .filter_map(|v| v.as_u64().map(|n| n.to_string()))
+                .collect();
             keys.join("+")
         }
         _ => String::new(),
@@ -187,7 +193,10 @@ pub async fn get_history(
 
 /// Delete a history entry.
 #[tauri::command]
-pub async fn delete_history(state: State<'_, AppState>, ts: String) -> Result<serde_json::Value, String> {
+pub async fn delete_history(
+    state: State<'_, AppState>,
+    ts: String,
+) -> Result<serde_json::Value, String> {
     let mut stats = state.stats.lock().await;
     stats.delete_history(&ts);
     Ok(serde_json::json!({ "ok": true }))
@@ -204,7 +213,11 @@ pub async fn send_audio_chunk(
     static CHUNK_COUNT: AtomicU64 = AtomicU64::new(0);
     let n = CHUNK_COUNT.fetch_add(1, Ordering::Relaxed);
     if n == 0 || n % 50 == 0 {
-        eprintln!("[audio] received chunk #{} ({} bytes base64)", n, base64_chunk.len());
+        eprintln!(
+            "[audio] received chunk #{} ({} bytes base64)",
+            n,
+            base64_chunk.len()
+        );
     }
 
     let session = state.asr_session.lock().await;
@@ -234,11 +247,11 @@ pub async fn audio_stopped(state: State<'_, AppState>) -> Result<(), String> {
 
 /// Notify that audio warmup is ready.
 #[tauri::command]
-pub async fn audio_warmup_ready(
-    _app: AppHandle,
-    _state: State<'_, AppState>,
-) -> Result<(), String> {
-    // This is a simplified version — in production, transition to recording state
+pub async fn audio_warmup_ready(_app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let mut pending = state.pending_audio_warmup.lock().await;
+    if let Some(tx) = pending.take() {
+        let _ = tx.send(());
+    }
     Ok(())
 }
 
@@ -251,6 +264,10 @@ pub async fn audio_warmup_failed(
 ) -> Result<(), String> {
     let mut logger = state.logger.lock().await;
     logger.error("audio warmup failed", Some(&message));
+    let mut pending = state.pending_audio_warmup.lock().await;
+    if let Some(tx) = pending.take() {
+        drop(tx);
+    }
     Ok(())
 }
 
@@ -325,7 +342,10 @@ pub async fn open_accessibility_settings(app: AppHandle) -> Result<(), String> {
     {
         use tauri_plugin_shell::ShellExt;
         app.shell()
-            .open("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility", None)
+            .open(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+                None,
+            )
             .map_err(|e| format!("Failed to open accessibility settings: {}", e))
     }
 }
@@ -334,7 +354,8 @@ pub async fn open_accessibility_settings(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn select_sound_file(app: AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let file_path = app.dialog()
+    let file_path = app
+        .dialog()
         .file()
         .add_filter("音频文件", &["mp3", "wav", "ogg", "m4a", "aac", "flac"])
         .blocking_pick_file();
@@ -358,5 +379,9 @@ pub async fn get_log_path(state: State<'_, AppState>) -> Result<String, String> 
 /// Get the config file path.
 #[tauri::command]
 pub async fn get_config_path(state: State<'_, AppState>) -> Result<String, String> {
-    Ok(state.config_manager.config_path().to_string_lossy().to_string())
+    Ok(state
+        .config_manager
+        .config_path()
+        .to_string_lossy()
+        .to_string())
 }

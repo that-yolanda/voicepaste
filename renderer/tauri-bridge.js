@@ -5,9 +5,7 @@
  * Drop this <script> into both index.html and settings.html before app.js/settings.js.
  * It creates window.voiceOverlay and window.voiceSettings matching the Electron preload API.
  */
-(function () {
-  "use strict";
-
+(() => {
   const { invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
 
@@ -178,15 +176,29 @@
       const pressed = new Set();
 
       const keyNameMap = {
-        ControlLeft: "Control", ControlRight: "Control",
-        ShiftLeft: "Shift", ShiftRight: "Shift",
-        AltLeft: "Alt", AltRight: "Alt",
-        MetaLeft: "Command", MetaRight: "Command",
-        ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
-        Backspace: "Backspace", Tab: "Tab", Space: "Space",
-        Escape: "Escape", Enter: "Enter",
-        Delete: "Delete", Insert: "Insert",
-        Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+        ControlLeft: "Control",
+        ControlRight: "Control",
+        ShiftLeft: "Shift",
+        ShiftRight: "Shift",
+        AltLeft: "Alt",
+        AltRight: "Alt",
+        MetaLeft: "Command",
+        MetaRight: "Command",
+        ArrowUp: "Up",
+        ArrowDown: "Down",
+        ArrowLeft: "Left",
+        ArrowRight: "Right",
+        Backspace: "Backspace",
+        Tab: "Tab",
+        Space: "Space",
+        Escape: "Escape",
+        Enter: "Enter",
+        Delete: "Delete",
+        Insert: "Insert",
+        Home: "Home",
+        End: "End",
+        PageUp: "PageUp",
+        PageDown: "PageDown",
         CapsLock: "CapsLock",
       };
 
@@ -224,8 +236,12 @@
           e.stopPropagation();
 
           // Wait until the last modifier key is released to finalize
-          if (e.code.startsWith("Control") || e.code.startsWith("Shift") ||
-              e.code.startsWith("Alt") || e.code.startsWith("Meta")) {
+          if (
+            e.code.startsWith("Control") ||
+            e.code.startsWith("Shift") ||
+            e.code.startsWith("Alt") ||
+            e.code.startsWith("Meta")
+          ) {
             return;
           }
 
@@ -233,11 +249,15 @@
           const mods = [];
           let mainKey = "";
           for (const code of pressed) {
-            if (code.startsWith("Control")) { mods.push("Control"); }
-            else if (code.startsWith("Shift")) { mods.push("Shift"); }
-            else if (code.startsWith("Alt")) { mods.push("Alt"); }
-            else if (code.startsWith("Meta")) { mods.push("Command"); }
-            else {
+            if (code.startsWith("Control")) {
+              mods.push("Control");
+            } else if (code.startsWith("Shift")) {
+              mods.push("Shift");
+            } else if (code.startsWith("Alt")) {
+              mods.push("Alt");
+            } else if (code.startsWith("Meta")) {
+              mods.push("Command");
+            } else {
               mainKey = keyNameMap[code] || code.replace(/^(Key|Digit)/, "");
             }
           }

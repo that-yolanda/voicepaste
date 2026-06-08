@@ -146,8 +146,7 @@ impl StatsService {
                         if new_lines.is_empty() {
                             let _ = fs::remove_file(&file_path);
                         } else {
-                            let _ =
-                                fs::write(&file_path, format!("{}\n", new_lines.join("\n")));
+                            let _ = fs::write(&file_path, format!("{}\n", new_lines.join("\n")));
                         }
                     }
                 }

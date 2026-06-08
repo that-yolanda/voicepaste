@@ -30,6 +30,7 @@ pub struct AppInner {
     pub asr_events: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<AsrEvent>>>,
     #[allow(dead_code)]
     pub pending_audio_stop: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    pub pending_audio_warmup: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     #[allow(dead_code)]
     pub active_prompt_id: Mutex<Option<String>>,
     #[allow(dead_code)]
@@ -60,6 +61,7 @@ pub fn create_app_state(
         asr_session: Mutex::new(None),
         asr_events: Mutex::new(None),
         pending_audio_stop: Mutex::new(None),
+        pending_audio_warmup: Mutex::new(None),
         active_prompt_id: Mutex::new(None),
         ws_ready: false,
         audio_warmup_ready: false,

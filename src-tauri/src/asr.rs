@@ -18,7 +18,12 @@ use crate::config::{AudioConfig, ConnectionConfig, RequestConfig};
 
 /// Build the 4-byte binary header for the Doubao ASR protocol.
 fn build_header(message_type: u8, flags: u8, serialization: u8, compression: u8) -> [u8; 4] {
-    [0x11, (message_type << 4) | (flags & 0x0f), (serialization << 4) | (compression & 0x0f), 0x00]
+    [
+        0x11,
+        (message_type << 4) | (flags & 0x0f),
+        (serialization << 4) | (compression & 0x0f),
+        0x00,
+    ]
 }
 
 #[allow(dead_code)]
@@ -75,11 +80,19 @@ fn parse_server_response(buffer: &[u8]) -> Option<Value> {
             return None;
         }
 
-        let error_code =
-            u32::from_be_bytes([buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]]);
+        let error_code = u32::from_be_bytes([
+            buffer[offset],
+            buffer[offset + 1],
+            buffer[offset + 2],
+            buffer[offset + 3],
+        ]);
         offset += 4;
-        let error_size =
-            u32::from_be_bytes([buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]]);
+        let error_size = u32::from_be_bytes([
+            buffer[offset],
+            buffer[offset + 1],
+            buffer[offset + 2],
+            buffer[offset + 3],
+        ]);
         offset += 4;
 
         if buffer.len() < offset + error_size as usize {
@@ -115,8 +128,12 @@ fn parse_server_response(buffer: &[u8]) -> Option<Value> {
         return None;
     }
 
-    let payload_size =
-        u32::from_be_bytes([buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]]);
+    let payload_size = u32::from_be_bytes([
+        buffer[offset],
+        buffer[offset + 1],
+        buffer[offset + 2],
+        buffer[offset + 3],
+    ]);
     offset += 4;
 
     if buffer.len() < offset + payload_size as usize {
@@ -169,6 +186,43 @@ fn parse_server_response(buffer: &[u8]) -> Option<Value> {
 
 #[allow(dead_code)]
 /// Build the API request body from config.
+fn is_empty_yaml_value(value: &serde_yaml::Value) -> bool {
+    match value {
+        serde_yaml::Value::Null => true,
+        serde_yaml::Value::String(text) => text.trim().is_empty(),
+        serde_yaml::Value::Sequence(items) => items.is_empty(),
+        serde_yaml::Value::Mapping(items) => items.is_empty(),
+        _ => false,
+    }
+}
+
+fn parse_context_hotwords(value: &serde_yaml::Value) -> Vec<Value> {
+    match value {
+        serde_yaml::Value::String(text) => text
+            .split(',')
+            .map(str::trim)
+            .filter(|item| !item.is_empty())
+            .map(|word| json!({ "word": word }))
+            .collect(),
+        serde_yaml::Value::Sequence(items) => items
+            .iter()
+            .filter_map(|item| {
+                if let Some(word) = item.as_str().map(str::trim).filter(|word| !word.is_empty()) {
+                    return Some(json!({ "word": word }));
+                }
+                let word = item
+                    .as_mapping()
+                    .and_then(|map| map.get(serde_yaml::Value::String("word".to_string())))
+                    .and_then(|word| word.as_str())
+                    .map(str::trim)
+                    .filter(|word| !word.is_empty())?;
+                Some(json!({ "word": word }))
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 fn build_api_request_body(audio_config: &AudioConfig, request_config: &RequestConfig) -> Value {
     let mut audio = serde_json::Map::new();
     audio.insert("format".to_string(), json!(audio_config.format));
@@ -178,13 +232,19 @@ fn build_api_request_body(audio_config: &AudioConfig, request_config: &RequestCo
 
     let mut request = serde_json::Map::new();
     request.insert("model_name".to_string(), json!(request_config.model_name));
-    request.insert("model_version".to_string(), json!(request_config.model_version));
+    request.insert(
+        "model_version".to_string(),
+        json!(request_config.model_version),
+    );
     request.insert("operation".to_string(), json!(request_config.operation));
     request.insert("sequence".to_string(), json!(request_config.sequence));
     request.insert("enable_itn".to_string(), json!(request_config.enable_itn));
     request.insert("enable_punc".to_string(), json!(request_config.enable_punc));
     request.insert("enable_ddc".to_string(), json!(request_config.enable_ddc));
-    request.insert("show_utterances".to_string(), json!(request_config.show_utterances));
+    request.insert(
+        "show_utterances".to_string(),
+        json!(request_config.show_utterances),
+    );
     request.insert("result_type".to_string(), json!(request_config.result_type));
 
     if let Some(v) = request_config.end_window_size {
@@ -204,6 +264,41 @@ fn build_api_request_body(audio_config: &AudioConfig, request_config: &RequestCo
     }
     if let Some(v) = request_config.enable_accelerate_text {
         request.insert("enable_accelerate_text".to_string(), json!(v));
+    }
+    if let Some(corpus_value) = &request_config.corpus {
+        if let Some(corpus) = corpus_value.as_mapping() {
+            let mut corpus_json = serde_json::Map::new();
+            let mut context_hotwords = Vec::new();
+
+            for (key, value) in corpus {
+                let Some(key) = key.as_str() else {
+                    continue;
+                };
+                if key == "context_hotwords" {
+                    context_hotwords = parse_context_hotwords(value);
+                    continue;
+                }
+                if is_empty_yaml_value(value) {
+                    continue;
+                }
+                if let Ok(json_value) = serde_json::to_value(value) {
+                    if !json_value.is_null() {
+                        corpus_json.insert(key.to_string(), json_value);
+                    }
+                }
+            }
+
+            if !context_hotwords.is_empty() {
+                corpus_json.insert(
+                    "context".to_string(),
+                    json!(serde_json::json!({ "hotwords": context_hotwords }).to_string()),
+                );
+            }
+
+            if !corpus_json.is_empty() {
+                request.insert("corpus".to_string(), Value::Object(corpus_json));
+            }
+        }
     }
 
     json!({
@@ -238,9 +333,15 @@ fn clean_asr_text(text: &str) -> String {
 fn is_punctuation(ch: char) -> bool {
     matches!(
         ch,
-        '，' | '。' | '！' | '？'
-            | '、' | '；' | '：'
-            | '…' | '—' | '·'
+        '，' | '。'
+            | '！'
+            | '？'
+            | '、'
+            | '；'
+            | '：'
+            | '…'
+            | '—'
+            | '·'
             | ' '
             | ','
             | '.'
@@ -289,9 +390,15 @@ pub struct TranscriptUpdate {
 #[derive(Debug, Clone)]
 pub enum AsrEvent {
     Open,
-    Transcript { final_text: String, partial_text: String },
+    Transcript {
+        final_text: String,
+        partial_text: String,
+    },
     Error(String),
-    Close { code: u16, reason: String },
+    Close {
+        code: u16,
+        reason: String,
+    },
 }
 
 /// Running ASR session state.
@@ -304,7 +411,16 @@ pub struct AsrSession {
     partial_text: Arc<Mutex<String>>,
     #[allow(dead_code)]
     latest_result_text: Arc<Mutex<String>>,
-    sender: Arc<Mutex<Option<futures_util::stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
+    sender: Arc<
+        Mutex<
+            Option<
+                futures_util::stream::SplitSink<
+                    WebSocketStream<MaybeTlsStream<TcpStream>>,
+                    Message,
+                >,
+            >,
+        >,
+    >,
     #[allow(dead_code)]
     event_tx: mpsc::UnboundedSender<AsrEvent>,
     #[allow(dead_code)]
@@ -341,7 +457,8 @@ impl AsrSession {
         if self.is_committed.load(std::sync::atomic::Ordering::SeqCst) {
             return Err("录音已结束".to_string());
         }
-        self.is_committed.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.is_committed
+            .store(true, std::sync::atomic::Ordering::SeqCst);
 
         // Send last-audio frame
         let frame = encode_audio_only_request(&[], true);
@@ -367,7 +484,8 @@ impl AsrSession {
     }
 
     pub fn close(&self) {
-        self.is_ready.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.is_ready
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         let sender = self.sender.clone();
         tokio::spawn(async move {
             if let Some(ref mut sink) = *sender.lock().await {
@@ -414,12 +532,14 @@ pub async fn create_asr_session(
     let connect_id = Uuid::new_v4().to_string();
 
     // Build URL with request_id
-    let mut url = url::Url::parse(&connection.url)
-        .map_err(|e| format!("Invalid ASR URL: {}", e))?;
+    let mut url =
+        url::Url::parse(&connection.url).map_err(|e| format!("Invalid ASR URL: {}", e))?;
     url.query_pairs_mut().append_pair("request_id", &connect_id);
 
     // Build request with custom headers
-    let mut request = url.as_str().into_client_request()
+    let mut request = url
+        .as_str()
+        .into_client_request()
         .map_err(|e| format!("Failed to create WebSocket request: {}", e))?;
 
     let headers = request.headers_mut();
@@ -439,7 +559,8 @@ pub async fn create_asr_session(
     let request_body = build_api_request_body(audio_config, request_config);
     let init_frame = encode_full_client_request(&request_body);
     let mut sink = sink;
-    sink.send(Message::Binary(init_frame.into())).await
+    sink.send(Message::Binary(init_frame.into()))
+        .await
         .map_err(|e| format!("Failed to send ASR init request: {}", e))?;
 
     // Create session state
@@ -475,7 +596,10 @@ pub async fn create_asr_session(
                     if let Some(payload) = parse_server_response(buffer) {
                         // Debug: log non-audio response payloads to diagnose ASR errors
                         if !payload.get("raw_text").is_some() {
-                            eprintln!("[asr] server response: {}", serde_json::to_string(&payload).unwrap_or_default());
+                            eprintln!(
+                                "[asr] server response: {}",
+                                serde_json::to_string(&payload).unwrap_or_default()
+                            );
                         }
 
                         // Handle different response types
@@ -494,7 +618,8 @@ pub async fn create_asr_session(
                                 continue;
                             }
                             if !cleaned.is_empty() {
-                                let committed = is_committed.load(std::sync::atomic::Ordering::SeqCst);
+                                let committed =
+                                    is_committed.load(std::sync::atomic::Ordering::SeqCst);
                                 if committed {
                                     *final_text.lock().await = cleaned.to_string();
                                     let _ = event_tx_clone.send(AsrEvent::Transcript {
@@ -517,10 +642,14 @@ pub async fn create_asr_session(
                         // Error response
                         if let Some(code) = payload.get("code").and_then(|v| v.as_u64()) {
                             if code != 20000000 {
-                                eprintln!("[asr] binary response payload: {}", serde_json::to_string(&payload).unwrap_or_default());
+                                eprintln!(
+                                    "[asr] binary response payload: {}",
+                                    serde_json::to_string(&payload).unwrap_or_default()
+                                );
                                 let message = payload
                                     .get("message")
                                     .or_else(|| payload.get("msg"))
+                                    .or_else(|| payload.get("error"))
                                     .and_then(|v| v.as_str())
                                     .map(|m| format!("ASR error {}: {}", code, m))
                                     .unwrap_or_else(|| format!("ASR error code {}", code));
@@ -532,7 +661,11 @@ pub async fn create_asr_session(
                         // Result response
                         if let Some(result) = payload.get("result") {
                             let result_text = clean_asr_text(
-                                result.get("text").and_then(|v| v.as_str()).unwrap_or("").trim(),
+                                result
+                                    .get("text")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .trim(),
                             );
                             if !result_text.is_empty() {
                                 *latest_result_text.lock().await = result_text.clone();
@@ -547,14 +680,42 @@ pub async fn create_asr_session(
                                 if let Some(arr) = utterances.clone() {
                                     let completed: String = arr
                                         .iter()
-                                        .filter(|u| u.get("definite").and_then(|v| v.as_bool()).unwrap_or(false))
-                                        .filter_map(|u| u.get("text").and_then(|v| v.as_str()).map(|s| s.trim()))
+                                        .filter(|u| {
+                                            u.get("definite")
+                                                .and_then(|v| v.as_bool())
+                                                .unwrap_or(false)
+                                        })
+                                        .filter_map(|u| {
+                                            u.get("text").and_then(|v| v.as_str()).map(|s| s.trim())
+                                        })
                                         .collect::<Vec<&str>>()
                                         .join("");
 
                                     if !completed.is_empty() {
                                         *final_text.lock().await = completed.to_string();
                                     }
+
+                                    let streaming_partial: String = arr
+                                        .iter()
+                                        .filter(|u| {
+                                            !u.get("definite")
+                                                .and_then(|v| v.as_bool())
+                                                .unwrap_or(false)
+                                        })
+                                        .filter_map(|u| {
+                                            u.get("text").and_then(|v| v.as_str()).map(|s| s.trim())
+                                        })
+                                        .collect::<Vec<&str>>()
+                                        .join("");
+
+                                    let next_partial = if completed.is_empty() {
+                                        result_text.clone()
+                                    } else if let Some(rest) = result_text.strip_prefix(&completed)
+                                    {
+                                        rest.trim().to_string()
+                                    } else {
+                                        streaming_partial
+                                    };
 
                                     if committed {
                                         *partial_text.lock().await = String::new();
@@ -563,6 +724,7 @@ pub async fn create_asr_session(
                                             partial_text: String::new(),
                                         });
                                     } else {
+                                        *partial_text.lock().await = next_partial;
                                         let ft = final_text.lock().await.clone();
                                         let pt = partial_text.lock().await.clone();
                                         let _ = event_tx_clone.send(AsrEvent::Transcript {
@@ -592,7 +754,11 @@ pub async fn create_asr_session(
                             if committed {
                                 if let Some(arr) = utterances {
                                     if let Some(last) = arr.last() {
-                                        if last.get("definite").and_then(|v| v.as_bool()).unwrap_or(false) {
+                                        if last
+                                            .get("definite")
+                                            .and_then(|v| v.as_bool())
+                                            .unwrap_or(false)
+                                        {
                                             let text = latest_result_text.lock().await.clone();
                                             *final_text.lock().await = text.clone();
                                             *partial_text.lock().await = String::new();

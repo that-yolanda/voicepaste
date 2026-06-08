@@ -18,14 +18,38 @@ struct ProviderDefaults {
 #[allow(dead_code)]
 fn get_provider_defaults(provider: &str) -> ProviderDefaults {
     match provider {
-        "deepseek" => ProviderDefaults { default_url: "", default_model: "deepseek-v4-flash" },
-        "openai" => ProviderDefaults { default_url: "", default_model: "gpt-4.1-mini" },
-        "anthropic" => ProviderDefaults { default_url: "", default_model: "claude-3-5-haiku-latest" },
-        "gemini" => ProviderDefaults { default_url: "", default_model: "gemini-2.5-flash-lite" },
-        "openrouter" => ProviderDefaults { default_url: "https://openrouter.ai/api/v1", default_model: "openai/gpt-4o-mini" },
-        "siliconflow" => ProviderDefaults { default_url: "https://api.siliconflow.cn/v1", default_model: "deepseek-ai/DeepSeek-V3" },
-        "ollama" => ProviderDefaults { default_url: "http://localhost:11434/api", default_model: "llama3.1" },
-        _ => ProviderDefaults { default_url: "", default_model: "" },
+        "deepseek" => ProviderDefaults {
+            default_url: "",
+            default_model: "deepseek-v4-flash",
+        },
+        "openai" => ProviderDefaults {
+            default_url: "",
+            default_model: "gpt-4.1-mini",
+        },
+        "anthropic" => ProviderDefaults {
+            default_url: "",
+            default_model: "claude-3-5-haiku-latest",
+        },
+        "gemini" => ProviderDefaults {
+            default_url: "",
+            default_model: "gemini-2.5-flash-lite",
+        },
+        "openrouter" => ProviderDefaults {
+            default_url: "https://openrouter.ai/api/v1",
+            default_model: "openai/gpt-4o-mini",
+        },
+        "siliconflow" => ProviderDefaults {
+            default_url: "https://api.siliconflow.cn/v1",
+            default_model: "deepseek-ai/DeepSeek-V3",
+        },
+        "ollama" => ProviderDefaults {
+            default_url: "http://localhost:11434/api",
+            default_model: "llama3.1",
+        },
+        _ => ProviderDefaults {
+            default_url: "",
+            default_model: "",
+        },
     }
 }
 
@@ -45,9 +69,21 @@ fn get_active_provider_config(config: &LlmConfig) -> (String, String, String) {
 
     let (url, api_key, model) = if let Some(pc) = provider_config {
         (
-            if pc.url.is_empty() { config.url.clone().unwrap_or_default() } else { pc.url.clone() },
-            if pc.api_key.is_empty() { config.api_key.clone().unwrap_or_default() } else { pc.api_key.clone() },
-            if pc.model.is_empty() { config.model.clone().unwrap_or_default() } else { pc.model.clone() },
+            if pc.url.is_empty() {
+                config.url.clone().unwrap_or_default()
+            } else {
+                pc.url.clone()
+            },
+            if pc.api_key.is_empty() {
+                config.api_key.clone().unwrap_or_default()
+            } else {
+                pc.api_key.clone()
+            },
+            if pc.model.is_empty() {
+                config.model.clone().unwrap_or_default()
+            } else {
+                pc.model.clone()
+            },
         )
     } else {
         (
@@ -73,7 +109,11 @@ fn normalize_base_url(url: &str) -> String {
 #[allow(dead_code)]
 /// Call LLM API using OpenAI-compatible chat completion format.
 /// All providers are accessed via the /chat/completions endpoint.
-pub async fn call_llm_api(config: &LlmConfig, text: &str, system_prompt: &str) -> Result<String, String> {
+pub async fn call_llm_api(
+    config: &LlmConfig,
+    text: &str,
+    system_prompt: &str,
+) -> Result<String, String> {
     let provider_id = &config.provider;
     let defaults = get_provider_defaults(provider_id);
     let (provider_url, api_key, model_name) = get_active_provider_config(config);

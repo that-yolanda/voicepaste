@@ -497,6 +497,7 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       break;
     case "recording:start":
       try {
+        state.appState = "recording";
         state.audioReady = false;
         await startAudioCapture();
         startWaveformAnimation();

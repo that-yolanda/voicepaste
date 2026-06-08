@@ -33,7 +33,7 @@ pub fn rdev_key_to_uiohook_keycode(key: &Key) -> Option<u32> {
         Key::ControlRight => 0x009D,
         Key::Alt => 0x0038,
         Key::AltGr => 0x0138,
-        Key::MetaLeft => 0x0037,  // Command/Windows
+        Key::MetaLeft => 0x0037, // Command/Windows
         Key::MetaRight => 0x00D7,
         Key::UpArrow => 0x0067,
         Key::DownArrow => 0x006C,

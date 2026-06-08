@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="icon-clip">
+      <rect x="112" y="112" width="800" height="800" rx="188" ry="188"/>
+    </clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="none"/>
+  <image href="../build/icon.png" x="112" y="112" width="800" height="800" preserveAspectRatio="xMidYMid slice" clip-path="url(#icon-clip)"/>
+</svg>

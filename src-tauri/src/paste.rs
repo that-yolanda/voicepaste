@@ -107,10 +107,7 @@ pub fn play_sound(file_path: &str) {
         let _ = Command::new("afplay").arg(file_path).spawn();
     } else {
         let escaped = file_path.replace('\'', "''");
-        let script = format!(
-            "(New-Object Media.SoundPlayer '{}').PlaySync()",
-            escaped
-        );
+        let script = format!("(New-Object Media.SoundPlayer '{}').PlaySync()", escaped);
         let _ = Command::new("powershell.exe")
             .args(["-NoProfile", "-Command", &script])
             .spawn();
