@@ -5,6 +5,12 @@ exports.default = async function notarizing(context) {
   const { electronPlatformName, appOutDir } = context;
   if (electronPlatformName !== "darwin") return;
 
+  // Skip notarization when code signing is disabled (pack without -s)
+  if (process.env.CSC_IDENTITY_AUTO_DISCOVERY === "false") {
+    console.log("Skipping notarization: code signing is disabled");
+    return;
+  }
+
   loadDotEnv();
 
   const appleId = process.env.APPLE_ID;
