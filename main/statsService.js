@@ -167,6 +167,44 @@ function getHistory(daysBack) {
   return allItems;
 }
 
+function deleteHistory(ts) {
+  ensureHistoryDir();
+  const d = new Date(ts);
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const filePath = path.join(historyDir, `${key}.jsonl`);
+
+  if (fs.existsSync(filePath)) {
+    try {
+      const raw = fs.readFileSync(filePath, "utf8").trim();
+      if (raw) {
+        const lines = raw.split("\n");
+        const newLines = lines.filter((line) => {
+          try {
+            const item = JSON.parse(line);
+            return item.ts !== ts;
+          } catch {
+            return true;
+          }
+        });
+        if (newLines.length !== lines.length) {
+          if (newLines.length === 0) {
+            fs.unlinkSync(filePath);
+          } else {
+            fs.writeFileSync(filePath, `${newLines.join("\n")}\n`, "utf8");
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[StatsService] failed to delete history for ${ts}`, err);
+    }
+  }
+
+  const idx = historyBuffer.findIndex((item) => item.ts === ts);
+  if (idx !== -1) {
+    historyBuffer.splice(idx, 1);
+  }
+}
+
 function closeStatsService() {
   if (flushTimer) {
     clearTimeout(flushTimer);
@@ -181,5 +219,6 @@ module.exports = {
   recordSession,
   getStats,
   getHistory,
+  deleteHistory,
   closeStatsService,
 };

@@ -33,7 +33,13 @@ const { createAsrSession } = require("./asrService");
 const { pasteTextToFocusedElement } = require("./pasteService");
 const { structureText } = require("./llmService");
 const { logInfo, logError, resolveLogPath, closeLogger } = require("./logger");
-const { initStatsService, recordSession, getStats, getHistory } = require("./statsService");
+const {
+  initStatsService,
+  recordSession,
+  getStats,
+  getHistory,
+  deleteHistory,
+} = require("./statsService");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
 const {
   initUpdateService,
@@ -554,6 +560,28 @@ function getHotkey() {
   return currentConfig.app.hotkey;
 }
 
+function getOverlayStyle() {
+  return currentConfig.app?.overlay_style === "vibrancy" ? "vibrancy" : "liquid";
+}
+
+// Resolved light/dark variant for the macOS Liquid Glass overlay.
+// "auto" follows the live system appearance; "light"/"dark" pin it so an
+// in-progress transcription is never affected by a system theme switch.
+function getOverlayGlassVariant() {
+  const mode = currentConfig.app?.overlay_glass_mode;
+  if (mode === "light") return "light";
+  if (mode === "dark") return "dark";
+  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+}
+
+function getOverlayAppearance() {
+  return {
+    platform: process.platform,
+    overlayStyle: getOverlayStyle(),
+    glass: getOverlayGlassVariant(),
+  };
+}
+
 function getAccessibilityStatus() {
   if (process.platform !== "darwin") {
     return "granted";
@@ -898,23 +926,31 @@ async function finishRecordingFlow() {
 
   logInfo("finish recording flow");
 
-  if (!asrSession?.isReady()) {
-    logError("finish failed because asr not ready");
+  setState("finishing");
+  sendOverlayMessage("recording:stop");
+  await waitForRendererAudioStop();
+
+  // Capture the session locally: the global asrSession can be nulled by the
+  // onClose handler while we await the commit (e.g. when the user stops right
+  // after starting and the socket closes early). The closure keeps the
+  // transcript readable even after the global reference is cleared.
+  const session = asrSession;
+  if (!session?.isReady()) {
+    // Session dropped before any audio was recognized — nothing to paste.
+    // End quietly instead of surfacing it as an error.
+    logInfo("finish: session dropped before commit");
     await cleanupSession();
+    resetTranscript();
     hideOverlay();
     setState("idle");
     activeSessionPromptId = null;
     return;
   }
 
-  setState("finishing");
-  sendOverlayMessage("recording:stop");
-  await waitForRendererAudioStop();
-
   try {
-    const finalText = await asrSession.commitAndAwaitFinal();
+    const finalText = await session.commitAndAwaitFinal();
     expectingSessionClose = true;
-    const transcriptSnapshot = asrSession.getTranscriptSnapshot();
+    const transcriptSnapshot = session.getTranscriptSnapshot();
     let textToPaste = (
       transcriptSnapshot.latestResultText ||
       finalText ||
@@ -1088,6 +1124,8 @@ function registerShortcuts() {
 
 function reloadRuntimeConfig() {
   currentConfig = loadConfig();
+  // Reflect overlay appearance changes live without restarting recording logic.
+  sendOverlayMessage("appearance", getOverlayAppearance());
 }
 
 function resolveTheme() {
@@ -1247,6 +1285,12 @@ app.whenReady().then(() => {
 
   ipcMain.handle("app:get-config", () => ({
     hotkey: getHotkey(),
+    ...getOverlayAppearance(),
+    sound: {
+      enabled: currentConfig.app?.sound?.enabled !== false,
+      start_sound: currentConfig.app?.sound?.start_sound || "",
+      end_sound: currentConfig.app?.sound?.end_sound || "",
+    },
   }));
 
   ipcMain.handle("settings:get-login-item", () => {
@@ -1451,6 +1495,11 @@ app.whenReady().then(() => {
         payload: { resolved },
       });
     }
+    // Keep the overlay's Liquid Glass light/dark variant in sync when the
+    // system appearance flips (only changes anything in "auto" glass mode).
+    // This is a pure CSS class swap in the overlay — it never interrupts an
+    // in-progress transcription.
+    sendOverlayMessage("appearance", getOverlayAppearance());
   });
 
   ipcMain.handle("settings:set-theme", async (_event, preference) => {
@@ -1471,6 +1520,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("stats:get-history", async (_event, daysBack) => {
     return getHistory(daysBack || 3);
+  });
+
+  ipcMain.handle("stats:delete-history", async (_event, ts) => {
+    return deleteHistory(ts);
   });
 
   ipcMain.handle("prompts:load", () => {

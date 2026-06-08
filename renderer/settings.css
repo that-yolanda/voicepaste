@@ -1211,6 +1211,49 @@ kbd {
   margin-top: -1px;
 }
 
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.history-item:hover .history-actions {
+  opacity: 1;
+}
+
+.history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.history-btn.delete-btn:hover {
+  color: var(--error);
+}
+
+.history-btn .nav-icon {
+  width: 14px;
+  height: 14px;
+}
+.history-btn .nav-icon svg {
+  width: 14px;
+  height: 14px;
+}
 .history-date-divider:first-child {
   margin-top: 0;
 }

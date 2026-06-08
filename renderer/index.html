@@ -12,37 +12,38 @@
   </head>
   <body>
     <main class="overlay">
-      <section class="stage" id="stage" data-state="idle">
-        <div class="bubble" id="bubble" data-wrap="single">
-          <div class="transcript" id="transcript">
-            <span class="final-text" id="finalText"></span>
-            <span class="partial-text" id="partialText"></span>
-          </div>
-          <div class="hint" id="hint" data-variant="text" data-visible="false">
-            <span class="hint-label" id="hintLabel"></span>
-            <span class="hint-progress" id="hintProgress" aria-hidden="true">
-              <span class="hint-progress-bar"></span>
-            </span>
-          </div>
-        </div>
+      <section class="stage" id="stage" data-state="idle" data-mode="transcript">
+        <div class="bubble pill platform-mac" id="bubble" data-wrap="single">
+          <span class="indicator" id="indicator" aria-hidden="true">
+            <span class="ind-dot"></span>
+            <svg class="ind-spinner" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <circle class="track" cx="8" cy="8" r="6.5"></circle>
+              <circle class="arc" cx="8" cy="8" r="6.5"></circle>
+            </svg>
+          </span>
 
-        <div class="waveform-slot" id="waveformSlot" aria-hidden="true">
-          <div class="status-bars" id="statusBars" data-active="false">
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
-            <span class="status-bar"></span>
+          <div class="body" id="body">
+            <div class="transcript" id="transcript">
+              <span class="final-text" id="finalText"></span>
+              <span class="partial-text" id="partialText"></span>
+            </div>
+            <div class="hint" id="hint" data-variant="text" data-visible="false">
+              <span class="hint-label" id="hintLabel"></span>
+            </div>
           </div>
+
+          <span class="wave" id="waveformSlot" aria-hidden="true">
+            <span class="status-bars" id="statusBars" data-active="false">
+              <span class="status-bar"></span>
+              <span class="status-bar"></span>
+              <span class="status-bar"></span>
+              <span class="status-bar"></span>
+            </span>
+          </span>
         </div>
       </section>
     </main>
     <div class="measure-text" id="measureText"></div>
     <script src="./app.js"></script>
   </body>
-  </html>
+</html>

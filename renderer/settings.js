@@ -5,6 +5,9 @@
   let isDirty = false;
   let currentThemePreference = "system";
   let currentHotkeyMode = "toggle";
+  let currentOverlayStyle = "liquid";
+  let currentOverlayGlassMode = "auto";
+  let currentPlatform = "";
   let currentLlmProvider = "deepseek";
   let hasAutoCheckedUpdates = false;
 
@@ -98,6 +101,10 @@
     promptHotkeyList: $("promptHotkeyList"),
     configPath: $("configPath"),
     autoStart: $("autoStart"),
+    overlayStyleRow: $("overlayStyleRow"),
+    overlayStyleSelector: $("overlayStyleSelector"),
+    overlayGlassModeRow: $("overlayGlassModeRow"),
+    overlayGlassModeSelector: $("overlayGlassModeSelector"),
     micDot: $("micDot"),
     micText: $("micText"),
     checkMicBtn: $("checkMicBtn"),
@@ -361,6 +368,32 @@
     });
   }
 
+  function updateOverlayGlassModeVisibility() {
+    if (!el.overlayGlassModeRow) return;
+    // The light/dark glass variant only applies to the macOS Liquid Glass UI,
+    // so hide it on non-macOS and when the Vibrancy backup is selected.
+    const show = currentPlatform === "darwin" && currentOverlayStyle === "liquid";
+    el.overlayGlassModeRow.style.display = show ? "" : "none";
+  }
+
+  function setOverlayStyle(style) {
+    currentOverlayStyle = style === "vibrancy" ? "vibrancy" : "liquid";
+    if (el.overlayStyleSelector) {
+      el.overlayStyleSelector.querySelectorAll(".seg-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.val === currentOverlayStyle);
+      });
+    }
+    updateOverlayGlassModeVisibility();
+  }
+
+  function setOverlayGlassMode(mode) {
+    currentOverlayGlassMode = ["light", "dark"].includes(mode) ? mode : "auto";
+    if (!el.overlayGlassModeSelector) return;
+    el.overlayGlassModeSelector.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.val === currentOverlayGlassMode);
+    });
+  }
+
   function setHotkeyHint(text, level) {
     el.hotkeyHint.textContent = text;
     el.hotkeyHintRow.style.display = text ? "" : "none";
@@ -460,6 +493,13 @@
 
     el.configPath.textContent = data.configPath || "-";
 
+    currentPlatform = data.runtime?.platform || currentPlatform;
+    setOverlayGlassMode(c.app?.overlay_glass_mode);
+    setOverlayStyle(c.app?.overlay_style); // also refreshes glass-mode row visibility
+    if (currentPlatform !== "darwin" && el.overlayStyleRow) {
+      el.overlayStyleRow.style.display = "none";
+    }
+
     if (data.runtime?.platform !== "darwin" && el.accessibilityRow) {
       el.accessibilityRow.style.display = "none";
     }
@@ -531,6 +571,8 @@
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
     config.app.theme = currentThemePreference;
+    config.app.overlay_style = currentOverlayStyle;
+    config.app.overlay_glass_mode = currentOverlayGlassMode;
     config.app.sound = {
       enabled: el.soundEnabled.checked,
       start_sound: el.startSoundName.dataset.path || "",
@@ -1129,7 +1171,63 @@
       const row = document.createElement("div");
       row.className = "history-item";
       const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-      row.innerHTML = `<span class="history-time">${time}</span><div class="history-content"><div class="history-text">${escapeHtml(item.text)}</div></div>`;
+      row.innerHTML = `
+        <span class="history-time">${time}</span>
+        <div class="history-content">
+          <div class="history-text">${escapeHtml(item.text)}</div>
+        </div>
+        <div class="history-actions">
+          <button type="button" class="history-btn copy-btn" title="复制">
+            <span class="nav-icon" data-icon="copy"></span>
+          </button>
+          <button type="button" class="history-btn delete-btn" title="删除">
+            <span class="nav-icon" data-icon="trash-2"></span>
+          </button>
+        </div>
+      `;
+
+      // Wait for elements to be inserted or query them directly from the unattached row
+      const copyBtn = row.querySelector(".copy-btn");
+      const deleteBtn = row.querySelector(".delete-btn");
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(item.text);
+          const iconSpan = copyBtn.querySelector(".nav-icon");
+          const originalHTML = iconSpan.innerHTML;
+          iconSpan.innerHTML = '<span style="font-size:12px;font-weight:bold;">✓</span>';
+          setTimeout(() => {
+            iconSpan.innerHTML = originalHTML;
+          }, 1500);
+        } catch (err) {
+          console.error("Failed to copy", err);
+        }
+      });
+
+      deleteBtn.addEventListener("click", async () => {
+        try {
+          await window.voiceSettings.deleteHistory(item.ts);
+          row.style.opacity = "0";
+          row.style.height = "0";
+          row.style.padding = "0";
+          row.style.minHeight = "0";
+          row.style.overflow = "hidden";
+          setTimeout(() => {
+            row.remove();
+          }, 200);
+        } catch (err) {
+          console.error("Failed to delete", err);
+        }
+      });
+
+      // Must call initIcons on the row so Lucide SVG is injected
+      const icons = row.querySelectorAll("[data-icon]");
+      icons.forEach((el) => {
+        const name = el.dataset.icon;
+        const svg = icon(name);
+        if (svg) el.innerHTML = svg;
+      });
+
       container.appendChild(row);
     }
 
@@ -1229,6 +1327,26 @@ SOFTWARE.`;
     setHotkeyMode(btn.dataset.val);
     saveFormNow();
   });
+
+  // Overlay glass style (macOS only)
+  if (el.overlayStyleSelector) {
+    el.overlayStyleSelector.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      setOverlayStyle(btn.dataset.val);
+      saveFormNow();
+    });
+  }
+
+  // Liquid Glass light/dark mode (macOS Liquid Glass only)
+  if (el.overlayGlassModeSelector) {
+    el.overlayGlassModeSelector.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      setOverlayGlassMode(btn.dataset.val);
+      saveFormNow();
+    });
+  }
 
   // Auto-start
   el.autoStart.addEventListener("change", async () => {
