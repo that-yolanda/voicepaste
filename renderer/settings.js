@@ -1261,8 +1261,16 @@
       /* ignore */
     }
 
-    _historyDaysBack = 3;
-    await loadHistory(_historyDaysBack);
+    // Start with 3 days; auto-expand if no records found (up to 30 days)
+    let daysBack = 3;
+    let items = await window.voiceSettings.getHistory(daysBack);
+    while ((!items || items.length === 0) && daysBack < 30) {
+      daysBack += 3;
+      items = await window.voiceSettings.getHistory(daysBack);
+    }
+
+    _historyDaysBack = daysBack;
+    renderHistory(items);
   }
 
   // ===== License =====
