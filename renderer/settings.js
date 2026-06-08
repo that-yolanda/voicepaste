@@ -378,7 +378,7 @@
     if (!el.overlayGlassModeRow) return;
     // The light/dark glass variant only applies to the macOS Liquid Glass UI,
     // so hide it on non-macOS and when the Vibrancy backup is selected.
-    const show = currentPlatform === "darwin" && currentOverlayStyle === "liquid";
+    const show = currentPlatform === "macos" && currentOverlayStyle === "liquid";
     el.overlayGlassModeRow.style.display = show ? "" : "none";
   }
 
@@ -447,6 +447,24 @@
     };
   }
 
+  // ===== App icon =====
+
+  async function loadAppIcon() {
+    // The <img> tags already have src="./icon.png" as the primary source.
+    // If that fails (e.g. production build), fall back to the Tauri asset protocol.
+    document.querySelectorAll('[data-icon-src="app-logo"]').forEach((img) => {
+      img.addEventListener("error", async () => {
+        try {
+          const resourcePath = await window.__TAURI__.path.resolveResource("icons/icon.png");
+          const assetUrl = window.__TAURI__.core.convertFileSrc(resourcePath);
+          img.src = assetUrl;
+        } catch (_e) {
+          // Icon remains as alt text — non-critical
+        }
+      });
+    });
+  }
+
   // ===== Config load/save =====
 
   async function loadSettings() {
@@ -502,17 +520,17 @@
     currentPlatform = data.runtime?.platform || currentPlatform;
     setOverlayGlassMode(c.app?.overlay_glass_mode);
     setOverlayStyle(c.app?.overlay_style); // also refreshes glass-mode row visibility
-    if (currentPlatform !== "darwin" && el.overlayStyleRow) {
+    if (currentPlatform !== "macos" && el.overlayStyleRow) {
       el.overlayStyleRow.style.display = "none";
     }
 
-    if (data.runtime?.platform !== "darwin" && el.accessibilityRow) {
+    if (data.runtime?.platform !== "macos" && el.accessibilityRow) {
       el.accessibilityRow.style.display = "none";
     }
 
     if (el.permHint) {
       el.permHint.textContent =
-        data.runtime?.platform === "darwin"
+        data.runtime?.platform === "macos"
           ? "macOS 需要麦克风权限和辅助功能权限，可前往：系统设置 > 隐私与安全 > 麦克风 / 辅助功能"
           : "当前系统无需额外权限配置。";
     }
@@ -1738,6 +1756,7 @@ SOFTWARE.`;
 
   // ===== Init =====
   initIcons();
+  loadAppIcon();
   loadSettings();
   loadHomeData();
 })();

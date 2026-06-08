@@ -69,6 +69,9 @@ pub fn run() {
             // Hotkey mode: "toggle" or "hold"
             app.manage(HotkeyMode(std::sync::Mutex::new(hotkey_mode)));
 
+            // Active prompt ID for the current recording session (None = main hotkey)
+            app.manage(ActivePromptId(std::sync::Mutex::new(None)));
+
             eprintln!("[voicepaste] setup: starting...");
             eprintln!("[voicepaste] data_dir: {:?}", data_dir);
             eprintln!("[voicepaste] resource_dir: {:?}", resource_dir);
@@ -409,7 +412,7 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
                             match event.state {
                                 ShortcutState::Pressed => {
                                     tauri::async_runtime::spawn(async move {
-                                        on_hotkey_pressed(handle, &mode).await;
+                                        on_hotkey_pressed(handle, &mode, None).await;
                                     });
                                 }
                                 ShortcutState::Released => {
@@ -446,6 +449,7 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
                 .on_shortcut(shortcut, move |_triggered_app, _triggered, event| {
                     let handle = app_handle.clone();
                     let mode = prompt_mode.clone();
+                    let pid = prompt_id.clone();
                     #[allow(unreachable_patterns)]
                     match event.state {
                         ShortcutState::Pressed => {
@@ -454,7 +458,7 @@ fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error
                                 prompt_title, prompt_id
                             );
                             tauri::async_runtime::spawn(async move {
-                                on_hotkey_pressed(handle, &mode).await;
+                                on_hotkey_pressed(handle, &mode, Some(pid)).await;
                             });
                         }
                         ShortcutState::Released => {
@@ -483,8 +487,18 @@ struct RecordingState(std::sync::Mutex<bool>);
 /// Hotkey mode: "toggle" (press once to start, press again to stop) or "hold" (hold to speak).
 struct HotkeyMode(std::sync::Mutex<String>);
 
+/// Tracks which prompt template triggered the current recording session.
+/// `None` means the main hotkey was used (not a prompt-specific hotkey).
+struct ActivePromptId(std::sync::Mutex<Option<String>>);
+
 /// Handle hotkey press event. In toggle mode, toggles recording. In hold mode, starts recording.
-async fn on_hotkey_pressed(app_handle: AppHandle, mode: &str) {
+/// `prompt_id` is `Some(id)` when a prompt-template hotkey was triggered, `None` for the main hotkey.
+async fn on_hotkey_pressed(app_handle: AppHandle, mode: &str, prompt_id: Option<String>) {
+    // Store the active prompt ID for the recording session
+    if let Some(active) = app_handle.try_state::<ActivePromptId>() {
+        *active.0.lock().unwrap() = prompt_id;
+    }
+
     if mode == "hold" {
         // Hold mode: press starts recording (only if not already recording)
         let recording_state = app_handle.state::<RecordingState>();
@@ -652,22 +666,50 @@ async fn stop_recording(app_handle: AppHandle) {
                 trimmed.pop();
             }
 
-            // 6. Apply LLM structure_text if enabled
+            // 6. Apply LLM structure_text only when a prompt-specific hotkey was used.
+            // The main hotkey (active_prompt_id = None) pastes raw text without polishing.
+            let active_prompt_id = app_handle
+                .try_state::<ActivePromptId>()
+                .and_then(|s| s.0.lock().unwrap().clone());
+
             let final_text = if let Some(ref config) = config {
-                if config.llm.enabled {
+                if config.llm.enabled && active_prompt_id.is_some() {
                     let prompts = app_inner.config_manager.load_prompts();
-                    let system_prompt = prompts
-                        .first()
-                        .map(|p| p.prompt.clone())
+                    let system_prompt = active_prompt_id
+                        .as_ref()
+                        .and_then(|pid| {
+                            prompts
+                                .iter()
+                                .find(|p| &p.id == pid)
+                                .map(|p| p.prompt.clone())
+                                .filter(|p| !p.trim().is_empty())
+                        })
                         .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
-                    eprintln!("[recording] applying LLM structure_text...");
-                    crate::llm::structure_text(&config.llm, &trimmed, &system_prompt).await
+                    eprintln!(
+                        "[recording] applying LLM structure_text (prompt_id: {:?})...",
+                        active_prompt_id
+                    );
+                    match crate::llm::call_llm_api(&config.llm, &trimmed, &system_prompt).await {
+                        Ok(result) => {
+                            eprintln!("[recording] LLM polishing succeeded ({} chars)", result.chars().count());
+                            result
+                        }
+                        Err(e) => {
+                            eprintln!("[recording] LLM polishing failed: {}, using raw text", e);
+                            trimmed.clone()
+                        }
+                    }
                 } else {
                     trimmed.clone()
                 }
             } else {
                 trimmed.clone()
             };
+
+            // Clear the active prompt ID after use
+            if let Some(active) = app_handle.try_state::<ActivePromptId>() {
+                *active.0.lock().unwrap() = None;
+            }
 
             // 7. Write to clipboard
             use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -734,6 +776,11 @@ async fn cancel_recording(app_handle: AppHandle) {
 
     *recording_state.0.lock().unwrap() = false;
     eprintln!("[recording] cancel requested");
+
+    // Clear the active prompt ID since the session was cancelled
+    if let Some(active) = app_handle.try_state::<ActivePromptId>() {
+        *active.0.lock().unwrap() = None;
+    }
 
     stop_renderer_audio(&app_handle, &app_inner, 1200).await;
 
@@ -872,7 +919,7 @@ pub fn reload_shortcuts(
                     match event.state {
                         ShortcutState::Pressed => {
                             tauri::async_runtime::spawn(async move {
-                                on_hotkey_pressed(handle, &m).await;
+                                on_hotkey_pressed(handle, &m, None).await;
                             });
                         }
                         ShortcutState::Released => {
@@ -886,6 +933,43 @@ pub fn reload_shortcuts(
             )?;
         } else {
             eprintln!("[shortcut] reload: failed to parse hotkey '{}'", hotkey_str);
+        }
+    }
+
+    // Re-register prompt shortcuts (unregister_all above removed them)
+    let data_dir = app.path().app_data_dir().ok();
+    let resource_dir = app.path().resource_dir().ok();
+    if let (Some(dd), Some(rd)) = (data_dir, resource_dir) {
+        let cm = config::ConfigManager::new(&dd, &rd);
+        let prompts = cm.load_prompts();
+        for prompt in &prompts {
+            let shortcut = parse_prompt_hotkey(&prompt.hotkey);
+            if let Some(shortcut) = shortcut {
+                let app_handle = app.clone();
+                let prompt_id = prompt.id.clone();
+                let prompt_mode = prompt.hotkey_mode.clone();
+                app.global_shortcut()
+                    .on_shortcut(shortcut, move |_app, _shortcut, event| {
+                        let handle = app_handle.clone();
+                        let mode = prompt_mode.clone();
+                        let pid = prompt_id.clone();
+                        #[allow(unreachable_patterns)]
+                        match event.state {
+                            ShortcutState::Pressed => {
+                                tauri::async_runtime::spawn(async move {
+                                    on_hotkey_pressed(handle, &mode, Some(pid)).await;
+                                });
+                            }
+                            ShortcutState::Released => {
+                                tauri::async_runtime::spawn(async move {
+                                    on_hotkey_released(handle, &mode).await;
+                                });
+                            }
+                            _ => {}
+                        }
+                    })
+                    .ok();
+            }
         }
     }
 

@@ -64,7 +64,7 @@ pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json:
             "hotkey": hotkey,
             "hotkeyDisplay": hotkey,
             "microphoneStatus": "granted", // WebView handles mic permissions
-            "accessibilityStatus": "granted", // Will be checked separately on macOS
+            "accessibilityStatus": check_accessibility(),
             "version": version,
             "platform": std::env::consts::OS,
             "theme": {
@@ -315,7 +315,6 @@ pub async fn paste_text(
     // Restore previous clipboard if needed
     if !keep_clipboard {
         // The clipboard already has the text, user may want it to stay
-        // This matches the Electron behavior
     }
 
     Ok(result)
@@ -324,8 +323,7 @@ pub async fn paste_text(
 /// Get microphone permission status.
 #[tauri::command]
 pub async fn get_microphone_status() -> Result<serde_json::Value, String> {
-    // In Tauri/WebView, microphone access is handled by getUserMedia
-    // We can't pre-check status like Electron's systemPreferences
+    // In Tauri/WebView, microphone access is handled by getUserMedia in the frontend
     Ok(serde_json::json!({ "status": "granted" }))
 }
 
@@ -336,16 +334,28 @@ pub async fn request_microphone_access() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "status": "granted", "granted": true }))
 }
 
+/// Check the real accessibility permission status on macOS via AXIsProcessTrusted.
+#[cfg(target_os = "macos")]
+fn check_accessibility() -> &'static str {
+    extern "C" {
+        fn AXIsProcessTrusted() -> u8;
+    }
+    if unsafe { AXIsProcessTrusted() != 0 } {
+        "granted"
+    } else {
+        "denied"
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn check_accessibility() -> &'static str {
+    "granted"
+}
+
 /// Get accessibility status (macOS only).
 #[tauri::command]
 pub async fn get_accessibility_status() -> Result<serde_json::Value, String> {
-    if cfg!(target_os = "macos") {
-        // On macOS, we'd need to check AXIsProcessTrusted
-        // For now, return "granted" as the app would typically be launched with permissions
-        Ok(serde_json::json!({ "status": "granted" }))
-    } else {
-        Ok(serde_json::json!({ "status": "granted" }))
-    }
+    Ok(serde_json::json!({ "status": check_accessibility() }))
 }
 
 /// Open accessibility settings (macOS only).

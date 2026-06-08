@@ -14,7 +14,7 @@
     <div class="shell">
       <aside class="sidebar">
         <div class="sidebar-header">
-          <img class="app-logo" src="./icon.png" alt="VoicePaste" />
+          <img class="app-logo" src="./icon.png" data-icon-src="app-logo" alt="VoicePaste" />
           <span class="app-name">VoicePaste</span>
         </div>
         <nav class="sidebar-nav">
@@ -284,11 +284,11 @@
                   </button>
                 </div>
               </div>
-              <div class="row">
+              <div class="row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
                 <div class="row-label">
                   <div class="title">配置文件路径</div>
                 </div>
-                <span class="mono-text" id="configPath">-</span>
+                <span class="mono-text" id="configPath" style="word-break: break-all; font-size: 12px; line-height: 1.5;">-</span>
               </div>
             </div>
             <div class="section-card" style="margin-top: 16px">
@@ -791,7 +791,7 @@
             </div>
             <div class="section-card">
               <div class="row" style="gap: 14px">
-                <img class="about-icon" src="./icon.png" alt="VoicePaste" />
+                <img class="about-icon" src="./icon.png" data-icon-src="app-logo" alt="VoicePaste" />
                 <div class="row-label">
                   <div class="title" style="font-size: 15px; font-weight: 600">
                     VoicePaste

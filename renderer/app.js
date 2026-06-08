@@ -37,10 +37,10 @@ const statusBarItems = elements.statusBars
   : [];
 
 // Swap the glass treatment without touching any recording/ASR logic.
-// platform: "darwin" → macOS, anything else → Windows-style Mica.
+// platform: "macos" → macOS (Tauri std::env::consts::OS), anything else → Windows-style Mica.
 // overlayStyle (macOS only): "liquid" (default) | "vibrancy" (backup).
 function applyAppearance({ platform, overlayStyle, glass } = {}) {
-  const isMac = platform === "darwin";
+  const isMac = platform === "macos";
   const isVibrancy = isMac && overlayStyle === "vibrancy";
   elements.bubble.classList.toggle("platform-mac", isMac);
   elements.bubble.classList.toggle("platform-win", !isMac);

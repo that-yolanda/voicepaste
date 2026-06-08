@@ -1,9 +1,9 @@
 /**
- * Tauri IPC Bridge — provides the same API surface as Electron's preload.js
+ * Tauri IPC Bridge — provides the frontend API surface
  * but routes all calls through Tauri's invoke/emit mechanism.
  *
  * Drop this <script> into both index.html and settings.html before app.js/settings.js.
- * It creates window.voiceOverlay and window.voiceSettings matching the Electron preload API.
+ * It creates window.voiceOverlay and window.voiceSettings APIs.
  */
 (() => {
   const { invoke } = window.__TAURI__.core;

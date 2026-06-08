@@ -27,6 +27,7 @@
     "core:event:default",
     "core:event:allow-listen",
     "core:event:allow-emit",
+    "core:path:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-is-registered",

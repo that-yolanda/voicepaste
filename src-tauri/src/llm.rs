@@ -19,19 +19,19 @@ struct ProviderDefaults {
 fn get_provider_defaults(provider: &str) -> ProviderDefaults {
     match provider {
         "deepseek" => ProviderDefaults {
-            default_url: "",
+            default_url: "https://api.deepseek.com/v1",
             default_model: "deepseek-v4-flash",
         },
         "openai" => ProviderDefaults {
-            default_url: "",
+            default_url: "https://api.openai.com/v1",
             default_model: "gpt-4.1-mini",
         },
         "anthropic" => ProviderDefaults {
-            default_url: "",
+            default_url: "https://api.anthropic.com/v1",
             default_model: "claude-3-5-haiku-latest",
         },
         "gemini" => ProviderDefaults {
-            default_url: "",
+            default_url: "https://generativelanguage.googleapis.com/v1beta/openai",
             default_model: "gemini-2.5-flash-lite",
         },
         "openrouter" => ProviderDefaults {
@@ -125,13 +125,19 @@ pub async fn call_llm_api(
     };
 
     if model.is_empty() {
-        return Err("文本润色模型还未配置，缺少 llm.model".to_string());
+        return Err(format!(
+            "文本润色模型还未配置，缺少 llm.{}.model",
+            provider_id
+        ));
     }
 
     let base_url = normalize_base_url(&provider_url);
     let url = if base_url.is_empty() {
         if defaults.default_url.is_empty() {
-            return Err("文本润色模型还未配置，缺少 llm.<provider>.url".to_string());
+            return Err(format!(
+                "文本润色模型还未配置，缺少 llm.{}.url",
+                provider_id
+            ));
         }
         format!("{}/chat/completions", defaults.default_url)
     } else {

@@ -63,6 +63,7 @@
       "../prompts.json.example": "prompts.json.example",
       "../renderer/assets/start.mp3": "sounds/start.mp3",
       "../renderer/assets/end.mp3": "sounds/end.mp3",
+      "icons/icon.png": "icons/icon.png",
       "icons/trayTemplate.png": "icons/trayTemplate.png",
       "icons/trayTemplate@2x.png": "icons/trayTemplate@2x.png",
       "icons/trayIcon.ico": "icons/trayIcon.ico"
