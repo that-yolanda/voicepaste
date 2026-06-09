@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.0.0 (2026-06-09)
+
+> **BREAKING CHANGE**: VoicePaste has been completely rewritten from Electron to Tauri v2 (Rust backend). This is a major architecture change.
+>
+> **Config is NOT preserved** — please back up your `config.yaml` before upgrading. You will need to reconfigure your credentials and preferences after installing v2.0.0.
+
+- **Electron → Tauri v2 Rewrite** — Entire app rebuilt with Tauri v2 (Rust + WebView), replacing the Electron runtime. Installer size reduced from **~120 MB to ~8.8 MB** and memory usage from **~500 MB to ~100 MB**.
+- **Native Hotkey Engine** — Replaced `uiohook-napi` / `tauri-plugin-global-shortcut` with the `keytap` crate for reliable modifier-only key support and left/right key distinction.
+- **Structured Logging** — Replaced raw `eprintln!` with leveled module-prefixed logging (`[ASR][INFO]`, `[Hotkey][DEBUG]`, etc.) and file rotation (300KB, gzip compressed).
+- **Beta Update Channel** — Added `app.beta_updates` config option and settings UI toggle for receiving prerelease updates.
+- **Single-file Updater Metadata** — Consolidated per-platform updater JSON into a single `latest.json` with multi-platform `platforms` map for simpler release management.
+- **macOS Tray & Dock** — Proper tray icon lifecycle management and dock visibility control.
+
 ## v1.2.0 (2026-05-26)
 
 - **LLM Text Polishing** — Integrate Vercel AI SDK with 8 provider support (DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, SiliconFlow, Ollama, custom OpenAI-compatible) for post-processing ASR output (formatting, polishing, translation, etc.).

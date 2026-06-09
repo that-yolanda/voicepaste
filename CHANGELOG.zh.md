@@ -1,5 +1,18 @@
 # 更新说明
 
+## v2.0.0 (2026-06-09)
+
+> **⚠️ 重大变更**：VoicePaste 已从 Electron 完全重写为 Tauri v2（Rust 后端），这是一次重大架构变更。
+>
+> **配置不会保留** — 升级前请务必备份 `config.yaml`。安装 v2.0.0 后需要重新填写凭证和偏好设置。
+
+- **Electron → Tauri v2 重写** — 整个应用使用 Tauri v2（Rust + WebView）重建，替换了 Electron 运行时。安装包体积从 **~120 MB 缩减至 ~8.8 MB**，内存占用从 **~500 MB 降至 ~100 MB**。
+- **原生快捷键引擎** — 使用 `keytap` crate 替换 `uiohook-napi` / `tauri-plugin-global-shortcut`，支持仅修饰键触发和左右键区分。
+- **结构化日志** — 用分级模块前缀日志（`[ASR][INFO]`、`[Hotkey][DEBUG]` 等）替代原始 `eprintln!`，支持文件轮转（300KB，gzip 压缩）。
+- **Beta 更新通道** — 新增 `app.beta_updates` 配置项和设置页开关，可接收预发布版本更新。
+- **单文件更新元数据** — 将多平台更新 JSON 合并为单个 `latest.json`，使用 `platforms` 映射表，简化发布管理。
+- **macOS 托盘与 Dock** — 正确的托盘图标生命周期管理和 Dock 栏显隐控制。
+
 ## v1.2.0 (2026-05-26)
 
 - **LLM 文本润色** — 集成 Vercel AI SDK，支持 DeepSeek、OpenAI、Anthropic、Gemini、OpenRouter、硅基流动、Ollama、自定义 OpenAI 兼容共 8 家厂商，可对 ASR 识别结果进行 LLM 后处理（格式化、润色、翻译等）。
