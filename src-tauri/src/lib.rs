@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    image::Image,
     tray::TrayIconBuilder,
     App, AppHandle, Emitter, Manager, RunEvent,
 };
@@ -133,9 +133,23 @@ pub fn run() {
                 // avoiding "Window move completed without beginning" on macOS.
                 position_overlay(app);
             }
-            RunEvent::ExitRequested { api, .. } => {
-                // Keep the app running in the tray when all windows are closed
-                api.prevent_exit();
+            RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } if label == "settings" => {
+                api.prevent_close();
+                if let Some(window) = app.get_webview_window("settings") {
+                    let _ = window.hide();
+                }
+                set_dock_visible(false);
+            }
+            RunEvent::ExitRequested { code, api, .. } => {
+                // Keep the app running in the tray for user-initiated window closes,
+                // but allow tray "quit" to call app.exit(0).
+                if code.is_none() {
+                    api.prevent_exit();
+                }
             }
             _ => {}
         });
@@ -321,43 +335,65 @@ async fn wait_for_audio_warmup(
     }
 }
 
+/// Show or hide the app in the macOS Dock.
+#[cfg(target_os = "macos")]
+fn set_dock_visible(visible: bool) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+    if let Some(mtm) = MainThreadMarker::new() {
+        let app = NSApplication::sharedApplication(mtm);
+        let policy = if visible {
+            NSApplicationActivationPolicy::Regular
+        } else {
+            NSApplicationActivationPolicy::Accessory
+        };
+        app.setActivationPolicy(policy);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_dock_visible(_visible: bool) {}
+
+/// Bring the settings window to front and show it in the Dock.
+fn show_settings(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        set_dock_visible(true);
+    }
+}
+
 /// Setup the system tray icon with menu items.
 fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
-    let settings_item = MenuItemBuilder::with_id("settings", "打开配置").build(app)?;
-    let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 
-    let menu = MenuBuilder::new(app)
-        .item(&settings_item)
-        .separator()
-        .item(&quit_item)
-        .build()?;
+    let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&settings_item, &separator, &quit_item])?;
+    let icon = Image::from_bytes(include_bytes!("../icons/trayTemplate.png"))?;
 
-    let _tray = TrayIconBuilder::new()
-        .menu(&menu)
+    let tray = TrayIconBuilder::with_id("main-tray")
+        .icon(icon)
+        .icon_as_template(true)
         .tooltip("VoicePaste")
-        .on_menu_event(|app, event| match event.id().as_ref() {
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id.as_ref() {
             "settings" => {
-                if let Some(window) = app.get_webview_window("settings") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                eprintln!("[tray] settings clicked");
+                show_settings(app);
             }
             "quit" => {
+                eprintln!("[tray] quit clicked");
                 app.exit(0);
             }
             _ => {}
         })
-        .on_tray_icon_event(|tray, event| {
-            // Click on tray icon opens settings
-            if let tauri::tray::TrayIconEvent::Click { .. } = event {
-                let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("settings") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-        })
         .build(app)?;
+
+    // Keep the tray icon alive for the app's lifetime.
+    app.manage(tray);
 
     Ok(())
 }
@@ -851,4 +887,3 @@ pub fn reload_hotkey_bindings(app: &AppHandle) {
     let prompts = app_inner.config_manager.load_prompts();
     hotkey::reload_bindings(&hc, &hotkey_str, &mode, &prompts);
 }
-
