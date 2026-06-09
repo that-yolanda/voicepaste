@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      lucide:
-        specifier: ^1.14.0
-        version: 1.14.0
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.4.12
@@ -18,6 +14,9 @@ importers:
       '@tauri-apps/cli':
         specifier: ^2
         version: 2.11.2
+      lucide:
+        specifier: ^1.14.0
+        version: 1.14.0
 
 packages:
 

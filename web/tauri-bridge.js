@@ -391,27 +391,47 @@
     },
 
     /**
-     * Check for updates.
-     * TODO: Implement with tauri-plugin-updater
+     * Check for updates via Tauri updater plugin.
+     * Returns { available: boolean, version?: string, date?: string, notes?: string }
      */
     async checkForUpdates() {
-      return { status: "not-available" };
+      return invoke("check_for_update");
     },
 
     /**
-     * Download update.
-     * TODO: Implement with tauri-plugin-updater
+     * Download and install the pending update.
+     * Progress is broadcast via update:progress / update:finished events.
      */
     async downloadUpdate() {
-      return { status: "error", message: "Updates not yet implemented in Tauri" };
+      return invoke("download_and_install_update");
     },
 
     /**
-     * Install update.
-     * TODO: Implement with tauri-plugin-updater
+     * Restart the app to apply the installed update.
      */
     async installUpdate() {
-      return { status: "error", message: "Updates not yet implemented in Tauri" };
+      const { relaunch } = window.__TAURI__.process;
+      await relaunch();
+    },
+
+    /**
+     * Listen for update download progress events.
+     * @param {function} listener - callback({ downloaded, contentLength } | { finished: true })
+     * @returns {function} cleanup function
+     */
+    onUpdateProgress(listener) {
+      let active = true;
+      const p = listen("update:progress", (event) => {
+        if (active && listener) listener(event.payload);
+      });
+      const f = listen("update:finished", () => {
+        if (active && listener) listener({ finished: true });
+      });
+      return () => {
+        active = false;
+        p.then((fn) => fn());
+        f.then((fn) => fn());
+      };
     },
 
     /**

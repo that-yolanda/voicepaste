@@ -7,6 +7,7 @@ mod llm;
 mod logger;
 mod paste;
 mod stats;
+mod updater;
 
 use app_state::*;
 use std::path::PathBuf;
@@ -30,6 +31,16 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // Register updater plugin
+            #[cfg(desktop)]
+            {
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
+
+            // Managed state for pending update
+            app.manage(updater::PendingUpdate(std::sync::Mutex::new(None)));
+
             // Resolve data directories
             let data_dir = app
                 .path()
@@ -109,6 +120,10 @@ pub fn run() {
             commands::play_sound_file,
             commands::get_log_path,
             commands::get_config_path,
+            #[cfg(desktop)]
+            updater::check_for_update,
+            #[cfg(desktop)]
+            updater::download_and_install_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -222,8 +237,8 @@ fn resolve_default_sound_path(app: &AppHandle, filename: &str) -> PathBuf {
 
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
-        .join("renderer")
         .join("assets")
+        .join("sounds")
         .join(filename)
 }
 

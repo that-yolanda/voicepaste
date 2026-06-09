@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <version> [--platforms mac-arm64,mac-x64,win-x64]" >&2
+  echo "Usage: $0 <version> [--platforms apple_aarch64,apple_x64,win_x64]" >&2
   exit 1
 fi
 
@@ -31,81 +31,97 @@ required=()
 optional=()
 
 if [[ -z "$platforms" ]]; then
-  # All platforms
-  required+=(
-    "$dist_dir/VoicePaste-${version}-arm64.dmg"
-    "$dist_dir/VoicePaste-${version}-x64.dmg"
-    "$dist_dir/VoicePaste-${version}-arm64.zip"
-    "$dist_dir/VoicePaste-${version}-x64.zip"
-    "$dist_dir/VoicePaste-${version}-win-x64.exe"
-    "$dist_dir/latest-mac.yml"
-    "$dist_dir/latest.yml"
-  )
-  optional+=(
-    "$dist_dir/VoicePaste-${version}-arm64.zip.blockmap"
-    "$dist_dir/VoicePaste-${version}-x64.zip.blockmap"
-    "$dist_dir/VoicePaste-${version}-win-x64.exe.blockmap"
-  )
-else
-  IFS=',' read -ra plat_array <<< "$platforms"
-  has_mac=false
-  has_win=false
-
-  for p in "${plat_array[@]}"; do
-    case "$p" in
-      mac-arm64)
-        required+=("$dist_dir/VoicePaste-${version}-arm64.dmg")
-        required+=("$dist_dir/VoicePaste-${version}-arm64.zip")
-        optional+=("$dist_dir/VoicePaste-${version}-arm64.zip.blockmap")
-        has_mac=true
-        ;;
-      mac-x64)
-        required+=("$dist_dir/VoicePaste-${version}-x64.dmg")
-        required+=("$dist_dir/VoicePaste-${version}-x64.zip")
-        optional+=("$dist_dir/VoicePaste-${version}-x64.zip.blockmap")
-        has_mac=true
-        ;;
-      win-x64)
-        required+=("$dist_dir/VoicePaste-${version}-win-x64.exe")
-        optional+=("$dist_dir/VoicePaste-${version}-win-x64.exe.blockmap")
-        has_win=true
-        ;;
-      *)
-        echo "Unknown platform: $p" >&2
-        exit 1
-        ;;
-    esac
-  done
-
-  if [[ "$has_mac" == true ]]; then
-    required+=("$dist_dir/latest-mac.yml")
-  fi
-  if [[ "$has_win" == true ]]; then
-    required+=("$dist_dir/latest.yml")
-  fi
+  # All platforms — use glob matching for flexibility
+  platforms="apple_aarch64,apple_x64,win_x64"
 fi
 
-missing=0
+IFS=',' read -ra plat_array <<< "$platforms"
+has_mac_arm=false
+has_mac_x64=false
+has_win=false
 
-for file in "${required[@]}"; do
-  if [[ ! -f "$file" ]]; then
-    echo "Missing required artifact: $file" >&2
-    missing=1
-  fi
+for p in "${plat_array[@]}"; do
+  case "$p" in
+    apple_aarch64)
+      required+=("$dist_dir/VoicePaste_${version}_aarch64.dmg")
+      optional+=("$dist_dir/VoicePaste_${version}_aarch64.app.tar.gz")
+      optional+=("$dist_dir/VoicePaste_${version}_aarch64.app.tar.gz.sig")
+      has_mac_arm=true
+      ;;
+    apple_x64)
+      required+=("$dist_dir/VoicePaste_${version}_x64.dmg")
+      optional+=("$dist_dir/VoicePaste_${version}_x64.app.tar.gz")
+      optional+=("$dist_dir/VoicePaste_${version}_x64.app.tar.gz.sig")
+      has_mac_x64=true
+      ;;
+    win_x64)
+      required+=("$dist_dir/VoicePaste_${version}_x64-setup.exe")
+      required+=("$dist_dir/VoicePaste_${version}_x64_en-US.msi")
+      optional+=("$dist_dir/VoicePaste_${version}_x64-setup.nsis.zip")
+      optional+=("$dist_dir/VoicePaste_${version}_x64-setup.nsis.zip.sig")
+      has_win=true
+      ;;
+    *)
+      echo "Unknown platform: $p" >&2
+      echo "Available: apple_aarch64, apple_x64, win_x64" >&2
+      exit 1
+      ;;
+  esac
 done
 
-if [[ $missing -ne 0 ]]; then
-  exit 1
+# Updater JSON metadata (only when signing key is available)
+if [[ "$has_mac_arm" == true ]]; then
+  optional+=("$dist_dir/latest-darwin-aarch64.json")
+fi
+if [[ "$has_mac_x64" == true ]]; then
+  optional+=("$dist_dir/latest-darwin-x86_64.json")
+fi
+if [[ "$has_win" == true ]]; then
+  optional+=("$dist_dir/latest-windows-x86_64.json")
 fi
 
-echo "Required artifacts:"
+# Validation
+missing_req=0
+missing_opt=0
+
+echo "=== Required Artifacts ==="
 for file in "${required[@]}"; do
-  echo "$file"
+  if [[ -f "$file" ]]; then
+    size=$(du -h "$file" | cut -f1)
+    echo "  ✅ $(basename "$file")  ($size)"
+  else
+    echo "  ❌ $(basename "$file")  MISSING"
+    missing_req=1
+  fi
 done
 
 echo
-echo "Optional artifacts:"
+echo "=== Optional Artifacts (updater) ==="
 for file in "${optional[@]}"; do
+  if [[ -f "$file" ]]; then
+    size=$(du -h "$file" | cut -f1)
+    echo "  ✅ $(basename "$file")  ($size)"
+  else
+    echo "  ⬚ $(basename "$file")  (not generated — requires signing key)"
+    missing_opt=1
+  fi
+done
+
+echo
+if [[ $missing_req -ne 0 ]]; then
+  echo "❌ Validation FAILED: missing required artifacts."
+  exit 1
+else
+  echo "✅ All required artifacts present."
+  if [[ $missing_opt -ne 0 ]]; then
+    echo "⚠️  Some optional updater artifacts were not generated."
+  fi
+fi
+
+# Print upload-ready file list for gh release upload
+echo
+echo "=== Uploadable Artifacts ==="
+for file in "${required[@]}" "${optional[@]}"; do
   if [[ -f "$file" ]]; then
     echo "$file"
   fi

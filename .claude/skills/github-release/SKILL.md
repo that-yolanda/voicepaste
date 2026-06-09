@@ -155,9 +155,10 @@ Mirror the historical GitHub Release style:
 
 ## Downloads
 
-- `VoicePaste-<version>-arm64.dmg` — macOS (Apple Silicon)
-- `VoicePaste-<version>-x64.dmg` — macOS (Intel)
-- `VoicePaste-<version>-win-x64.exe` — Windows (x64 NSIS installer)
+- `VoicePaste_<version>_aarch64.dmg` — macOS (Apple Silicon)
+- `VoicePaste_<version>_x64.dmg` — macOS (Intel)
+- `VoicePaste_<version>_x64-setup.exe` — Windows (x64 NSIS installer)
+- `VoicePaste_<version>_x64_en-US.msi` — Windows (x64 MSI)
 
 **Full Changelog**: https://github.com/that-yolanda/voicepaste/compare/v<previous>...v<version>
 ```
@@ -168,18 +169,24 @@ Mirror the historical GitHub Release style:
 
 ## Artifact Rules
 
-Always upload the platform installers and update metadata files required by `electron-updater`:
+Always upload the platform installers and update metadata files required by `tauri-plugin-updater`:
 
-- macOS:
-  - `VoicePaste-<version>-arm64.dmg`
-  - `VoicePaste-<version>-x64.dmg`
-  - `VoicePaste-<version>-arm64.zip`
-  - `VoicePaste-<version>-x64.zip`
-  - `latest-mac.yml`
-- Windows:
-  - `VoicePaste-<version>-win-x64.exe`
-  - `latest.yml`
-- Upload matching `*.blockmap` files when present.
+- macOS (Apple Silicon):
+  - `VoicePaste_<version>_aarch64.dmg`
+  - `VoicePaste_<version>_aarch64.app.tar.gz`
+  - `VoicePaste_<version>_aarch64.app.tar.gz.sig`
+  - `latest-darwin-aarch64.json`
+- macOS (Intel):
+  - `VoicePaste_<version>_x64.dmg`
+  - `VoicePaste_<version>_x64.app.tar.gz`
+  - `VoicePaste_<version>_x64.app.tar.gz.sig`
+  - `latest-darwin-x86_64.json`
+- Windows (x64):
+  - `VoicePaste_<version>_x64-setup.exe` (NSIS installer)
+  - `VoicePaste_<version>_x64_en-US.msi`
+  - `VoicePaste_<version>_x64-setup.nsis.zip`
+  - `VoicePaste_<version>_x64-setup.nsis.zip.sig`
+  - `latest-windows-x86_64.json`
 - Keep all assets for the same version in the same GitHub Release.
 
 ## Commands

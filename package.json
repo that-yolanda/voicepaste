@@ -23,21 +23,20 @@
     "volcengine"
   ],
   "scripts": {
-    "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build",
-    "start": "tauri dev",
-    "pack": "tauri build",
-    "lint": "biome lint ./renderer",
-    "format": "biome format --write ./renderer",
-    "check": "biome check --write ./renderer",
-    "lint:ci": "biome ci ./renderer"
+    "tauri": "tauri --config tauri/tauri.conf.json",
+    "dev": "tauri --config tauri/tauri.conf.json dev",
+    "build": "tauri --config tauri/tauri.conf.json build",
+    "start": "tauri --config tauri/tauri.conf.json dev",
+    "pack": "node --env-file=.env scripts/pack.js",
+    "clean": "node scripts/clean.js",
+    "lint": "biome lint ./web",
+    "format": "biome format --write ./web",
+    "check": "biome check --write ./web",
+    "lint:ci": "biome ci ./web"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
-    "@tauri-apps/cli": "^2"
-  },
-  "dependencies": {
+    "@tauri-apps/cli": "^2",
     "lucide": "^1.14.0"
   }
 }

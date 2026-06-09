@@ -11,11 +11,18 @@ pnpm dev
 
 ```bash
 pnpm build              # 生产构建（tauri build）
+pnpm pack               # 构建分发安装包
+pnpm pack -s            # 构建 + macOS 签名与公证
+pnpm pack -p apple_aarch64          # 仅 macOS ARM64
+pnpm pack -s -p apple_aarch64,win_x64  # 签名 + 指定平台
+pnpm clean              # 清理构建产物与缓存
 ```
+
+打包平台参数：`apple_aarch64`、`apple_x64`、`win_x64`。
 
 ### 代码签名与公证（macOS）
 
-生产构建需要配置代码签名和公证。通过 `tauri.conf.json` 的 bundle 设置和环境变量进行配置。
+使用 `-s` 参数的生产构建需要配置代码签名和公证。在 `.env` 中配置 Apple 凭证和 Tauri 更新签名密钥（参考 `.env.example`）。
 
 ## 说明
 
@@ -28,33 +35,44 @@ pnpm build              # 生产构建（tauri build）
 
 ```text
 voicepaste/
-├── src-tauri/            # Rust 后端（Tauri v2）
+├── assets/              # 源资源文件（图标、音频、托盘图标）
+│   ├── icon.png         #   主应用图标（`tauri icon` 的源文件）
+│   ├── sounds/          #   start.mp3、end.mp3
+│   └── trayTemplate.png #   macOS 托盘图标源文件
+├── scripts/             # 构建与工具脚本
+│   ├── pack.js          #   主打包脚本（-s、-p 参数）
+│   ├── clean.js         #   产物清理
+│   └── extract-icons.js #   Lucide 图标提取（beforeBuildCommand）
+├── tauri/               # Rust 后端（Tauri v2）
 │   ├── src/
-│   │   ├── lib.rs        # 应用入口、状态机与快捷键管理
-│   │   ├── asr.rs        # WebSocket ASR 客户端（二进制协议）
-│   │   ├── paste.rs      # 剪贴板写入、模拟粘贴与音效播放
-│   │   ├── config.rs     # 配置加载、模板与 YAML 处理
-│   │   ├── commands.rs   # Tauri IPC 命令处理
-│   │   ├── llm.rs        # LLM 文本润色集成
-│   │   ├── logger.rs     # 文件日志
-│   │   ├── stats.rs      # 使用统计与热力图数据
-│   │   └── app_state.rs  # 共享应用状态
-│   ├── icons/            # 应用图标与托盘图标（icns, ico, png）
-│   ├── capabilities/     # Tauri 权限配置
-│   ├── Cargo.toml        # Rust 依赖
-│   └── tauri.conf.json   # Tauri 配置
-├── renderer/             # 前端（WebView）
-│   ├── index.html        # 浮动覆盖窗口
-│   ├── app.js            # 音频采集与文本显示
-│   ├── settings.html     # 设置页面
-│   ├── settings.js       # 配置编辑器与 UI 逻辑
-│   ├── settings.css      # 样式与主题变量
-│   ├── theme.css         # 亮/暗主题定义
-│   ├── tauri-bridge.js   # IPC 桥接（替代 Electron preload）
-│   └── lucide-icons.js   # SVG 图标定义
-├── docs/                 # 文档、更新说明、截图
-├── config.yaml           # 本地运行配置（已 gitignore）
-├── config.yaml.example   # 打包默认模板配置
+│   │   ├── lib.rs       #   应用入口、状态机与快捷键管理
+│   │   ├── asr.rs       #   WebSocket ASR 客户端（二进制协议）
+│   │   ├── paste.rs     #   剪贴板写入、模拟粘贴与音效播放
+│   │   ├── config.rs    #   配置加载、模板与 YAML 处理
+│   │   ├── commands.rs  #   Tauri IPC 命令处理
+│   │   ├── updater.rs   #   自动更新检查与下载安装
+│   │   ├── llm.rs       #   LLM 文本润色集成
+│   │   ├── logger.rs    #   文件日志
+│   │   ├── stats.rs     #   使用统计与热力图数据
+│   │   └── app_state.rs #   共享应用状态
+│   ├── icons/           #   应用与托盘图标（`tauri icon` 生成）
+│   ├── capabilities/    #   Tauri 权限配置
+│   ├── Cargo.toml       #   Rust 依赖
+│   └── tauri.conf.json  #   Tauri 配置
+├── web/                 # 前端（WebView）
+│   ├── index.html       #   浮动覆盖窗口
+│   ├── app.js           #   音频采集与文本显示
+│   ├── settings.html    #   设置页面
+│   ├── settings.js      #   配置编辑器、更新 UI 与逻辑
+│   ├── settings.css     #   样式与主题变量
+│   ├── theme.css        #   亮/暗主题定义
+│   ├── tauri-bridge.js  #   IPC 桥接（替代 Electron preload）
+│   └── lucide-icons.js  #   SVG 图标定义（自动生成）
+├── docs/                #   文档、截图
+├── build/               #   中间构建产物（gitignore）
+├── dist/                #   最终分发产物（gitignore）
+├── config.yaml          #   本地运行配置（gitignore）
+├── config.yaml.example  #   打包默认模板配置
 └── package.json
 ```
 
@@ -64,7 +82,8 @@ voicepaste/
 - 字节跳动豆包 ASR（WebSocket）
 - gzip 压缩二进制帧
 - macOS 使用 AppleScript、Windows 使用 PowerShell 模拟粘贴
-- tauri-plugin-global-shortcut 注册全局快捷键
+- `keytap` crate 注册全局快捷键
+- `tauri-plugin-updater` 通过 GitHub Releases 实现自动更新
 
 ## 工作流程
 

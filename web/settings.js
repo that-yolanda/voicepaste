@@ -512,6 +512,13 @@
     setUpdateState("checking");
     window.voiceSettings
       .checkForUpdates()
+      .then((result) => {
+        if (result.available) {
+          setUpdateState("available", { version: result.version });
+        } else {
+          setUpdateState("not-available");
+        }
+      })
       .catch((err) => setUpdateState("error", { message: err.message || "检查更新失败" }));
   }
 
@@ -990,14 +997,38 @@
         setUpdateState("checking");
         window.voiceSettings
           .checkForUpdates()
+          .then((result) => {
+            if (result.available) {
+              setUpdateState("available", { version: result.version });
+            } else {
+              setUpdateState("not-available");
+            }
+          })
           .catch((err) => setUpdateState("error", { message: err.message || "检查更新失败" }));
         break;
-      case "available":
+      case "available": {
         setUpdateState("downloading");
+        const unsub = window.voiceSettings.onUpdateProgress((payload) => {
+          if (payload.finished) {
+            setUpdateState("downloaded");
+          } else {
+            const total = payload.contentLength || 0;
+            const pct = total > 0 ? Math.round((payload.downloaded / total) * 100) : 0;
+            setUpdateState("progress", { percent: pct });
+          }
+        });
         window.voiceSettings
           .downloadUpdate()
-          .catch((err) => setUpdateState("error", { message: err.message || "下载更新失败" }));
+          .then(() => {
+            unsub();
+            setUpdateState("downloaded");
+          })
+          .catch((err) => {
+            unsub();
+            setUpdateState("error", { message: err?.message || "下载更新失败" });
+          });
         break;
+      }
       case "downloaded":
         setUpdateState("installing");
         window.voiceSettings.installUpdate();
@@ -1757,9 +1788,6 @@ SOFTWARE.`;
     }
     if (event.type === "theme-changed") {
       applyTheme(event.payload.resolved);
-    }
-    if (event.type === "update-status") {
-      setUpdateState(event.payload.type, event.payload);
     }
   });
 
