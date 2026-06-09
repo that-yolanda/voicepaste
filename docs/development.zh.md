@@ -43,7 +43,7 @@ voicepaste/
 │   ├── pack.js          #   主打包脚本（-s、-p 参数）
 │   ├── clean.js         #   产物清理
 │   └── extract-icons.js #   Lucide 图标提取（beforeBuildCommand）
-├── tauri/               # Rust 后端（Tauri v2）
+├── src-tauri/           # Rust 后端（Tauri v2）
 │   ├── src/
 │   │   ├── lib.rs       #   应用入口、状态机与快捷键管理
 │   │   ├── asr.rs       #   WebSocket ASR 客户端（二进制协议）

@@ -9,7 +9,7 @@ const rootDir = path.join(__dirname, "..");
 const dirsToClean = [
   path.join(rootDir, "build"),            // Intermediate build artifacts
   path.join(rootDir, "dist"),             // Distribution output
-  path.join(rootDir, "tauri", "target"),  // Rust compilation cache
+  path.join(rootDir, "src-tauri", "target"),  // Rust compilation cache
   path.join(rootDir, "node_modules"),     // npm dependencies
 ];
 

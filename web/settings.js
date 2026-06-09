@@ -459,19 +459,9 @@
   // ===== App icon =====
 
   async function loadAppIcon() {
-    // The <img> tags already have src="./icon.png" as the primary source.
-    // If that fails (e.g. production build), fall back to the Tauri asset protocol.
-    document.querySelectorAll('[data-icon-src="app-logo"]').forEach((img) => {
-      img.addEventListener("error", async () => {
-        try {
-          const resourcePath = await window.__TAURI__.path.resolveResource("icons/icon.png");
-          const assetUrl = window.__TAURI__.core.convertFileSrc(resourcePath);
-          img.src = assetUrl;
-        } catch (_e) {
-          // Icon remains as alt text — non-critical
-        }
-      });
-    });
+    // The icon is in web/ alongside settings.html. Tauri serves it directly
+    // via the frontend protocol in both dev and production — no resolveResource
+    // needed. The HTML <img src="./icon.png"> handles it.
   }
 
   // ===== Config load/save =====

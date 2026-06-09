@@ -90,7 +90,7 @@ function validatePlatforms(platforms) {
 function validateSigningEnv(platforms) {
   const hasMac = platforms.some((p) => PLATFORM_MAP[p].group === "mac");
 
-  const required = ["APPLE_ID", "APPLE_APP_SPECIFIC_PASSWORD", "APPLE_TEAM_ID"];
+  const required = ["APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID"];
   const missing = required.filter((k) => !process.env[k]);
 
   // Signing identity: prefer APPLE_SIGNING_IDENTITY, fall back to CSC_NAME
@@ -150,12 +150,9 @@ async function buildPlatform(platformKey, includeUpdater) {
     ? cfg.bundles
     : cfg.bundles.filter((b) => b !== "app");
   const bundleFlag = bundles.join(",");
-  const rootDir = path.join(__dirname, "..");
-  const configPath = path.join(rootDir, "tauri", "tauri.conf.json");
 
   const args = [
     "build",
-    "--config", configPath,
     "--target", cfg.target,
     "--bundles", bundleFlag,
   ];
@@ -173,7 +170,7 @@ function collectArtifacts(platformKey) {
   const distDir = path.join(rootDir, "dist");
   const bundleDir = path.join(
     rootDir,
-    "tauri",
+    "src-tauri",
     "target",
     cfg.target,
     "release",
@@ -226,6 +223,23 @@ async function main() {
   const { sign, platforms } = parseArgs();
   validatePlatforms(platforms);
 
+  // Skip platforms that cannot be built on this host OS.
+  // macOS Tauri CLI only supports dmg/app; Windows CLI only supports nsis/msi.
+  const hostOS = process.platform; // "darwin" | "win32"
+  const compatible = platforms.filter((p) => {
+    const group = PLATFORM_MAP[p].group;
+    if ((hostOS === "darwin" && group !== "mac") || (hostOS === "win32" && group === "mac")) {
+      console.log(`Skipping ${p}: cannot build ${group} target on ${hostOS}`);
+      return false;
+    }
+    return true;
+  });
+
+  if (compatible.length === 0) {
+    console.error("Error: no platforms compatible with this host OS.");
+    process.exit(1);
+  }
+
   const rootDir = path.join(__dirname, "..");
   const distDir = path.join(rootDir, "dist");
 
@@ -252,7 +266,7 @@ async function main() {
 
   // Environment setup
   if (sign) {
-    validateSigningEnv(platforms);
+    validateSigningEnv(compatible);
     console.log("Building with code signing enabled.");
   } else {
     // Disable macOS code signing when -s is not passed
@@ -277,8 +291,8 @@ async function main() {
   const hasSigningKey = !!process.env.TAURI_SIGNING_PRIVATE_KEY;
 
   try {
-    // Build each platform
-    for (const p of platforms) {
+    // Build each compatible platform
+    for (const p of compatible) {
       await buildPlatform(p, hasSigningKey);
     }
   } catch (error) {
@@ -289,7 +303,7 @@ async function main() {
   // Collect artifacts
   console.log("\n=== Collecting artifacts ===");
   const allArtifacts = [];
-  for (const p of platforms) {
+  for (const p of compatible) {
     const artifacts = collectArtifacts(p);
     for (const a of artifacts) {
       if (!allArtifacts.includes(a)) allArtifacts.push(a);

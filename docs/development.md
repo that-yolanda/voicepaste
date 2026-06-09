@@ -43,7 +43,7 @@ voicepaste/
 │   ├── pack.js          #   Main packaging script (-s, -p flags)
 │   ├── clean.js         #   Artifact cleanup
 │   └── extract-icons.js #   Lucide icon extraction (beforeBuildCommand)
-├── tauri/               # Rust backend (Tauri v2)
+├── src-tauri/           # Rust backend (Tauri v2)
 │   ├── src/
 │   │   ├── lib.rs       #   App entry, state machine & hotkey management
 │   │   ├── asr.rs       #   WebSocket ASR client (binary protocol)

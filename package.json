@@ -23,10 +23,10 @@
     "volcengine"
   ],
   "scripts": {
-    "tauri": "tauri --config tauri/tauri.conf.json",
-    "dev": "tauri --config tauri/tauri.conf.json dev",
-    "build": "tauri --config tauri/tauri.conf.json build",
-    "start": "tauri --config tauri/tauri.conf.json dev",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "start": "tauri dev",
     "pack": "node --env-file=.env scripts/pack.js",
     "clean": "node scripts/clean.js",
     "lint": "biome lint ./web",

@@ -13,8 +13,8 @@ config.yaml
 prompts.json
 
 # Tauri build output
-tauri/target/
-tauri/Cargo.lock
+src-tauri/target/
+src-tauri/Cargo.lock
 
 # Auto-generated (beforeBuildCommand)
 web/lucide-icons.js
