@@ -77,27 +77,11 @@ for p in "${plat_array[@]}"; do
   esac
 done
 
-# Updater JSON metadata (only when signing key is available)
-if [[ "$has_mac_arm" == true ]]; then
-  if [[ "$beta" == true ]]; then
-    optional+=("$dist_dir/latest-beta-darwin-aarch64.json")
-  else
-    optional+=("$dist_dir/latest-darwin-aarch64.json")
-  fi
-fi
-if [[ "$has_mac_x64" == true ]]; then
-  if [[ "$beta" == true ]]; then
-    optional+=("$dist_dir/latest-beta-darwin-x86_64.json")
-  else
-    optional+=("$dist_dir/latest-darwin-x86_64.json")
-  fi
-fi
-if [[ "$has_win" == true ]]; then
-  if [[ "$beta" == true ]]; then
-    optional+=("$dist_dir/latest-beta-windows-x86_64.json")
-  else
-    optional+=("$dist_dir/latest-windows-x86_64.json")
-  fi
+# Updater JSON metadata — single multi-platform file
+if [[ "$beta" == true ]]; then
+  optional+=("$dist_dir/latest-beta.json")
+else
+  optional+=("$dist_dir/latest.json")
 fi
 
 # Validation

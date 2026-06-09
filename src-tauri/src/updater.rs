@@ -34,7 +34,7 @@ pub async fn check_for_update(
 
     let suffix = if beta { "-beta" } else { "" };
     let endpoint = format!(
-        "https://github.com/that-yolanda/voicepaste/releases/latest/download/latest{suffix}-{{{{target}}}}-{{{{arch}}}}.json"
+        "https://github.com/that-yolanda/voicepaste/releases/latest/download/latest{suffix}.json"
     );
 
     log_update!(info, "Checking for{} updates via {}", if beta { " beta" } else { "" }, endpoint);

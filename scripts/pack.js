@@ -229,18 +229,31 @@ const UPDATER_PLATFORMS = {
 };
 
 /**
- * After artifact collection, generates updater metadata JSON files.
- * Also renames updater bundles to include version + arch for uniqueness.
+ * After artifact collection, generates updater metadata JSON.
+ * Uses Tauri's multi-platform format: a single `latest.json` (or `latest-beta.json`)
+ * containing all platforms under a `platforms` map. Supports cross-machine builds:
+ * if the JSON already exists, new platform entries are merged in.
  *
- * - dist/VoicePaste.app.tar.gz → VoicePaste_1.3.1-beta_aarch64.app.tar.gz
- * - Generates latest-beta-darwin-aarch64.json (or latest-darwin-aarch64.json)
+ * Also renames updater bundles to include version + arch for uniqueness:
+ * - dist/VoicePaste.app.tar.gz → VoicePaste_1.3.1_aarch64.app.tar.gz
  */
 function generateUpdaterArtifacts(platforms, version, beta) {
   const distDir = path.join(__dirname, "..", "dist");
   const repoUrl = "https://github.com/that-yolanda/voicepaste/releases/download";
   const suffix = beta ? "-beta" : "";
+  const jsonName = `latest${suffix}.json`;
+  const jsonPath = path.join(distDir, jsonName);
 
   console.log("\n=== Generating updater metadata ===");
+
+  // Load existing JSON to support cross-machine merge (e.g. Mac build → Windows build)
+  let existing = { platforms: {} };
+  if (fs.existsSync(jsonPath)) {
+    existing = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+    console.log(`  Merging into existing ${jsonName}`);
+  }
+
+  const platformEntries = existing.platforms || {};
 
   for (const p of platforms) {
     const cfg = UPDATER_PLATFORMS[p];
@@ -277,23 +290,26 @@ function generateUpdaterArtifacts(platforms, version, beta) {
       .readFileSync(path.join(distDir, newSig), "utf8")
       .trim();
 
-    // Generate updater JSON
-    const jsonName = `latest${suffix}-${cfg.id}.json`;
-    const json = {
-      version,
-      date: new Date().toISOString(),
+    // Add platform entry
+    platformEntries[cfg.id] = {
       url: `${repoUrl}/v${version}/${newBundle}`,
       signature,
     };
 
-    fs.writeFileSync(
-      path.join(distDir, jsonName),
-      JSON.stringify(json, null, 2) + "\n",
-    );
-
     console.log(`  ${bundleFile} → ${newBundle}`);
-    console.log(`  Generated ${jsonName}`);
+    console.log(`  Added platform ${cfg.id} to ${jsonName}`);
   }
+
+  // Write unified JSON
+  const output = {
+    version,
+    notes: existing.notes || "",
+    pub_date: new Date().toISOString(),
+    platforms: platformEntries,
+  };
+
+  fs.writeFileSync(jsonPath, JSON.stringify(output, null, 2) + "\n");
+  console.log(`  Generated ${jsonName} (${Object.keys(platformEntries).length} platform(s))`);
 }
 
 // ---------------------------------------------------------------------------

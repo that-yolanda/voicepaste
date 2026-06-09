@@ -139,20 +139,20 @@ VoicePaste uses two update channels (stable and beta) served from the same GitHu
 
 ### How It Works
 
-Both `latest-*.json` (stable) and `latest-beta-*.json` (beta) are uploaded to the **stable release**. The beta JSON's `url` field points to the actual download assets in the prerelease release.
+Both `latest.json` (stable) and `latest-beta.json` (beta) are uploaded to the **stable release**. Each JSON uses Tauri's multi-platform `platforms` map — the beta JSON's platform entries point to download assets in the prerelease release.
 
 ```
 Stable Release (v1.3.0)                      Beta Release (v1.3.1-beta, --prerelease)
-├── latest-darwin-aarch64.json (stable)       ├── VoicePaste_1.3.1-beta_aarch64.app.tar.gz
-├── latest-beta-darwin-aarch64.json (beta)    └── VoicePaste_1.3.1-beta_aarch64.app.tar.gz.sig
+├── latest.json (stable, multi-platform)      ├── VoicePaste_1.3.1-beta_aarch64.app.tar.gz
+├── latest-beta.json (beta, multi-platform)   └── VoicePaste_1.3.1-beta_aarch64.app.tar.gz.sig
 ├── VoicePaste_1.3.0_aarch64.dmg
 └── ...
 ```
 
 ### Release Workflow
 
-1. **Stable release**: `gh release create v1.3.0 --latest`, upload stable artifacts + `latest-*.json`
-2. **Beta release**: `gh release create v1.3.1-beta --prerelease`, upload beta artifacts. Then upload `latest-beta-*.json` to the latest stable release: `gh release upload v1.3.0 latest-beta-*.json --clobber`
+1. **Stable release**: `gh release create v1.3.0 --latest`, upload stable artifacts + `latest.json`
+2. **Beta release**: `gh release create v1.3.1-beta --prerelease`, upload beta artifacts. Then upload `latest-beta.json` to the latest stable release: `gh release upload v1.3.0 latest-beta.json --clobber`
 3. **Beta → Stable**: Create a new stable release (e.g., `v1.3.1`). The new release becomes `/releases/latest/`, and the old beta metadata is no longer reachable.
 
 ### Why This Approach

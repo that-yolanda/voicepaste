@@ -156,19 +156,19 @@ Consider using `--draft` first for safety, then publish after the user approves 
 
 ### Beta Release Flow
 
-> **Important**: Beta metadata (`latest-beta-*.json`) must be uploaded to the **latest stable release** (not just the prerelease) because `/releases/latest/` skips prerelease releases. See "Update Channels" section below for the full architecture.
+> **Important**: Beta metadata (`latest-beta.json`) must be uploaded to the **latest stable release** (not just the prerelease) because `/releases/latest/` skips prerelease releases. See "Update Channels" section below for the full architecture.
 
 1. Set version in `package.json` to `x.y.z-beta` (e.g., `1.3.1-beta`). Each beta increments the patch version — `1.3.1-beta`, `1.3.2-beta`, etc.
 2. Pack script auto-syncs version to `Cargo.toml` (`version = "..."`). `tauri.conf.json` omits the `version` field entirely.
 3. Build: `pnpm run pack -s --beta -p apple_aarch64`
-4. Artifacts in `dist/` will contain `latest-beta-*.json` (renamed from `latest-*.json`)
+4. Artifacts in `dist/` will contain `latest-beta.json` (multi-platform JSON with `platforms` map)
 5. Create prerelease: `gh release create vx.y.z-beta --prerelease`
 6. Upload beta artifacts (installers + tar.gz + sig) to the prerelease release
-7. **Upload `latest-beta-*.json` to the latest stable release** (so beta users can discover the update via `/releases/latest/download/latest-beta-*.json`):
+7. **Upload `latest-beta.json` to the latest stable release** (so beta users can discover the update via `/releases/latest/download/latest-beta.json`):
    ```bash
    # Find the latest stable release tag
    STABLE_TAG=$(gh release list --limit 10 --json tagName,isPrerelease --jq '.[] | select(.isPrerelease == false) | .tagName' | head -1)
-   gh release upload "$STABLE_TAG" dist/latest-beta-*.json --clobber
+   gh release upload "$STABLE_TAG" dist/latest-beta.json --clobber
    ```
 8. Users with `beta_updates: true` in config will receive this update
 9. When ready for stable: set version to `x.y.z` (no suffix), build without `--beta`, create non-prerelease release as usual
@@ -213,8 +213,8 @@ VoicePaste uses two update channels served from the same GitHub repository. The 
 
 ```
 Stable Release (v1.3.0, --latest)
-├── latest-darwin-aarch64.json          ← stable metadata
-├── latest-beta-darwin-aarch64.json     ← beta metadata (url points to beta release assets)
+├── latest.json                         ← stable metadata (multi-platform)
+├── latest-beta.json                    ← beta metadata (platforms point to beta release assets)
 ├── VoicePaste_1.3.0_aarch64.dmg
 └── ...
 
@@ -228,16 +228,16 @@ Beta Release (v1.3.1-beta, --prerelease)
 
 | Channel | URL Pattern |
 |---------|-------------|
-| Stable | `.../releases/latest/download/latest-{target}-{arch}.json` |
-| Beta | `.../releases/latest/download/latest-beta-{target}-{arch}.json` |
+| Stable | `.../releases/latest/download/latest.json` |
+| Beta | `.../releases/latest/download/latest-beta.json` |
 
-Both URLs resolve from the **stable release** because `/releases/latest/` skips prerelease. The beta JSON's `url` field points to the actual download in the prerelease release.
+Both URLs resolve from the **stable release** because `/releases/latest/` skips prerelease. The updater JSON uses a `platforms` map — each platform entry's `url` points to the actual download in the corresponding release.
 
 ### Release Sequence
 
-1. **Stable release**: Create with `--latest`, upload stable artifacts + `latest-*.json`
-2. **Beta release**: Create with `--prerelease`, upload beta artifacts. Then upload `latest-beta-*.json` to the latest stable release via `gh release upload <stable-tag> latest-beta-*.json --clobber`
-3. **Beta → Stable**: Create a new stable release as usual. The old `latest-beta-*.json` stays in the previous stable release but is no longer reachable (the new stable release becomes `/releases/latest/`). If a new beta is needed, upload a new `latest-beta-*.json` to the new stable release.
+1. **Stable release**: Create with `--latest`, upload stable artifacts + `latest.json`
+2. **Beta release**: Create with `--prerelease`, upload beta artifacts. Then upload `latest-beta.json` to the latest stable release via `gh release upload <stable-tag> latest-beta.json --clobber`
+3. **Beta → Stable**: Create a new stable release as usual. The old `latest-beta.json` stays in the previous stable release but is no longer reachable (the new stable release becomes `/releases/latest/`). If a new beta is needed, upload a new `latest-beta.json` to the new stable release.
 
 ### Why This Approach
 
@@ -250,22 +250,21 @@ Both URLs resolve from the **stable release** because `/releases/latest/` skips 
 
 Always upload the platform installers and update metadata files required by `tauri-plugin-updater`:
 
+- **Updater metadata** (one file for all platforms):
+  - `latest.json` (stable) or `latest-beta.json` (beta) — multi-platform JSON with `platforms` map
 - macOS (Apple Silicon):
   - `VoicePaste_<version>_aarch64.dmg`
   - `VoicePaste_<version>_aarch64.app.tar.gz`
   - `VoicePaste_<version>_aarch64.app.tar.gz.sig`
-  - `latest-darwin-aarch64.json`
 - macOS (Intel):
   - `VoicePaste_<version>_x64.dmg`
   - `VoicePaste_<version>_x64.app.tar.gz`
   - `VoicePaste_<version>_x64.app.tar.gz.sig`
-  - `latest-darwin-x86_64.json`
 - Windows (x64):
   - `VoicePaste_<version>_x64-setup.exe` (NSIS installer)
   - `VoicePaste_<version>_x64_en-US.msi`
   - `VoicePaste_<version>_x64-setup.nsis.zip`
   - `VoicePaste_<version>_x64-setup.nsis.zip.sig`
-  - `latest-windows-x86_64.json`
 - Keep all assets for the same version in the same GitHub Release.
 
 ## Commands
