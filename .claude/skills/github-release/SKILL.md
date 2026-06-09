@@ -158,11 +158,11 @@ Consider using `--draft` first for safety, then publish after the user approves 
 
 > **Important**: Beta metadata (`latest-beta-*.json`) must be uploaded to the **latest stable release** (not just the prerelease) because `/releases/latest/` skips prerelease releases. See "Update Channels" section below for the full architecture.
 
-1. Set version in `package.json` to `x.y.z-beta.n` (e.g., `1.3.0-beta.1`)
-2. Sync version to `tauri.conf.json` (`"version"`) and `Cargo.toml` (`version = "..."`)
+1. Set version in `package.json` to `x.y.z-beta` (e.g., `1.3.1-beta`). Each beta increments the patch version — `1.3.1-beta`, `1.3.2-beta`, etc.
+2. Pack script auto-syncs version to `Cargo.toml` (`version = "..."`). `tauri.conf.json` omits the `version` field entirely.
 3. Build: `pnpm run pack -s --beta -p apple_aarch64`
 4. Artifacts in `dist/` will contain `latest-beta-*.json` (renamed from `latest-*.json`)
-5. Create prerelease: `gh release create vx.y.z-beta.n --prerelease`
+5. Create prerelease: `gh release create vx.y.z-beta --prerelease`
 6. Upload beta artifacts (installers + tar.gz + sig) to the prerelease release
 7. **Upload `latest-beta-*.json` to the latest stable release** (so beta users can discover the update via `/releases/latest/download/latest-beta-*.json`):
    ```bash
@@ -218,10 +218,10 @@ Stable Release (v1.3.0, --latest)
 ├── VoicePaste_1.3.0_aarch64.dmg
 └── ...
 
-Beta Release (v1.3.1-beta.1, --prerelease)
-├── VoicePaste_1.3.1-beta.1_aarch64.dmg
-├── VoicePaste_1.3.1-beta.1_aarch64.app.tar.gz
-└── VoicePaste_1.3.1-beta.1_aarch64.app.tar.gz.sig
+Beta Release (v1.3.1-beta, --prerelease)
+├── VoicePaste_1.3.1-beta_aarch64.dmg
+├── VoicePaste_1.3.1-beta_aarch64.app.tar.gz
+└── VoicePaste_1.3.1-beta_aarch64.app.tar.gz.sig
 ```
 
 ### Endpoint URLs
@@ -244,7 +244,7 @@ Both URLs resolve from the **stable release** because `/releases/latest/` skips 
 - GitHub has no static URL for "latest prerelease" — must use REST API (requires auth, not suitable for desktop apps)
 - Tauri has no native multi-channel updater support ([tauri-apps/tauri#2595](https://github.com/tauri-apps/tauri/issues/2595))
 - `--prerelease` flag ensures `electron-updater` on the `main` branch ignores beta releases
-- SemVer guarantees `1.3.0-beta.1 < 1.3.0`, so stable users are never offered beta updates
+- SemVer guarantees `1.3.1-beta < 1.3.1`, so stable users are never offered beta updates
 
 ## Artifact Rules
 

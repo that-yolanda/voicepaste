@@ -232,7 +232,7 @@ const UPDATER_PLATFORMS = {
  * After artifact collection, generates updater metadata JSON files.
  * Also renames updater bundles to include version + arch for uniqueness.
  *
- * - dist/VoicePaste.app.tar.gz → VoicePaste_1.3.0-beta.1_aarch64.app.tar.gz
+ * - dist/VoicePaste.app.tar.gz → VoicePaste_1.3.1-beta_aarch64.app.tar.gz
  * - Generates latest-beta-darwin-aarch64.json (or latest-darwin-aarch64.json)
  */
 function generateUpdaterArtifacts(platforms, version, beta) {

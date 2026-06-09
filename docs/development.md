@@ -142,9 +142,9 @@ VoicePaste uses two update channels (stable and beta) served from the same GitHu
 Both `latest-*.json` (stable) and `latest-beta-*.json` (beta) are uploaded to the **stable release**. The beta JSON's `url` field points to the actual download assets in the prerelease release.
 
 ```
-Stable Release (v1.3.0)                      Beta Release (v1.3.1-beta.1, --prerelease)
-├── latest-darwin-aarch64.json (stable)       ├── VoicePaste_1.3.1-beta.1_aarch64.app.tar.gz
-├── latest-beta-darwin-aarch64.json (beta)    └── VoicePaste_1.3.1-beta.1_aarch64.app.tar.gz.sig
+Stable Release (v1.3.0)                      Beta Release (v1.3.1-beta, --prerelease)
+├── latest-darwin-aarch64.json (stable)       ├── VoicePaste_1.3.1-beta_aarch64.app.tar.gz
+├── latest-beta-darwin-aarch64.json (beta)    └── VoicePaste_1.3.1-beta_aarch64.app.tar.gz.sig
 ├── VoicePaste_1.3.0_aarch64.dmg
 └── ...
 ```
@@ -152,7 +152,7 @@ Stable Release (v1.3.0)                      Beta Release (v1.3.1-beta.1, --prer
 ### Release Workflow
 
 1. **Stable release**: `gh release create v1.3.0 --latest`, upload stable artifacts + `latest-*.json`
-2. **Beta release**: `gh release create v1.3.1-beta.1 --prerelease`, upload beta artifacts. Then upload `latest-beta-*.json` to the latest stable release: `gh release upload v1.3.0 latest-beta-*.json --clobber`
+2. **Beta release**: `gh release create v1.3.1-beta --prerelease`, upload beta artifacts. Then upload `latest-beta-*.json` to the latest stable release: `gh release upload v1.3.0 latest-beta-*.json --clobber`
 3. **Beta → Stable**: Create a new stable release (e.g., `v1.3.1`). The new release becomes `/releases/latest/`, and the old beta metadata is no longer reachable.
 
 ### Why This Approach
@@ -160,4 +160,4 @@ Stable Release (v1.3.0)                      Beta Release (v1.3.1-beta.1, --prer
 - Tauri has no native multi-channel updater support
 - GitHub has no static URL for "latest prerelease"
 - `--prerelease` protects the Electron version on `main` branch
-- SemVer guarantees `1.3.0-beta.1 < 1.3.0` — stable users never see beta updates
+- SemVer guarantees `1.3.1-beta < 1.3.1` — stable users never see beta updates
