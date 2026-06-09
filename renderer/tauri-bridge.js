@@ -166,24 +166,24 @@
 
     /**
      * Record a custom hotkey.
-     * Uses DOM keyboard events (window capture phase) since rdev is not
-     * compatible with macOS 26+.  Window capture fires before the document
-     * capture handler in settings.js (suppressKeyboardDuringHotkeyRecording),
-     * so we see the events first.
+     * Uses DOM keyboard events (window capture phase).
+     * Supports left/right modifier distinction and modifier-only hotkeys.
      * Returns { hotkey, displayString, keys }.
      */
     async recordHotkey() {
       const pressed = new Set();
 
+      // Map DOM code names to hotkey config names.
+      // Left/right modifiers keep their side-specific names for keytap.
       const keyNameMap = {
-        ControlLeft: "Control",
-        ControlRight: "Control",
-        ShiftLeft: "Shift",
-        ShiftRight: "Shift",
-        AltLeft: "Alt",
-        AltRight: "Alt",
-        MetaLeft: "Command",
-        MetaRight: "Command",
+        ControlLeft: "ControlLeft",
+        ControlRight: "ControlRight",
+        ShiftLeft: "ShiftLeft",
+        ShiftRight: "ShiftRight",
+        AltLeft: "AltLeft",
+        AltRight: "AltRight",
+        MetaLeft: "MetaLeft",
+        MetaRight: "MetaRight",
         ArrowUp: "Up",
         ArrowDown: "Down",
         ArrowLeft: "Left",
@@ -204,13 +204,82 @@
 
       return new Promise((resolve) => {
         let settled = false;
+        let modifierTimer = null;
 
         const finish = (result) => {
           if (settled) return;
           settled = true;
+          if (modifierTimer) clearTimeout(modifierTimer);
           window.removeEventListener("keydown", onKeyDown, true);
           window.removeEventListener("keyup", onKeyUp, true);
           resolve(result);
+        };
+
+        const isModifier = (code) =>
+          code.startsWith("Control") ||
+          code.startsWith("Shift") ||
+          code.startsWith("Alt") ||
+          code.startsWith("Meta");
+
+        // Build the hotkey string from the current pressed set.
+        // Sorts modifiers canonically: Control, Alt, Shift, Meta (left variants before right).
+        const buildHotkey = (includeMainKey) => {
+          const mods = [];
+          let mainKey = "";
+          for (const code of pressed) {
+            if (code.startsWith("Control")) {
+              mods.push(keyNameMap[code] || "ControlLeft");
+            } else if (code.startsWith("Shift")) {
+              mods.push(keyNameMap[code] || "ShiftLeft");
+            } else if (code.startsWith("Alt")) {
+              mods.push(keyNameMap[code] || "AltLeft");
+            } else if (code.startsWith("Meta")) {
+              mods.push(keyNameMap[code] || "MetaLeft");
+            } else {
+              mainKey = keyNameMap[code] || code.replace(/^(Key|Digit)/, "");
+            }
+          }
+
+          // De-duplicate and sort canonically
+          const uniqueMods = [...new Set(mods)];
+          const modOrder = [
+            "ControlLeft",
+            "ControlRight",
+            "Control",
+            "AltLeft",
+            "AltRight",
+            "Alt",
+            "ShiftLeft",
+            "ShiftRight",
+            "Shift",
+            "MetaLeft",
+            "MetaRight",
+            "Command",
+          ];
+          const sortedMods = modOrder.filter((m) => uniqueMods.includes(m));
+
+          if (!includeMainKey && mainKey) return null;
+          if (!includeMainKey && sortedMods.length === 0) return null;
+
+          const parts = includeMainKey && mainKey ? [...sortedMods, mainKey] : sortedMods;
+          return parts.join("+");
+        };
+
+        // Schedule modifier-only finalization after a debounce period.
+        // If the user holds only modifier keys for 300ms without pressing
+        // another key, finalize as a modifier-only hotkey.
+        const scheduleModifierFinalize = () => {
+          if (modifierTimer) clearTimeout(modifierTimer);
+          const allModifiers = [...pressed].every(isModifier);
+          if (allModifiers && pressed.size > 0) {
+            modifierTimer = setTimeout(() => {
+              if (settled) return;
+              const hotkey = buildHotkey(false);
+              if (hotkey) {
+                finish({ keys: [hotkey], displayString: hotkey, hotkey });
+              }
+            }, 300);
+          }
         };
 
         const onKeyDown = (e) => {
@@ -228,6 +297,11 @@
           // Stop propagation only (NOT preventDefault!) to avoid suppressing keyup
           // on macOS WKWebView, where preventDefault on keydown kills the keyup event.
           e.stopPropagation();
+
+          // If a non-modifier key was pressed, cancel modifier-only timer
+          if (!isModifier(e.code)) {
+            if (modifierTimer) clearTimeout(modifierTimer);
+          }
         };
 
         const onKeyUp = (e) => {
@@ -235,45 +309,25 @@
           // Only stop propagation — preventDefault here can suppress subsequent events
           e.stopPropagation();
 
-          // Wait until the last modifier key is released to finalize
-          if (
-            e.code.startsWith("Control") ||
-            e.code.startsWith("Shift") ||
-            e.code.startsWith("Alt") ||
-            e.code.startsWith("Meta")
-          ) {
-            return;
-          }
-
-          // Build the hotkey string: modifiers first, then the main key
-          const mods = [];
-          let mainKey = "";
-          for (const code of pressed) {
-            if (code.startsWith("Control")) {
-              mods.push("Control");
-            } else if (code.startsWith("Shift")) {
-              mods.push("Shift");
-            } else if (code.startsWith("Alt")) {
-              mods.push("Alt");
-            } else if (code.startsWith("Meta")) {
-              mods.push("Command");
-            } else {
-              mainKey = keyNameMap[code] || code.replace(/^(Key|Digit)/, "");
+          // If a non-modifier key was released, finalize with modifiers + main key
+          if (!isModifier(e.code)) {
+            const hotkey = buildHotkey(true);
+            if (hotkey) {
+              finish({ keys: [hotkey], displayString: hotkey, hotkey });
             }
-          }
-
-          // De-duplicate modifiers and sort canonically
-          const uniqueMods = [...new Set(mods)];
-          const modOrder = ["Control", "Alt", "Shift", "Command"];
-          const sortedMods = modOrder.filter((m) => uniqueMods.includes(m));
-
-          if (!mainKey) {
-            // Only modifiers released — wait for the real key
             return;
           }
 
-          const hotkey = [...sortedMods, mainKey].join("+");
-          finish({ keys: [hotkey], displayString: hotkey, hotkey });
+          // Modifier released: check if we should finalize modifier-only
+          // Schedule a check — if no new key comes within 50ms, try to finalize
+          if (modifierTimer) clearTimeout(modifierTimer);
+          const allModifiers = [...pressed].every(isModifier);
+          if (allModifiers && pressed.size > 0) {
+            // Still holding some modifiers — start debounce
+            scheduleModifierFinalize();
+          } else if (pressed.size === 0) {
+            // All keys released without a main key — don't finalize (empty binding)
+          }
         };
 
         window.addEventListener("keydown", onKeyDown, true);

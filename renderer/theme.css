@@ -1,140 +1,139 @@
 /* ===== Dark theme (default) ===== */
 
 :root {
-    color-scheme: dark;
+  color-scheme: dark;
 
-    --font-ui:
-        -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
-        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI",
-        "Microsoft YaHei", "Noto Sans CJK SC", Arial, system-ui, sans-serif;
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", Arial, system-ui, sans-serif;
 
-    --bg: #141413;
-    --surface: #1c1c1a;
-    --surface-hover: #262624;
-    --card: #222220;
-    --input-bg: #1c1c1a;
+  --bg: #141413;
+  --surface: #1c1c1a;
+  --surface-hover: #262624;
+  --card: #222220;
+  --input-bg: #1c1c1a;
 
-    --border: #30302e;
-    --border-subtle: #262624;
-    --border-hover: #3d3d3a;
+  --border: #30302e;
+  --border-subtle: #262624;
+  --border-hover: #3d3d3a;
 
-    --accent: #d97757;
-    --accent-dim: rgba(217, 119, 87, 0.12);
-    --accent-glow: rgba(217, 119, 87, 0.25);
-    --accent-hover: #e8896a;
-    --accent-active: #c46640;
-    --accent-soft: rgba(217, 119, 87, 0.1);
-    --text-on-accent: #faf9f5;
+  --accent: #d97757;
+  --accent-dim: rgba(217, 119, 87, 0.12);
+  --accent-glow: rgba(217, 119, 87, 0.25);
+  --accent-hover: #e8896a;
+  --accent-active: #c46640;
+  --accent-soft: rgba(217, 119, 87, 0.1);
+  --text-on-accent: #faf9f5;
 
-    --toggle-bg: #3d3d3a;
-    --toggle-active: #d97757;
+  --toggle-bg: #3d3d3a;
+  --toggle-active: #d97757;
 
-    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2);
 
-    --text: #eae9e4;
-    --text-dim: #a8a7a1;
-    --text-muted: #76756f;
+  --text: #eae9e4;
+  --text-dim: #a8a7a1;
+  --text-muted: #76756f;
 
-    --success: #6cbf6c;
-    --warning: #e8a840;
-    --error: #e05550;
+  --success: #6cbf6c;
+  --warning: #e8a840;
+  --error: #e05550;
 
-    --glow-success: rgba(108, 191, 108, 0.3);
-    --glow-warning: rgba(232, 168, 64, 0.3);
-    --glow-error: rgba(224, 85, 80, 0.3);
+  --glow-success: rgba(108, 191, 108, 0.3);
+  --glow-warning: rgba(232, 168, 64, 0.3);
+  --glow-error: rgba(224, 85, 80, 0.3);
 
-    --fill-subtle: rgba(250, 249, 245, 0.02);
-    --fill-hover: rgba(250, 249, 245, 0.03);
-    --fill-interactive: rgba(250, 249, 245, 0.06);
-    --fill-track: rgba(250, 249, 245, 0.1);
+  --fill-subtle: rgba(250, 249, 245, 0.02);
+  --fill-hover: rgba(250, 249, 245, 0.03);
+  --fill-interactive: rgba(250, 249, 245, 0.06);
+  --fill-track: rgba(250, 249, 245, 0.1);
 
-    --scrollbar-thumb: rgba(250, 249, 245, 0.08);
-    --scrollbar-thumb-hover: rgba(250, 249, 245, 0.16);
+  --scrollbar-thumb: rgba(250, 249, 245, 0.08);
+  --scrollbar-thumb-hover: rgba(250, 249, 245, 0.16);
 
-    --tag-bg: rgba(217, 119, 87, 0.08);
-    --tag-border: rgba(217, 119, 87, 0.15);
-    --tag-match-bg: rgba(217, 119, 87, 0.18);
-    --tag-hover-bg: rgba(217, 119, 87, 0.14);
-    --tag-hover-border: rgba(217, 119, 87, 0.25);
+  --tag-bg: rgba(217, 119, 87, 0.08);
+  --tag-border: rgba(217, 119, 87, 0.15);
+  --tag-match-bg: rgba(217, 119, 87, 0.18);
+  --tag-hover-bg: rgba(217, 119, 87, 0.14);
+  --tag-hover-border: rgba(217, 119, 87, 0.25);
 
-    --sidebar-bg: #1a1a18;
-    --sidebar-active-bg: rgba(217, 119, 87, 0.1);
+  --sidebar-bg: #1a1a18;
+  --sidebar-active-bg: rgba(217, 119, 87, 0.1);
 
-    --overlay-bg: rgba(0, 0, 0, 0.94);
-    --overlay-card: rgb(0, 0, 0);
-    --overlay-text: rgba(250, 249, 245, 0.96);
-    --overlay-muted: rgba(250, 249, 245, 0.55);
-    --overlay-soft: rgba(250, 249, 245, 0.38);
-    --overlay-spinner-border: rgba(250, 249, 245, 0.15);
-    --overlay-bar: rgba(250, 249, 245, 0.75);
+  --overlay-bg: rgba(0, 0, 0, 0.94);
+  --overlay-card: rgb(0, 0, 0);
+  --overlay-text: rgba(250, 249, 245, 0.96);
+  --overlay-muted: rgba(250, 249, 245, 0.55);
+  --overlay-soft: rgba(250, 249, 245, 0.38);
+  --overlay-spinner-border: rgba(250, 249, 245, 0.15);
+  --overlay-bar: rgba(250, 249, 245, 0.75);
 
-    --heatmap-0: #2a2a28;
-    --heatmap-1: rgba(217, 119, 87, 0.15);
-    --heatmap-2: rgba(217, 119, 87, 0.3);
-    --heatmap-3: rgba(217, 119, 87, 0.5);
-    --heatmap-4: #d97757;
+  --heatmap-0: #2a2a28;
+  --heatmap-1: rgba(217, 119, 87, 0.15);
+  --heatmap-2: rgba(217, 119, 87, 0.3);
+  --heatmap-3: rgba(217, 119, 87, 0.5);
+  --heatmap-4: #d97757;
 }
 
 /* ===== Light theme ===== */
 
 [data-theme="light"] {
-    color-scheme: light;
+  color-scheme: light;
 
-    --bg: #f5f4ed;
-    --surface: #faf9f5;
-    --surface-hover: #f0eee6;
-    --card: #ffffff;
-    --input-bg: #ffffff;
+  --bg: #f5f4ed;
+  --surface: #faf9f5;
+  --surface-hover: #f0eee6;
+  --card: #ffffff;
+  --input-bg: #ffffff;
 
-    --border: #e8e6dc;
-    --border-subtle: #f0eee6;
-    --border-hover: #d1cfc5;
+  --border: #e8e6dc;
+  --border-subtle: #f0eee6;
+  --border-hover: #d1cfc5;
 
-    --accent: #c96442;
-    --accent-dim: rgba(201, 100, 66, 0.12);
-    --accent-glow: rgba(201, 100, 66, 0.25);
-    --accent-hover: #b85838;
-    --accent-active: #a04830;
-    --accent-soft: rgba(201, 100, 66, 0.08);
-    --text-on-accent: #faf9f5;
+  --accent: #c96442;
+  --accent-dim: rgba(201, 100, 66, 0.12);
+  --accent-glow: rgba(201, 100, 66, 0.25);
+  --accent-hover: #b85838;
+  --accent-active: #a04830;
+  --accent-soft: rgba(201, 100, 66, 0.08);
+  --text-on-accent: #faf9f5;
 
-    --toggle-bg: #d1cfc5;
-    --toggle-active: #c96442;
+  --toggle-bg: #d1cfc5;
+  --toggle-active: #c96442;
 
-    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
 
-    --text: #1a1a18;
-    --text-dim: #5e5d59;
-    --text-muted: #87867f;
+  --text: #1a1a18;
+  --text-dim: #5e5d59;
+  --text-muted: #87867f;
 
-    --success: #5a8a4a;
-    --warning: #b8863a;
-    --error: #b05040;
+  --success: #5a8a4a;
+  --warning: #b8863a;
+  --error: #b05040;
 
-    --glow-success: rgba(90, 138, 74, 0.2);
-    --glow-warning: rgba(184, 134, 58, 0.2);
-    --glow-error: rgba(176, 80, 64, 0.2);
+  --glow-success: rgba(90, 138, 74, 0.2);
+  --glow-warning: rgba(184, 134, 58, 0.2);
+  --glow-error: rgba(176, 80, 64, 0.2);
 
-    --fill-subtle: rgba(0, 0, 0, 0.02);
-    --fill-hover: rgba(0, 0, 0, 0.03);
-    --fill-interactive: rgba(0, 0, 0, 0.05);
-    --fill-track: rgba(0, 0, 0, 0.12);
+  --fill-subtle: rgba(0, 0, 0, 0.02);
+  --fill-hover: rgba(0, 0, 0, 0.03);
+  --fill-interactive: rgba(0, 0, 0, 0.05);
+  --fill-track: rgba(0, 0, 0, 0.12);
 
-    --scrollbar-thumb: rgba(0, 0, 0, 0.12);
-    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
 
-    --tag-bg: rgba(201, 100, 66, 0.06);
-    --tag-border: rgba(201, 100, 66, 0.12);
-    --tag-match-bg: rgba(201, 100, 66, 0.12);
-    --tag-hover-bg: rgba(201, 100, 66, 0.1);
-    --tag-hover-border: rgba(201, 100, 66, 0.2);
+  --tag-bg: rgba(201, 100, 66, 0.06);
+  --tag-border: rgba(201, 100, 66, 0.12);
+  --tag-match-bg: rgba(201, 100, 66, 0.12);
+  --tag-hover-bg: rgba(201, 100, 66, 0.1);
+  --tag-hover-border: rgba(201, 100, 66, 0.2);
 
-    --sidebar-bg: #ffffff;
-    --sidebar-active-bg: rgba(201, 100, 66, 0.08);
+  --sidebar-bg: #ffffff;
+  --sidebar-active-bg: rgba(201, 100, 66, 0.08);
 
-    --heatmap-0: #ededeb;
-    --heatmap-1: rgba(201, 100, 66, 0.18);
-    --heatmap-2: rgba(201, 100, 66, 0.38);
-    --heatmap-3: rgba(201, 100, 66, 0.58);
-    --heatmap-4: #c96442;
+  --heatmap-0: #ededeb;
+  --heatmap-1: rgba(201, 100, 66, 0.18);
+  --heatmap-2: rgba(201, 100, 66, 0.38);
+  --heatmap-3: rgba(201, 100, 66, 0.58);
+  --heatmap-4: #c96442;
 }

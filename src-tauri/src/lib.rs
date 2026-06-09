@@ -2,6 +2,7 @@ mod app_state;
 mod asr;
 mod commands;
 mod config;
+mod hotkey;
 mod llm;
 mod logger;
 mod paste;
@@ -16,16 +17,10 @@ use tauri::{
     tray::TrayIconBuilder,
     App, AppHandle, Emitter, Manager, RunEvent,
 };
-use tauri_plugin_global_shortcut::{Code, Shortcut};
-
-fn escape_shortcut() -> Shortcut {
-    Shortcut::new(None, Code::Escape)
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -82,10 +77,10 @@ pub fn run() {
             // Setup system tray
             setup_tray(app)?;
 
-            // Setup global shortcuts from config
-            eprintln!("[voicepaste] setting up global shortcuts...");
-            setup_global_shortcuts(app)?;
-            eprintln!("[voicepaste] global shortcuts ready");
+            // Setup global hotkeys via keytap
+            eprintln!("[voicepaste] setting up global hotkeys (keytap)...");
+            setup_keytap_hotkeys(app)?;
+            eprintln!("[voicepaste] global hotkeys ready");
 
             Ok(())
         })
@@ -190,28 +185,8 @@ fn should_enable_escape_shortcut(state: &app_state::AppState) -> bool {
 }
 
 fn sync_escape_shortcut(app: &AppHandle, state: &app_state::AppState) {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-
-    let _ = app.global_shortcut().unregister(escape_shortcut());
-    if !should_enable_escape_shortcut(state) {
-        return;
-    }
-
-    let app_handle = app.clone();
-    let result = app.global_shortcut().on_shortcut(
-        escape_shortcut(),
-        move |_triggered_app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                let handle = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    cancel_recording(handle).await;
-                });
-            }
-        },
-    );
-
-    if let Err(error) = result {
-        eprintln!("[shortcut] failed to register Escape: {}", error);
+    if let Some(hc) = app.try_state::<hotkey::HotkeyConfig>() {
+        hotkey::set_escape_enabled(&hc, should_enable_escape_shortcut(state));
     }
 }
 
@@ -372,102 +347,35 @@ fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Register global shortcuts based on the current configuration.
-/// Reads the hotkey from the cached config and registers it via the global-shortcut plugin.
-fn setup_global_shortcuts(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-
-    // Use the shared ConfigManager from managed state (cached in memory)
+/// Initialize keytap-based global hotkey listener.
+fn setup_keytap_hotkeys(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let app_inner: std::sync::Arc<app_state::AppInner> =
         (*app.state::<std::sync::Arc<app_state::AppInner>>()).clone();
 
-    if let Ok(config) = app_inner.config_manager.load_config() {
-        let hotkey_value = &config.app.hotkey;
-        let hotkey_mode = config.app.hotkey_mode.as_str();
-        eprintln!("[shortcut] config loaded, hotkey value: {:?}, mode: {}", hotkey_value, hotkey_mode);
+    let config = app_inner.config_manager.load_config().map_err(|e| format!("{}", e))?;
+    let hotkey_str = match &config.app.hotkey {
+        serde_yaml::Value::String(s) => s.clone(),
+        _ => String::new(),
+    };
+    let hotkey_mode = config.app.hotkey_mode.as_str();
 
-        // For simple string hotkeys (like "Control+Space", "F13"), register via plugin
-        if let serde_yaml::Value::String(hotkey_str) = hotkey_value {
-            eprintln!("[shortcut] hotkey string: '{}'", hotkey_str);
-            if !hotkey_str.is_empty() {
-                // Parse the accelerator string and register
-                if let Some(shortcut) = parse_accelerator_to_shortcut(hotkey_str) {
-                    eprintln!("[shortcut] registering shortcut for: {} (mode: {})", hotkey_str, hotkey_mode);
-                    let app_handle = app.handle().clone();
-                    let mode = hotkey_mode.to_string();
-                    app.global_shortcut().on_shortcut(
-                        shortcut,
-                        move |_triggered_app, _triggered_shortcut, event| {
-                            let handle = app_handle.clone();
-                            let mode = mode.clone();
-                            match event.state {
-                                ShortcutState::Pressed => {
-                                    tauri::async_runtime::spawn(async move {
-                                        on_hotkey_pressed(handle, &mode, None).await;
-                                    });
-                                }
-                                ShortcutState::Released => {
-                                    tauri::async_runtime::spawn(async move {
-                                        on_hotkey_released(handle, &mode).await;
-                                    });
-                                }
-                            }
-                        },
-                    )?;
-                } else {
-                    eprintln!("[shortcut] failed to parse hotkey: '{}'", hotkey_str);
-                }
-            }
-        }
-        // For array hotkeys (custom key combinations), the rdev listener handles them
-    } else {
-        eprintln!("[shortcut] failed to load config");
-    }
-
-    // Register prompt shortcuts (from cached prompts)
     let prompts = app_inner.config_manager.load_prompts();
-    for prompt in &prompts {
-        let hotkey = &prompt.hotkey;
-        let shortcut = parse_prompt_hotkey(hotkey);
+    let bindings = hotkey::build_initial_bindings(&hotkey_str, hotkey_mode, &prompts);
 
-        if let Some(shortcut) = shortcut {
-            let app_handle = app.handle().clone();
-            let prompt_id = prompt.id.clone();
-            let prompt_title = prompt.title.clone();
-            let prompt_mode = prompt.hotkey_mode.clone();
-            app.global_shortcut()
-                .on_shortcut(shortcut, move |_triggered_app, _triggered, event| {
-                    let handle = app_handle.clone();
-                    let mode = prompt_mode.clone();
-                    let pid = prompt_id.clone();
-                    match event.state {
-                        ShortcutState::Pressed => {
-                            eprintln!(
-                                "[shortcut] prompt shortcut triggered: {} ({})",
-                                prompt_title, prompt_id
-                            );
-                            tauri::async_runtime::spawn(async move {
-                                on_hotkey_pressed(handle, &mode, Some(pid)).await;
-                            });
-                        }
-                        ShortcutState::Released => {
-                            tauri::async_runtime::spawn(async move {
-                                on_hotkey_released(handle, &mode).await;
-                            });
-                        }
-                    }
-                })
-                .ok();
-        } else if !hotkey.is_sequence() || !hotkey.as_sequence().unwrap().is_empty() {
-            eprintln!(
-                "[shortcut] prompt '{}' hotkey {:?} uses unsupported keycodes, skipping",
-                prompt.title, hotkey
-            );
-        }
-    }
+    let hotkey_config = hotkey::create_config(bindings);
+    let hotkey_manager = hotkey::start_hotkey_listener(hotkey_config.clone(), app.handle().clone())
+        .map_err(|e| format!("keytap init failed: {:?}", e))?;
+
+    app.manage(hotkey_config);
+    // Keep the manager alive for the app lifetime (its Drop stops the tap)
+    app.manage(HotkeyManagerState(std::sync::Mutex::new(hotkey_manager)));
 
     Ok(())
 }
+
+/// Wrapper to keep the HotkeyManager alive as Tauri managed state.
+#[allow(dead_code)]
+struct HotkeyManagerState(std::sync::Mutex<hotkey::HotkeyManager>);
 
 /// Simple recording toggle state managed by Tauri.
 struct RecordingState(std::sync::Mutex<bool>);
@@ -567,11 +475,34 @@ async fn start_recording(app_handle: AppHandle) {
         return;
     }
 
+    // Check if recording was cancelled during warmup (hold mode: quick press-release)
+    if !*recording_state.0.lock().unwrap() {
+        eprintln!("[recording] cancelled during warmup, aborting start");
+        stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+        set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+        if let Some(overlay) = app_handle.get_webview_window("overlay") {
+            let _ = overlay.hide();
+        }
+        return;
+    }
+
     // 3. Create ASR session
     match crate::asr::create_asr_session(&config.connection, &config.audio, &config.request)
         .await
     {
         Ok((session, event_rx)) => {
+            // Check if recording was cancelled during ASR connection
+            if !*recording_state.0.lock().unwrap() {
+                eprintln!("[recording] cancelled during ASR connection, closing session");
+                session.close();
+                stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+                set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+                if let Some(overlay) = app_handle.get_webview_window("overlay") {
+                    let _ = overlay.hide();
+                }
+                return;
+            }
+
             *app_inner.asr_session.lock().await = Some(session.clone());
             set_app_state(&app_handle, &app_inner, app_state::AppState::Recording).await;
 
@@ -875,283 +806,34 @@ async fn forward_asr_events(
     eprintln!("[events] event forwarding task ended");
 }
 
-/// Unregister all global shortcuts and re-register a single hotkey.
-/// Used after saving config so the new hotkey takes effect immediately
-/// without requiring an app restart.
-pub fn reload_shortcuts(
-    app: &AppHandle,
-    hotkey_str: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+/// Reload all hotkey bindings from the current config and prompts.
+/// Called after saving config or prompts so changes take effect immediately.
+pub fn reload_hotkey_bindings(app: &AppHandle) {
+    let Some(hc) = app.try_state::<hotkey::HotkeyConfig>() else {
+        eprintln!("[hotkey] HotkeyConfig not in managed state");
+        return;
+    };
 
-    // Unregister all current shortcuts
-    let _ = app.global_shortcut().unregister_all();
+    let app_inner = app.state::<std::sync::Arc<app_state::AppInner>>();
+    let config = match app_inner.config_manager.load_config() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[hotkey] failed to load config for reload: {}", e);
+            return;
+        }
+    };
 
-    // Read the current hotkey mode from managed state
+    let hotkey_str = match &config.app.hotkey {
+        serde_yaml::Value::String(s) => s.clone(),
+        _ => String::new(),
+    };
+
     let mode = app
         .try_state::<HotkeyMode>()
         .map(|m| m.0.lock().unwrap().clone())
         .unwrap_or_else(|| "toggle".to_string());
 
-    // Register the new hotkey
-    if !hotkey_str.is_empty() {
-        if let Some(shortcut) = parse_accelerator_to_shortcut(hotkey_str) {
-            let app_handle = app.clone();
-            let mode_clone = mode.clone();
-            app.global_shortcut().on_shortcut(
-                shortcut,
-                move |_triggered_app, _triggered, event| {
-                    let handle = app_handle.clone();
-                    let m = mode_clone.clone();
-                    match event.state {
-                        ShortcutState::Pressed => {
-                            tauri::async_runtime::spawn(async move {
-                                on_hotkey_pressed(handle, &m, None).await;
-                            });
-                        }
-                        ShortcutState::Released => {
-                            tauri::async_runtime::spawn(async move {
-                                on_hotkey_released(handle, &m).await;
-                            });
-                        }
-                    }
-                },
-            )?;
-        } else {
-            eprintln!("[shortcut] reload: failed to parse hotkey '{}'", hotkey_str);
-        }
-    }
-
-    // Re-register prompt shortcuts (unregister_all above removed them)
-    // Use the shared ConfigManager from managed state (cached in memory)
-    let app_inner = app.state::<std::sync::Arc<app_state::AppInner>>();
     let prompts = app_inner.config_manager.load_prompts();
-    for prompt in &prompts {
-        let shortcut = parse_prompt_hotkey(&prompt.hotkey);
-        if let Some(shortcut) = shortcut {
-            let app_handle = app.clone();
-            let prompt_id = prompt.id.clone();
-            let prompt_mode = prompt.hotkey_mode.clone();
-            app.global_shortcut()
-                .on_shortcut(shortcut, move |_app, _shortcut, event| {
-                    let handle = app_handle.clone();
-                    let mode = prompt_mode.clone();
-                    let pid = prompt_id.clone();
-                    match event.state {
-                        ShortcutState::Pressed => {
-                            tauri::async_runtime::spawn(async move {
-                                on_hotkey_pressed(handle, &mode, Some(pid)).await;
-                            });
-                        }
-                        ShortcutState::Released => {
-                            tauri::async_runtime::spawn(async move {
-                                on_hotkey_released(handle, &mode).await;
-                            });
-                        }
-                    }
-                })
-                .ok();
-        }
-    }
-
-    Ok(())
+    hotkey::reload_bindings(&hc, &hotkey_str, &mode, &prompts);
 }
 
-/// Parse a prompt hotkey value that can be either:
-/// - A string array like `["Control+Shift+A"]` (new format, from DOM recording)
-/// - A number array like `[29, 54, 4]` (legacy uIOhook format)
-fn parse_prompt_hotkey(hotkey: &serde_yaml::Value) -> Option<Shortcut> {
-    let seq = hotkey.as_sequence()?;
-
-    // Try string format first: ["Control+Shift+A"]
-    if let Some(first) = seq.first() {
-        if let Some(s) = first.as_str() {
-            return parse_accelerator_to_shortcut(s);
-        }
-    }
-
-    // Fall back to uIOhook keycode format: [29, 54, 4]
-    let keycodes: Vec<u32> = seq.iter().filter_map(|v| v.as_u64().map(|n| n as u32)).collect();
-    if keycodes.is_empty() {
-        return None;
-    }
-    keycode_array_to_shortcut(&keycodes)
-}
-
-/// Convert a uIOhook keycode array (used in prompt hotkeys) to a Tauri
-/// global-shortcut `Shortcut`. Only modifiers and common special keys are
-/// mapped; alphanumeric keys are not supported yet.
-fn keycode_array_to_shortcut(keycodes: &[u32]) -> Option<Shortcut> {
-    use tauri_plugin_global_shortcut::{Code, Modifiers};
-
-    let mut modifiers = Modifiers::empty();
-    let mut main_key = None;
-
-    for &kc in keycodes {
-        match kc {
-            0x001D | 0x009D => modifiers |= Modifiers::CONTROL, // Left/Right Ctrl
-            0x002E | 0x0036 => modifiers |= Modifiers::SHIFT,   // Left/Right Shift
-            0x0038 | 0x0138 => modifiers |= Modifiers::ALT,     // Left/Right Alt
-            0x0037 | 0x00D7 => modifiers |= Modifiers::SUPER,   // Left/Right Meta/Cmd
-            0x0020 => main_key = Some(Code::Space),
-            0x0028 => main_key = Some(Code::Enter),
-            0x002A => main_key = Some(Code::Backspace),
-            0x002B => main_key = Some(Code::Tab),
-            0x003B => main_key = Some(Code::F1),
-            0x003C => main_key = Some(Code::F2),
-            0x003D => main_key = Some(Code::F3),
-            0x003E => main_key = Some(Code::F4),
-            0x003F => main_key = Some(Code::F5),
-            0x0040 => main_key = Some(Code::F6),
-            0x0041 => main_key = Some(Code::F7),
-            0x0042 => main_key = Some(Code::F8),
-            0x0043 => main_key = Some(Code::F9),
-            0x0044 => main_key = Some(Code::F10),
-            0x0057 => main_key = Some(Code::F11),
-            0x0058 => main_key = Some(Code::F12),
-            _ => {
-                eprintln!(
-                    "[shortcut] unsupported keycode 0x{:04X}, skipping prompt shortcut",
-                    kc
-                );
-                return None;
-            }
-        }
-    }
-
-    main_key.map(|k| {
-        let mods = if modifiers.is_empty() {
-            None
-        } else {
-            Some(modifiers)
-        };
-        Shortcut::new(mods, k)
-    })
-}
-
-/// Parse an Electron-style accelerator string (e.g. "Control+Space", "F13")
-/// into a Tauri global-shortcut Shortcut.
-fn parse_accelerator_to_shortcut(accelerator: &str) -> Option<Shortcut> {
-    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
-
-    let parts: Vec<&str> = accelerator.split('+').map(|p| p.trim()).collect();
-    if parts.is_empty() {
-        return None;
-    }
-
-    let mut modifiers = Modifiers::empty();
-    let mut code = None;
-
-    for part in parts {
-        let lower = part.to_lowercase();
-        match lower.as_str() {
-            "ctrl" | "control" => modifiers |= Modifiers::CONTROL,
-            "shift" => modifiers |= Modifiers::SHIFT,
-            "alt" | "option" => modifiers |= Modifiers::ALT,
-            "super" | "cmd" | "command" | "meta" => modifiers |= Modifiers::SUPER,
-            "cmdorctrl" | "commandorcontrol" => {
-                if cfg!(target_os = "macos") {
-                    modifiers |= Modifiers::SUPER;
-                } else {
-                    modifiers |= Modifiers::CONTROL;
-                }
-            }
-            "space" => code = Some(Code::Space),
-            "enter" | "return" => code = Some(Code::Enter),
-            "tab" => code = Some(Code::Tab),
-            "escape" | "esc" => code = Some(Code::Escape),
-            "backspace" => code = Some(Code::Backspace),
-            "up" => code = Some(Code::ArrowUp),
-            "down" => code = Some(Code::ArrowDown),
-            "left" => code = Some(Code::ArrowLeft),
-            "right" => code = Some(Code::ArrowRight),
-            s if s.starts_with('f') && s.len() <= 3 => {
-                if let Ok(n) = s[1..].parse::<u32>() {
-                    code = match n {
-                        1 => Some(Code::F1),
-                        2 => Some(Code::F2),
-                        3 => Some(Code::F3),
-                        4 => Some(Code::F4),
-                        5 => Some(Code::F5),
-                        6 => Some(Code::F6),
-                        7 => Some(Code::F7),
-                        8 => Some(Code::F8),
-                        9 => Some(Code::F9),
-                        10 => Some(Code::F10),
-                        11 => Some(Code::F11),
-                        12 => Some(Code::F12),
-                        13 => Some(Code::F13),
-                        14 => Some(Code::F14),
-                        15 => Some(Code::F15),
-                        16 => Some(Code::F16),
-                        17 => Some(Code::F17),
-                        18 => Some(Code::F18),
-                        19 => Some(Code::F19),
-                        20 => Some(Code::F20),
-                        21 => Some(Code::F21),
-                        22 => Some(Code::F22),
-                        23 => Some(Code::F23),
-                        24 => Some(Code::F24),
-                        _ => None,
-                    };
-                }
-            }
-            s if s.len() == 1 && s.chars().next().unwrap().is_ascii_alphabetic() => {
-                code = match s {
-                    "a" => Some(Code::KeyA),
-                    "b" => Some(Code::KeyB),
-                    "c" => Some(Code::KeyC),
-                    "d" => Some(Code::KeyD),
-                    "e" => Some(Code::KeyE),
-                    "f" => Some(Code::KeyF),
-                    "g" => Some(Code::KeyG),
-                    "h" => Some(Code::KeyH),
-                    "i" => Some(Code::KeyI),
-                    "j" => Some(Code::KeyJ),
-                    "k" => Some(Code::KeyK),
-                    "l" => Some(Code::KeyL),
-                    "m" => Some(Code::KeyM),
-                    "n" => Some(Code::KeyN),
-                    "o" => Some(Code::KeyO),
-                    "p" => Some(Code::KeyP),
-                    "q" => Some(Code::KeyQ),
-                    "r" => Some(Code::KeyR),
-                    "s" => Some(Code::KeyS),
-                    "t" => Some(Code::KeyT),
-                    "u" => Some(Code::KeyU),
-                    "v" => Some(Code::KeyV),
-                    "w" => Some(Code::KeyW),
-                    "x" => Some(Code::KeyX),
-                    "y" => Some(Code::KeyY),
-                    "z" => Some(Code::KeyZ),
-                    _ => None,
-                };
-            }
-            s if s.len() == 1 && s.chars().next().unwrap().is_ascii_digit() => {
-                code = match s {
-                    "0" => Some(Code::Digit0),
-                    "1" => Some(Code::Digit1),
-                    "2" => Some(Code::Digit2),
-                    "3" => Some(Code::Digit3),
-                    "4" => Some(Code::Digit4),
-                    "5" => Some(Code::Digit5),
-                    "6" => Some(Code::Digit6),
-                    "7" => Some(Code::Digit7),
-                    "8" => Some(Code::Digit8),
-                    "9" => Some(Code::Digit9),
-                    _ => None,
-                };
-            }
-            _ => {}
-        }
-    }
-
-    code.map(|c| {
-        let mods = if modifiers.is_empty() {
-            None
-        } else {
-            Some(modifiers)
-        };
-        Shortcut::new(mods, c)
-    })
-}

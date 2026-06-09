@@ -279,6 +279,15 @@
       Alt: "⌥",
       Option: "⌥",
       Space: "␣",
+      // Side-specific modifier names (from keytap)
+      ControlLeft: "L ⌃",
+      ControlRight: "R ⌃",
+      ShiftLeft: "L ⇧",
+      ShiftRight: "R ⇧",
+      AltLeft: "L ⌥",
+      AltRight: "R ⌥",
+      MetaLeft: "L ⌘",
+      MetaRight: "R ⌘",
     };
     return aliases[key] || key;
   }

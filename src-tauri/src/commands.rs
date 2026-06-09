@@ -92,11 +92,7 @@ pub async fn save_config(
         *hotkey_mode.0.lock().unwrap() = updated_config.app.hotkey_mode.clone();
     }
 
-    let hotkey_str = match &updated_config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
-        _ => String::new(),
-    };
-    crate::reload_shortcuts(&app, &hotkey_str).ok();
+    crate::reload_hotkey_bindings(&app);
 
     let updated_text = state.config_manager.read_config_text()?;
     let config = state.config_manager.load_config()?;
@@ -131,11 +127,7 @@ pub async fn save_config_object(
     }
 
     // Re-register shortcuts with the new hotkey from the config object
-    let hotkey_str = match config_object.get("app").and_then(|a| a.get("hotkey")) {
-        Some(serde_yaml::Value::String(s)) => s.clone(),
-        _ => String::new(),
-    };
-    crate::reload_shortcuts(&app, &hotkey_str).ok();
+    crate::reload_hotkey_bindings(&app);
 
     let config_text = state.config_manager.read_config_text()?;
     let parsed = state.config_manager.get_editable_config()?;
@@ -169,11 +161,7 @@ pub async fn reset_config(
     if let Some(hotkey_mode) = app.try_state::<HotkeyMode>() {
         *hotkey_mode.0.lock().unwrap() = config.app.hotkey_mode.clone();
     }
-    let hotkey_str = match &config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
-        _ => String::new(),
-    };
-    crate::reload_shortcuts(&app, &hotkey_str).ok();
+    crate::reload_hotkey_bindings(&app);
 
     let config_text = state.config_manager.read_config_text()?;
     let parsed = state.config_manager.get_editable_config()?;
@@ -201,12 +189,7 @@ pub async fn save_prompts(
     state.config_manager.save_prompts(&prompts)?;
 
     // Reload shortcuts so changed prompt hotkeys take effect immediately
-    let config = state.config_manager.load_config()?;
-    let hotkey_str = match &config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
-        _ => String::new(),
-    };
-    crate::reload_shortcuts(&app, &hotkey_str).ok();
+    crate::reload_hotkey_bindings(&app);
 
     Ok(serde_json::json!({ "ok": true }))
 }
