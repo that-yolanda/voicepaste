@@ -19,9 +19,20 @@ Use this skill for project-specific GitHub release work in this repository. Foll
 
 ## Version Location
 
-| Item | File | Field |
-|------|------|-------|
-| Version | `package.json` | `version` |
+**Single source of truth: `package.json` → `"version"`**
+
+Only change version in `package.json`. The pack script (`scripts/pack.js`) automatically syncs it to `Cargo.toml` before building. `tauri.conf.json` omits the `version` field entirely — Tauri reads from `Cargo.toml` at build time.
+
+| File | Field | How it stays in sync |
+|------|-------|---------------------|
+| `package.json` | `"version"` | ✏️ **Only file to edit manually** |
+| `src-tauri/Cargo.toml` | `version = "..."` | Auto-synced by `pack.js` before build |
+| `src-tauri/tauri.conf.json` | *(omitted)* | Falls back to `Cargo.toml` |
+
+When updating the version, only modify `package.json`:
+```bash
+node -e "const p=require('./package.json'); p.version='1.4.0'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n')"
+```
 
 ## Workflow
 

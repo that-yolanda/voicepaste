@@ -27,6 +27,12 @@ Pack platform keys: `apple_aarch64`, `apple_x64`, `win_x64`. Multiple platforms 
 
 No test framework is configured.
 
+## Version Management
+
+**Single source of truth: `package.json` → `"version"`**
+
+Only change the version in `package.json`. The pack script auto-syncs it to `Cargo.toml` before building. `tauri.conf.json` omits `version` — Tauri reads from `Cargo.toml` at build time.
+
 ## Architecture
 
 ### Rust Backend (`src-tauri/src/`)

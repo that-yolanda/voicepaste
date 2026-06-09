@@ -344,6 +344,20 @@ async function main() {
     }
   }
 
+  // Sync version from package.json → Cargo.toml
+  // (tauri.conf.json omits "version" so Tauri reads from Cargo.toml at build time)
+  const version = require(path.join(rootDir, "package.json")).version;
+  const cargoTomlPath = path.join(rootDir, "src-tauri", "Cargo.toml");
+  const cargoToml = fs.readFileSync(cargoTomlPath, "utf8");
+  const updatedToml = cargoToml.replace(
+    /^version\s*=\s*"[^"]*"/m,
+    `version = "${version}"`,
+  );
+  if (cargoToml !== updatedToml) {
+    fs.writeFileSync(cargoTomlPath, updatedToml);
+    console.log(`Synced version → Cargo.toml: ${version}`);
+  }
+
   // Environment setup
   if (sign) {
     validateSigningEnv(compatible);
@@ -391,7 +405,6 @@ async function main() {
   }
 
   // Generate updater metadata (renames bundles + creates latest-*.json)
-  const version = require(path.join(rootDir, "package.json")).version;
   if (hasSigningKey) {
     generateUpdaterArtifacts(compatible, version, beta);
   }
