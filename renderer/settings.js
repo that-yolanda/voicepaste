@@ -903,7 +903,7 @@
         }, 2000);
         break;
       case "available":
-        el.aboutUpdateBtn.textContent = "立即更新";
+        el.aboutUpdateBtn.textContent = "前往下载";
         el.aboutUpdateBtn.disabled = false;
         el.aboutUpdateBtn.className = "btn btn-sm btn-accent";
         el.aboutUpdateStatus.textContent = `发现新版本`;
@@ -958,10 +958,7 @@
           .catch((err) => setUpdateState("error", { message: err.message || "检查更新失败" }));
         break;
       case "available":
-        setUpdateState("downloading");
-        window.voiceSettings
-          .downloadUpdate()
-          .catch((err) => setUpdateState("error", { message: err.message || "下载更新失败" }));
+        window.open("https://github.com/that-yolanda/voicepaste/releases", "_blank");
         break;
       case "downloaded":
         setUpdateState("installing");
