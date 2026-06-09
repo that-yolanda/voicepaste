@@ -132,3 +132,32 @@ All logging uses the `log` crate with custom macros defined in `src-tauri/src/lo
 - Max size: 300KB
 - Rotation: gzip-compressed to `voicepaste.log.gz`, keeps only 1 backup
 - Only INFO and above written to file
+
+## Update Channels
+
+VoicePaste uses two update channels (stable and beta) served from the same GitHub repository. The key constraint is that **GitHub's `/releases/latest/` URL only resolves to the latest non-prerelease release** — there is no static URL for prerelease releases.
+
+### How It Works
+
+Both `latest-*.json` (stable) and `latest-beta-*.json` (beta) are uploaded to the **stable release**. The beta JSON's `url` field points to the actual download assets in the prerelease release.
+
+```
+Stable Release (v1.3.0)                      Beta Release (v1.3.1-beta.1, --prerelease)
+├── latest-darwin-aarch64.json (stable)       ├── VoicePaste_1.3.1-beta.1_aarch64.app.tar.gz
+├── latest-beta-darwin-aarch64.json (beta)    └── VoicePaste_1.3.1-beta.1_aarch64.app.tar.gz.sig
+├── VoicePaste_1.3.0_aarch64.dmg
+└── ...
+```
+
+### Release Workflow
+
+1. **Stable release**: `gh release create v1.3.0 --latest`, upload stable artifacts + `latest-*.json`
+2. **Beta release**: `gh release create v1.3.1-beta.1 --prerelease`, upload beta artifacts. Then upload `latest-beta-*.json` to the latest stable release: `gh release upload v1.3.0 latest-beta-*.json --clobber`
+3. **Beta → Stable**: Create a new stable release (e.g., `v1.3.1`). The new release becomes `/releases/latest/`, and the old beta metadata is no longer reachable.
+
+### Why This Approach
+
+- Tauri has no native multi-channel updater support
+- GitHub has no static URL for "latest prerelease"
+- `--prerelease` protects the Electron version on `main` branch
+- SemVer guarantees `1.3.0-beta.1 < 1.3.0` — stable users never see beta updates

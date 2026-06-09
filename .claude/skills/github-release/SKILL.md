@@ -145,14 +145,22 @@ Consider using `--draft` first for safety, then publish after the user approves 
 
 ### Beta Release Flow
 
+> **Important**: Beta metadata (`latest-beta-*.json`) must be uploaded to the **latest stable release** (not just the prerelease) because `/releases/latest/` skips prerelease releases. See "Update Channels" section below for the full architecture.
+
 1. Set version in `package.json` to `x.y.z-beta.n` (e.g., `1.3.0-beta.1`)
 2. Sync version to `tauri.conf.json` (`"version"`) and `Cargo.toml` (`version = "..."`)
 3. Build: `pnpm run pack -s --beta -p apple_aarch64`
 4. Artifacts in `dist/` will contain `latest-beta-*.json` (renamed from `latest-*.json`)
 5. Create prerelease: `gh release create vx.y.z-beta.n --prerelease`
-6. Upload all artifacts including `latest-beta-*` files
-7. Users with `beta_updates: true` in config will receive this update
-8. When ready for stable: set version to `x.y.z` (no suffix), build without `--beta`, create non-prerelease release
+6. Upload beta artifacts (installers + tar.gz + sig) to the prerelease release
+7. **Upload `latest-beta-*.json` to the latest stable release** (so beta users can discover the update via `/releases/latest/download/latest-beta-*.json`):
+   ```bash
+   # Find the latest stable release tag
+   STABLE_TAG=$(gh release list --limit 10 --json tagName,isPrerelease --jq '.[] | select(.isPrerelease == false) | .tagName' | head -1)
+   gh release upload "$STABLE_TAG" dist/latest-beta-*.json --clobber
+   ```
+8. Users with `beta_updates: true` in config will receive this update
+9. When ready for stable: set version to `x.y.z` (no suffix), build without `--beta`, create non-prerelease release as usual
 
 ### Step 10: Upload Artifacts
 
@@ -185,6 +193,47 @@ Mirror the historical GitHub Release style:
 - Keep the list concise: usually 3-6 bullets.
 - Rewrite release notes for users. Do not paste file-level implementation details.
 - If the release is mostly fixes, `## What's Changed` is also acceptable.
+
+## Update Channels
+
+VoicePaste uses two update channels served from the same GitHub repository. The key constraint is that **GitHub's `/releases/latest/` URL only resolves to the latest non-prerelease release** — there is no equivalent URL for prerelease releases.
+
+### Architecture
+
+```
+Stable Release (v1.3.0, --latest)
+├── latest-darwin-aarch64.json          ← stable metadata
+├── latest-beta-darwin-aarch64.json     ← beta metadata (url points to beta release assets)
+├── VoicePaste_1.3.0_aarch64.dmg
+└── ...
+
+Beta Release (v1.3.1-beta.1, --prerelease)
+├── VoicePaste_1.3.1-beta.1_aarch64.dmg
+├── VoicePaste_1.3.1-beta.1_aarch64.app.tar.gz
+└── VoicePaste_1.3.1-beta.1_aarch64.app.tar.gz.sig
+```
+
+### Endpoint URLs
+
+| Channel | URL Pattern |
+|---------|-------------|
+| Stable | `.../releases/latest/download/latest-{target}-{arch}.json` |
+| Beta | `.../releases/latest/download/latest-beta-{target}-{arch}.json` |
+
+Both URLs resolve from the **stable release** because `/releases/latest/` skips prerelease. The beta JSON's `url` field points to the actual download in the prerelease release.
+
+### Release Sequence
+
+1. **Stable release**: Create with `--latest`, upload stable artifacts + `latest-*.json`
+2. **Beta release**: Create with `--prerelease`, upload beta artifacts. Then upload `latest-beta-*.json` to the latest stable release via `gh release upload <stable-tag> latest-beta-*.json --clobber`
+3. **Beta → Stable**: Create a new stable release as usual. The old `latest-beta-*.json` stays in the previous stable release but is no longer reachable (the new stable release becomes `/releases/latest/`). If a new beta is needed, upload a new `latest-beta-*.json` to the new stable release.
+
+### Why This Approach
+
+- GitHub has no static URL for "latest prerelease" — must use REST API (requires auth, not suitable for desktop apps)
+- Tauri has no native multi-channel updater support ([tauri-apps/tauri#2595](https://github.com/tauri-apps/tauri/issues/2595))
+- `--prerelease` flag ensures `electron-updater` on the `main` branch ignores beta releases
+- SemVer guarantees `1.3.0-beta.1 < 1.3.0`, so stable users are never offered beta updates
 
 ## Artifact Rules
 

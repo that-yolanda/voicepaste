@@ -123,6 +123,17 @@ For release work, use the project skill at `.claude/skills/github-release`. It i
 - Ensure version, docs, and artifacts all match the target release version before uploading
 - Do not upload partial release assets
 
+### Beta Update Channel
+
+VoicePaste supports a beta update channel for prerelease testing. The architecture is critical to get right:
+
+- **`/releases/latest/` only resolves to the latest non-prerelease release** — there is no static URL for prerelease releases on GitHub
+- Both `latest-*.json` (stable) and `latest-beta-*.json` (beta) must be uploaded to the **stable release** so both URLs resolve
+- The beta JSON's `url` field points to the actual assets in the prerelease release
+- When publishing a beta: create a `--prerelease` release with beta artifacts, then **also upload `latest-beta-*.json` to the latest stable release** via `gh release upload <stable-tag> latest-beta-*.json --clobber`
+- `--prerelease` flag ensures the Electron version on `main` branch ignores beta releases
+- See `.claude/skills/github-release/SKILL.md` for the full release workflow
+
 ## Key Conventions
 
 - Rust backend with Tauri v2 plugins (clipboard-manager, shell, dialog, autostart, updater, process)
