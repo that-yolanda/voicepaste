@@ -931,7 +931,8 @@
         el.aboutUpdateBtn.textContent = "前往下载";
         el.aboutUpdateBtn.disabled = false;
         el.aboutUpdateBtn.className = "btn btn-sm btn-accent";
-        el.aboutUpdateStatus.textContent = "跳转 GitHub Releases 手动下载";
+        el.aboutUpdateStatus.textContent = "发现新版本";
+        if (el.updateBadge) el.updateBadge.style.display = "";
         break;
     }
   }
