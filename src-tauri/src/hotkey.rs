@@ -395,7 +395,8 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
     loop {
         match tap.recv_timeout(std::time::Duration::from_millis(100)) {
             Ok(event) => {
-                let key = match event.kind {
+                let event_kind = event.kind;
+                let key = match event_kind {
                     EventKind::KeyDown(k) => {
                         held.insert(k);
                         Some(k)
@@ -413,7 +414,11 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
 
                 // Check escape cancellation
                 let cfg = config.read().unwrap();
-                if cfg.escape_enabled && held.contains(&Key::Escape) && held.len() == 1 {
+                if matches!(event_kind, EventKind::KeyUp(Key::Escape)) {
+                    escape_was_pressed = false;
+                }
+
+                if cfg.escape_enabled && matches!(event_kind, EventKind::KeyDown(Key::Escape)) {
                     if !escape_was_pressed {
                         escape_was_pressed = true;
                         let handle = app_handle.clone();
@@ -421,8 +426,6 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                             crate::cancel_recording(handle).await;
                         });
                     }
-                } else {
-                    escape_was_pressed = false;
                 }
 
                 // Match hotkey bindings
