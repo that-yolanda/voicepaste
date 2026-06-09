@@ -220,6 +220,83 @@ function collectArtifacts(platformKey) {
 }
 
 // ---------------------------------------------------------------------------
+// Updater metadata generation
+// ---------------------------------------------------------------------------
+const UPDATER_PLATFORMS = {
+  apple_aarch64: { id: "darwin-aarch64", arch: "aarch64", ext: ".app.tar.gz" },
+  apple_x64: { id: "darwin-x86_64", arch: "x64", ext: ".app.tar.gz" },
+  win_x64: { id: "windows-x86_64", arch: "x64", ext: ".nsis.zip" },
+};
+
+/**
+ * After artifact collection, generates updater metadata JSON files.
+ * Also renames updater bundles to include version + arch for uniqueness.
+ *
+ * - dist/VoicePaste.app.tar.gz → VoicePaste_1.3.0-beta.1_aarch64.app.tar.gz
+ * - Generates latest-beta-darwin-aarch64.json (or latest-darwin-aarch64.json)
+ */
+function generateUpdaterArtifacts(platforms, version, beta) {
+  const distDir = path.join(__dirname, "..", "dist");
+  const repoUrl = "https://github.com/that-yolanda/voicepaste/releases/download";
+  const suffix = beta ? "-beta" : "";
+
+  console.log("\n=== Generating updater metadata ===");
+
+  for (const p of platforms) {
+    const cfg = UPDATER_PLATFORMS[p];
+    if (!cfg) continue;
+
+    // Find updater bundle in dist (e.g. VoicePaste.app.tar.gz)
+    const files = fs.readdirSync(distDir);
+    const bundleFile = files.find((f) => f.endsWith(cfg.ext));
+    if (!bundleFile) {
+      console.log(`  Skipping ${p}: no ${cfg.ext} bundle found`);
+      continue;
+    }
+
+    const sigFile = bundleFile + ".sig";
+    if (!files.includes(sigFile)) {
+      console.log(`  Skipping ${p}: no signature file (${sigFile}) found`);
+      continue;
+    }
+
+    // Rename bundle + sig to include version and arch
+    const baseName = `VoicePaste_${version}_${cfg.arch}`;
+    const newBundle = `${baseName}${cfg.ext}`;
+    const newSig = `${newBundle}.sig`;
+
+    if (bundleFile !== newBundle) {
+      fs.renameSync(path.join(distDir, bundleFile), path.join(distDir, newBundle));
+    }
+    if (sigFile !== newSig) {
+      fs.renameSync(path.join(distDir, sigFile), path.join(distDir, newSig));
+    }
+
+    // Read signature
+    const signature = fs
+      .readFileSync(path.join(distDir, newSig), "utf8")
+      .trim();
+
+    // Generate updater JSON
+    const jsonName = `latest${suffix}-${cfg.id}.json`;
+    const json = {
+      version,
+      date: new Date().toISOString(),
+      url: `${repoUrl}/v${version}/${newBundle}`,
+      signature,
+    };
+
+    fs.writeFileSync(
+      path.join(distDir, jsonName),
+      JSON.stringify(json, null, 2) + "\n",
+    );
+
+    console.log(`  ${bundleFile} → ${newBundle}`);
+    console.log(`  Generated ${jsonName}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
@@ -313,20 +390,15 @@ async function main() {
     }
   }
 
-  // For beta builds, rename latest-*.json to latest-beta-*.json
-  if (beta) {
-    console.log("\n=== Beta mode: renaming update metadata ===");
-    for (const entry of fs.readdirSync(distDir)) {
-      if (entry.startsWith("latest-") && entry.endsWith(".json") && !entry.includes("-beta-")) {
-        const newName = entry.replace("latest-", "latest-beta-");
-        fs.renameSync(path.join(distDir, entry), path.join(distDir, newName));
-        console.log(`  ${entry} → ${newName}`);
-      }
-    }
+  // Generate updater metadata (renames bundles + creates latest-*.json)
+  const version = require(path.join(rootDir, "package.json")).version;
+  if (hasSigningKey) {
+    generateUpdaterArtifacts(compatible, version, beta);
   }
 
   console.log(`\nArtifacts in ./dist/:`);
-  for (const a of allArtifacts.sort()) {
+  const finalArtifacts = fs.readdirSync(distDir).sort();
+  for (const a of finalArtifacts) {
     const stat = fs.statSync(path.join(distDir, a));
     const size =
       stat.size > 1024 * 1024
@@ -335,7 +407,7 @@ async function main() {
     console.log(`  ${a} (${size})`);
   }
 
-  console.log(`\nDone! ${allArtifacts.length} artifacts in ${path.relative(rootDir, distDir)}/`);
+  console.log(`\nDone! ${finalArtifacts.length} artifacts in ${path.relative(rootDir, distDir)}/`);
 }
 
 main();
