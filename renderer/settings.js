@@ -9,7 +9,6 @@
   let currentOverlayGlassMode = "auto";
   let currentPlatform = "";
   let currentLlmProvider = "deepseek";
-  let hasAutoCheckedUpdates = false;
 
   const LLM_PROVIDERS = {
     deepseek: {
@@ -466,20 +465,9 @@
       document.title = data.runtime?.version ? `VoicePaste v${data.runtime.version}` : "VoicePaste";
 
       clearDirty();
-      autoCheckUpdatesOnce();
     } catch (_err) {
       /* ignore */
     }
-  }
-
-  function autoCheckUpdatesOnce() {
-    if (hasAutoCheckedUpdates || _updateState !== "idle") return;
-
-    hasAutoCheckedUpdates = true;
-    setUpdateState("checking");
-    window.voiceSettings
-      .checkForUpdates()
-      .catch((err) => setUpdateState("error", { message: err.message || "检查更新失败" }));
   }
 
   function populateForm(data) {
@@ -940,10 +928,10 @@
         }, 3000);
         break;
       default:
-        el.aboutUpdateBtn.textContent = "检查更新";
+        el.aboutUpdateBtn.textContent = "前往下载";
         el.aboutUpdateBtn.disabled = false;
-        el.aboutUpdateBtn.className = "btn btn-sm";
-        el.aboutUpdateStatus.textContent = "-";
+        el.aboutUpdateBtn.className = "btn btn-sm btn-accent";
+        el.aboutUpdateStatus.textContent = "跳转 GitHub Releases 手动下载";
         break;
     }
   }
@@ -952,10 +940,7 @@
     switch (_updateState) {
       case "idle":
       case "error":
-        setUpdateState("checking");
-        window.voiceSettings
-          .checkForUpdates()
-          .catch((err) => setUpdateState("error", { message: err.message || "检查更新失败" }));
+        window.open("https://github.com/that-yolanda/voicepaste/releases", "_blank");
         break;
       case "available":
         window.open("https://github.com/that-yolanda/voicepaste/releases", "_blank");

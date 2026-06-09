@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.3.0 (2026-06-09)
+
+- **macOS Liquid Glass Overlay** — New overlay appearance that adapts to light/dark mode with vibrancy fallback for older macOS versions.
+- **Notification Sounds** — Configurable start and end sounds with custom file support. Audio playback moved to the main process for reliability.
+- **History Improvements** — Copy and delete functionality for individual history entries.
+- **LLM Prompt Update** — Refined default text structuring prompt for better polishing results.
+- **Update Redirect to GitHub** — Last Electron release before Tauri migration. The update button now links directly to GitHub Releases for manual download instead of using the built-in auto-updater.
+
+### Fixes
+
+- Fix ASR session race condition when recording stops quickly
+- Fix built-in sound file loading path in packaged macOS app
+- Skip notarization step when code signing is disabled in build
+- Show older history records when recent days have no entries instead of empty state
+
 ## v1.2.0 (2026-05-26)
 
 - **LLM Text Polishing** — Integrate Vercel AI SDK with 8 provider support (DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, SiliconFlow, Ollama, custom OpenAI-compatible) for post-processing ASR output (formatting, polishing, translation, etc.).
