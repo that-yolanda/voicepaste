@@ -41,11 +41,14 @@ const ALL_PLATFORMS = Object.keys(PLATFORM_MAP);
 function parseArgs() {
   const args = process.argv.slice(2);
   let sign = false;
+  let beta = false;
   let platforms = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "-s" || args[i] === "--sign") {
       sign = true;
+    } else if (args[i] === "-b" || args[i] === "--beta") {
+      beta = true;
     } else if (args[i] === "-p" || args[i] === "--platform") {
       const next = args[i + 1];
       if (!next || next.startsWith("-")) {
@@ -57,7 +60,7 @@ function parseArgs() {
     }
   }
 
-  return { sign, platforms: platforms || ALL_PLATFORMS };
+  return { sign, beta, platforms: platforms || ALL_PLATFORMS };
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +223,7 @@ function collectArtifacts(platformKey) {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
-  const { sign, platforms } = parseArgs();
+  const { sign, beta, platforms } = parseArgs();
   validatePlatforms(platforms);
 
   // Skip platforms that cannot be built on this host OS.
@@ -307,6 +310,18 @@ async function main() {
     const artifacts = collectArtifacts(p);
     for (const a of artifacts) {
       if (!allArtifacts.includes(a)) allArtifacts.push(a);
+    }
+  }
+
+  // For beta builds, rename latest-*.json to latest-beta-*.json
+  if (beta) {
+    console.log("\n=== Beta mode: renaming update metadata ===");
+    for (const entry of fs.readdirSync(distDir)) {
+      if (entry.startsWith("latest-") && entry.endsWith(".json") && !entry.includes("-beta-")) {
+        const newName = entry.replace("latest-", "latest-beta-");
+        fs.renameSync(path.join(distDir, entry), path.join(distDir, newName));
+        console.log(`  ${entry} → ${newName}`);
+      }
     }
   }
 

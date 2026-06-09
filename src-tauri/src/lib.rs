@@ -1,10 +1,11 @@
+#[macro_use]
+mod logger;
 mod app_state;
 mod asr;
 mod commands;
 mod config;
 mod hotkey;
 mod llm;
-mod logger;
 mod paste;
 mod stats;
 mod updater;
@@ -57,8 +58,18 @@ pub fn run() {
             // Initialize services
             let config_manager = config::ConfigManager::new(&data_dir, &resource_dir);
             let log_path = data_dir.join("voicepaste.log");
-            let logger_instance = logger::Logger::new(log_path);
             let stats_service = stats::StatsService::new(&data_dir);
+
+            // Initialize global logger (must be before any log_*! calls)
+            let voice_logger = logger::VoiceLogger::new(log_path.clone());
+            let log_level = if cfg!(debug_assertions) {
+                log::LevelFilter::Debug
+            } else {
+                log::LevelFilter::Info
+            };
+            log::set_boxed_logger(Box::new(voice_logger))
+                .expect("Failed to set global logger");
+            log::set_max_level(log_level);
 
             // Read hotkey mode before config_manager is moved into app state
             let hotkey_mode = config_manager
@@ -66,7 +77,7 @@ pub fn run() {
                 .map(|c| c.app.hotkey_mode.clone())
                 .unwrap_or_else(|_| "toggle".to_string());
 
-            let app_state = create_app_state(config_manager, logger_instance, stats_service);
+            let app_state = create_app_state(config_manager, log_path, stats_service);
             app.manage(app_state);
 
             // Recording state toggle (used by global shortcut handler)
@@ -78,9 +89,9 @@ pub fn run() {
             // Active prompt ID for the current recording session (None = main hotkey)
             app.manage(ActivePromptId(std::sync::Mutex::new(None)));
 
-            eprintln!("[voicepaste] setup: starting...");
-            eprintln!("[voicepaste] data_dir: {:?}", data_dir);
-            eprintln!("[voicepaste] resource_dir: {:?}", resource_dir);
+            log_app!(info, "Setup complete");
+            log_app!(debug, "data_dir: {:?}", data_dir);
+            log_app!(debug, "resource_dir: {:?}", resource_dir);
 
             // Setup overlay window properties
             setup_overlay_window(app);
@@ -89,9 +100,9 @@ pub fn run() {
             setup_tray(app)?;
 
             // Setup global hotkeys via keytap
-            eprintln!("[voicepaste] setting up global hotkeys (keytap)...");
+            log_app!(debug, "Setting up global hotkeys (keytap)...");
             setup_keytap_hotkeys(app)?;
-            eprintln!("[voicepaste] global hotkeys ready");
+            log_app!(info, "Global hotkeys ready");
 
             Ok(())
         })
@@ -238,7 +249,7 @@ async fn set_app_state(
             "payload": { "state": app_state_name(&next_state) }
         }),
     );
-    eprintln!("[recording] state: {}", app_state_name(&next_state));
+    log_rec!(info, "State → {}", app_state_name(&next_state));
 }
 
 fn resolve_default_sound_path(app: &AppHandle, filename: &str) -> PathBuf {
@@ -260,7 +271,7 @@ fn play_configured_sound(app: &AppHandle, app_inner: &Arc<app_state::AppInner>, 
     let config = match app_inner.config_manager.load_config() {
         Ok(config) => config,
         Err(error) => {
-            eprintln!("[sound] config load failed: {}", error);
+            log_app!(warn, "Sound config load failed: {}", error);
             return;
         }
     };
@@ -381,11 +392,11 @@ fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "settings" => {
-                eprintln!("[tray] settings clicked");
+                log_tray!(debug, "Settings clicked");
                 show_settings(app);
             }
             "quit" => {
-                eprintln!("[tray] quit clicked");
+                log_tray!(debug, "Quit clicked");
                 app.exit(0);
             }
             _ => {}
@@ -485,7 +496,7 @@ async fn start_recording(app_handle: AppHandle) {
         Ok(c) => c,
         Err(e) => {
             *recording_state.0.lock().unwrap() = false;
-            eprintln!("[recording] failed to load config: {}", e);
+            log_rec!(error, "Failed to load config: {}", e);
             let _ = app_handle.emit("overlay:event", serde_json::json!({
                 "type": "hint",
                 "payload": { "text": format!("配置加载失败: {}", e), "level": "error", "variant": "text" }
@@ -515,7 +526,7 @@ async fn start_recording(app_handle: AppHandle) {
         if let Some(overlay) = app_handle.get_webview_window("overlay") {
             let _ = overlay.hide();
         }
-        eprintln!("[recording] audio warmup failed: {}", e);
+        log_rec!(warn, "Audio warmup failed: {}", e);
         let _ = app_handle.emit(
             "overlay:event",
             serde_json::json!({
@@ -528,7 +539,7 @@ async fn start_recording(app_handle: AppHandle) {
 
     // Check if recording was cancelled during warmup (hold mode: quick press-release)
     if !*recording_state.0.lock().unwrap() {
-        eprintln!("[recording] cancelled during warmup, aborting start");
+        log_rec!(warn, "Cancelled during warmup, aborting start");
         stop_renderer_audio(&app_handle, &app_inner, 1200).await;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
         if let Some(overlay) = app_handle.get_webview_window("overlay") {
@@ -544,7 +555,7 @@ async fn start_recording(app_handle: AppHandle) {
         Ok((session, event_rx)) => {
             // Check if recording was cancelled during ASR connection
             if !*recording_state.0.lock().unwrap() {
-                eprintln!("[recording] cancelled during ASR connection, closing session");
+                log_rec!(warn, "Cancelled during ASR connection, closing session");
                 session.close();
                 stop_renderer_audio(&app_handle, &app_inner, 1200).await;
                 set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
@@ -570,7 +581,7 @@ async fn start_recording(app_handle: AppHandle) {
             });
         }
         Err(e) => {
-            eprintln!("[recording] ASR connection failed: {}", e);
+            log_rec!(error, "ASR connection failed: {}", e);
             *recording_state.0.lock().unwrap() = false;
             stop_renderer_audio(&app_handle, &app_inner, 1200).await;
             set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
@@ -616,12 +627,8 @@ async fn stop_recording(app_handle: AppHandle) {
 
         let trimmed = text.trim().to_string();
         if !trimmed.is_empty() {
-            let preview = trimmed.chars().take(60).collect::<String>();
-            eprintln!(
-                "[recording] final text ({} chars): {:?}",
-                trimmed.chars().count(),
-                preview
-            );
+            log_rec!(info, "Final text received ({} chars)", trimmed.chars().count());
+            log_rec!(debug, "Final text preview: {:?}", trimmed.chars().take(60).collect::<String>());
 
             // 5. Load config for LLM / behavior settings
             let config = app_inner.config_manager.load_config().ok();
@@ -655,17 +662,14 @@ async fn stop_recording(app_handle: AppHandle) {
                                 .filter(|p| !p.trim().is_empty())
                         })
                         .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
-                    eprintln!(
-                        "[recording] applying LLM structure_text (prompt_id: {:?})...",
-                        active_prompt_id
-                    );
+                    log_rec!(debug, "Applying LLM structure_text (prompt_id: {:?})", active_prompt_id);
                     match crate::llm::call_llm_api(&config.llm, &trimmed, &system_prompt).await {
                         Ok(result) => {
-                            eprintln!("[recording] LLM polishing succeeded ({} chars)", result.chars().count());
+                            log_rec!(info, "LLM polishing succeeded ({} chars)", result.chars().count());
                             result
                         }
                         Err(e) => {
-                            eprintln!("[recording] LLM polishing failed: {}, using raw text", e);
+                            log_rec!(warn, "LLM polishing failed: {}, using raw text", e);
                             trimmed.clone()
                         }
                     }
@@ -684,7 +688,7 @@ async fn stop_recording(app_handle: AppHandle) {
             // 7. Write to clipboard
             use tauri_plugin_clipboard_manager::ClipboardExt;
             if let Err(e) = app_handle.clipboard().write_text(&final_text) {
-                eprintln!("[recording] clipboard write failed: {}", e);
+                log_rec!(error, "Clipboard write failed: {}", e);
                 let _ = app_handle.emit("overlay:event", serde_json::json!({
                     "type": "hint",
                     "payload": { "text": format!("剪贴板写入失败: {}", e), "level": "error", "variant": "text" }
@@ -698,7 +702,7 @@ async fn stop_recording(app_handle: AppHandle) {
             app_inner.stats.lock().await.record_session(&final_text);
             play_configured_sound(&app_handle, &app_inner, "end");
         } else {
-            eprintln!("[recording] final text is empty, skipping paste");
+            log_rec!(warn, "Final text is empty, skipping paste");
         }
 
         // 10. Close the WebSocket session
@@ -745,7 +749,7 @@ async fn cancel_recording(app_handle: AppHandle) {
     }
 
     *recording_state.0.lock().unwrap() = false;
-    eprintln!("[recording] cancel requested");
+    log_rec!(debug, "Cancel requested");
 
     // Clear the active prompt ID since the session was cancelled
     if let Some(active) = app_handle.try_state::<ActivePromptId>() {
@@ -778,7 +782,7 @@ async fn forward_asr_events(
 ) {
     use crate::asr::AsrEvent;
 
-    eprintln!("[events] event forwarding task started");
+    log_events!(debug, "Event forwarding task started");
     while let Some(event) = event_rx.recv().await {
         match event {
             AsrEvent::Transcript {
@@ -801,7 +805,7 @@ async fn forward_asr_events(
                 );
             }
             AsrEvent::Error(msg) => {
-                eprintln!("[events] ASR error: {}", msg);
+                log_events!(error, "ASR error: {}", msg);
                 let _ = app.emit(
                     "overlay:event",
                     serde_json::json!({
@@ -825,13 +829,10 @@ async fn forward_asr_events(
                 }
             }
             AsrEvent::Open => {
-                eprintln!("[events] ASR connection opened");
+                log_events!(info, "ASR connection opened");
             }
             AsrEvent::Close { code, reason } => {
-                eprintln!(
-                    "[events] ASR connection closed (code={}, reason={:?})",
-                    code, reason
-                );
+                log_events!(info, "ASR connection closed (code={}, reason={:?})", code, reason);
                 // If connection closed during recording, auto-stop
                 // Extract the flag eagerly to avoid holding MutexGuard across .await
                 let was_recording = app
@@ -854,14 +855,14 @@ async fn forward_asr_events(
             }
         }
     }
-    eprintln!("[events] event forwarding task ended");
+    log_events!(debug, "Event forwarding task ended");
 }
 
 /// Reload all hotkey bindings from the current config and prompts.
 /// Called after saving config or prompts so changes take effect immediately.
 pub fn reload_hotkey_bindings(app: &AppHandle) {
     let Some(hc) = app.try_state::<hotkey::HotkeyConfig>() else {
-        eprintln!("[hotkey] HotkeyConfig not in managed state");
+        log_hotkey!(error, "HotkeyConfig not in managed state");
         return;
     };
 
@@ -869,7 +870,7 @@ pub fn reload_hotkey_bindings(app: &AppHandle) {
     let config = match app_inner.config_manager.load_config() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("[hotkey] failed to load config for reload: {}", e);
+            log_hotkey!(error, "Failed to load config for reload: {}", e);
             return;
         }
     };

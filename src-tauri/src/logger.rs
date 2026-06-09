@@ -1,77 +1,159 @@
+//! Global logging with structured output and automatic file rotation.
+//!
+//! Implements `log::Log` to provide `[MODULE][LEVEL]` formatted output.
+//! INFO and above are written to the log file; DEBUG is stderr-only (dev builds).
+//! Log file rotates at 300KB: old content is gzip-compressed to `.log.gz` (1 backup).
+
 use chrono::Utc;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
-const MAX_LOG_SIZE: u64 = 1024 * 512; // 512KB
+const MAX_LOG_SIZE: u64 = 300 * 1024; // 300KB
 
-pub struct Logger {
+/// Structured logger implementing `log::Log`.
+///
+/// Writes formatted log lines to both stderr and a rotating log file.
+/// Module names are specified via `log::target()` using the `log_*!` macros below.
+pub struct VoiceLogger {
     log_path: PathBuf,
-    file: Option<File>,
+    file: Mutex<Option<File>>,
 }
 
-impl Logger {
+impl VoiceLogger {
     pub fn new(log_path: PathBuf) -> Self {
-        Self {
+        let logger = Self {
             log_path,
-            file: None,
-        }
-    }
-
-    fn ensure_file(&mut self) {
-        if self.file.is_some() {
-            return;
-        }
-
-        // Rotate if file is too large
-        if self.log_path.exists() {
-            if let Ok(metadata) = fs::metadata(&self.log_path) {
-                if metadata.len() >= MAX_LOG_SIZE {
-                    if let Ok(content) = fs::read_to_string(&self.log_path) {
-                        let keep = &content[content.len() / 2..];
-                        let cut_at = keep.find('\n').map(|i| i + 1).unwrap_or(0);
-                        let truncated = &keep[cut_at..];
-                        let _ = fs::write(&self.log_path, truncated);
-                    }
-                }
-            }
-        }
-
-        if let Some(parent) = self.log_path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-
-        self.file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.log_path)
-            .ok();
-    }
-
-    pub fn log(&mut self, level: &str, message: &str, meta: Option<&str>) {
-        self.ensure_file();
-        let timestamp = Utc::now().to_rfc3339();
-        let meta_part = meta.unwrap_or("");
-        let line = if meta_part.is_empty() {
-            format!("{} {} {}", timestamp, level, message)
-        } else {
-            format!("{} {} {} {}", timestamp, level, message, meta_part)
+            file: Mutex::new(None),
         };
-
-        if let Some(ref mut file) = self.file {
-            let _ = writeln!(file, "{}", line);
-        }
+        logger.rotate_if_needed();
+        logger
     }
 
-    pub fn info(&mut self, message: &str, meta: Option<&str>) {
-        self.log("INFO", message, meta);
-    }
-
-    pub fn error(&mut self, message: &str, meta: Option<&str>) {
-        self.log("ERROR", message, meta);
-    }
-
+    /// Return the log file path.
+    #[allow(dead_code)]
     pub fn log_path(&self) -> &PathBuf {
         &self.log_path
     }
+
+    /// If the log file exceeds `MAX_LOG_SIZE`, gzip it to `.log.gz` (overwriting
+    /// any previous backup) and start a fresh log file.
+    fn rotate_if_needed(&self) {
+        if !self.log_path.exists() {
+            return;
+        }
+        let Ok(meta) = fs::metadata(&self.log_path) else {
+            return;
+        };
+        if meta.len() < MAX_LOG_SIZE {
+            return;
+        }
+
+        // Close current file handle so we can safely manipulate the file.
+        *self.file.lock().unwrap() = None;
+
+        let gz_path = self.log_path.with_extension("log.gz");
+        if let Ok(content) = fs::read(&self.log_path) {
+            let mut encoder = GzEncoder::new(
+                File::create(&gz_path).unwrap_or_else(|e| {
+                    panic!("Failed to create {}: {}", gz_path.display(), e)
+                }),
+                Compression::fast(),
+            );
+            let _ = encoder.write_all(&content);
+            let _ = encoder.finish();
+        }
+        let _ = fs::remove_file(&self.log_path);
+    }
+
+    fn write_to_file(&self, line: &str) {
+        let mut guard = self.file.lock().unwrap();
+        if guard.is_none() {
+            self.rotate_if_needed();
+            *guard = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.log_path)
+                .ok();
+        }
+        if let Some(ref mut f) = *guard {
+            let _ = writeln!(f, "{}", line);
+        }
+    }
 }
+
+impl log::Log for VoiceLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::max_level()
+    }
+
+    fn log(&self, record: &log::Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+        let formatted = format!(
+            "{} [{}][{}] {}",
+            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            record.target(),
+            record.level(),
+            record.args(),
+        );
+        eprintln!("{}", formatted);
+        // INFO and above are persisted to the log file.
+        if record.level() <= log::Level::Info {
+            self.write_to_file(&formatted);
+        }
+    }
+
+    fn flush(&self) {
+        if let Some(ref f) = *self.file.lock().unwrap() {
+            let _ = f.sync_all();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-prefixed logging macros
+// ---------------------------------------------------------------------------
+// Usage: `log_rec!(info, "State → {}", state)` → `[Recording][INFO] State → idle`
+// The first argument is always the log-level ident (error / warn / info / debug).
+
+#[macro_export]
+macro_rules! log_app {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "App", $($t)*) };
+}
+#[macro_export]
+macro_rules! log_rec {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "Recording", $($t)*) };
+}
+#[macro_export]
+macro_rules! log_asr {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "ASR", $($t)*) };
+}
+#[macro_export]
+macro_rules! log_audio {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "Audio", $($t)*) };
+}
+#[macro_export]
+macro_rules! log_hotkey {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "Hotkey", $($t)*) };
+}
+#[macro_export]
+macro_rules! log_events {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "Events", $($t)*) };
+}
+#[macro_export]
+macro_rules! log_tray {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "Tray", $($t)*) };
+}
+#[macro_export]
+macro_rules! log_update {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "Update", $($t)*) };
+}
+
+// Keep a type alias for backward compatibility.
+#[allow(dead_code)]
+pub type Logger = VoiceLogger;

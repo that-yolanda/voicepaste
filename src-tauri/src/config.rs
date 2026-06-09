@@ -32,6 +32,9 @@ pub struct AppSettings {
     pub overlay_glass_mode: String,
     #[serde(default)]
     pub sound: Option<SoundConfig>,
+    /// When true, check for beta (prerelease) updates instead of stable only.
+    #[serde(default)]
+    pub beta_updates: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,6 +223,7 @@ impl Default for AppConfig {
                 overlay_style: default_overlay_style(),
                 overlay_glass_mode: default_overlay_glass_mode(),
                 sound: None,
+                beta_updates: false,
             },
             connection: ConnectionConfig {
                 url: String::new(),

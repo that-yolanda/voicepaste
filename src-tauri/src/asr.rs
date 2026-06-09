@@ -527,8 +527,9 @@ pub async fn create_asr_session(
                     if let Some(payload) = parse_server_response(buffer) {
                         // Debug: log non-audio response payloads to diagnose ASR errors
                         if !payload.get("raw_text").is_some() {
-                            eprintln!(
-                                "[asr] server response: {}",
+                            log_asr!(
+                                debug,
+                                "Server response: {}",
                                 serde_json::to_string(&payload).unwrap_or_default()
                             );
                         }
@@ -573,8 +574,9 @@ pub async fn create_asr_session(
                         // Error response
                         if let Some(code) = payload.get("code").and_then(|v| v.as_u64()) {
                             if code != 20000000 {
-                                eprintln!(
-                                    "[asr] binary response payload: {}",
+                                log_asr!(
+                                    warn,
+                                    "Binary response payload: {}",
                                     serde_json::to_string(&payload).unwrap_or_default()
                                 );
                                 let message = payload
@@ -706,7 +708,7 @@ pub async fn create_asr_session(
                 }
                 Ok(Message::Text(text)) => {
                     // Handle text messages (error responses)
-                    eprintln!("[asr] text message: {}", text);
+                    log_asr!(error, "Text message: {}", text);
                     if let Ok(payload) = serde_json::from_str::<Value>(&text) {
                         if payload.get("type").and_then(|v| v.as_str()) == Some("error") {
                             let message = payload

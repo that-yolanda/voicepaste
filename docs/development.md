@@ -99,3 +99,36 @@ Press again (or release in hold mode) → Wait for final result → Optional LLM
 - macOS 12+ / Windows 10+
 - Rust (latest stable)
 - pnpm
+
+## Logging Conventions
+
+All logging uses the `log` crate with custom macros defined in `src-tauri/src/logger.rs`.
+
+### Module Prefixes
+
+| Macro | Module | Used in |
+|-------|--------|---------|
+| `log_app!` | App | lib.rs (init, config, sound) |
+| `log_rec!` | Recording | lib.rs (recording state machine) |
+| `log_asr!` | ASR | asr.rs |
+| `log_audio!` | Audio | commands.rs (audio chunks) |
+| `log_hotkey!` | Hotkey | hotkey.rs |
+| `log_events!` | Events | lib.rs (event forwarding) |
+| `log_tray!` | Tray | lib.rs (tray menu) |
+| `log_update!` | Update | updater.rs |
+
+### Level Guidelines
+
+- **ERROR**: Failures that break functionality (connection lost, config corrupt)
+- **WARN**: Degraded behavior with fallback (LLM failed → raw text, chunk dropped)
+- **INFO**: Key milestones only (state change, connection event, text received count)
+- **DEBUG**: Verbose details for development (payloads, paths, preview text)
+- ASR recognition text: **never at INFO**, use `log_rec!(debug, "preview: {:?}", truncated)`
+- Do not use `eprintln!` / `println!` — use `log_*!` macros exclusively
+
+### Log File Rotation
+
+- Location: `{app_data_dir}/voicepaste.log`
+- Max size: 300KB
+- Rotation: gzip-compressed to `voicepaste.log.gz`, keeps only 1 backup
+- Only INFO and above written to file

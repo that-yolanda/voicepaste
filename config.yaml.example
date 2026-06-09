@@ -10,6 +10,7 @@ app:
     enabled: true                # 录音开始和粘贴完成时播放提示音
     start_sound: ""              # 就绪提示音文件路径，留空使用内置音效
     end_sound: ""                # 完成提示音文件路径，留空使用内置音效
+  beta_updates: false            # 接收 Beta 版本更新（可能不稳定）
 
 connection:
   url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async

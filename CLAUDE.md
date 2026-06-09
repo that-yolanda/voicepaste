@@ -97,6 +97,16 @@ voicepaste/
 - Fix all errors and warnings reported by Biome before considering a task complete
 - Rust code must compile with zero warnings (`cargo check`)
 
+## Logging
+
+- Use `log_*!` macros from `logger.rs` (e.g., `log_rec!(info, ...)`, `log_asr!(debug, ...)`)
+- Format: `[MODULE][LEVEL] message` — modules: App, Recording, ASR, Audio, Hotkey, Events, Tray, Update
+- Levels: ERROR (failures), WARN (degraded), INFO (milestones), DEBUG (verbose, dev only)
+- Never log ASR recognition text at INFO level — use DEBUG with truncated preview
+- File logging (`voicepaste.log`) captures INFO and above; log file rotates at 300KB (gzip to `.log.gz`, 1 backup)
+- Default level: Debug in dev builds (`cfg!(debug_assertions)`), Info in release builds
+- Do NOT use `eprintln!` / `println!` for logging — always use the `log_*!` macros
+
 ## Code Commit Convention
 
 - Commit message prefixes must use Conventional Commit style, such as `fix:`, `feat:`, `refactor:`, `docs:`

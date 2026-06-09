@@ -272,8 +272,9 @@ fn keycode_array_to_keys(keycodes: &[u32]) -> Option<BTreeSet<Key>> {
                 keys.insert(key);
             }
             None => {
-                eprintln!(
-                    "[hotkey] unsupported uIOhook keycode 0x{:04X}, skipping prompt shortcut",
+                log_hotkey!(
+                    warn,
+                    "Unsupported uIOhook keycode 0x{:04X}, skipping prompt shortcut",
                     kc
                 );
                 return None;
@@ -461,7 +462,7 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
             }
             Err(keytap::RecvTimeoutError::Timeout) => continue,
             Err(keytap::RecvTimeoutError::Disconnected) => {
-                eprintln!("[hotkey] tap disconnected, listener thread exiting");
+                log_hotkey!(debug, "Tap disconnected, listener thread exiting");
                 break;
             }
         }
@@ -523,30 +524,21 @@ pub fn reload_bindings(
     // Main hotkey
     if !main_hotkey_str.is_empty() {
         if let Some(keys) = parse_hotkey_string(main_hotkey_str) {
-            eprintln!(
-                "[hotkey] main binding: {:?} (mode: {})",
-                keys, main_mode
-            );
+            log_hotkey!(debug, "Main binding: {:?} (mode: {})", keys, main_mode);
             bindings.push(HotkeyBinding {
                 keys,
                 mode: main_mode.to_string(),
                 prompt_id: None,
             });
         } else {
-            eprintln!(
-                "[hotkey] failed to parse main hotkey: '{}'",
-                main_hotkey_str
-            );
+            log_hotkey!(warn, "Failed to parse main hotkey: '{}'", main_hotkey_str);
         }
     }
 
     // Prompt hotkeys
     for prompt in prompts {
         if let Some(keys) = parse_prompt_hotkey_to_keys(&prompt.hotkey) {
-            eprintln!(
-                "[hotkey] prompt '{}' binding: {:?} (mode: {})",
-                prompt.title, keys, prompt.hotkey_mode
-            );
+            log_hotkey!(debug, "Prompt '{}' binding: {:?} (mode: {})", prompt.title, keys, prompt.hotkey_mode);
             bindings.push(HotkeyBinding {
                 keys,
                 mode: prompt.hotkey_mode.clone(),
@@ -554,10 +546,7 @@ pub fn reload_bindings(
             });
         } else if !prompt.hotkey.is_sequence() || !prompt.hotkey.as_sequence().unwrap().is_empty()
         {
-            eprintln!(
-                "[hotkey] prompt '{}' hotkey {:?} uses unsupported keycodes, skipping",
-                prompt.title, prompt.hotkey
-            );
+            log_hotkey!(warn, "Prompt '{}' hotkey {:?} uses unsupported keycodes, skipping", prompt.title, prompt.hotkey);
         }
     }
 

@@ -233,11 +233,7 @@ pub async fn send_audio_chunk(
     static CHUNK_COUNT: AtomicU64 = AtomicU64::new(0);
     let n = CHUNK_COUNT.fetch_add(1, Ordering::Relaxed);
     if n == 0 || n % 50 == 0 {
-        eprintln!(
-            "[audio] received chunk #{} ({} bytes base64)",
-            n,
-            base64_chunk.len()
-        );
+        log_audio!(debug, "Received chunk #{} ({} bytes base64)", n, base64_chunk.len());
     }
 
     let session = state.asr_session.lock().await;
@@ -246,10 +242,10 @@ pub async fn send_audio_chunk(
             session.append_audio(&base64_chunk);
             return Ok(serde_json::json!({ "ok": true }));
         }
-        eprintln!("[audio] chunk #{} dropped: session not ready", n);
+        log_audio!(warn, "Chunk #{} dropped: session not ready", n);
     } else {
         if n == 0 {
-            eprintln!("[audio] chunk #{} dropped: no session", n);
+            log_audio!(warn, "Chunk #{} dropped: no session", n);
         }
     }
     Ok(serde_json::json!({ "ok": false, "message": "ASR 会话未建立" }))
@@ -282,8 +278,7 @@ pub async fn audio_warmup_failed(
     state: State<'_, AppState>,
     message: String,
 ) -> Result<(), String> {
-    let mut logger = state.logger.lock().await;
-    logger.error("audio warmup failed", Some(&message));
+    log_audio!(error, "Audio warmup failed: {}", message);
     let mut pending = state.pending_audio_warmup.lock().await;
     if let Some(tx) = pending.take() {
         drop(tx);
@@ -294,12 +289,11 @@ pub async fn audio_warmup_failed(
 /// Send diagnostic info from renderer.
 #[tauri::command]
 pub async fn send_diagnostic(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     payload: serde_json::Value,
 ) -> Result<(), String> {
-    let mut logger = state.logger.lock().await;
     let msg = serde_json::to_string(&payload).unwrap_or_default();
-    logger.info("renderer diagnostic", Some(&msg));
+    log_app!(info, "Renderer diagnostic: {}", msg);
     Ok(())
 }
 
@@ -402,8 +396,7 @@ pub async fn play_sound_file(file_path: String) -> Result<(), String> {
 /// Get the log file path.
 #[tauri::command]
 pub async fn get_log_path(state: State<'_, AppState>) -> Result<String, String> {
-    let logger = state.logger.lock().await;
-    Ok(logger.log_path().to_string_lossy().to_string())
+    Ok(state.log_path.to_string_lossy().to_string())
 }
 
 /// Get the config file path.

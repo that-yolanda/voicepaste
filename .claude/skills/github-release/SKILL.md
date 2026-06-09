@@ -15,6 +15,7 @@ Use this skill for project-specific GitHub release work in this repository. Foll
 | `--major` | Force major version bump |
 | `--minor` | Force minor version bump |
 | `--patch` | Force patch version bump |
+| `--beta` | Build and release as beta (prerelease) |
 
 ## Version Location
 
@@ -93,7 +94,11 @@ Run `pnpm check` — this project requires Biome lint + format to pass before an
 ### Step 6: Build Artifacts
 
 ```bash
+# Stable release
 pnpm run pack -s
+
+# Beta release
+pnpm run pack -s --beta
 ```
 
 This builds all platforms with signing and notarization. Validate artifacts:
@@ -129,11 +134,25 @@ git push origin v<version>
 # Render release notes
 .claude/skills/github-release/scripts/render-release-notes.sh <version>
 
-# Create release with notes
+# Stable release
 gh release create v<version> --title "v<version>" --notes-file <temp>
+
+# Beta release (prerelease flag prevents electron-updater from seeing it)
+gh release create v<version> --prerelease --title "v<version>" --notes-file <temp>
 ```
 
 Consider using `--draft` first for safety, then publish after the user approves the release notes.
+
+### Beta Release Flow
+
+1. Set version in `package.json` to `x.y.z-beta.n` (e.g., `1.3.0-beta.1`)
+2. Sync version to `tauri.conf.json` (`"version"`) and `Cargo.toml` (`version = "..."`)
+3. Build: `pnpm run pack -s --beta -p apple_aarch64`
+4. Artifacts in `dist/` will contain `latest-beta-*.json` (renamed from `latest-*.json`)
+5. Create prerelease: `gh release create vx.y.z-beta.n --prerelease`
+6. Upload all artifacts including `latest-beta-*` files
+7. Users with `beta_updates: true` in config will receive this update
+8. When ready for stable: set version to `x.y.z` (no suffix), build without `--beta`, create non-prerelease release
 
 ### Step 10: Upload Artifacts
 

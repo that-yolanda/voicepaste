@@ -26,6 +26,14 @@ done
 root_dir="$(git rev-parse --show-toplevel)"
 dist_dir="$root_dir/dist"
 
+# Check for --beta flag
+beta=false
+for arg in "$@"; do
+  case "$arg" in
+    --beta) beta=true ;;
+  esac
+done
+
 # Build artifact lists based on requested platforms
 required=()
 optional=()
@@ -71,13 +79,25 @@ done
 
 # Updater JSON metadata (only when signing key is available)
 if [[ "$has_mac_arm" == true ]]; then
-  optional+=("$dist_dir/latest-darwin-aarch64.json")
+  if [[ "$beta" == true ]]; then
+    optional+=("$dist_dir/latest-beta-darwin-aarch64.json")
+  else
+    optional+=("$dist_dir/latest-darwin-aarch64.json")
+  fi
 fi
 if [[ "$has_mac_x64" == true ]]; then
-  optional+=("$dist_dir/latest-darwin-x86_64.json")
+  if [[ "$beta" == true ]]; then
+    optional+=("$dist_dir/latest-beta-darwin-x86_64.json")
+  else
+    optional+=("$dist_dir/latest-darwin-x86_64.json")
+  fi
 fi
 if [[ "$has_win" == true ]]; then
-  optional+=("$dist_dir/latest-windows-x86_64.json")
+  if [[ "$beta" == true ]]; then
+    optional+=("$dist_dir/latest-beta-windows-x86_64.json")
+  else
+    optional+=("$dist_dir/latest-windows-x86_64.json")
+  fi
 fi
 
 # Validation

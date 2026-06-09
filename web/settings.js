@@ -156,6 +156,7 @@
     promptsList: $("promptsList"),
     addPromptBtn: $("addPromptBtn"),
     soundEnabled: $("soundEnabled"),
+    betaUpdates: $("betaUpdates"),
     soundFilesRow: $("soundFilesRow"),
     endSoundFilesRow: $("endSoundFilesRow"),
     startSoundName: $("startSoundName"),
@@ -586,6 +587,7 @@
     updateSoundFileDisplay("start", soundConfig.start_sound || "");
     updateSoundFileDisplay("end", soundConfig.end_sound || "");
     updateSoundRowsVisibility();
+    el.betaUpdates.checked = Boolean(c.app?.beta_updates);
     el.llmModel.value = activeProviderConfig.model || c.llm?.model || activeProviderDefault.model;
 
     loadAndRenderPrompts();
@@ -608,6 +610,7 @@
       start_sound: el.startSoundName.dataset.path || "",
       end_sound: el.endSoundName.dataset.path || "",
     };
+    config.app.beta_updates = el.betaUpdates.checked;
 
     config.connection = config.connection || {};
     config.connection.url = el.wsUrl.value.trim();
@@ -1442,6 +1445,9 @@ SOFTWARE.`;
     toggleSecret("accessToken", el.toggleAccessToken),
   );
   el.toggleSecretKey.addEventListener("click", () => toggleSecret("secretKey", el.toggleSecretKey));
+
+  // Beta updates toggle
+  el.betaUpdates.addEventListener("change", saveFormNow);
 
   // LLM fields
   el.llmEnabled.addEventListener("change", saveFormNow);
