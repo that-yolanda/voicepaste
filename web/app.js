@@ -36,10 +36,49 @@ const statusBarItems = elements.statusBars
   ? Array.from(elements.statusBars.querySelectorAll(".status-bar"))
   : [];
 
+// Latest appearance, used to decide whether to drive the native macOS glass view.
+const currentAppearance = { platform: "", overlayStyle: "liquid", glass: "auto" };
+
+// Resolve the effective light/dark variant. "auto" follows the system theme via
+// the webview's prefers-color-scheme (the native glass also follows the system in
+// auto mode, so text colour and glass tint stay in sync).
+function resolvedGlassVariant() {
+  const g = currentAppearance.glass;
+  if (g === "light" || g === "dark") return g;
+  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+}
+
+// Push the current pill rectangle to the backend so the native macOS glass view
+// (NSGlassEffectView / NSVisualEffectView) can sit exactly behind the pill.
+// No-op on non-macOS, where the CSS background renders the pill directly.
+function syncGlassRect() {
+  if (currentAppearance.platform !== "macos") return;
+  const rect = elements.bubble.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  // Match the pill's CSS corner radius: a fixed 16px when wrapped to multiple
+  // lines, otherwise a full capsule (half the shorter side).
+  const isMulti = elements.bubble.dataset.wrap === "multi";
+  const radius = isMulti ? 16 : Math.min(rect.width, rect.height) / 2;
+  window.voiceOverlay
+    .updateGlassRect({
+      x: rect.left,
+      y: rect.top,
+      w: rect.width,
+      h: rect.height,
+      radius,
+      style: currentAppearance.overlayStyle || "liquid",
+      variant: resolvedGlassVariant(),
+    })
+    .catch(() => {});
+}
+
 // Swap the glass treatment without touching any recording/ASR logic.
 // platform: "macos" → macOS (Tauri std::env::consts::OS), anything else → Windows-style Mica.
 // overlayStyle (macOS only): "liquid" (default) | "vibrancy" (backup).
 function applyAppearance({ platform, overlayStyle, glass } = {}) {
+  currentAppearance.platform = platform || "";
+  currentAppearance.overlayStyle = overlayStyle || "liquid";
+  currentAppearance.glass = glass || "auto";
   const isMac = platform === "macos";
   const isVibrancy = isMac && overlayStyle === "vibrancy";
   elements.bubble.classList.toggle("platform-mac", isMac);
@@ -48,7 +87,10 @@ function applyAppearance({ platform, overlayStyle, glass } = {}) {
   // Liquid Glass switches to its Light variant (dark text + light glass body)
   // when the resolved glass variant is light, so it stays legible over pale
   // backgrounds. Vibrancy keeps its classic dark look regardless.
-  elements.bubble.classList.toggle("is-light", isMac && !isVibrancy && glass === "light");
+  elements.bubble.classList.toggle(
+    "is-light",
+    isMac && !isVibrancy && resolvedGlassVariant() === "light",
+  );
 }
 
 // --- Waveform animation ---
@@ -148,6 +190,7 @@ function scheduleResize() {
       elements.bubble.style.width = "";
       state.renderedWidth = 0;
       elements.bubble.dataset.wrap = "single";
+      syncGlassRect();
       return;
     }
 
@@ -216,6 +259,8 @@ function scheduleResize() {
         elements.bubble.style.width = `${width}px`;
       }
     }
+
+    syncGlassRect();
   });
 }
 
@@ -534,6 +579,8 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       break;
     case "appearance":
       applyAppearance(payload || {});
+      // Re-push the rect so the native macOS glass switches style/variant live.
+      syncGlassRect();
       break;
     case "sound:config":
       break;

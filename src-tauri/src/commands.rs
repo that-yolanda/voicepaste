@@ -2,7 +2,7 @@ use crate::app_state::AppHandle as AppState;
 use crate::config::PromptItem;
 use crate::paste;
 use crate::HotkeyMode;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 // Re-export paste::PasteResult for use in commands
 use paste::PasteResult;
@@ -94,6 +94,19 @@ pub async fn save_config(
 
     crate::reload_hotkey_bindings(&app);
 
+    // Notify the overlay so it can re-apply the glass appearance live.
+    let _ = app.emit(
+        "overlay:event",
+        serde_json::json!({
+            "type": "appearance",
+            "payload": {
+                "platform": std::env::consts::OS,
+                "overlayStyle": updated_config.app.overlay_style,
+                "glass": updated_config.app.overlay_glass_mode,
+            }
+        }),
+    );
+
     let updated_text = state.config_manager.read_config_text()?;
     let config = state.config_manager.load_config()?;
     let hotkey = match &config.app.hotkey {
@@ -128,6 +141,19 @@ pub async fn save_config_object(
 
     // Re-register shortcuts with the new hotkey from the config object
     crate::reload_hotkey_bindings(&app);
+
+    // Notify the overlay so it can re-apply the glass appearance live.
+    let _ = app.emit(
+        "overlay:event",
+        serde_json::json!({
+            "type": "appearance",
+            "payload": {
+                "platform": std::env::consts::OS,
+                "overlayStyle": updated_config.app.overlay_style,
+                "glass": updated_config.app.overlay_glass_mode,
+            }
+        }),
+    );
 
     let config_text = state.config_manager.read_config_text()?;
     let parsed = state.config_manager.get_editable_config()?;
