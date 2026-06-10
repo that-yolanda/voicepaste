@@ -627,7 +627,7 @@ fn setup_keytap_hotkeys(app: &mut App) -> Result<(), Box<dyn std::error::Error>>
 
     let config = app_inner.config_manager.load_config().map_err(|e| format!("{}", e))?;
     let hotkey_str = match &config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
+        serde_norway::Value::String(s) => s.clone(),
         _ => String::new(),
     };
     let hotkey_mode = config.app.hotkey_mode.as_str();
@@ -1151,7 +1151,7 @@ pub fn reload_hotkey_bindings(app: &AppHandle) {
     };
 
     let hotkey_str = match &config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
+        serde_norway::Value::String(s) => s.clone(),
         _ => String::new(),
     };
 

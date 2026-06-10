@@ -183,25 +183,25 @@ fn parse_server_response(buffer: &[u8]) -> Option<Value> {
 }
 
 /// Check if a YAML value is effectively empty.
-fn is_empty_yaml_value(value: &serde_yaml::Value) -> bool {
+fn is_empty_yaml_value(value: &serde_norway::Value) -> bool {
     match value {
-        serde_yaml::Value::Null => true,
-        serde_yaml::Value::String(text) => text.trim().is_empty(),
-        serde_yaml::Value::Sequence(items) => items.is_empty(),
-        serde_yaml::Value::Mapping(items) => items.is_empty(),
+        serde_norway::Value::Null => true,
+        serde_norway::Value::String(text) => text.trim().is_empty(),
+        serde_norway::Value::Sequence(items) => items.is_empty(),
+        serde_norway::Value::Mapping(items) => items.is_empty(),
         _ => false,
     }
 }
 
-fn parse_context_hotwords(value: &serde_yaml::Value) -> Vec<Value> {
+fn parse_context_hotwords(value: &serde_norway::Value) -> Vec<Value> {
     match value {
-        serde_yaml::Value::String(text) => text
+        serde_norway::Value::String(text) => text
             .split(',')
             .map(str::trim)
             .filter(|item| !item.is_empty())
             .map(|word| json!({ "word": word }))
             .collect(),
-        serde_yaml::Value::Sequence(items) => items
+        serde_norway::Value::Sequence(items) => items
             .iter()
             .filter_map(|item| {
                 if let Some(word) = item.as_str().map(str::trim).filter(|word| !word.is_empty()) {
@@ -209,7 +209,7 @@ fn parse_context_hotwords(value: &serde_yaml::Value) -> Vec<Value> {
                 }
                 let word = item
                     .as_mapping()
-                    .and_then(|map| map.get(serde_yaml::Value::String("word".to_string())))
+                    .and_then(|map| map.get(serde_norway::Value::String("word".to_string())))
                     .and_then(|word| word.as_str())
                     .map(str::trim)
                     .filter(|word| !word.is_empty())?;

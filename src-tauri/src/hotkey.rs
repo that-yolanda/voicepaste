@@ -244,7 +244,7 @@ fn digit_to_key(c: char) -> Option<Key> {
 /// Parse a prompt hotkey YAML value that can be either:
 /// - A string array like `["Control+Shift+A"]` (new format)
 /// - A number array like `[29, 54, 4]` (legacy uIOhook format)
-pub fn parse_prompt_hotkey_to_keys(hotkey: &serde_yaml::Value) -> Option<BTreeSet<Key>> {
+pub fn parse_prompt_hotkey_to_keys(hotkey: &serde_norway::Value) -> Option<BTreeSet<Key>> {
     let seq = hotkey.as_sequence()?;
 
     // Try string format first: ["Control+Shift+A"]

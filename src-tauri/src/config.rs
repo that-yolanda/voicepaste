@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_yaml;
+use serde_norway;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
@@ -17,7 +17,7 @@ pub struct AppConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     #[serde(default = "default_hotkey")]
-    pub hotkey: serde_yaml::Value,
+    pub hotkey: serde_norway::Value,
     #[serde(default = "default_hotkey_mode")]
     pub hotkey_mode: String,
     #[serde(default = "default_true")]
@@ -104,7 +104,7 @@ pub struct RequestConfig {
     #[serde(default)]
     pub enable_accelerate_text: Option<bool>,
     #[serde(default)]
-    pub corpus: Option<serde_yaml::Value>,
+    pub corpus: Option<serde_norway::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -156,7 +156,7 @@ pub struct PromptItem {
     /// - Legacy uIOhook keycodes: `[29, 54, 4]` (numbers)
     /// - New accelerator strings: `["Control+Shift+A"]` (strings)
     #[serde(default)]
-    pub hotkey: serde_yaml::Value,
+    pub hotkey: serde_norway::Value,
     #[serde(default = "default_hotkey_mode")]
     pub hotkey_mode: String,
     #[serde(default)]
@@ -164,8 +164,8 @@ pub struct PromptItem {
 }
 
 // Default value functions
-fn default_hotkey() -> serde_yaml::Value {
-    serde_yaml::Value::String("F13".to_string())
+fn default_hotkey() -> serde_norway::Value {
+    serde_norway::Value::String("F13".to_string())
 }
 fn default_hotkey_mode() -> String {
     "toggle".to_string()
@@ -269,12 +269,12 @@ impl Default for AppConfig {
 
 // -- Prompt helpers --
 
-fn normalize_prompt_item(item: &serde_yaml::Value, index: usize) -> PromptItem {
+fn normalize_prompt_item(item: &serde_norway::Value, index: usize) -> PromptItem {
     let fallback_id = format!("prompt-{}", index + 1);
     let hotkey_value = item
         .get("hotkey")
         .cloned()
-        .unwrap_or(serde_yaml::Value::Sequence(vec![]));
+        .unwrap_or(serde_norway::Value::Sequence(vec![]));
 
     PromptItem {
         id: item
@@ -319,7 +319,7 @@ fn load_default_prompts(example_path: &Option<PathBuf>) -> Vec<PromptItem> {
         Err(_) => return vec![],
     };
 
-    let parsed: Vec<serde_yaml::Value> = match serde_json::from_str(&content) {
+    let parsed: Vec<serde_norway::Value> = match serde_json::from_str(&content) {
         Ok(v) => v,
         Err(_) => return vec![],
     };
@@ -395,11 +395,11 @@ impl ConfigManager {
             Ok(c) => c,
             Err(_) => return AppConfig::default(),
         };
-        let raw: serde_yaml::Value = match serde_yaml::from_str(&content) {
+        let raw: serde_norway::Value = match serde_norway::from_str(&content) {
             Ok(v) => v,
             Err(_) => return AppConfig::default(),
         };
-        serde_yaml::from_value(raw).unwrap_or_default()
+        serde_norway::from_value(raw).unwrap_or_default()
     }
 
     /// Read prompts from disk, merge with defaults, and optionally save merged result.
@@ -412,7 +412,7 @@ impl ConfigManager {
             Err(_) => return load_default_prompts(example_path),
         };
 
-        let parsed: Vec<serde_yaml::Value> = match serde_json::from_str(&content) {
+        let parsed: Vec<serde_norway::Value> = match serde_json::from_str(&content) {
             Ok(v) => v,
             Err(_) => return load_default_prompts(example_path),
         };
@@ -454,30 +454,30 @@ impl ConfigManager {
 
     /// Save config as raw YAML text, update memory cache and disk.
     pub fn save_config_text(&self, text: &str) -> Result<(), String> {
-        let raw: serde_yaml::Value =
-            serde_yaml::from_str(text).map_err(|e| format!("Invalid YAML: {}", e))?;
-        let config: AppConfig = serde_yaml::from_value(raw).unwrap_or_default();
+        let raw: serde_norway::Value =
+            serde_norway::from_str(text).map_err(|e| format!("Invalid YAML: {}", e))?;
+        let config: AppConfig = serde_norway::from_value(raw).unwrap_or_default();
         fs::write(&self.config_path, text).map_err(|e| format!("Failed to write config: {}", e))?;
         *self.cached_config.write().unwrap() = config;
         Ok(())
     }
 
     /// Save config as a parsed YAML value, update memory cache and disk.
-    pub fn save_config(&self, config: &serde_yaml::Value) -> Result<(), String> {
-        let yaml = serde_yaml::to_string(config)
+    pub fn save_config(&self, config: &serde_norway::Value) -> Result<(), String> {
+        let yaml = serde_norway::to_string(config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
         let parsed: AppConfig =
-            serde_yaml::from_value(config.clone()).unwrap_or_default();
+            serde_norway::from_value(config.clone()).unwrap_or_default();
         fs::write(&self.config_path, yaml).map_err(|e| format!("Failed to write config: {}", e))?;
         *self.cached_config.write().unwrap() = parsed;
         Ok(())
     }
 
     /// Get config as editable YAML value (reads from disk for settings UI).
-    pub fn get_editable_config(&self) -> Result<serde_yaml::Value, String> {
+    pub fn get_editable_config(&self) -> Result<serde_norway::Value, String> {
         let content = fs::read_to_string(&self.config_path)
             .map_err(|e| format!("Failed to read config: {}", e))?;
-        serde_yaml::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
+        serde_norway::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
     }
 
     /// Reset config to default, update memory cache and disk.
@@ -489,7 +489,7 @@ impl ConfigManager {
         let content = fs::read_to_string(example_path)
             .map_err(|e| format!("Failed to read example config: {}", e))?;
         fs::write(&self.config_path, &content).map_err(|e| format!("Failed to write config: {}", e))?;
-        let config: AppConfig = serde_yaml::from_str(&content).unwrap_or_default();
+        let config: AppConfig = serde_norway::from_str(&content).unwrap_or_default();
         *self.cached_config.write().unwrap() = config;
         Ok(())
     }

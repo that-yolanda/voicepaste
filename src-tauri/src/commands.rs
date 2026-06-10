@@ -63,8 +63,8 @@ fn resolve_theme(preference: &str) -> String {
 pub async fn get_app_config(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let config = state.config_manager.load_config()?;
     let hotkey = match &config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
-        serde_yaml::Value::Sequence(arr) => {
+        serde_norway::Value::String(s) => s.clone(),
+        serde_norway::Value::Sequence(arr) => {
             let keys: Vec<String> = arr
                 .iter()
                 .filter_map(|v| v.as_u64().map(|n| n.to_string()))
@@ -94,8 +94,8 @@ pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json:
     let parsed_config = state.config_manager.get_editable_config()?;
 
     let hotkey = match &config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
-        serde_yaml::Value::Sequence(arr) => {
+        serde_norway::Value::String(s) => s.clone(),
+        serde_norway::Value::Sequence(arr) => {
             let keys: Vec<String> = arr
                 .iter()
                 .filter_map(|v| v.as_u64().map(|n| n.to_string()))
@@ -173,7 +173,7 @@ pub async fn save_config(
     let updated_text = state.config_manager.read_config_text()?;
     let config = state.config_manager.load_config()?;
     let hotkey = match &config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
+        serde_norway::Value::String(s) => s.clone(),
         _ => String::new(),
     };
 
@@ -192,7 +192,7 @@ pub async fn save_config(
 pub async fn save_config_object(
     app: AppHandle,
     state: State<'_, AppState>,
-    config_object: serde_yaml::Value,
+    config_object: serde_norway::Value,
 ) -> Result<serde_json::Value, String> {
     state.config_manager.save_config(&config_object)?;
 
@@ -234,7 +234,7 @@ pub async fn save_config_object(
     let parsed = state.config_manager.get_editable_config()?;
     let config = state.config_manager.load_config()?;
     let hotkey = match &config.app.hotkey {
-        serde_yaml::Value::String(s) => s.clone(),
+        serde_norway::Value::String(s) => s.clone(),
         _ => String::new(),
     };
 
