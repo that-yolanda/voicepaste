@@ -180,6 +180,9 @@
      */
     async recordHotkey() {
       const pressed = new Set();
+      const isMacLikePlatform = /\b(Mac|iPhone|iPad|iPod)\b/.test(
+        `${navigator.platform || ""} ${navigator.userAgent || ""}`,
+      );
 
       // Map DOM code names to hotkey config names.
       // Left/right modifiers keep their side-specific names for keytap.
@@ -302,8 +305,12 @@
             return;
           }
 
-          // Stop propagation only (NOT preventDefault!) to avoid suppressing keyup
-          // on macOS WKWebView, where preventDefault on keydown kills the keyup event.
+          // Windows WebView scrolls on Space unless keydown default is blocked.
+          // Keep macOS WKWebView behavior unchanged because preventDefault on
+          // keydown can suppress the keyup event needed to finish recording.
+          if (!isMacLikePlatform) {
+            e.preventDefault();
+          }
           e.stopPropagation();
 
           // If a non-modifier key was pressed, cancel modifier-only timer

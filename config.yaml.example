@@ -1,5 +1,5 @@
 app:
-  hotkey: Control+Space
+  hotkey: ControlLeft+Space
   hotkey_mode: toggle             # 热键模式：toggle=按一次开始再按一次结束，hold=按住说话松开结束
   remove_trailing_period: true   # 自动删除识别结果末尾的句号（。或 .）
   keep_clipboard: true           # 保留识别结果在剪贴板，便于失败后手动再次粘贴
@@ -57,7 +57,6 @@ request:
     context_hotwords: Claude Code, Claude, mermaid, AGENTS.md, skills, codex, OpenAI, ChatGPT, GLM, cronjob, hermes, openclaw, obsidian, schema, skill, agent  # 逗号分隔的热词列表
 
 llm:
-  enabled: false              # 启用 LLM 文本润色
   provider: deepseek          # deepseek / openai / anthropic / gemini / openrouter / siliconflow / ollama / openai_compatible
   deepseek:
     url: ""                   # 内置默认地址，可留空

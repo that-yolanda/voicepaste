@@ -89,6 +89,39 @@ fn get_active_provider_config(config: &LlmConfig) -> (String, String, String) {
     (url, api_key, model)
 }
 
+/// Validate that LLM configuration has the minimum required fields.
+/// Returns a user-facing error message if configuration is incomplete.
+pub fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
+    let (url, api_key, model) = get_active_provider_config(config);
+    let defaults = get_provider_defaults(&config.provider);
+
+    // Check model: must be explicitly set or have a provider default
+    if model.is_empty() && defaults.default_model.is_empty() {
+        return Err(format!(
+            "文本润色模型还未配置，缺少 llm.{}.model",
+            config.provider
+        ));
+    }
+
+    // Check URL: must be explicitly set or have a provider default
+    if url.is_empty() && defaults.default_url.is_empty() {
+        return Err(format!(
+            "文本润色模型还未配置，缺少 llm.{}.url",
+            config.provider
+        ));
+    }
+
+    // Check API key (ollama runs locally and does not require one)
+    if api_key.is_empty() && config.provider != "ollama" {
+        return Err(format!(
+            "文本润色模型还未配置，缺少 llm.{}.api_key",
+            config.provider
+        ));
+    }
+
+    Ok(())
+}
+
 fn normalize_base_url(url: &str) -> String {
     let value = url.trim().to_string();
     if value.is_empty() {

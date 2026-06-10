@@ -715,6 +715,46 @@ async fn start_recording(app_handle: AppHandle) {
         }
     };
 
+    // 1b. Pre-validate LLM config when a prompt-specific hotkey was used.
+    //     Aborts early with an error hint instead of recording silently and
+    //     producing no output.
+    let active_prompt_id = app_handle
+        .try_state::<ActivePromptId>()
+        .and_then(|s| s.0.lock().unwrap().clone());
+
+    if active_prompt_id.is_some() {
+        if let Err(e) = crate::llm::validate_llm_config(&config.llm) {
+            log_rec!(warn, "LLM pre-validation failed: {}", e);
+            *recording_state.0.lock().unwrap() = false;
+            // Show overlay with error, auto-hide after delay
+            let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
+            if let Some(overlay) = app_handle.get_webview_window("overlay") {
+                let _ = overlay.show();
+            }
+            set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+            let _ = app_handle.emit("overlay:event", serde_json::json!({
+                "type": "hint",
+                "payload": { "text": e, "level": "error", "variant": "text" }
+            }));
+            // Auto-hide overlay after delay so user can read the error
+            let delayed_handle = app_handle.clone();
+            let delayed_inner: Arc<app_state::AppInner> = Arc::clone(&*app_inner);
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                let still_idle = {
+                    let s = delayed_inner.state.lock().await;
+                    matches!(*s, app_state::AppState::Idle)
+                };
+                if still_idle {
+                    if let Some(overlay) = delayed_handle.get_webview_window("overlay") {
+                        let _ = overlay.hide();
+                    }
+                }
+            });
+            return;
+        }
+    }
+
     *app_inner.latest_transcript.lock().await = (String::new(), String::new());
     let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
     if let Some(overlay) = app_handle.get_webview_window("overlay") {
@@ -794,11 +834,31 @@ async fn start_recording(app_handle: AppHandle) {
             log_rec!(error, "ASR connection failed: {}", e);
             *recording_state.0.lock().unwrap() = false;
             stop_renderer_audio(&app_handle, &app_inner, 1200).await;
-            set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+            // Emit error hint BEFORE setting idle state so the overlay shows the
+            // error message.  The state:idle handler in the frontend only clears
+            // hints whose level is "info", so an "error" level hint survives.
             let _ = app_handle.emit("overlay:event", serde_json::json!({
                 "type": "hint",
                 "payload": { "text": format!("ASR 连接失败: {}", e), "level": "error", "variant": "text" }
             }));
+            set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+            // Auto-hide the overlay after a short delay so the user can read the
+            // error.  Guard: only hide if still idle (not in a new session).
+            let delayed_handle = app_handle.clone();
+            let delayed_inner: Arc<app_state::AppInner> =
+                Arc::clone(&*app_inner);
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                let still_idle = {
+                    let s = delayed_inner.state.lock().await;
+                    matches!(*s, app_state::AppState::Idle)
+                };
+                if still_idle {
+                    if let Some(overlay) = delayed_handle.get_webview_window("overlay") {
+                        let _ = overlay.hide();
+                    }
+                }
+            });
         }
     }
 }
@@ -860,7 +920,7 @@ async fn stop_recording(app_handle: AppHandle) {
                 .and_then(|s| s.0.lock().unwrap().clone());
 
             let final_text = if let Some(ref config) = config {
-                if config.llm.enabled && active_prompt_id.is_some() {
+                if active_prompt_id.is_some() {
                     let prompts = app_inner.config_manager.load_prompts();
                     let system_prompt = active_prompt_id
                         .as_ref()
@@ -880,6 +940,10 @@ async fn stop_recording(app_handle: AppHandle) {
                         }
                         Err(e) => {
                             log_rec!(warn, "LLM polishing failed: {}, using raw text", e);
+                            let _ = app_handle.emit("overlay:event", serde_json::json!({
+                                "type": "hint",
+                                "payload": { "text": format!("文本润色失败，已输出原文"), "level": "warn", "variant": "text" }
+                            }));
                             trimmed.clone()
                         }
                     }
