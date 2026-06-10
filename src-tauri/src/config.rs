@@ -111,8 +111,6 @@ pub struct RequestConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LlmConfig {
-    #[serde(default)]
-    pub enabled: bool,
     #[serde(default = "default_llm_provider")]
     pub provider: String,
     #[serde(default)]
@@ -257,7 +255,6 @@ impl Default for AppConfig {
                 corpus: None,
             },
             llm: LlmConfig {
-                enabled: false,
                 provider: default_llm_provider(),
                 deepseek: None,
                 openai: None,

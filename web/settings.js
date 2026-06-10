@@ -145,7 +145,6 @@
     licenseOverlay: $("licenseOverlay"),
     licenseCloseBtn: $("licenseCloseBtn"),
     licenseText: $("licenseText"),
-    llmEnabled: $("llmEnabled"),
     llmProviderGrid: $("llmProviderGrid"),
     llmBaseUrl: $("llmBaseUrl"),
     llmBaseUrlDesc: $("llmBaseUrlDesc"),
@@ -574,7 +573,6 @@
     el.accessToken.value = c.connection?.access_token || "";
     el.secretKey.value = c.connection?.secret_key || "";
 
-    el.llmEnabled.checked = Boolean(c.llm?.enabled);
     setLlmProvider(c.llm?.provider || (c.llm?.url ? "openai_compatible" : "deepseek"));
     const activeProviderConfig = c.llm?.[currentLlmProvider] || {};
     const activeProviderDefault = LLM_PROVIDERS[currentLlmProvider];
@@ -639,7 +637,6 @@
     config.request.corpus.context_hotwords = hotwords.join(", ");
 
     config.llm = config.llm || {};
-    config.llm.enabled = el.llmEnabled.checked;
     config.llm.provider = currentLlmProvider;
     delete config.llm.base_url;
     delete config.llm.url;
@@ -1450,7 +1447,6 @@ SOFTWARE.`;
   el.betaUpdates.addEventListener("change", saveFormNow);
 
   // LLM fields
-  el.llmEnabled.addEventListener("change", saveFormNow);
   el.llmProviderGrid.addEventListener("click", (e) => {
     const btn = e.target.closest(".provider-chip");
     if (!btn) return;
