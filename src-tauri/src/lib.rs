@@ -638,6 +638,8 @@ async fn start_recording(app_handle: AppHandle) {
 
     // 3. Create ASR session (select engine based on config)
     let engine_name = config.asr.engine.as_str();
+    let hotwords = app_inner.hotword_manager.active_words();
+    log_rec!(debug, "Active hotwords ({}): {:?}", hotwords.len(), hotwords);
     let result = match engine_name {
         "sherpa-onnx" => {
             let active_model = if config.asr.active_model.is_empty() {
@@ -654,7 +656,7 @@ async fn start_recording(app_handle: AppHandle) {
                 active_model,
                 config.asr_offline.clone(),
             );
-            engine.create_session(&[]).await
+            engine.create_session(&hotwords).await
         }
         _ => {
             // Default: Doubao online engine
@@ -663,7 +665,7 @@ async fn start_recording(app_handle: AppHandle) {
                 config.audio.clone(),
                 config.request.clone(),
             );
-            engine.create_session(&[]).await
+            engine.create_session(&hotwords).await
         }
     };
 
@@ -802,7 +804,7 @@ async fn stop_recording(app_handle: AppHandle) {
             let final_text = if let Some(ref config) = config {
                 if active_prompt_id.is_some() {
                     let prompts = app_inner.config_manager.load_prompts();
-                    let system_prompt = active_prompt_id
+                    let mut system_prompt = active_prompt_id
                         .as_ref()
                         .and_then(|pid| {
                             prompts
@@ -812,6 +814,20 @@ async fn stop_recording(app_handle: AppHandle) {
                                 .filter(|p| !p.trim().is_empty())
                         })
                         .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
+
+                    // When using sherpa-onnx engine, append hotwords to the LLM prompt
+                    // as a fallback hint for proper-noun accuracy.
+                    if config.asr.engine == "sherpa-onnx" {
+                        let hw = app_inner.hotword_manager.active_words();
+                        if !hw.is_empty() {
+                            system_prompt = format!(
+                                "{}\n\n需要注意以下专有名词的准确拼写：{}",
+                                system_prompt,
+                                hw.join("、")
+                            );
+                        }
+                    }
+
                     log_rec!(debug, "Applying LLM structure_text (prompt_id: {:?})", active_prompt_id);
                     match crate::llm::call_llm_api(&config.llm, &trimmed, &system_prompt).await {
                         Ok(result) => {

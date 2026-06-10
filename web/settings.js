@@ -1,7 +1,6 @@
 (() => {
   let parsedConfig = {};
   let _originalConfigText = "";
-  let hotwords = [];
   let isDirty = false;
   let currentThemePreference = "system";
   let currentHotkeyMode = "toggle";
@@ -126,10 +125,6 @@
     removeTrailingPeriod: $("removeTrailingPeriod"),
     keepClipboard: $("keepClipboard"),
     boostingTableId: $("boostingTableId"),
-    hotwordTags: $("hotwordTags"),
-    hotwordHint: $("hotwordHint"),
-    newHotword: $("newHotword"),
-    addHotwordBtn: $("addHotwordBtn"),
     yamlEditor: $("yamlEditor"),
     reloadYamlBtn: $("reloadYamlBtn"),
     resetBtn: $("resetBtn"),
@@ -599,21 +594,6 @@
 
     el.boostingTableId.value = c.request?.corpus?.boosting_table_id || "";
 
-    const raw = c.request?.corpus?.context_hotwords;
-    if (typeof raw === "string") {
-      hotwords = raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-    } else if (Array.isArray(raw)) {
-      hotwords = raw
-        .map((h) => (typeof h === "string" ? h.trim() : (h?.word || "").trim()))
-        .filter(Boolean);
-    } else {
-      hotwords = [];
-    }
-    renderHotwords();
-
     el.appId.value = c.connection?.app_id || "";
     el.accessToken.value = c.connection?.access_token || "";
     el.secretKey.value = c.connection?.secret_key || "";
@@ -678,7 +658,6 @@
 
     config.request.corpus = config.request.corpus || {};
     config.request.corpus.boosting_table_id = el.boostingTableId.value.trim();
-    config.request.corpus.context_hotwords = hotwords.join(", ");
 
     config.llm = config.llm || {};
     config.llm.provider = currentLlmProvider;
@@ -799,56 +778,12 @@
     }
   }
 
-  // ===== Hotwords =====
-
   function escapeHtml(str) {
     return str
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
-  }
-
-  function renderHotwords(filter = "") {
-    const query = filter.trim().toLowerCase();
-    el.hotwordTags.innerHTML = hotwords
-      .map((word, i) => {
-        const isMatch = query && word.toLowerCase() === query;
-        const isDimmed = query && !word.toLowerCase().includes(query);
-        const cls = `tag${isMatch ? " is-match" : isDimmed ? " is-dimmed" : ""}`;
-        return (
-          `<span class="${cls}">` +
-          `<span>${escapeHtml(word)}</span>` +
-          `<button type="button" class="tag-remove" data-index="${i}" title="移除">&times;</button>` +
-          `</span>`
-        );
-      })
-      .join("");
-  }
-
-  function setHotwordHint(text, level) {
-    el.hotwordHint.textContent = text;
-    el.hotwordHint.dataset.level = level || "";
-  }
-
-  function addHotword() {
-    const word = el.newHotword.value.trim();
-    if (!word) return;
-    if (hotwords.includes(word)) {
-      setHotwordHint(`「${word}」已存在`, "warn");
-      return;
-    }
-    hotwords.push(word);
-    el.newHotword.value = "";
-    setHotwordHint("", "");
-    renderHotwords();
-    saveFormNow();
-  }
-
-  function removeHotword(index) {
-    hotwords.splice(index, 1);
-    renderHotwords();
-    saveFormNow();
   }
 
   // ===== Password toggle =====
@@ -1734,25 +1669,6 @@ SOFTWARE.`;
     renderPrompts();
     renderPromptHotkeys();
     await savePromptsNow();
-  });
-
-  // Hotwords
-  el.addHotwordBtn.addEventListener("click", addHotword);
-  el.newHotword.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") addHotword();
-  });
-  el.newHotword.addEventListener("input", () => {
-    const val = el.newHotword.value.trim();
-    renderHotwords(val);
-    if (val && hotwords.includes(val)) {
-      setHotwordHint(`「${val}」已存在`, "warn");
-    } else {
-      setHotwordHint("", "");
-    }
-  });
-  el.hotwordTags.addEventListener("click", (e) => {
-    const btn = e.target.closest(".tag-remove");
-    if (btn) removeHotword(parseInt(btn.dataset.index, 10));
   });
 
   // YAML section

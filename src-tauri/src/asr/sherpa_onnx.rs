@@ -172,6 +172,7 @@ impl AsrSession for SherpaOnnxSession {
         let vad = self.vad.clone();
         let recognizer = self.recognizer.clone();
         let accumulated = self.accumulated_text.clone();
+        let hotwords = self.hotwords.clone();
         let samples = samples.to_vec();
 
         std::thread::spawn(move || {
@@ -204,7 +205,13 @@ impl AsrSession for SherpaOnnxSession {
                     continue;
                 }
 
-                let stream = recognizer.create_stream();
+                let stream = if hotwords.is_empty() {
+                    recognizer.create_stream()
+                } else {
+                    // sherpa-onnx expects hotwords as newline-separated string
+                    let hotwords_str = hotwords.join("\n");
+                    recognizer.create_stream_with_hotwords(&hotwords_str)
+                };
                 stream.accept_waveform(16000, &segment_samples);
                 recognizer.decode(&stream);
 
@@ -236,6 +243,7 @@ impl AsrSession for SherpaOnnxSession {
         let vad = self.vad.clone();
         let recognizer = self.recognizer.clone();
         let accumulated = self.accumulated_text.clone();
+        let hotwords = self.hotwords.clone();
 
         let final_text = tokio::task::spawn_blocking(move || {
             // Flush remaining audio through VAD
@@ -262,6 +270,12 @@ impl AsrSession for SherpaOnnxSession {
                 None => return accumulated.lock().map(|a| a.clone()).unwrap_or_default(),
             };
 
+            let hotwords_str = if hotwords.is_empty() {
+                String::new()
+            } else {
+                hotwords.join("\n")
+            };
+
             let mut new_text = String::new();
             for segment_samples in segments {
                 let duration = segment_samples.len() as f32 / 16000.0;
@@ -269,7 +283,11 @@ impl AsrSession for SherpaOnnxSession {
                     continue;
                 }
 
-                let stream = recognizer.create_stream();
+                let stream = if hotwords_str.is_empty() {
+                    recognizer.create_stream()
+                } else {
+                    recognizer.create_stream_with_hotwords(&hotwords_str)
+                };
                 stream.accept_waveform(16000, &segment_samples);
                 recognizer.decode(&stream);
 

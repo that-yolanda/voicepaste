@@ -268,6 +268,13 @@ pub async fn download_model(
         archive
             .unpack(&model_dir)
             .map_err(|e| format!("解压失败: {}", e))?;
+    } else if url.ends_with(".tar.bz2") || url.ends_with(".tbz2") {
+        use bzip2::read::BzDecoder;
+        let bz = BzDecoder::new(&archive_data[..]);
+        let mut archive = tar::Archive::new(bz);
+        archive
+            .unpack(&model_dir)
+            .map_err(|e| format!("解压失败: {}", e))?;
     } else {
         // Single file — save directly using the first model_files value
         if let Some(filename) = entry.model_files.values().next() {

@@ -41,6 +41,7 @@ keytap = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
 sherpa-onnx = { version = "1.13", default-features = false }
 tar = "0.4"
+bzip2 = "0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
