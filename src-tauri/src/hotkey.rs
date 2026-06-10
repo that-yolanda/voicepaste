@@ -43,8 +43,7 @@ pub type HotkeyConfig = Arc<RwLock<HotkeyConfigInner>>;
 /// does NOT stop the listener (it runs until the process exits).
 /// This is intentional — global hotkeys must work for the full app lifetime.
 pub struct HotkeyManager {
-    #[allow(dead_code)]
-    config: HotkeyConfig,
+    _config: HotkeyConfig,
 }
 
 // ---------------------------------------------------------------------------
@@ -382,11 +381,11 @@ pub fn start_hotkey_listener(
         Ok(tap) => tap,
         Err(keytap::Error::PermissionDenied) => {
             log_hotkey!(warn, "Accessibility permission not granted — global hotkeys disabled");
-            return Ok(HotkeyManager { config });
+            return Ok(HotkeyManager { _config: config });
         }
         Err(e) => {
             log_hotkey!(error, "keytap init failed: {:?} — global hotkeys disabled", e);
-            return Ok(HotkeyManager { config });
+            return Ok(HotkeyManager { _config: config });
         }
     };
 
@@ -402,7 +401,7 @@ pub fn start_hotkey_listener(
 
     config.write().unwrap().tap_active = true;
 
-    Ok(HotkeyManager { config })
+    Ok(HotkeyManager { _config: config })
 }
 
 /// Try to start the keytap listener if it is not already running.

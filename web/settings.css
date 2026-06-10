@@ -1316,15 +1316,17 @@ kbd {
 }
 
 .model-tab-content {
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 .model-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
+  border-radius: 14px;
+  padding: 0;
   margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
   transition: border-color 0.2s;
 }
 
@@ -1337,11 +1339,12 @@ kbd {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  padding: 13px 18px;
 }
 
 .model-card-name {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   margin-bottom: 6px;
 }
 
@@ -1387,24 +1390,22 @@ kbd {
 }
 
 .model-card-config {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
 }
 
 .model-card-status {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  padding: 0 18px 13px;
   font-size: 12px;
 }
 
 .model-downloaded {
-  color: var(--green);
+  color: var(--success);
   font-weight: 500;
 }
 
@@ -1433,14 +1434,14 @@ kbd {
   padding: 4px 12px;
   border-radius: 6px;
   background: none;
-  color: var(--red);
-  border: 1px solid var(--red);
+  color: var(--error);
+  border: 1px solid var(--error);
   cursor: pointer;
 }
 
 .model-progress {
   font-size: 11px;
-  color: var(--fg-secondary);
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -1448,9 +1449,10 @@ kbd {
 .hotword-group-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
+  border-radius: 14px;
+  padding: 13px 18px;
   margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
 }
 
 .hotword-group-head {
@@ -1462,8 +1464,8 @@ kbd {
 }
 
 .hotword-group-name {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .hotword-group-active {

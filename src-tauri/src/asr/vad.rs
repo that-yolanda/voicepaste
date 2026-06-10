@@ -1,6 +1,5 @@
 use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 use std::path::Path;
-use std::sync::Mutex;
 
 use crate::config::VadConfig;
 
@@ -95,18 +94,7 @@ impl VadProcessor {
 
         segments
     }
-
-    /// Reset the VAD state.
-    #[allow(dead_code)]
-    pub fn reset(&mut self) {
-        self.buffer.clear();
-        self.detector.reset();
-    }
 }
-
-/// Thread-safe wrapper for VadProcessor.
-#[allow(dead_code)]
-pub struct SharedVadProcessor(pub Mutex<VadProcessor>);
 
 #[cfg(test)]
 mod tests {

@@ -737,14 +737,6 @@ impl AsrEngine for DoubaoEngine {
         let _ = event_tx.send(AsrEvent::Open);
         Ok((Box::new(session), event_rx))
     }
-
-    fn supports_streaming(&self) -> bool {
-        true
-    }
-
-    fn name(&self) -> &str {
-        "doubao"
-    }
 }
 
 // ---------------------------------------------------------------------------

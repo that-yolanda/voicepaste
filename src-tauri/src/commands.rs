@@ -538,17 +538,18 @@ pub async fn get_accessibility_status() -> Result<serde_json::Value, String> {
 
 /// Open accessibility settings (macOS only).
 #[tauri::command]
-pub async fn open_accessibility_settings(app: AppHandle) -> Result<(), String> {
-    #[allow(deprecated)]
+pub async fn open_accessibility_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
     {
-        use tauri_plugin_shell::ShellExt;
-        app.shell()
-            .open(
-                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-                None,
-            )
-            .map_err(|e| format!("Failed to open accessibility settings: {}", e))
+        let status = std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .status()
+            .map_err(|e| format!("Failed to open accessibility settings: {}", e))?;
+        if !status.success() {
+            return Err(format!("Failed to open accessibility settings: {}", status));
+        }
     }
+    Ok(())
 }
 
 /// Try to start the keytap listener if it was skipped at startup due to

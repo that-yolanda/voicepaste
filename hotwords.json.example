@@ -4,7 +4,7 @@
     {
       "id": "default",
       "name": "默认热词表",
-      "words": []
+      "words": ["Claude Code", "Claude", "mermaid", "AGENTS.md","skills","codex","OpenAI", "ChatGPT", "GLM", "hermes", "openclaw", "obsidian", "schema", "skill", "agent", "etsy"]
     }
   ]
 }

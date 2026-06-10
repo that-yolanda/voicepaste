@@ -46,14 +46,13 @@ pub struct HotwordManager {
     cached: RwLock<HotwordData>,
 }
 
-#[allow(dead_code)]
 impl HotwordManager {
     pub fn new(data_dir: &Path, resource_dir: &Path) -> Self {
         let path = data_dir.join("hotwords.json");
+        let example_path = resource_dir.join("hotwords.json.example");
 
         // Ensure file exists
         if !path.exists() {
-            let example_path = resource_dir.join("hotwords.json.example");
             if example_path.exists() {
                 let _ = fs::copy(&example_path, &path);
             } else {
@@ -64,7 +63,15 @@ impl HotwordManager {
             }
         }
 
-        let data = Self::read_from_disk(&path);
+        let mut data = Self::read_from_disk(&path);
+        if let Some(defaults) = Self::read_example(&example_path) {
+            let changed = Self::merge_defaults(&mut data, defaults);
+            if changed {
+                if let Ok(json) = serde_json::to_string_pretty(&data) {
+                    let _ = fs::write(&path, json);
+                }
+            }
+        }
         Self {
             path,
             cached: RwLock::new(data),
@@ -77,6 +84,36 @@ impl HotwordManager {
             Err(_) => return HotwordData::default(),
         };
         serde_json::from_str(&content).unwrap_or_default()
+    }
+
+    fn read_example(path: &Path) -> Option<HotwordData> {
+        let content = fs::read_to_string(path).ok()?;
+        serde_json::from_str(&content).ok()
+    }
+
+    fn merge_defaults(data: &mut HotwordData, defaults: HotwordData) -> bool {
+        let mut changed = false;
+
+        for default_group in defaults.groups {
+            if let Some(group) = data.groups.iter_mut().find(|g| g.id == default_group.id) {
+                for word in default_group.words {
+                    if !group.words.contains(&word) {
+                        group.words.push(word);
+                        changed = true;
+                    }
+                }
+            } else {
+                data.groups.push(default_group);
+                changed = true;
+            }
+        }
+
+        if data.groups.iter().all(|g| g.id != data.active_group) {
+            data.active_group = default_active_group();
+            changed = true;
+        }
+
+        changed
     }
 
     /// Load hotword data from memory cache (no disk I/O).
@@ -127,8 +164,26 @@ impl HotwordManager {
         }
         self.save(&data)
     }
+}
 
-    pub fn path(&self) -> &PathBuf {
-        &self.path
+#[cfg(test)]
+mod tests {
+    use super::{HotwordData, HotwordGroup, HotwordManager};
+
+    #[test]
+    fn merge_defaults_adds_missing_words_without_duplicates() {
+        let mut data = HotwordData::default();
+        let defaults = HotwordData {
+            active_group: "default".to_string(),
+            groups: vec![HotwordGroup {
+                id: "default".to_string(),
+                name: "默认热词表".to_string(),
+                words: vec!["Claude".to_string(), "OpenAI".to_string()],
+            }],
+        };
+
+        assert!(HotwordManager::merge_defaults(&mut data, defaults.clone()));
+        assert_eq!(data.groups[0].words, vec!["Claude", "OpenAI"]);
+        assert!(!HotwordManager::merge_defaults(&mut data, defaults));
     }
 }

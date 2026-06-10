@@ -41,7 +41,7 @@
           <div class="nav-divider"></div>
           <div class="nav-group-label">模型</div>
           <div class="nav-item" data-section="service">
-            <span class="nav-icon" data-icon="audio-lines"></span>
+            <span class="nav-icon" data-icon="mic"></span>
             <span>音频模型</span>
           </div>
           <div class="nav-item" data-section="hotwords">
@@ -314,6 +314,36 @@
                 </div>
               </div>
             </div>
+            <div class="section-card" style="margin-top: 16px">
+              <div class="row">
+                <div class="row-label">
+                  <div class="title">
+                    移除末尾句号
+                    <span class="dev-path" title="配置路径：app.remove_trailing_period">app.remove_trailing_period</span>
+                  </div>
+                  <div class="desc">粘贴前自动移除识别结果末尾的句号</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="removeTrailingPeriod" checked />
+                  <span class="track"></span>
+                  <span class="thumb"></span>
+                </label>
+              </div>
+              <div class="row">
+                <div class="row-label">
+                  <div class="title">
+                    保留剪贴板
+                    <span class="dev-path" title="配置路径：app.keep_clipboard">app.keep_clipboard</span>
+                  </div>
+                  <div class="desc">输入完成后恢复原剪贴板内容</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="keepClipboard" checked />
+                  <span class="track"></span>
+                  <span class="thumb"></span>
+                </label>
+              </div>
+            </div>
           </section>
           <section class="section hidden" id="section-permissions">
             <div class="section-header">
@@ -481,7 +511,7 @@
             </button>
             <div id="hotwordGroupsList"></div>
             <div class="hint-text" style="margin-top: 16px">
-              💡 内置支持热词库的模型可直接生效，其他模型会将热词追加到 LLM 提示词中
+              内置支持热词库的模型可直接生效，其他模型会将热词追加到 LLM 提示词中
             </div>
           </section>
 

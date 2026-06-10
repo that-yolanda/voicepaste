@@ -37,6 +37,7 @@ const ICONS = [
   "CalendarDays",
   "Mic",
   "Timer",
+  "ChevronDown",
 ];
 
 const attrs = {

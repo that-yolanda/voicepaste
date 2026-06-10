@@ -22,21 +22,13 @@ pub enum AsrEvent {
 
 /// ASR engine trait — factory for creating recording sessions.
 /// Each backend (Doubao WebSocket, sherpa-onnx, etc.) implements this.
-#[allow(dead_code)]
 #[async_trait]
 pub trait AsrEngine: Send + Sync {
     /// Create a new recording session with optional hotwords.
-    #[allow(clippy::type_complexity)]
     async fn create_session(
         &self,
         hotwords: &[String],
     ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), String>;
-
-    /// Whether this engine supports real-time streaming partial results.
-    fn supports_streaming(&self) -> bool;
-
-    /// Engine identifier for logging.
-    fn name(&self) -> &str;
 }
 
 /// ASR session trait — one recording session.

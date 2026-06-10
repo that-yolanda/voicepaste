@@ -531,8 +531,10 @@
       autoCheckUpdatesOnce();
       updateCurrentModelBadge();
       loadHotwordGroups();
-    } catch (_err) {
-      /* ignore */
+    } catch (err) {
+      console.error("Failed to load settings", err);
+      updateMicStatus("unknown");
+      updateAccessibilityStatus("unknown");
     }
   }
 
@@ -589,8 +591,12 @@
     el.enableNonstream.checked = Boolean(c.request?.enable_nonstream);
     el.enableItn.checked = c.request?.enable_itn !== false;
     el.enablePunc.checked = c.request?.enable_punc !== false;
-    el.removeTrailingPeriod.checked = c.app?.remove_trailing_period !== false;
-    el.keepClipboard.checked = c.app?.keep_clipboard !== false;
+    if (el.removeTrailingPeriod) {
+      el.removeTrailingPeriod.checked = c.app?.remove_trailing_period !== false;
+    }
+    if (el.keepClipboard) {
+      el.keepClipboard.checked = c.app?.keep_clipboard !== false;
+    }
 
     el.boostingTableId.value = c.request?.corpus?.boosting_table_id || "";
 
@@ -623,8 +629,12 @@
     config.app = config.app || {};
     config.app.hotkey = config.app.hotkey || "F13";
     config.app.hotkey_mode = currentHotkeyMode;
-    config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
-    config.app.keep_clipboard = el.keepClipboard.checked;
+    config.app.remove_trailing_period = el.removeTrailingPeriod
+      ? el.removeTrailingPeriod.checked
+      : config.app.remove_trailing_period !== false;
+    config.app.keep_clipboard = el.keepClipboard
+      ? el.keepClipboard.checked
+      : config.app.keep_clipboard !== false;
     config.app.theme = currentThemePreference;
     config.app.overlay_style = currentOverlayStyle;
     config.app.sound = {
@@ -722,9 +732,14 @@
   }
 
   async function checkMic() {
-    let result = await window.voiceSettings.getMicrophoneStatus();
-    if (result.status !== "granted") {
-      result = await window.voiceSettings.requestMicrophoneAccess();
+    let result;
+    try {
+      result = await window.voiceSettings.getMicrophoneStatus();
+      if (result.status === "prompt" || result.status === "not-determined") {
+        result = await window.voiceSettings.requestMicrophoneAccess();
+      }
+    } catch {
+      result = { status: "unknown" };
     }
     updateMicStatus(result.status || "unknown");
   }
@@ -1805,7 +1820,10 @@ SOFTWARE.`;
     const model = c.asr?.active_model || "";
     if (el.currentModelBadge) {
       if (engine === "sherpa-onnx" && model) {
-        el.currentModelBadge.textContent = `当前：${model}`;
+        const item = Array.isArray(_modelRegistry)
+          ? _modelRegistry.find((entry) => entry.id === model)
+          : null;
+        el.currentModelBadge.textContent = `当前：${item?.name || model}`;
       } else {
         el.currentModelBadge.textContent = "当前：豆包流式输出大模型";
       }
@@ -1826,6 +1844,7 @@ SOFTWARE.`;
       _modelRegistry = regResult?.models || [];
       _downloadedModels = dlResult?.models || [];
       renderOfflineModels();
+      updateCurrentModelBadge();
     } catch (_err) {
       if (el.offlineModelList) {
         el.offlineModelList.innerHTML = '<div class="hint-text">加载模型列表失败</div>';
@@ -2048,10 +2067,14 @@ SOFTWARE.`;
 
   if (el.addHotwordGroupBtn) {
     el.addHotwordGroupBtn.addEventListener("click", async () => {
-      const name = prompt("请输入热词表名称：");
-      if (!name?.trim()) return;
+      if (!_hotwordData) {
+        _hotwordData = {
+          active_group: "default",
+          groups: [{ id: "default", name: "默认热词表", words: [] }],
+        };
+      }
       const id = `hw-${Date.now()}`;
-      _hotwordData.groups.push({ id, name: name.trim(), words: [] });
+      _hotwordData.groups.push({ id, name: "新建热词表", words: [] });
       await saveHotwordData();
       renderHotwordGroups();
     });

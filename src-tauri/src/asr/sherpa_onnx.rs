@@ -131,14 +131,6 @@ impl AsrEngine for SherpaOnnxEngine {
 
         Ok((Box::new(session), event_rx))
     }
-
-    fn supports_streaming(&self) -> bool {
-        false
-    }
-
-    fn name(&self) -> &str {
-        "sherpa-onnx"
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +139,6 @@ impl AsrEngine for SherpaOnnxEngine {
 
 /// Sherpa-ONNX ASR session using VAD + OfflineRecognizer.
 /// All shared state uses std::sync::Mutex for access from blocking threads.
-#[allow(dead_code)]
 struct SherpaOnnxSession {
     is_ready: Arc<AtomicBool>,
     is_committed: Arc<AtomicBool>,

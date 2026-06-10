@@ -33,12 +33,6 @@ impl VoiceLogger {
         logger
     }
 
-    /// Return the log file path.
-    #[allow(dead_code)]
-    pub fn log_path(&self) -> &PathBuf {
-        &self.log_path
-    }
-
     /// If the log file exceeds `MAX_LOG_SIZE`, gzip it to `.log.gz` (overwriting
     /// any previous backup) and start a fresh log file.
     fn rotate_if_needed(&self) {
@@ -153,7 +147,3 @@ macro_rules! log_tray {
 macro_rules! log_update {
     ($l:ident, $($t:tt)*) => { log::$l!(target: "Update", $($t)*) };
 }
-
-// Keep a type alias for backward compatibility.
-#[allow(dead_code)]
-pub type Logger = VoiceLogger;

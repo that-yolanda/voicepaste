@@ -39,6 +39,7 @@ pub struct ModelEntry {
     pub provider: String,
     /// For offline models: "offline" or "online" (streaming local).
     /// For online models: omitted.
+    #[serde(rename = "type")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_type: Option<String>,
     pub name: String,
@@ -174,21 +175,6 @@ fn is_model_downloaded(models_base: &Path, model: &ModelEntry) -> bool {
         .model_files
         .values()
         .all(|filename| model_dir.join(filename).exists())
-}
-
-/// Ensure the VAD model is downloaded. Returns error if not available.
-pub fn ensure_vad_model(data_dir: &Path, registry: &ModelRegistry) -> Result<PathBuf, String> {
-    let vad_entry = registry
-        .models
-        .iter()
-        .find(|m| m.category == ModelCategory::Vad)
-        .ok_or("VAD 模型未在注册表中找到")?;
-
-    let dir = models_dir(data_dir);
-    if is_model_downloaded(&dir, vad_entry) {
-        return Ok(dir.join(&vad_entry.id));
-    }
-    Err("VAD 模型尚未下载，请先在设置中下载".to_string())
 }
 
 /// Download a model, emitting progress events to the frontend.
@@ -340,9 +326,4 @@ pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<(), String> {
 /// Resolve the model directory path for a given model ID.
 pub fn model_path(data_dir: &Path, model_id: &str) -> PathBuf {
     models_dir(data_dir).join(model_id)
-}
-
-/// Find a model entry by ID.
-pub fn find_model<'a>(registry: &'a ModelRegistry, model_id: &str) -> Option<&'a ModelEntry> {
-    registry.models.iter().find(|m| m.id == model_id)
 }
