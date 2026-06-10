@@ -507,6 +507,24 @@
       return invoke("download_model", { modelId });
     },
 
+    /**
+     * Listen for model download progress events.
+     * @param {function} listener - callback({ model_id, status, progress })
+     * @returns {function} cleanup function
+     */
+    onModelDownloadProgress(listener) {
+      let active = true;
+      const unlisten = listen("model:download:progress", (event) => {
+        if (active && listener) {
+          listener(event.payload);
+        }
+      });
+      return () => {
+        active = false;
+        unlisten.then((fn) => fn());
+      };
+    },
+
     deleteModel(modelId) {
       return invoke("delete_model", { modelId });
     },

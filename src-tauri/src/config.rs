@@ -233,7 +233,7 @@ pub struct PromptItem {
 
 // Default value functions
 fn default_asr_engine() -> String {
-    "doubao".to_string()
+    "doubao-streaming".to_string()
 }
 fn default_num_threads() -> u32 {
     2
@@ -545,6 +545,19 @@ impl ConfigManager {
             Err(_) => return AppConfig::default(),
         };
         let mut config: AppConfig = serde_norway::from_value(raw).unwrap_or_default();
+
+        // Migrate old engine values to new model-ID format:
+        //   "doubao"      → "doubao-streaming"
+        //   "sherpa-onnx" → active_model (or sensible default)
+        if config.asr.engine == "doubao" {
+            config.asr.engine = "doubao-streaming".to_string();
+        } else if config.asr.engine == "sherpa-onnx" {
+            config.asr.engine = if config.asr.active_model.is_empty() {
+                "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8".to_string()
+            } else {
+                std::mem::take(&mut config.asr.active_model)
+            };
+        }
 
         // Bidirectional migration: ensure both old and new fields are populated
         if config.connection.url.is_empty() && !config.asr_online.doubao.url.is_empty() {

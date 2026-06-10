@@ -529,6 +529,13 @@
 
       clearDirty();
       autoCheckUpdatesOnce();
+      // Load registry early so badge and filters can use it
+      try {
+        const regResult = await window.voiceSettings.getModelRegistry();
+        _modelRegistry = regResult?.models || [];
+      } catch (_) {
+        _modelRegistry = [];
+      }
       updateCurrentModelBadge();
       loadHotwordGroups();
     } catch (err) {
@@ -603,6 +610,12 @@
     el.appId.value = c.connection?.app_id || "";
     el.accessToken.value = c.connection?.access_token || "";
     el.secretKey.value = c.connection?.secret_key || "";
+
+    // Model enable toggles: only the active engine's toggle should be on
+    if (el.enableDoubao) {
+      const engine = c.asr?.engine || "doubao-streaming";
+      el.enableDoubao.checked = !engine.startsWith("sherpa-onnx");
+    }
 
     setLlmProvider(c.llm?.provider || (c.llm?.url ? "openai_compatible" : "deepseek"));
     const activeProviderConfig = c.llm?.[currentLlmProvider] || {};
@@ -1018,7 +1031,9 @@
           })
           .catch((err) => {
             unsub();
-            setUpdateState("error", { message: err?.message || "下载更新失败" });
+            setUpdateState("error", {
+              message: err?.message || "下载更新失败",
+            });
           });
         break;
       }
@@ -1791,21 +1806,33 @@ SOFTWARE.`;
     });
   }
 
-  // ===== Model Enable Toggle =====
+  // ===== Model Enable Toggle (mutually exclusive) =====
 
   if (el.enableDoubao) {
     el.enableDoubao.addEventListener("change", async () => {
       if (el.enableDoubao.checked) {
-        await saveModelSelection("doubao", "");
+        // Uncheck all offline model toggles
+        if (el.offlineModelList) {
+          el.offlineModelList.querySelectorAll(".offline-model-toggle").forEach((t) => {
+            t.checked = false;
+          });
+        }
+        await saveModelSelection("doubao-streaming");
       }
     });
   }
 
-  async function saveModelSelection(engine, activeModel) {
+  /** Uncheck the doubao toggle (called when an offline model is enabled). */
+  function disableDoubaoToggle() {
+    if (el.enableDoubao) {
+      el.enableDoubao.checked = false;
+    }
+  }
+
+  async function saveModelSelection(modelId) {
     const config = parsedConfig || {};
     if (!config.asr) config.asr = {};
-    config.asr.engine = engine;
-    config.asr.active_model = activeModel;
+    config.asr.engine = modelId;
     try {
       await window.voiceSettings.saveConfigObject(config);
       await loadSettings();
@@ -1816,17 +1843,12 @@ SOFTWARE.`;
 
   function updateCurrentModelBadge() {
     const c = parsedConfig || {};
-    const engine = c.asr?.engine || "doubao";
-    const model = c.asr?.active_model || "";
+    const modelId = c.asr?.engine || "doubao-streaming";
     if (el.currentModelBadge) {
-      if (engine === "sherpa-onnx" && model) {
-        const item = Array.isArray(_modelRegistry)
-          ? _modelRegistry.find((entry) => entry.id === model)
-          : null;
-        el.currentModelBadge.textContent = `当前：${item?.name || model}`;
-      } else {
-        el.currentModelBadge.textContent = "当前：豆包流式输出大模型";
-      }
+      const item = Array.isArray(_modelRegistry)
+        ? _modelRegistry.find((entry) => entry.id === modelId)
+        : null;
+      el.currentModelBadge.textContent = `当前：${item?.name || modelId}`;
     }
   }
 
@@ -1837,11 +1859,8 @@ SOFTWARE.`;
 
   async function loadOfflineModels() {
     try {
-      const [regResult, dlResult] = await Promise.all([
-        window.voiceSettings.getModelRegistry(),
-        window.voiceSettings.getDownloadedModels(),
-      ]);
-      _modelRegistry = regResult?.models || [];
+      // Registry is already loaded in loadSettings(); only refresh downloads
+      const dlResult = await window.voiceSettings.getDownloadedModels();
       _downloadedModels = dlResult?.models || [];
       renderOfflineModels();
       updateCurrentModelBadge();
@@ -1854,77 +1873,149 @@ SOFTWARE.`;
 
   function renderOfflineModels() {
     if (!el.offlineModelList || !_modelRegistry) return;
-    const offlineModels = _modelRegistry.filter((m) => m.category === "offline");
+    const offlineModels = _modelRegistry.filter((m) => m.type === "offline");
     if (offlineModels.length === 0) {
       el.offlineModelList.innerHTML = '<div class="hint-text">暂无可用本地模型</div>';
       return;
     }
 
     const c = parsedConfig || {};
-    const currentEngine = c.asr?.engine || "doubao";
-    const currentModel = c.asr?.active_model || "";
+    const currentModelId = c.asr?.engine || "doubao-streaming";
 
-    el.offlineModelList.innerHTML = offlineModels
+    // Sort: VAD first, then ASR
+    const sorted = [...offlineModels].sort((a, b) => {
+      if (a.category !== b.category) {
+        if (a.category === "vad") return -1;
+        if (b.category === "vad") return 1;
+      }
+      return 0;
+    });
+
+    el.offlineModelList.innerHTML = sorted
       .map((model) => {
         const isDownloaded = _downloadedModels.includes(model.id);
-        const isActive = currentEngine === "sherpa-onnx" && currentModel === model.id;
-        const tags = (model.features || [])
-          .map((f) => `<span class="model-tag">${escapeHtml(f)}</span>`)
+        const isActive = currentModelId === model.id;
+        const isVad = model.category === "vad";
+        const tags = (model.tags || [])
+          .map((t) => `<span class="model-tag${isVad ? " vad-tag" : ""}">${escapeHtml(t)}</span>`)
           .join("");
-        const recTags = (model.recommend_tags || [])
-          .map(
-            (t) =>
-              `<span class="model-tag" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)">${escapeHtml(t)}</span>`,
-          )
-          .join("");
+        const langStr = model.languages?.length
+          ? model.languages.slice(0, 3).join(", ") + (model.languages.length > 3 ? "…" : "")
+          : "";
+        const sizeStr = [
+          model.file_size ? `${model.file_size}MB` : "",
+          model.mem_size ? `${model.mem_size}MB 内存` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
 
-        return (
-          `<div class="model-card${isActive ? " model-card-active" : ""}">` +
-          `<div class="model-card-head">` +
-          `<div class="model-card-info">` +
-          `<div class="model-card-name">${escapeHtml(model.name)}</div>` +
-          `<div class="model-card-tags">${tags}${recTags}</div>` +
-          `</div>` +
-          `<label class="toggle model-enable-toggle">` +
-          `<input type="checkbox" data-model-id="${model.id}" class="offline-model-toggle" ${isActive ? "checked" : ""} ${!isDownloaded ? "disabled" : ""} />` +
-          `<span class="track"></span><span class="thumb"></span>` +
-          `</label>` +
-          `</div>` +
-          `<div class="model-card-status">` +
-          (isDownloaded
-            ? `<span class="model-downloaded">✓ 已下载</span><button type="button" class="model-delete-btn" data-model-id="${model.id}">删除</button>`
-            : `<button type="button" class="model-download-btn" data-model-id="${model.id}" data-url="${model.download_url || ""}">下载${model.file_size_mb ? ` ${model.file_size_mb}MB` : ""}</button>`) +
-          `</div>` +
-          `</div>`
-        );
+        let body = `<div class="model-card">`;
+        body += `<div class="model-card-head">`;
+        body += `<div class="model-card-info">`;
+        body += `<div class="model-card-name">${escapeHtml(model.name)}</div>`;
+        body += `<div class="model-card-tags">${tags}</div>`;
+        if (langStr || sizeStr) {
+          body += `<div class="model-card-meta">${[langStr, sizeStr].filter(Boolean).join(" · ")}</div>`;
+        }
+        body += `</div>`;
+        // ASR models get enable toggle; VAD/punctuation are base models — no toggle
+        if (!isVad) {
+          body += `<label class="toggle model-enable-toggle">`;
+          body += `<input type="checkbox" data-model-id="${model.id}" class="offline-model-toggle" ${isActive ? "checked" : ""} ${!isDownloaded ? "disabled" : ""} />`;
+          body += `<span class="track"></span><span class="thumb"></span>`;
+          body += `</label>`;
+        }
+        body += `</div>`; // end model-card-head
+
+        body += `<div class="model-card-status">`;
+        if (isDownloaded) {
+          body += `<span class="model-downloaded">已下载${model.file_size ? ` · ${model.file_size}MB` : ""}</span>`;
+          body += `<button type="button" class="model-delete-btn" data-model-id="${model.id}">删除</button>`;
+        } else {
+          body += `<button type="button" class="model-download-btn" data-model-id="${model.id}">下载${model.file_size ? ` ${model.file_size}MB` : ""}</button>`;
+        }
+        body += `</div>`;
+
+        body += `</div>`; // end model-card
+        return body;
       })
       .join("");
 
-    // Event listeners
+    // Event listeners for enable toggles (ASR models only)
     el.offlineModelList.querySelectorAll(".offline-model-toggle").forEach((toggle) => {
       toggle.addEventListener("change", async (e) => {
         const modelId = e.target.dataset.modelId;
         if (e.target.checked) {
-          await saveModelSelection("sherpa-onnx", modelId);
+          disableDoubaoToggle();
+          el.offlineModelList.querySelectorAll(".offline-model-toggle").forEach((t) => {
+            if (t !== e.target) t.checked = false;
+          });
+          await saveModelSelection(modelId);
         }
       });
     });
 
+    // Event listeners for download buttons
     el.offlineModelList.querySelectorAll(".model-download-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const modelId = btn.dataset.modelId;
+        const VAD_ID = "silero-vad";
+
+        // Step 1: If downloading an ASR model and VAD not downloaded,
+        // trigger VAD download first — progress shown on VAD card.
+        if (modelId !== VAD_ID && !_downloadedModels.includes(VAD_ID)) {
+          const vadBtn = el.offlineModelList.querySelector(
+            `.model-download-btn[data-model-id="${VAD_ID}"]`,
+          );
+          if (vadBtn) {
+            vadBtn.disabled = true;
+            vadBtn.textContent = "下载中 0%";
+            const vadUnsub = window.voiceSettings.onModelDownloadProgress((payload) => {
+              if (payload.model_id !== VAD_ID) return;
+              if (payload.status === "downloading") {
+                vadBtn.textContent = `下载中 ${payload.progress}%`;
+              } else if (payload.status === "completed") {
+                vadBtn.textContent = "下载完成";
+              }
+            });
+            try {
+              await window.voiceSettings.downloadModel(VAD_ID);
+              vadUnsub();
+              _downloadedModels.push(VAD_ID);
+            } catch (_err) {
+              vadUnsub();
+              vadBtn.textContent = "下载失败";
+              vadBtn.disabled = false;
+              return;
+            }
+          }
+        }
+
+        // Step 2: Download the requested model
         btn.disabled = true;
-        btn.textContent = "下载中...";
+        btn.textContent = "下载中 0%";
+        const unsub = window.voiceSettings.onModelDownloadProgress((payload) => {
+          if (payload.model_id !== modelId) return;
+          if (payload.status === "downloading") {
+            btn.textContent = `下载中 ${payload.progress}%`;
+          } else if (payload.status === "completed") {
+            btn.textContent = "下载完成";
+          }
+        });
+
         try {
           await window.voiceSettings.downloadModel(modelId);
+          unsub();
           await loadOfflineModels();
         } catch (_err) {
+          unsub();
           btn.textContent = "下载失败";
           btn.disabled = false;
         }
       });
     });
 
+    // Event listeners for delete buttons
     el.offlineModelList.querySelectorAll(".model-delete-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const modelId = btn.dataset.modelId;

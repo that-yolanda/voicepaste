@@ -636,30 +636,36 @@ async fn start_recording(app_handle: AppHandle) {
         return;
     }
 
-    // 3. Create ASR session (select engine based on config)
-    let engine_name = config.asr.engine.as_str();
+    // 3. Create ASR session (engine chosen by model ID → registry provider)
     let hotwords = app_inner.hotword_manager.active_words();
     log_rec!(debug, "Active hotwords ({}): {:?}", hotwords.len(), hotwords);
-    let result = match engine_name {
-        "sherpa-onnx" => {
-            let active_model = if config.asr.active_model.is_empty() {
-                "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8".to_string()
-            } else {
-                config.asr.active_model.clone()
-            };
+
+    let resource_dir = app_handle
+        .path()
+        .resource_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let registry = crate::model::load_registry(&resource_dir);
+
+    // Resolve engine from model ID: config.asr.engine stores the model ID.
+    let engine_model_id = config.asr.engine.as_str();
+    let entry = registry.models.iter().find(|m| m.id == engine_model_id);
+
+    let result = match entry {
+        Some(entry) if entry.provider == "sherpa-onnx" => {
             let data_dir = app_handle
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
             let engine = crate::asr::sherpa_onnx::SherpaOnnxEngine::new(
                 data_dir,
-                active_model,
+                resource_dir,
+                engine_model_id.to_string(),
                 config.asr_offline.clone(),
             );
             engine.create_session(&hotwords).await
         }
         _ => {
-            // Default: Doubao online engine
+            // Default / volcengine: Doubao online engine
             let engine = crate::asr::doubao::DoubaoEngine::new(
                 config.connection.clone(),
                 config.audio.clone(),
@@ -697,7 +703,7 @@ async fn start_recording(app_handle: AppHandle) {
 
             // For non-streaming engines, show a "recording" hint since
             // partial results won't appear during recording.
-            if engine_name == "sherpa-onnx" {
+            if entry.map_or(false, |e| !e.capabilities.streaming) {
                 let _ = app_handle.emit(
                     "overlay:event",
                     serde_json::json!({
@@ -815,9 +821,9 @@ async fn stop_recording(app_handle: AppHandle) {
                         })
                         .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
 
-                    // When using sherpa-onnx engine, append hotwords to the LLM prompt
+                    // When using sherpa-onnx (local) engine, append hotwords to the LLM prompt
                     // as a fallback hint for proper-noun accuracy.
-                    if config.asr.engine == "sherpa-onnx" {
+                    if config.asr.engine.starts_with("sherpa-onnx") {
                         let hw = app_inner.hotword_manager.active_words();
                         if !hw.is_empty() {
                             system_prompt = format!(

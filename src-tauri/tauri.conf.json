@@ -57,7 +57,7 @@
       "../config.yaml.example": "config.yaml.example",
       "../prompts.json.example": "prompts.json.example",
       "../hotwords.json.example": "hotwords.json.example",
-      "../assets/registry.json": "registry.json",
+      "../registry.json": "registry.json",
       "../assets/sounds/start.mp3": "sounds/start.mp3",
       "../assets/sounds/end.mp3": "sounds/end.mp3",
       "icons/icon.png": "icons/icon.png",

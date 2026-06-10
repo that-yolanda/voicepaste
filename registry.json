@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "=== VoicePaste 模型注册表 (Model Registry) ===\n\n字段说明：\n  id            [required] 全局唯一标识，如 \"doubao-streaming\", \"silero-vad\"\n  type          [required] \"online\" | \"offline\"\n  category      [required] \"asr\" | \"vad\" | \"punctuation\"\n  provider      [required] 引擎/协议标识，对应后端代码：volcengine / sherpa-onnx\n  name          [required] UI 显示的模型名称\n  description   [required] UI 显示的模型描述\n  tags          [required] 特点标签，除了 capabilities 以外需要展示的描述信息\n  capabilities  [required] { streaming, hotwords, punctuation, itn }\n  languages     [required] 支持的语言代码，如 [\"zh\", \"en\"]，UI 仅显示前三个\n\n仅离线模型 (type=offline)：\n  architecture  [offline*] sherpa-onnx 模型架构：\"sense_voice\" | \"transducer\" | \"vad\"\n  download_url  [offline]  下载地址\n  file_size     [offline]  下载文件大小 (MB)\n  mem_size      [offline]  运行时内存占用 (MB)\n  model_files   [offline*] { key: filename } 下载后需校验的文件及构建 recognizer 时定位\n  default_config[offline]  sherpa-onnx 默认参数，如 { \"use_itn\": true }\n\n仅在线模型 (type=online)：\n  requires_config [online] 前端需要展示的配置字段列表：url, app_id, access_token, secret_key, resource_id\n",
+
+  "version": 3,
+  "updated_at": "2026-06-10",
+  "models": [
+    {
+      "id": "doubao-streaming",
+      "type": "online",
+      "category": "asr",
+      "provider": "volcengine",
+      "name": "火山引擎 - 豆包流式输出大模型",
+      "description": "基于豆包大模型的流式语音识别服务",
+      "tags": ["流式输出", "免费可用", "热词库", "中文,英文,方言"],
+      "capabilities": {
+        "streaming": true,
+        "hotwords": true,
+        "punctuation": true,
+        "itn": true
+      },
+      "languages": ["zh", "en"],
+      "requires_config": ["url", "app_id", "access_token", "secret_key", "resource_id"]
+    },
+    {
+      "id": "silero-vad",
+      "type": "offline",
+      "category": "vad",
+      "provider": "sherpa-onnx",
+      "name": "Silero VAD",
+      "description": "语音活动检测模型，语音分段的基础依赖",
+      "tags": ["基础模型"],
+      "capabilities": {
+        "streaming": false,
+        "hotwords": false,
+        "punctuation": false,
+        "itn": false
+      },
+      "languages": [],
+      "architecture": "vad",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+      "file_size": 2,
+      "mem_size": 50,
+      "model_files": { "model": "silero_vad.onnx" }
+    },
+    {
+      "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8",
+      "type": "offline",
+      "category": "asr",
+      "provider": "sherpa-onnx",
+      "name": "SenseVoice 多语言",
+      "description": "高精度离线模型，支持中英日韩粤等 80+ 种语言",
+      "tags": ["80 种语言", "本地离线", "热词库", "中文识别率高", "多语言"],
+      "capabilities": {
+        "streaming": false,
+        "hotwords": false,
+        "punctuation": true,
+        "itn": true
+      },
+      "languages": ["zh", "en", "ja", "ko", "yue"],
+      "architecture": "sense_voice",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
+      "file_size": 239,
+      "mem_size": 800,
+      "model_files": {
+        "model": "model.int8.onnx",
+        "tokens": "tokens.txt"
+      },
+      "default_config": {
+        "use_itn": true,
+        "language": "auto"
+      }
+    },
+    {
+      "id": "sherpa-onnx-streaming-zipformer-zh-en",
+      "type": "offline",
+      "category": "asr",
+      "provider": "sherpa-onnx",
+      "name": "Streaming Zipformer 中英",
+      "description": "实时流式本地模型，支持中英双语低延迟识别",
+      "tags": ["中文,英文", "流式输出", "本地离线", "热词库", "识别速度快"],
+      "capabilities": {
+        "streaming": true,
+        "hotwords": true,
+        "punctuation": false,
+        "itn": false
+      },
+      "languages": ["zh", "en"],
+      "architecture": "transducer",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2",
+      "file_size": 150,
+      "mem_size": 600,
+      "model_files": {
+        "encoder": "encoder-epoch-99-avg-1.int8.onnx",
+        "decoder": "decoder-epoch-99-avg-1.onnx",
+        "joiner": "joiner-epoch-99-avg-1.int8.onnx",
+        "tokens": "tokens.txt"
+      },
+      "default_config": {
+        "enable_endpoint": true,
+        "rule1_min_trailing_silence": 2.4,
+        "rule2_min_trailing_silence": 0.8,
+        "rule3_min_utterance_length": 20
+      }
+    }
+  ]
+}

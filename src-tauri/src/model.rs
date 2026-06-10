@@ -3,20 +3,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 
-/// Model category: online (cloud), offline (local), or vad.
+/// Model category: what the model does (not its online/offline nature).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ModelCategory {
-    Online,
-    Offline,
+    Asr,
     Vad,
-}
-
-/// Language descriptor.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LanguageInfo {
-    pub code: String,
-    pub name: String,
+    Punctuation,
 }
 
 /// Engine capabilities.
@@ -31,47 +24,55 @@ pub struct Capabilities {
     pub itn: bool,
 }
 
-/// Model entry in the registry.
+/// Model entry in the registry (matches registry.json schema).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelEntry {
+    /// Global unique ID, e.g. "doubao-streaming", "silero-vad".
     pub id: String,
-    pub category: ModelCategory,
-    pub provider: String,
-    /// For offline models: "offline" or "online" (streaming local).
-    /// For online models: omitted.
+    /// "online" | "offline"
     #[serde(rename = "type")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_type: Option<String>,
+    pub model_type: String,
+    /// "asr" | "vad" | "punctuation"
+    pub category: ModelCategory,
+    /// Engine/provider: "volcengine" | "sherpa-onnx"
+    pub provider: String,
+    /// Display name in the UI.
     pub name: String,
+    /// Display description in the UI.
     pub description: String,
+    /// Feature tags beyond capabilities.
     #[serde(default)]
-    pub features: Vec<String>,
-    #[serde(default)]
-    pub recommend_tags: Vec<String>,
-    #[serde(default)]
-    pub languages: Vec<LanguageInfo>,
+    pub tags: Vec<String>,
+    /// Capabilities.
     pub capabilities: Capabilities,
-    /// Online models: config fields the user must fill.
+    /// Supported language codes, e.g. ["zh", "en"].
+    #[serde(default)]
+    pub languages: Vec<String>,
+
+    // -- Online models only --
+    /// Config fields the user must fill (e.g. url, app_id, access_token, …).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requires_config: Option<Vec<String>>,
-    /// Offline/VAD models: download URL.
+
+    // -- Offline models only --
+    /// Sherpa-ONNX architecture: "sense_voice", "transducer", "vad", etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub architecture: Option<String>,
+    /// Download URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub download_url: Option<String>,
     /// Approximate download size in MB.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_size_mb: Option<u64>,
+    pub file_size: Option<u64>,
     /// Approximate runtime memory in MB.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub memory_mb: Option<u64>,
-    /// Required model files (key → relative filename).
+    pub mem_size: Option<u64>,
+    /// Required model files (key → relative filename in the extracted directory).
     #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub model_files: std::collections::HashMap<String, String>,
-    /// Default model parameters.
+    /// Default model parameters (sherpa-onnx config overrides).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_config: Option<serde_json::Value>,
-    /// VAD models: which categories depend on this model.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required_by: Option<Vec<String>>,
 }
 
 /// Top-level registry structure.
@@ -83,7 +84,7 @@ pub struct ModelRegistry {
     pub models: Vec<ModelEntry>,
 }
 
-/// Load the model registry from the bundled assets, falling back to a minimal default.
+/// Load the model registry from the resource directory, falling back to a minimal default.
 pub fn load_registry(resource_dir: &Path) -> ModelRegistry {
     let registry_path = resource_dir.join("registry.json");
     if registry_path.exists() {
@@ -99,31 +100,20 @@ pub fn load_registry(resource_dir: &Path) -> ModelRegistry {
 
 fn minimal_registry() -> ModelRegistry {
     ModelRegistry {
-        version: 2,
+        version: 3,
         updated_at: String::new(),
         models: vec![ModelEntry {
             id: "doubao-streaming".to_string(),
-            category: ModelCategory::Online,
+            model_type: "online".to_string(),
+            category: ModelCategory::Asr,
             provider: "volcengine".to_string(),
-            model_type: None,
             name: "火山引擎 - 豆包流式输出大模型".to_string(),
             description: "基于豆包大模型的流式语音识别服务".to_string(),
-            features: vec![
+            tags: vec![
                 "流式输出".to_string(),
                 "免费可用".to_string(),
                 "热词库".to_string(),
                 "中文,英文,方言".to_string(),
-            ],
-            recommend_tags: vec!["免费可用".to_string()],
-            languages: vec![
-                LanguageInfo {
-                    code: "zh".to_string(),
-                    name: "中文".to_string(),
-                },
-                LanguageInfo {
-                    code: "en".to_string(),
-                    name: "英文".to_string(),
-                },
             ],
             capabilities: Capabilities {
                 streaming: true,
@@ -131,6 +121,7 @@ fn minimal_registry() -> ModelRegistry {
                 punctuation: true,
                 itn: true,
             },
+            languages: vec!["zh".to_string(), "en".to_string()],
             requires_config: Some(vec![
                 "url".to_string(),
                 "app_id".to_string(),
@@ -138,13 +129,20 @@ fn minimal_registry() -> ModelRegistry {
                 "secret_key".to_string(),
                 "resource_id".to_string(),
             ]),
+            architecture: None,
             download_url: None,
-            file_size_mb: None,
-            memory_mb: None,
+            file_size: None,
+            mem_size: None,
             model_files: std::collections::HashMap::new(),
             default_config: None,
-            required_by: None,
         }],
+    }
+}
+
+impl ModelEntry {
+    /// Whether this model can be downloaded (has a download_url and is offline).
+    pub fn is_downloadable(&self) -> bool {
+        self.download_url.is_some()
     }
 }
 
@@ -159,7 +157,7 @@ pub fn get_downloaded_models(data_dir: &Path, registry: &ModelRegistry) -> Vec<S
     registry
         .models
         .iter()
-        .filter(|m| m.category != ModelCategory::Online)
+        .filter(|m| m.is_downloadable())
         .filter(|m| is_model_downloaded(&dir, m))
         .map(|m| m.id.clone())
         .collect()

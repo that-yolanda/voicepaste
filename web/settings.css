@@ -1319,6 +1319,10 @@ kbd {
   margin-top: 14px;
 }
 
+.model-tab-content.hidden {
+  display: none;
+}
+
 .model-card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -1330,10 +1334,6 @@ kbd {
   transition: border-color 0.2s;
 }
 
-.model-card-active {
-  border-color: var(--accent);
-}
-
 .model-card-head {
   display: flex;
   align-items: flex-start;
@@ -1342,10 +1342,28 @@ kbd {
   padding: 13px 18px;
 }
 
+.model-card-head-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.model-card-head-right .section-link {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .model-card-name {
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 6px;
+}
+
+.model-card-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
 }
 
 .model-card-tags {
@@ -1367,7 +1385,7 @@ kbd {
 }
 
 .model-expand-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   background: none;
@@ -1376,7 +1394,12 @@ kbd {
   font-size: 12px;
   cursor: pointer;
   padding: 6px 0;
-  margin-top: 4px;
+}
+
+.model-expand-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 0 18px;
 }
 
 .model-expand-btn svg {
@@ -1390,10 +1413,14 @@ kbd {
 }
 
 .model-card-config {
-  border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: 0;
+  padding-bottom: 4px;
+}
+
+.model-card-config.hidden {
+  display: none;
 }
 
 .model-card-status {
@@ -1405,8 +1432,97 @@ kbd {
 }
 
 .model-downloaded {
-  color: var(--success);
-  font-weight: 500;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ===== Config Group (model card internals) ===== */
+
+.config-group {
+  padding: 8px 18px;
+}
+
+.config-group + .config-group {
+  padding-top: 0;
+}
+
+.config-group-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0 18px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+}
+
+.config-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  min-width: 100px;
+}
+
+.config-row .input-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.config-row .input-group {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===== Model Download Status ===== */
+
+.model-card-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px 13px;
+  font-size: 12px;
+}
+
+.model-download-btn,
+.model-delete-btn {
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.model-download-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.model-delete-btn {
+  color: var(--error);
+  border-color: transparent;
+  background: none;
+  padding: 4px 6px;
+}
+
+.model-delete-btn:hover {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.model-download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.model-tag.vad-tag {
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  color: var(--text-muted);
+  font-size: 10px;
 }
 
 .model-download-btn {
