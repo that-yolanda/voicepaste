@@ -30,6 +30,9 @@ pub struct HotkeyConfigInner {
     pub bindings: Vec<HotkeyBinding>,
     /// Whether escape-key cancellation is currently enabled.
     pub escape_enabled: bool,
+    /// Whether the keytap listener thread is currently running.
+    /// `false` when the tap could not be created (e.g. missing permissions).
+    pub tap_active: bool,
 }
 
 /// Thread-safe handle to the hotkey configuration.
@@ -367,11 +370,25 @@ fn keycode_to_key(kc: u32) -> Option<Key> {
 ///
 /// Spawns a background thread that receives raw keyboard events from keytap
 /// and dispatches matching hotkey events via the Tauri async runtime.
+///
+/// When accessibility/input-monitoring permission is not granted (macOS/Linux),
+/// logs a warning and returns a manager *without* an active listener so the
+/// app can still start. The user can grant permission later and restart.
 pub fn start_hotkey_listener(
     config: HotkeyConfig,
     app_handle: tauri::AppHandle,
 ) -> Result<HotkeyManager, keytap::Error> {
-    let tap = Tap::new()?;
+    let tap = match Tap::new() {
+        Ok(tap) => tap,
+        Err(keytap::Error::PermissionDenied) => {
+            log_hotkey!(warn, "Accessibility permission not granted — global hotkeys disabled");
+            return Ok(HotkeyManager { config });
+        }
+        Err(e) => {
+            log_hotkey!(error, "keytap init failed: {:?} — global hotkeys disabled", e);
+            return Ok(HotkeyManager { config });
+        }
+    };
 
     let config_clone = config.clone();
     let handle_clone = app_handle.clone();
@@ -383,7 +400,45 @@ pub fn start_hotkey_listener(
         })
         .expect("failed to spawn hotkey listener thread");
 
+    config.write().unwrap().tap_active = true;
+
     Ok(HotkeyManager { config })
+}
+
+/// Try to start the keytap listener if it is not already running.
+///
+/// Returns `true` if the listener is now active (either it was already
+/// running, or we successfully created it post-startup).  Returns `false`
+/// if the tap still cannot be created (e.g. permission still missing).
+pub fn ensure_hotkey_active(config: &HotkeyConfig, app_handle: &tauri::AppHandle) -> bool {
+    {
+        let cfg = config.read().unwrap();
+        if cfg.tap_active {
+            return true;
+        }
+    }
+
+    let tap = match Tap::new() {
+        Ok(tap) => tap,
+        Err(e) => {
+            log_hotkey!(warn, "Still cannot create keytap: {:?}", e);
+            return false;
+        }
+    };
+
+    let config_clone = config.clone();
+    let handle_clone = app_handle.clone();
+
+    std::thread::Builder::new()
+        .name("voicepaste-hotkey".into())
+        .spawn(move || {
+            run_listener_loop(&tap, &config_clone, &handle_clone);
+        })
+        .expect("failed to spawn hotkey listener thread");
+
+    config.write().unwrap().tap_active = true;
+    log_hotkey!(info, "Hotkey listener started (post-startup reinit)");
+    true
 }
 
 /// Main loop for the listener thread.
@@ -508,6 +563,7 @@ pub fn create_config(bindings: Vec<HotkeyBinding>) -> HotkeyConfig {
     Arc::new(RwLock::new(HotkeyConfigInner {
         bindings,
         escape_enabled: false,
+        tap_active: false,
     }))
 }
 

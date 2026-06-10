@@ -63,7 +63,7 @@ pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json:
         "runtime": {
             "hotkey": hotkey,
             "hotkeyDisplay": hotkey,
-            "microphoneStatus": "granted", // WebView handles mic permissions
+            "microphoneStatus": check_microphone(),
             "accessibilityStatus": check_accessibility(),
             "version": version,
             "platform": std::env::consts::OS,
@@ -347,11 +347,45 @@ pub async fn paste_text(
     Ok(result)
 }
 
-/// Get microphone permission status.
+/// Get microphone permission status via macOS AVFoundation.
+/// Returns the real TCC authorization status on macOS; on other platforms
+/// delegates to the WebView frontend.
 #[tauri::command]
 pub async fn get_microphone_status() -> Result<serde_json::Value, String> {
-    // In Tauri/WebView, microphone access is handled by getUserMedia in the frontend
-    Ok(serde_json::json!({ "status": "granted" }))
+    Ok(serde_json::json!({ "status": check_microphone() }))
+}
+
+/// Check microphone permission via AVCaptureDevice authorization status.
+#[cfg(target_os = "macos")]
+fn check_microphone() -> &'static str {
+    use objc2::{class, msg_send};
+
+    // AVMediaTypeAudio is a framework NSString constant → @"soun"
+    extern "C" {
+        static AVMediaTypeAudio: *const objc2::runtime::AnyObject;
+    }
+
+    let status: isize = unsafe {
+        msg_send![
+            class!(AVCaptureDevice),
+            authorizationStatusForMediaType: AVMediaTypeAudio
+        ]
+    };
+
+    // AVAuthorizationStatus values
+    match status {
+        0 => "prompt",     // AVAuthorizationStatusNotDetermined — never asked
+        1 => "restricted", // AVAuthorizationStatusRestricted — parental / MDM
+        2 => "denied",     // AVAuthorizationStatusDenied — user refused
+        3 => "granted",    // AVAuthorizationStatusAuthorized
+        _ => "unknown",
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn check_microphone() -> &'static str {
+    // On non-macOS platforms the WebView getUserMedia flow handles this
+    "granted"
 }
 
 /// Request microphone access.
@@ -398,6 +432,18 @@ pub async fn open_accessibility_settings(app: AppHandle) -> Result<(), String> {
             )
             .map_err(|e| format!("Failed to open accessibility settings: {}", e))
     }
+}
+
+/// Try to start the keytap listener if it was skipped at startup due to
+/// missing accessibility permission.  Call this after the user grants
+/// permission in System Settings and returns to the app.
+#[tauri::command]
+pub async fn reinit_hotkey(app: AppHandle) -> Result<serde_json::Value, String> {
+    let Some(config) = app.try_state::<crate::hotkey::HotkeyConfig>() else {
+        return Ok(serde_json::json!({ "active": false, "reason": "no-config" }));
+    };
+    let active = crate::hotkey::ensure_hotkey_active(&config, &app);
+    Ok(serde_json::json!({ "active": active }))
 }
 
 /// Select a sound file via file dialog.

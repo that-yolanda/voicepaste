@@ -5,6 +5,8 @@ fn main() {
         .contains("apple")
     {
         println!("cargo:rustc-link-lib=framework=ApplicationServices");
+        // Link AVFoundation for microphone permission check
+        println!("cargo:rustc-link-lib=framework=AVFoundation");
     }
     tauri_build::build();
 }

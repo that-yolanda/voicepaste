@@ -478,6 +478,19 @@
       updateMicStatus(data.runtime?.microphoneStatus || "unknown");
       updateAccessibilityStatus(data.runtime?.accessibilityStatus || "unknown");
 
+      // If accessibility is already granted but the hotkey listener was
+      // never started (e.g. permission was granted after app launch),
+      // try to start it now.
+      if (data.runtime?.accessibilityStatus === "granted") {
+        window.voiceSettings.reinitHotkey();
+      }
+
+      // Auto-request microphone permission if the user has never been asked.
+      // On macOS this triggers the system TCC dialog via getUserMedia.
+      if (data.runtime?.microphoneStatus === "prompt") {
+        checkMic();
+      }
+
       try {
         const loginSettings = await window.voiceSettings.getLoginItemSettings();
         el.autoStart.checked = loginSettings.openAtLogin;
@@ -683,7 +696,8 @@
     const labels = {
       granted: "已授权",
       denied: "已拒绝",
-      "not-determined": "未决定",
+      prompt: "未授权",
+      "not-determined": "未授权",
       restricted: "受限制",
       unknown: "未知",
     };
@@ -743,7 +757,15 @@
 
   async function refreshAccessibilityStatus() {
     const result = await window.voiceSettings.getAccessibilityStatus();
+    const prev = el.accDot.dataset.status;
     updateAccessibilityStatus(result.status || "unknown");
+
+    // If accessibility permission was just granted and the hotkey listener
+    // was never started (e.g. because permission was missing at launch),
+    // try to reinitialize it now.
+    if (result.status === "granted" && prev !== "granted") {
+      window.voiceSettings.reinitHotkey();
+    }
   }
 
   // ===== Hotwords =====
@@ -1435,6 +1457,12 @@ SOFTWARE.`;
       return;
     }
     window.voiceSettings.openAccessibilitySettings();
+  });
+
+  // Refresh accessibility status when window regains focus (e.g., after
+  // user switches back from System Settings where they granted permission).
+  window.addEventListener("focus", () => {
+    refreshAccessibilityStatus();
   });
 
   // Save bar

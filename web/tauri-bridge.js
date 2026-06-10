@@ -118,6 +118,10 @@
 
     /**
      * Get microphone permission status.
+     *
+     * Queries the real macOS TCC status via AVFoundation (or WebView on
+     * other platforms).  Returns "granted", "denied", "prompt" (never asked),
+     * or "restricted".
      */
     async getMicrophoneStatus() {
       return invoke("get_microphone_status");
@@ -125,9 +129,23 @@
 
     /**
      * Request microphone access.
+     *
+     * Opens the system permission dialog via getUserMedia.  The stream is
+     * closed immediately — we only need the permission grant, not an active
+     * recording.
      */
     async requestMicrophoneAccess() {
-      return invoke("request_microphone_access");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => {
+          t.stop();
+        });
+        return { status: "granted", granted: true };
+      } catch (e) {
+        // Permission denied, device not found, or user cancelled
+        const message = e instanceof Error ? e.message : String(e);
+        return { status: "denied", granted: false, error: message };
+      }
     },
 
     /**
@@ -142,6 +160,17 @@
      */
     async openAccessibilitySettings() {
       return invoke("open_accessibility_settings");
+    },
+
+    /**
+     * Retry starting the keytap hotkey listener.
+     *
+     * Call after the user grants accessibility permission in System
+     * Settings and returns to the app.  Returns { active: true } when
+     * the listener is now running.
+     */
+    async reinitHotkey() {
+      return invoke("reinit_hotkey");
     },
 
     /**
