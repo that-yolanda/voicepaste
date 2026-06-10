@@ -492,6 +492,34 @@
         unlisten.then((fn) => fn());
       };
     },
+
+    // ===== Model Management =====
+
+    getModelRegistry() {
+      return invoke("get_model_registry");
+    },
+
+    getDownloadedModels() {
+      return invoke("get_downloaded_models");
+    },
+
+    downloadModel(modelId) {
+      return invoke("download_model", { modelId });
+    },
+
+    deleteModel(modelId) {
+      return invoke("delete_model", { modelId });
+    },
+
+    // ===== Hotword Management =====
+
+    loadHotwords() {
+      return invoke("load_hotwords");
+    },
+
+    saveHotwords(data) {
+      return invoke("save_hotwords", { data });
+    },
   };
 
   console.log("[TauriBridge] voiceOverlay and voiceSettings APIs initialized");

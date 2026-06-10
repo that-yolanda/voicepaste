@@ -38,10 +38,18 @@
             <span>系统权限</span>
             <span class="nav-badge" id="permBadge" style="display: none"></span>
           </div>
+          <div class="nav-divider"></div>
+          <div class="nav-group-label">模型</div>
           <div class="nav-item" data-section="service">
-            <span class="nav-icon" data-icon="cloud"></span>
+            <span class="nav-icon" data-icon="audio-lines"></span>
             <span>音频模型</span>
           </div>
+          <div class="nav-item" data-section="hotwords">
+            <span class="nav-icon" data-icon="book-open"></span>
+            <span>热词库</span>
+          </div>
+          <div class="nav-divider"></div>
+          <div class="nav-group-label">处理</div>
           <div class="nav-item" data-section="llm">
             <span class="nav-icon" data-icon="sparkles"></span>
             <span>文本润色</span>
@@ -343,128 +351,137 @@
             <div class="hint-text" id="permHint" style="margin-top: 12px"></div>
           </section>
 
-          <!-- 识别服务 -->
+          <!-- 音频模型 -->
           <section class="section hidden" id="section-service">
             <div class="section-header">
               <div>
                 <div class="section-title">音频模型</div>
-                <div class="section-subtitle">配置语音识别引擎连接参数</div>
+                <div class="section-subtitle">选择并配置语音识别引擎</div>
+              </div>
+              <div class="current-model-badge" id="currentModelBadge">当前：豆包流式输出大模型</div>
+            </div>
+
+            <!-- Tab switcher -->
+            <div class="seg-control" id="modelTabs">
+              <button type="button" class="seg-btn active" data-tab="online">在线模型</button>
+              <button type="button" class="seg-btn" data-tab="offline">本地模型</button>
+            </div>
+
+            <!-- Online models tab -->
+            <div class="model-tab-content" id="tab-online">
+              <div class="model-card model-card-active" id="model-card-doubao">
+                <div class="model-card-head">
+                  <div class="model-card-info">
+                    <div class="model-card-name">火山引擎 - 豆包流式输出大模型</div>
+                    <div class="model-card-tags">
+                      <span class="model-tag">流式输出</span>
+                      <span class="model-tag">免费可用</span>
+                      <span class="model-tag">热词库</span>
+                      <span class="model-tag">中文,英文,方言</span>
+                    </div>
+                  </div>
+                  <label class="toggle model-enable-toggle">
+                    <input type="checkbox" id="enableDoubao" checked />
+                    <span class="track"></span>
+                    <span class="thumb"></span>
+                  </label>
+                </div>
+                <a
+                  class="section-link"
+                  href="https://console.volcengine.com/speech/app"
+                  target="_blank"
+                  style="margin: 8px 0"
+                  >如何获取 API 凭据？</a
+                >
+                <button type="button" class="model-expand-btn" id="doubaoExpandBtn">
+                  <span class="nav-icon" data-icon="chevron-down"></span>
+                  <span>展开配置</span>
+                </button>
+                <div class="model-card-config hidden" id="doubaoConfig">
+                  <div class="row vertical">
+                    <div class="row-label"><div class="title">WebSocket 地址</div></div>
+                    <input type="text" id="wsUrl" class="input-field mono" placeholder="wss://..." />
+                  </div>
+                  <div class="row vertical">
+                    <div class="row-label"><div class="title">Resource ID</div></div>
+                    <input type="text" id="resourceId" class="input-field mono" placeholder="输入 Resource ID" />
+                  </div>
+                  <div class="row vertical">
+                    <div class="row-label">
+                      <div class="title">语言</div>
+                      <div class="desc">留空则自动检测</div>
+                    </div>
+                    <input type="text" id="language" class="input-field" placeholder="如 zh-CN, en-US, ja-JP" />
+                  </div>
+                  <div class="row vertical">
+                    <div class="row-label"><div class="title">App ID</div></div>
+                    <input type="text" id="appId" class="input-field mono" placeholder="输入 App ID" />
+                  </div>
+                  <div class="row vertical">
+                    <div class="row-label"><div class="title">Access Token</div></div>
+                    <div class="input-group">
+                      <input type="password" id="accessToken" class="input-field mono" placeholder="输入 Access Token" />
+                      <button type="button" class="pw-toggle" id="toggleAccessToken">
+                        <span class="nav-icon" data-icon="eye"></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="row vertical">
+                    <div class="row-label"><div class="title">Secret Key</div></div>
+                    <div class="input-group">
+                      <input type="password" id="secretKey" class="input-field mono" placeholder="输入 Secret Key" />
+                      <button type="button" class="pw-toggle" id="toggleSecretKey">
+                        <span class="nav-icon" data-icon="eye"></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="row vertical">
+                    <div class="row-label"><div class="title">热词表 ID</div></div>
+                    <input type="text" id="boostingTableId" class="input-field mono" placeholder="输入热词表 ID" />
+                  </div>
+                  <div class="toggle-grid" style="margin-top: 8px">
+                    <div class="row">
+                      <div class="row-label"><div class="title">语义顺滑</div></div>
+                      <label class="toggle"><input type="checkbox" id="enableDdc" checked /><span class="track"></span><span class="thumb"></span></label>
+                    </div>
+                    <div class="row">
+                      <div class="row-label"><div class="title">数字格式化</div></div>
+                      <label class="toggle"><input type="checkbox" id="enableItn" checked /><span class="track"></span><span class="thumb"></span></label>
+                    </div>
+                    <div class="row">
+                      <div class="row-label"><div class="title">二遍识别</div></div>
+                      <label class="toggle"><input type="checkbox" id="enableNonstream" /><span class="track"></span><span class="thumb"></span></label>
+                    </div>
+                    <div class="row">
+                      <div class="row-label"><div class="title">自动标点</div></div>
+                      <label class="toggle"><input type="checkbox" id="enablePunc" checked /><span class="track"></span><span class="thumb"></span></label>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <a
-              class="section-link"
-              href="https://console.volcengine.com/speech/app"
-              target="_blank"
-              >前往火山引擎控制台获取 API 凭据</a
-            >
-            <div class="section-card" style="margin-top: 12px">
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    WebSocket 地址
-                    <span class="dev-path" title="配置路径：connection.url"
-                      >connection.url</span
-                    >
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  id="wsUrl"
-                  class="input-field mono"
-                  placeholder="wss://..."
-                />
+
+            <!-- Offline models tab -->
+            <div class="model-tab-content hidden" id="tab-offline">
+              <div id="offlineModelList"></div>
+              <div class="hint-text" style="margin-top: 12px" id="vadDownloadHint"></div>
+            </div>
+          </section>
+
+          <!-- 热词库 -->
+          <section class="section hidden" id="section-hotwords">
+            <div class="section-header">
+              <div>
+                <div class="section-title">热词库</div>
+                <div class="section-subtitle">管理热词组，提升专有词汇识别准确率</div>
               </div>
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    Resource ID
-                    <span class="dev-path" title="配置路径：connection.resource_id"
-                      >connection.resource_id</span
-                    >
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  id="resourceId"
-                  class="input-field mono"
-                  placeholder="输入 Resource ID"
-                />
-              </div>
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    语言
-                    <span class="dev-path" title="配置路径：audio.language"
-                      >audio.language</span
-                    >
-                  </div>
-                  <div class="desc">留空则自动检测</div>
-                </div>
-                <input
-                  type="text"
-                  id="language"
-                  class="input-field"
-                  placeholder="如 zh-CN, en-US, ja-JP"
-                />
-              </div>
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    App ID
-                    <span class="dev-path" title="配置路径：connection.app_id"
-                      >connection.app_id</span
-                    >
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  id="appId"
-                  class="input-field mono"
-                  placeholder="输入 App ID"
-                />
-              </div>
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    Access Token
-                    <span class="dev-path" title="配置路径：connection.access_token"
-                      >connection.access_token</span
-                    >
-                  </div>
-                </div>
-                <div class="input-group">
-                  <input
-                    type="password"
-                    id="accessToken"
-                    class="input-field mono"
-                    placeholder="输入 Access Token"
-                  />
-                  <button type="button" class="pw-toggle" id="toggleAccessToken">
-                    <span class="nav-icon" data-icon="eye"></span>
-                  </button>
-                </div>
-              </div>
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    Secret Key
-                    <span class="dev-path" title="配置路径：connection.secret_key"
-                      >connection.secret_key</span
-                    >
-                  </div>
-                </div>
-                <div class="input-group">
-                  <input
-                    type="password"
-                    id="secretKey"
-                    class="input-field mono"
-                    placeholder="输入 Secret Key"
-                  />
-                  <button type="button" class="pw-toggle" id="toggleSecretKey">
-                    <span class="nav-icon" data-icon="eye"></span>
-                  </button>
-                </div>
-              </div>
+            </div>
+            <button type="button" class="btn btn-sm" id="addHotwordGroupBtn" style="margin-bottom: 12px">
+              + 添加热词表
+            </button>
+            <div id="hotwordGroupsList"></div>
+            <div class="hint-text" style="margin-top: 16px">
+              💡 内置支持热词库的模型可直接生效，其他模型会将热词追加到 LLM 提示词中
             </div>
           </section>
 
@@ -587,132 +604,30 @@
             <div class="section-header">
               <div>
                 <div class="section-title">高级配置</div>
-                <div class="section-subtitle">微调识别行为，大多数用户不需要修改</div>
+                <div class="section-subtitle">调整本地模型 VAD 参数与高级选项</div>
               </div>
             </div>
             <div class="section-card">
-              <div class="toggle-grid">
-                <div class="row">
-                  <div class="row-label">
-                    <div class="title">
-                      语义顺滑
-                      <span class="dev-path" title="request.enable_ddc">ddc</span>
-                    </div>
-                  </div>
-                  <label class="toggle">
-                    <input type="checkbox" id="enableDdc" checked />
-                    <span class="track"></span>
-                    <span class="thumb"></span>
-                  </label>
-                </div>
-                <div class="row">
-                  <div class="row-label">
-                    <div class="title">
-                      二遍识别
-                      <span class="dev-path" title="request.enable_nonstream"
-                        >nonstream</span
-                      >
-                    </div>
-                  </div>
-                  <label class="toggle">
-                    <input type="checkbox" id="enableNonstream" />
-                    <span class="track"></span>
-                    <span class="thumb"></span>
-                  </label>
-                </div>
-                <div class="row">
-                  <div class="row-label">
-                    <div class="title">
-                      数字格式化
-                      <span class="dev-path" title="request.enable_itn">itn</span>
-                    </div>
-                  </div>
-                  <label class="toggle">
-                    <input type="checkbox" id="enableItn" checked />
-                    <span class="track"></span>
-                    <span class="thumb"></span>
-                  </label>
-                </div>
-                <div class="row">
-                  <div class="row-label">
-                    <div class="title">
-                      自动标点
-                      <span class="dev-path" title="request.enable_punc">punc</span>
-                    </div>
-                  </div>
-                  <label class="toggle">
-                    <input type="checkbox" id="enablePunc" checked />
-                    <span class="track"></span>
-                    <span class="thumb"></span>
-                  </label>
-                </div>
-                <div class="row">
-                  <div class="row-label">
-                    <div class="title">
-                      删除句尾句号
-                      <span class="dev-path" title="app.remove_trailing_period"
-                        >period</span
-                      >
-                    </div>
-                  </div>
-                  <label class="toggle">
-                    <input type="checkbox" id="removeTrailingPeriod" checked />
-                    <span class="track"></span>
-                    <span class="thumb"></span>
-                  </label>
-                </div>
-                <div class="row">
-                  <div class="row-label">
-                    <div class="title">
-                      保留剪贴板
-                      <span class="dev-path" title="app.keep_clipboard"
-                        >clipboard</span
-                      >
-                    </div>
-                  </div>
-                  <label class="toggle">
-                    <input type="checkbox" id="keepClipboard" checked />
-                    <span class="track"></span>
-                    <span class="thumb"></span>
-                  </label>
-                </div>
-              </div>
-            </div>
-            <div class="section-card" style="margin-top: 16px">
+              <div class="section-title" style="margin-bottom: 8px">VAD 语音分段</div>
               <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    热词表 ID
-                    <span class="dev-path" title="request.corpus.boosting_table_id"
-                      >table_id</span
-                    >
-                  </div>
-                  <div class="desc">关联云端热词表以提升专有词汇识别准确率</div>
-                </div>
-                <input
-                  type="text"
-                  id="boostingTableId"
-                  class="input-field mono"
-                  placeholder="输入热词表 ID"
-                />
+                <div class="row-label"><div class="title">灵敏度阈值</div><div class="desc">0-1，越低越灵敏</div></div>
+                <input type="number" id="vadThreshold" class="input-field" value="0.2" step="0.05" min="0.01" max="0.99" />
               </div>
-              <div class="hotword-row">
-                <div style="font-size: 13px; font-weight: 450; margin-bottom: 6px">
-                  自定义热词
-                </div>
-                <div class="hotword-input-group">
-                  <input
-                    type="text"
-                    id="newHotword"
-                    class="input-field"
-                    placeholder="输入热词后按回车添加"
-                  />
-                  <button type="button" class="btn btn-sm" id="addHotwordBtn">
-                    添加
-                  </button>
-                </div>
-                <div class="hotword-hint" id="hotwordHint"></div>
-                <div class="tag-list" id="hotwordTags"></div>
+              <div class="row vertical">
+                <div class="row-label"><div class="title">最短静音时长 (秒)</div></div>
+                <input type="number" id="vadMinSilence" class="input-field" value="0.2" step="0.1" min="0.05" max="5.0" />
+              </div>
+              <div class="row vertical">
+                <div class="row-label"><div class="title">最短语音时长 (秒)</div></div>
+                <input type="number" id="vadMinSpeech" class="input-field" value="0.2" step="0.1" min="0.05" max="5.0" />
+              </div>
+              <div class="row vertical">
+                <div class="row-label"><div class="title">最长语音时长 (秒)</div></div>
+                <input type="number" id="vadMaxSpeech" class="input-field" value="10.0" step="1.0" min="1.0" max="30.0" />
+              </div>
+              <div class="row vertical">
+                <div class="row-label"><div class="title">识别线程数</div><div class="desc">本地模型并发线程</div></div>
+                <input type="number" id="numThreads" class="input-field" value="2" step="1" min="1" max="16" />
               </div>
             </div>
           </section>

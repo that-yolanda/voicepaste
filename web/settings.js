@@ -161,6 +161,22 @@
     endSoundName: $("endSoundName"),
     endSoundSelect: $("endSoundSelect"),
     endSoundReset: $("endSoundReset"),
+    // Model page
+    enableDoubao: $("enableDoubao"),
+    doubaoExpandBtn: $("doubaoExpandBtn"),
+    doubaoConfig: $("doubaoConfig"),
+    currentModelBadge: $("currentModelBadge"),
+    offlineModelList: $("offlineModelList"),
+    vadDownloadHint: $("vadDownloadHint"),
+    // VAD advanced
+    vadThreshold: $("vadThreshold"),
+    vadMinSilence: $("vadMinSilence"),
+    vadMinSpeech: $("vadMinSpeech"),
+    vadMaxSpeech: $("vadMaxSpeech"),
+    numThreads: $("numThreads"),
+    // Hotword groups
+    hotwordGroupsList: $("hotwordGroupsList"),
+    addHotwordGroupBtn: $("addHotwordGroupBtn"),
   };
 
   // ===== Dirty state & auto-save =====
@@ -518,6 +534,8 @@
 
       clearDirty();
       autoCheckUpdatesOnce();
+      updateCurrentModelBadge();
+      loadHotwordGroups();
     } catch (_err) {
       /* ignore */
     }
@@ -1814,6 +1832,314 @@ SOFTWARE.`;
       applyTheme(event.payload.resolved);
     }
   });
+
+  // ===== Model Tab Switching =====
+
+  document.querySelectorAll("#modelTabs .seg-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#modelTabs .seg-btn").forEach((b) => {
+        b.classList.remove("active");
+      });
+      btn.classList.add("active");
+      const tab = btn.dataset.tab;
+      document.getElementById("tab-online").classList.toggle("hidden", tab !== "online");
+      document.getElementById("tab-offline").classList.toggle("hidden", tab !== "offline");
+      if (tab === "offline") loadOfflineModels();
+    });
+  });
+
+  // Doubao config expand/collapse
+  if (el.doubaoExpandBtn) {
+    el.doubaoExpandBtn.addEventListener("click", () => {
+      const config = el.doubaoConfig;
+      const btn = el.doubaoExpandBtn;
+      const isHidden = config.classList.contains("hidden");
+      config.classList.toggle("hidden", !isHidden);
+      btn.classList.toggle("expanded", isHidden);
+      btn.querySelector("span:last-child").textContent = isHidden ? "收起配置" : "展开配置";
+    });
+  }
+
+  // ===== Model Enable Toggle =====
+
+  if (el.enableDoubao) {
+    el.enableDoubao.addEventListener("change", async () => {
+      if (el.enableDoubao.checked) {
+        await saveModelSelection("doubao", "");
+      }
+    });
+  }
+
+  async function saveModelSelection(engine, activeModel) {
+    const config = parsedConfig || {};
+    if (!config.asr) config.asr = {};
+    config.asr.engine = engine;
+    config.asr.active_model = activeModel;
+    try {
+      await window.voiceSettings.saveConfigObject(config);
+      await loadSettings();
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function updateCurrentModelBadge() {
+    const c = parsedConfig || {};
+    const engine = c.asr?.engine || "doubao";
+    const model = c.asr?.active_model || "";
+    if (el.currentModelBadge) {
+      if (engine === "sherpa-onnx" && model) {
+        el.currentModelBadge.textContent = `当前：${model}`;
+      } else {
+        el.currentModelBadge.textContent = "当前：豆包流式输出大模型";
+      }
+    }
+  }
+
+  // ===== Offline Model List =====
+
+  let _modelRegistry = null;
+  let _downloadedModels = [];
+
+  async function loadOfflineModels() {
+    try {
+      const [regResult, dlResult] = await Promise.all([
+        window.voiceSettings.getModelRegistry(),
+        window.voiceSettings.getDownloadedModels(),
+      ]);
+      _modelRegistry = regResult?.models || [];
+      _downloadedModels = dlResult?.models || [];
+      renderOfflineModels();
+    } catch (_err) {
+      if (el.offlineModelList) {
+        el.offlineModelList.innerHTML = '<div class="hint-text">加载模型列表失败</div>';
+      }
+    }
+  }
+
+  function renderOfflineModels() {
+    if (!el.offlineModelList || !_modelRegistry) return;
+    const offlineModels = _modelRegistry.filter((m) => m.category === "offline");
+    if (offlineModels.length === 0) {
+      el.offlineModelList.innerHTML = '<div class="hint-text">暂无可用本地模型</div>';
+      return;
+    }
+
+    const c = parsedConfig || {};
+    const currentEngine = c.asr?.engine || "doubao";
+    const currentModel = c.asr?.active_model || "";
+
+    el.offlineModelList.innerHTML = offlineModels
+      .map((model) => {
+        const isDownloaded = _downloadedModels.includes(model.id);
+        const isActive = currentEngine === "sherpa-onnx" && currentModel === model.id;
+        const tags = (model.features || [])
+          .map((f) => `<span class="model-tag">${escapeHtml(f)}</span>`)
+          .join("");
+        const recTags = (model.recommend_tags || [])
+          .map(
+            (t) =>
+              `<span class="model-tag" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)">${escapeHtml(t)}</span>`,
+          )
+          .join("");
+
+        return (
+          `<div class="model-card${isActive ? " model-card-active" : ""}">` +
+          `<div class="model-card-head">` +
+          `<div class="model-card-info">` +
+          `<div class="model-card-name">${escapeHtml(model.name)}</div>` +
+          `<div class="model-card-tags">${tags}${recTags}</div>` +
+          `</div>` +
+          `<label class="toggle model-enable-toggle">` +
+          `<input type="checkbox" data-model-id="${model.id}" class="offline-model-toggle" ${isActive ? "checked" : ""} ${!isDownloaded ? "disabled" : ""} />` +
+          `<span class="track"></span><span class="thumb"></span>` +
+          `</label>` +
+          `</div>` +
+          `<div class="model-card-status">` +
+          (isDownloaded
+            ? `<span class="model-downloaded">✓ 已下载</span><button type="button" class="model-delete-btn" data-model-id="${model.id}">删除</button>`
+            : `<button type="button" class="model-download-btn" data-model-id="${model.id}" data-url="${model.download_url || ""}">下载${model.file_size_mb ? ` ${model.file_size_mb}MB` : ""}</button>`) +
+          `</div>` +
+          `</div>`
+        );
+      })
+      .join("");
+
+    // Event listeners
+    el.offlineModelList.querySelectorAll(".offline-model-toggle").forEach((toggle) => {
+      toggle.addEventListener("change", async (e) => {
+        const modelId = e.target.dataset.modelId;
+        if (e.target.checked) {
+          await saveModelSelection("sherpa-onnx", modelId);
+        }
+      });
+    });
+
+    el.offlineModelList.querySelectorAll(".model-download-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const modelId = btn.dataset.modelId;
+        btn.disabled = true;
+        btn.textContent = "下载中...";
+        try {
+          await window.voiceSettings.downloadModel(modelId);
+          await loadOfflineModels();
+        } catch (_err) {
+          btn.textContent = "下载失败";
+          btn.disabled = false;
+        }
+      });
+    });
+
+    el.offlineModelList.querySelectorAll(".model-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const modelId = btn.dataset.modelId;
+        try {
+          await window.voiceSettings.deleteModel(modelId);
+          await loadOfflineModels();
+        } catch (_err) {
+          /* ignore */
+        }
+      });
+    });
+  }
+
+  // ===== Hotword Groups =====
+
+  let _hotwordData = null;
+
+  async function loadHotwordGroups() {
+    try {
+      _hotwordData = await window.voiceSettings.loadHotwords();
+      renderHotwordGroups();
+    } catch (_err) {
+      _hotwordData = {
+        active_group: "default",
+        groups: [{ id: "default", name: "默认热词表", words: [] }],
+      };
+      renderHotwordGroups();
+    }
+  }
+
+  async function saveHotwordData() {
+    if (!_hotwordData) return;
+    try {
+      await window.voiceSettings.saveHotwords(_hotwordData);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function renderHotwordGroups() {
+    if (!el.hotwordGroupsList || !_hotwordData) return;
+    const groups = _hotwordData.groups || [];
+
+    el.hotwordGroupsList.innerHTML = groups
+      .map((group) => {
+        const isActive = group.id === _hotwordData.active_group;
+        const tags = (group.words || [])
+          .map(
+            (word, i) =>
+              `<span class="tag"><span>${escapeHtml(word)}</span><button type="button" class="tag-remove" data-group="${group.id}" data-index="${i}">&times;</button></span>`,
+          )
+          .join("");
+
+        return (
+          `<div class="hotword-group-card" data-group-id="${group.id}">` +
+          `<div class="hotword-group-head">` +
+          `<div>` +
+          `<span class="hotword-group-name">${escapeHtml(group.name)}</span>` +
+          (isActive ? `<span class="hotword-group-active">当前生效</span>` : "") +
+          `</div>` +
+          `<div class="hotword-group-actions">` +
+          (isActive
+            ? ""
+            : `<button type="button" class="btn btn-sm hw-activate-btn" data-group="${group.id}">使用</button>`) +
+          (group.id === "default"
+            ? ""
+            : `<button type="button" class="btn btn-sm hw-delete-group-btn" data-group="${group.id}">删除</button>`) +
+          `</div>` +
+          `</div>` +
+          `<div class="hotword-input-group">` +
+          `<input type="text" class="input-field hw-input" data-group="${group.id}" placeholder="输入热词后按回车添加" />` +
+          `<button type="button" class="btn btn-sm hw-add-btn" data-group="${group.id}">添加</button>` +
+          `</div>` +
+          `<div class="tag-list" style="margin-top: 8px">${tags}</div>` +
+          `</div>`
+        );
+      })
+      .join("");
+
+    // Event listeners for hotword groups
+    el.hotwordGroupsList.querySelectorAll(".hw-activate-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        _hotwordData.active_group = btn.dataset.group;
+        await saveHotwordData();
+        renderHotwordGroups();
+      });
+    });
+
+    el.hotwordGroupsList.querySelectorAll(".hw-delete-group-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const groupId = btn.dataset.group;
+        _hotwordData.groups = _hotwordData.groups.filter((g) => g.id !== groupId);
+        if (_hotwordData.active_group === groupId) {
+          _hotwordData.active_group = "default";
+        }
+        await saveHotwordData();
+        renderHotwordGroups();
+      });
+    });
+
+    el.hotwordGroupsList.querySelectorAll(".hw-add-btn").forEach((btn) => {
+      btn.addEventListener("click", () => addHotwordToGroup(btn.dataset.group));
+    });
+
+    el.hotwordGroupsList.querySelectorAll(".hw-input").forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") addHotwordToGroup(input.dataset.group);
+      });
+    });
+
+    el.hotwordGroupsList.querySelectorAll(".tag-remove").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const groupId = btn.dataset.group;
+        const index = parseInt(btn.dataset.index, 10);
+        const group = _hotwordData.groups.find((g) => g.id === groupId);
+        if (group) {
+          group.words.splice(index, 1);
+          await saveHotwordData();
+          renderHotwordGroups();
+        }
+      });
+    });
+  }
+
+  async function addHotwordToGroup(groupId) {
+    const input = el.hotwordGroupsList.querySelector(`.hw-input[data-group="${groupId}"]`);
+    if (!input) return;
+    const word = input.value.trim();
+    if (!word) return;
+
+    const group = _hotwordData.groups.find((g) => g.id === groupId);
+    if (!group) return;
+
+    if (group.words.includes(word)) return;
+    group.words.push(word);
+    input.value = "";
+    await saveHotwordData();
+    renderHotwordGroups();
+  }
+
+  if (el.addHotwordGroupBtn) {
+    el.addHotwordGroupBtn.addEventListener("click", async () => {
+      const name = prompt("请输入热词表名称：");
+      if (!name?.trim()) return;
+      const id = `hw-${Date.now()}`;
+      _hotwordData.groups.push({ id, name: name.trim(), words: [] });
+      await saveHotwordData();
+      renderHotwordGroups();
+    });
+  }
 
   // ===== Init =====
   initIcons();
