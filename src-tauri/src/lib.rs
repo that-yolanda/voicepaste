@@ -6,6 +6,7 @@ mod commands;
 mod config;
 mod hotkey;
 mod llm;
+mod overlay;
 mod paste;
 mod stats;
 mod updater;
@@ -17,7 +18,7 @@ use std::time::Duration;
 use tauri::{
     image::Image,
     tray::TrayIconBuilder,
-    App, AppHandle, Emitter, Manager, RunEvent,
+    App, AppHandle, Emitter, Listener, Manager, RunEvent,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,6 +97,16 @@ pub fn run() {
             // Setup overlay window properties
             setup_overlay_window(app);
 
+            // Mirror every overlay:event to the native macOS renderer (no-op on Windows).
+            // The backend already emits these for the WebView; we tap the same stream so
+            // the native AppKit pill stays in sync without touching each emit site.
+            let overlay_handle = app.handle().clone();
+            app.listen_any("overlay:event", move |event| {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(event.payload()) {
+                    overlay::handle_event(&overlay_handle, &value);
+                }
+            });
+
             // Setup system tray
             setup_tray(app)?;
 
@@ -122,7 +133,6 @@ pub fn run() {
             commands::audio_warmup_ready,
             commands::audio_warmup_failed,
             commands::send_diagnostic,
-            update_overlay_glass,
             commands::paste_text,
             commands::get_microphone_status,
             commands::request_microphone_access,
@@ -370,210 +380,6 @@ fn set_dock_visible(visible: bool) {
 
 #[cfg(not(target_os = "macos"))]
 fn set_dock_visible(_visible: bool) {}
-
-/// Native "Liquid Glass" / vibrancy background for the overlay pill.
-///
-/// macOS WKWebView cannot blur the desktop behind a transparent window via CSS
-/// `backdrop-filter`, so the glass body is rendered by a native AppKit view placed
-/// *behind* the transparent WKWebView. The view's frame tracks the pill rectangle
-/// reported by the frontend. `NSGlassEffectView` (real Apple Liquid Glass) is used on
-/// macOS 26+ when `overlay_style == "liquid"`; otherwise it falls back to the classic
-/// `NSVisualEffectView` frosted vibrancy (which also covers older macOS).
-#[cfg(target_os = "macos")]
-mod glass {
-    use objc2::msg_send;
-    use objc2::rc::Retained;
-    use objc2::runtime::AnyObject;
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{
-        NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSGlassEffectView,
-        NSGlassEffectViewStyle, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
-        NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowOrderingMode,
-    };
-    use objc2_foundation::{NSPoint, NSRect, NSSize};
-    use std::cell::RefCell;
-
-    enum GlassView {
-        Liquid(Retained<NSGlassEffectView>),
-        Vibrancy(Retained<NSVisualEffectView>),
-    }
-
-    impl GlassView {
-        fn view(&self) -> &NSView {
-            // Retained<Subclass> coerces to &NSView via chained Deref.
-            match self {
-                GlassView::Liquid(v) => v,
-                GlassView::Vibrancy(v) => v,
-            }
-        }
-        fn style(&self) -> &'static str {
-            match self {
-                GlassView::Liquid(_) => "liquid",
-                GlassView::Vibrancy(_) => "vibrancy",
-            }
-        }
-    }
-
-    // Held on the main thread only — no Send/Sync needed. `sync` is always invoked
-    // via `run_on_main_thread`, so this thread-local persists across calls.
-    // Tuple: (the glass view, the light/dark variant currently applied to it).
-    thread_local! {
-        static GLASS: RefCell<Option<(GlassView, String)>> = const { RefCell::new(None) };
-    }
-
-    fn liquid_glass_available() -> bool {
-        objc2::runtime::AnyClass::get(c"NSGlassEffectView").is_some()
-    }
-
-    /// Force the view's light/dark rendering instead of inheriting the system theme,
-    /// so the glass body matches the chosen variant (and the webview text colour).
-    fn apply_appearance(view: &NSView, variant: &str) {
-        let name = if variant == "dark" {
-            unsafe { NSAppearanceNameDarkAqua }
-        } else {
-            unsafe { NSAppearanceNameAqua }
-        };
-        let appearance = NSAppearance::appearanceNamed(name);
-        let ptr: *const AnyObject = match appearance.as_deref() {
-            Some(a) => (a as *const NSAppearance).cast(),
-            None => std::ptr::null(),
-        };
-        // SAFETY: setAppearance accepts a nullable NSAppearance pointer.
-        unsafe {
-            let _: () = msg_send![view, setAppearance: ptr];
-        }
-    }
-
-    /// Position/show the glass behind the pill (`Some(rect)`), or hide it (`None`).
-    /// `rect` is `(x, y, w, h, radius)` in CSS points, top-left origin (as the webview sees it).
-    pub fn sync(
-        ns_window_ptr: *mut std::ffi::c_void,
-        rect: Option<(f64, f64, f64, f64, f64)>,
-        style: &str,
-        variant: &str,
-    ) {
-        if MainThreadMarker::new().is_none() || ns_window_ptr.is_null() {
-            return;
-        }
-        // SAFETY: pointer is the overlay window's live NSWindow for the app lifetime.
-        let ns_window: &NSWindow = unsafe { &*(ns_window_ptr as *const NSWindow) };
-        let Some(content) = ns_window.contentView() else {
-            return;
-        };
-
-        let want = if style == "liquid" && liquid_glass_available() {
-            "liquid"
-        } else {
-            "vibrancy"
-        };
-
-        GLASS.with(|cell| {
-            let mut slot = cell.borrow_mut();
-
-            // (Re)create when missing or when the style changed.
-            let recreate = slot.as_ref().map(|(g, _)| g.style() != want).unwrap_or(true);
-            if recreate {
-                log_app!(
-                    info,
-                    "overlay glass view = {} (NSGlassEffectView available = {})",
-                    want,
-                    liquid_glass_available()
-                );
-                if let Some((old, _)) = slot.take() {
-                    old.view().removeFromSuperview();
-                }
-                let mtm = MainThreadMarker::new().unwrap();
-                let gv = if want == "liquid" {
-                    let v = NSGlassEffectView::new(mtm);
-                    // "Clear" is the transparent, refractive Liquid Glass look;
-                    // the default "Regular" renders as a heavier frosted material.
-                    v.setStyle(NSGlassEffectViewStyle::Clear);
-                    GlassView::Liquid(v)
-                } else {
-                    let v = NSVisualEffectView::new(mtm);
-                    v.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-                    v.setState(NSVisualEffectState::Active);
-                    v.setMaterial(NSVisualEffectMaterial::HUDWindow);
-                    GlassView::Vibrancy(v)
-                };
-                gv.view().setWantsLayer(true);
-                content.addSubview_positioned_relativeTo(
-                    gv.view(),
-                    NSWindowOrderingMode::Below,
-                    None,
-                );
-                // Empty applied-variant forces apply_appearance below to run.
-                *slot = Some((gv, String::new()));
-            }
-
-            let entry = slot.as_mut().unwrap();
-            // Apply light/dark only when it changed (avoids per-frame relayout).
-            if entry.1 != variant {
-                apply_appearance(entry.0.view(), variant);
-                entry.1 = variant.to_string();
-            }
-
-            let gv = &entry.0;
-            match rect {
-                None => gv.view().setHidden(true),
-                Some((x, y, w, h, radius)) => {
-                    let content_h = content.bounds().size.height;
-                    let frame = NSRect {
-                        origin: NSPoint { x, y: content_h - y - h },
-                        size: NSSize { width: w, height: h },
-                    };
-                    let radius = radius.clamp(0.0, w.min(h) / 2.0);
-                    gv.view().setFrame(frame);
-                    match gv {
-                        GlassView::Liquid(v) => v.setCornerRadius(radius),
-                        GlassView::Vibrancy(_) => {
-                            // Round the frosted view via its backing layer.
-                            let view = gv.view();
-                            // SAFETY: `layer` returns the view's CALayer (or null).
-                            let layer: *mut AnyObject = unsafe { msg_send![view, layer] };
-                            if !layer.is_null() {
-                                unsafe {
-                                    let _: () = msg_send![layer, setCornerRadius: radius];
-                                    let _: () = msg_send![layer, setMasksToBounds: true];
-                                }
-                            }
-                        }
-                    }
-                    gv.view().setHidden(false);
-                }
-            }
-        });
-    }
-}
-
-/// IPC: update the native overlay-glass rectangle to follow the pill (macOS only).
-#[tauri::command]
-#[allow(clippy::too_many_arguments)]
-fn update_overlay_glass(
-    app: AppHandle,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    radius: f64,
-    style: String,
-    variant: String,
-) {
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(overlay) = app.get_webview_window("overlay") {
-            let _ = app.run_on_main_thread(move || {
-                if let Ok(ptr) = overlay.ns_window() {
-                    glass::sync(ptr, Some((x, y, w, h, radius)), &style, &variant);
-                }
-            });
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (app, x, y, w, h, radius, style, variant);
-    }
-}
 
 /// Bring the settings window to front and show it in the Dock.
 fn show_settings(app: &tauri::AppHandle) {

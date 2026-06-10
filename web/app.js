@@ -48,29 +48,11 @@ function resolvedGlassVariant() {
   return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
 }
 
-// Push the current pill rectangle to the backend so the native macOS glass view
-// (NSGlassEffectView / NSVisualEffectView) can sit exactly behind the pill.
-// No-op on non-macOS, where the CSS background renders the pill directly.
-function syncGlassRect() {
-  if (currentAppearance.platform !== "macos") return;
-  const rect = elements.bubble.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return;
-  // Match the pill's CSS corner radius: a fixed 16px when wrapped to multiple
-  // lines, otherwise a full capsule (half the shorter side).
-  const isMulti = elements.bubble.dataset.wrap === "multi";
-  const radius = isMulti ? 16 : Math.min(rect.width, rect.height) / 2;
-  window.voiceOverlay
-    .updateGlassRect({
-      x: rect.left,
-      y: rect.top,
-      w: rect.width,
-      h: rect.height,
-      radius,
-      style: currentAppearance.overlayStyle || "liquid",
-      variant: resolvedGlassVariant(),
-    })
-    .catch(() => {});
-}
+// Overlay rendering is split by platform:
+// - macOS: a fully native AppKit pill (NSGlassEffectView) renders the overlay,
+//   driven by the Rust `overlay` module; the web layer is only a hidden audio worker.
+// - Windows: the CSS pill background renders the overlay directly.
+// Either way the web layer no longer drives any native glass.
 
 // Swap the glass treatment without touching any recording/ASR logic.
 // platform: "macos" → macOS (Tauri std::env::consts::OS), anything else → Windows-style Mica.
@@ -80,6 +62,11 @@ function applyAppearance({ platform, overlayStyle, glass } = {}) {
   currentAppearance.overlayStyle = overlayStyle || "liquid";
   currentAppearance.glass = glass || "auto";
   const isMac = platform === "macos";
+  // macOS renders the overlay with a native AppKit pill, so the web UI is hidden
+  // entirely (the WebView only captures audio). Windows keeps the web overlay.
+  if (elements.stage) {
+    elements.stage.style.display = isMac ? "none" : "";
+  }
   const isVibrancy = isMac && overlayStyle === "vibrancy";
   elements.bubble.classList.toggle("platform-mac", isMac);
   elements.bubble.classList.toggle("platform-win", !isMac);
@@ -190,7 +177,6 @@ function scheduleResize() {
       elements.bubble.style.width = "";
       state.renderedWidth = 0;
       elements.bubble.dataset.wrap = "single";
-      syncGlassRect();
       return;
     }
 
@@ -259,8 +245,6 @@ function scheduleResize() {
         elements.bubble.style.width = `${width}px`;
       }
     }
-
-    syncGlassRect();
   });
 }
 
@@ -579,8 +563,6 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       break;
     case "appearance":
       applyAppearance(payload || {});
-      // Re-push the rect so the native macOS glass switches style/variant live.
-      syncGlassRect();
       break;
     case "sound:config":
       break;

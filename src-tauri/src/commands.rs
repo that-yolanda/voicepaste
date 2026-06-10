@@ -248,6 +248,29 @@ pub async fn delete_history(
     Ok(serde_json::json!({ "ok": true }))
 }
 
+/// Compute a 0..1 loudness level from a base64 PCM16 chunk for the overlay waveform.
+/// Mirrors the web AnalyserNode mapping (RMS + peak, mild compression).
+#[cfg(target_os = "macos")]
+fn compute_audio_level(base64_chunk: &str) -> Option<f64> {
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64_chunk)
+        .ok()?;
+    let count = bytes.len() / 2;
+    if count == 0 {
+        return None;
+    }
+    let mut sum_squares = 0f64;
+    let mut peak = 0f64;
+    for frame in bytes.chunks_exact(2) {
+        let sample = i16::from_le_bytes([frame[0], frame[1]]) as f64 / 32768.0;
+        sum_squares += sample * sample;
+        peak = peak.max(sample.abs());
+    }
+    let rms = (sum_squares / count as f64).sqrt();
+    Some((rms * 13.0 + peak * 2.8).powf(0.82).min(1.0))
+}
+
 /// Receive an audio chunk from the renderer (base64-encoded PCM).
 #[tauri::command]
 pub async fn send_audio_chunk(
@@ -266,6 +289,11 @@ pub async fn send_audio_chunk(
     if let Some(ref session) = *session {
         if session.is_ready() {
             session.append_audio(&base64_chunk);
+            // Drive the native waveform (macOS only) from the same PCM the ASR receives.
+            #[cfg(target_os = "macos")]
+            if let Some(level) = compute_audio_level(&base64_chunk) {
+                crate::overlay::set_audio_level(&_app, level);
+            }
             return Ok(serde_json::json!({ "ok": true }));
         }
         log_audio!(warn, "Chunk #{} dropped: session not ready", n);

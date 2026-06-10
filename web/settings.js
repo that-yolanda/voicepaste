@@ -5,8 +5,9 @@
   let isDirty = false;
   let currentThemePreference = "system";
   let currentHotkeyMode = "toggle";
-  let currentOverlayStyle = "liquid";
-  let currentOverlayGlassMode = "auto";
+  let currentOverlayType = "liquid"; // "liquid" | "vibrancy"
+  let currentLiquidVariant = "liquid"; // "liquid" (通透) | "liquid-standard" (标准)
+  let currentOverlayGlassMode = "auto"; // vibrancy only: "auto" | "light" | "dark"
   let currentPlatform = "";
   let currentLlmProvider = "deepseek";
   let hasAutoCheckedUpdates = false;
@@ -102,7 +103,9 @@
     configPath: $("configPath"),
     autoStart: $("autoStart"),
     overlayStyleRow: $("overlayStyleRow"),
-    overlayStyleSelector: $("overlayStyleSelector"),
+    overlayTypeSelector: $("overlayTypeSelector"),
+    overlayLiquidVariantRow: $("overlayLiquidVariantRow"),
+    overlayLiquidVariantSelector: $("overlayLiquidVariantSelector"),
     overlayGlassModeRow: $("overlayGlassModeRow"),
     overlayGlassModeSelector: $("overlayGlassModeSelector"),
     micDot: $("micDot"),
@@ -383,30 +386,42 @@
     });
   }
 
-  function updateOverlayGlassModeVisibility() {
-    if (!el.overlayGlassModeRow) return;
-    // The light/dark glass variant only applies to the macOS Liquid Glass UI,
-    // so hide it on non-macOS and when the Vibrancy backup is selected.
-    const show = currentPlatform === "macos" && currentOverlayStyle === "liquid";
-    el.overlayGlassModeRow.style.display = show ? "" : "none";
+  function setSegActive(selector, value) {
+    if (!selector) return;
+    selector.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.val === value);
+    });
   }
 
-  function setOverlayStyle(style) {
-    currentOverlayStyle = style === "vibrancy" ? "vibrancy" : "liquid";
-    if (el.overlayStyleSelector) {
-      el.overlayStyleSelector.querySelectorAll(".seg-btn").forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.val === currentOverlayStyle);
-      });
+  // Show the second row matching the chosen material: the liquid variant row
+  // (通透/标准) for Liquid Glass, or the light/dark row for Vibrancy. Both hide on
+  // non-macOS (the overlay is web-rendered there).
+  function updateOverlaySubVisibility() {
+    const isMac = currentPlatform === "macos";
+    if (el.overlayLiquidVariantRow) {
+      el.overlayLiquidVariantRow.style.display =
+        isMac && currentOverlayType === "liquid" ? "" : "none";
     }
-    updateOverlayGlassModeVisibility();
+    if (el.overlayGlassModeRow) {
+      el.overlayGlassModeRow.style.display =
+        isMac && currentOverlayType === "vibrancy" ? "" : "none";
+    }
+  }
+
+  function setOverlayType(type) {
+    currentOverlayType = type === "vibrancy" ? "vibrancy" : "liquid";
+    setSegActive(el.overlayTypeSelector, currentOverlayType);
+    updateOverlaySubVisibility();
+  }
+
+  function setLiquidVariant(variant) {
+    currentLiquidVariant = variant === "liquid-standard" ? "liquid-standard" : "liquid";
+    setSegActive(el.overlayLiquidVariantSelector, currentLiquidVariant);
   }
 
   function setOverlayGlassMode(mode) {
     currentOverlayGlassMode = ["light", "dark"].includes(mode) ? mode : "auto";
-    if (!el.overlayGlassModeSelector) return;
-    el.overlayGlassModeSelector.querySelectorAll(".seg-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.val === currentOverlayGlassMode);
-    });
+    setSegActive(el.overlayGlassModeSelector, currentOverlayGlassMode);
   }
 
   function setHotkeyHint(text, level) {
@@ -524,8 +539,16 @@
     el.configPath.textContent = data.configPath || "-";
 
     currentPlatform = data.runtime?.platform || currentPlatform;
+    // Map the single `overlay_style` config into the type + liquid-variant UI.
+    const style = c.app?.overlay_style;
+    if (style === "vibrancy") {
+      setLiquidVariant("liquid");
+      setOverlayType("vibrancy");
+    } else {
+      setLiquidVariant(style === "liquid-standard" ? "liquid-standard" : "liquid");
+      setOverlayType("liquid");
+    }
     setOverlayGlassMode(c.app?.overlay_glass_mode);
-    setOverlayStyle(c.app?.overlay_style); // also refreshes glass-mode row visibility
     if (currentPlatform !== "macos" && el.overlayStyleRow) {
       el.overlayStyleRow.style.display = "none";
     }
@@ -601,7 +624,8 @@
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
     config.app.theme = currentThemePreference;
-    config.app.overlay_style = currentOverlayStyle;
+    config.app.overlay_style =
+      currentOverlayType === "vibrancy" ? "vibrancy" : currentLiquidVariant;
     config.app.overlay_glass_mode = currentOverlayGlassMode;
     config.app.sound = {
       enabled: el.soundEnabled.checked,
@@ -1392,17 +1416,27 @@ SOFTWARE.`;
     saveFormNow();
   });
 
-  // Overlay glass style (macOS only)
-  if (el.overlayStyleSelector) {
-    el.overlayStyleSelector.addEventListener("click", (e) => {
+  // Overlay material type (macOS only): 液态玻璃 / 磨砂毛玻璃
+  if (el.overlayTypeSelector) {
+    el.overlayTypeSelector.addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-btn");
       if (!btn) return;
-      setOverlayStyle(btn.dataset.val);
+      setOverlayType(btn.dataset.val);
       saveFormNow();
     });
   }
 
-  // Liquid Glass light/dark mode (macOS Liquid Glass only)
+  // Liquid Glass sub-variant: 通透 (Clear) / 标准 (Regular)
+  if (el.overlayLiquidVariantSelector) {
+    el.overlayLiquidVariantSelector.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      setLiquidVariant(btn.dataset.val);
+      saveFormNow();
+    });
+  }
+
+  // Vibrancy (frosted glass) light/dark mode: 跟随系统 / 浅色 / 深色
   if (el.overlayGlassModeSelector) {
     el.overlayGlassModeSelector.addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-btn");
