@@ -73,9 +73,9 @@ body {
   min-width: 116px;
   max-width: 100%;
   overflow: hidden;
-  transition:
-    width 0.15s ease-out,
-    border-radius 0.18s ease-out;
+  /* No size/radius animation: the native macOS glass layer (NSGlassEffectView /
+     NSVisualEffectView) tracks the pill via discrete frame updates, so animating
+     the pill width or corner radius would visibly detach it from the glass. */
 }
 
 /* ---------- Multi-line layout (3 lines max, top fades out) ---------- */
@@ -276,6 +276,11 @@ body {
    Platform variant: macOS — Liquid Glass (default, dark)
    =========================================================== */
 .pill.platform-mac {
+  /* The frosted/Liquid-Glass body is rendered by a native AppKit view
+     (NSGlassEffectView / NSVisualEffectView) placed behind the transparent
+     WKWebView — WKWebView's CSS backdrop-filter cannot blur the desktop, so
+     the pill background must stay transparent and only draw the edge highlights,
+     drop shadow, and text on top of the native glass. */
   background:
     linear-gradient(
       180deg,
@@ -284,9 +289,7 @@ body {
       rgba(255, 255, 255, 0) 60%,
       rgba(255, 255, 255, 0.08) 100%
     ),
-    rgba(20, 22, 28, 0.32);
-  backdrop-filter: blur(22px) saturate(180%) contrast(0.85) brightness(0.95);
-  -webkit-backdrop-filter: blur(22px) saturate(180%) contrast(0.85) brightness(0.95);
+    transparent;
   border: 0.5px solid rgba(255, 255, 255, 0.3);
   box-shadow:
     0 0 0 0.5px rgba(0, 0, 0, 0.22),
@@ -346,16 +349,17 @@ body {
    edges (dimmed) so the pill stays legible over pale wallpapers.
    ----------------------------------------------------------- */
 .pill.platform-mac.is-light {
+  /* Light variant: the native light glass body is rendered behind the webview,
+     so keep the CSS background transparent (only a faint top sheen) and just
+     flip the text/edges to the dark-on-light treatment. */
   background:
     linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.55) 0%,
-      rgba(255, 255, 255, 0.32) 50%,
-      rgba(255, 255, 255, 0.42) 100%
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0.04) 50%,
+      rgba(255, 255, 255, 0.1) 100%
     ),
-    rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px) saturate(160%) contrast(1.05) brightness(1.04);
-  -webkit-backdrop-filter: blur(20px) saturate(160%) contrast(1.05) brightness(1.04);
+    transparent;
   border: 0.5px solid rgba(255, 255, 255, 0.7);
   box-shadow:
     0 0 0 0.5px rgba(0, 0, 0, 0.12),
@@ -392,6 +396,23 @@ body {
 }
 .pill.platform-mac.is-light .status-bar {
   background: linear-gradient(180deg, #2bb673, #1f8e58);
+}
+
+/* -----------------------------------------------------------
+   macOS · Liquid Glass (NSGlassEffectView, "Clear" style)
+   The refractive glass body is rendered natively behind the webview, so the
+   pill itself must be fully transparent with no frosted sheen — otherwise the
+   CSS decoration masks the native liquid glass. Keep only the text and a faint
+   drop shadow. Applies to liquid (both light and dark), never to vibrancy.
+   ----------------------------------------------------------- */
+.pill.platform-mac:not(.is-vibrancy) {
+  background: transparent;
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.35);
+}
+.pill.platform-mac:not(.is-vibrancy)::before,
+.pill.platform-mac:not(.is-vibrancy)::after {
+  display: none;
 }
 
 /* ===========================================================

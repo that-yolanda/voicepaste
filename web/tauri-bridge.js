@@ -74,6 +74,14 @@
     async getConfig() {
       return invoke("get_app_config");
     },
+
+    /**
+     * Report the pill rectangle so the native macOS glass view can follow it.
+     * No-op on non-macOS backends. Fire-and-forget.
+     */
+    updateGlassRect({ x, y, w, h, radius, style, variant }) {
+      return invoke("update_overlay_glass", { x, y, w, h, radius, style, variant });
+    },
   };
 
   // ---------------------------------------------------------------------------
