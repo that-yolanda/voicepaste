@@ -3,6 +3,7 @@ use tokio::sync::Mutex;
 
 use crate::asr::{AsrEvent, AsrSession};
 use crate::config::ConfigManager;
+use crate::hotword::HotwordManager;
 use crate::stats::StatsService;
 
 /// Application recording state.
@@ -18,6 +19,7 @@ pub enum AppState {
 pub struct AppInner {
     pub state: Mutex<AppState>,
     pub config_manager: ConfigManager,
+    pub hotword_manager: HotwordManager,
     pub log_path: std::path::PathBuf,
     pub stats: Mutex<StatsService>,
     pub asr_session: Mutex<Option<Arc<dyn AsrSession>>>,
@@ -32,12 +34,14 @@ pub type AppHandle = Arc<AppInner>;
 /// Create the shared application state.
 pub fn create_app_state(
     config_manager: ConfigManager,
+    hotword_manager: HotwordManager,
     log_path: std::path::PathBuf,
     stats_service: StatsService,
 ) -> AppHandle {
     Arc::new(AppInner {
         state: Mutex::new(AppState::Idle),
         config_manager,
+        hotword_manager,
         log_path,
         stats: Mutex::new(stats_service),
         asr_session: Mutex::new(None),

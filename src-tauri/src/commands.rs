@@ -1,5 +1,6 @@
 use crate::app_state::AppHandle as AppState;
 use crate::config::PromptItem;
+use crate::hotword::HotwordData;
 use crate::paste;
 use crate::HotkeyMode;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -594,4 +595,20 @@ pub async fn get_config_path(state: State<'_, AppState>) -> Result<String, Strin
         .config_path()
         .to_string_lossy()
         .to_string())
+}
+
+/// Load hotword library.
+#[tauri::command]
+pub async fn load_hotwords(state: State<'_, AppState>) -> Result<HotwordData, String> {
+    Ok(state.hotword_manager.load())
+}
+
+/// Save hotword library.
+#[tauri::command]
+pub async fn save_hotwords(
+    state: State<'_, AppState>,
+    data: HotwordData,
+) -> Result<serde_json::Value, String> {
+    state.hotword_manager.save(&data)?;
+    Ok(serde_json::json!({ "ok": true }))
 }

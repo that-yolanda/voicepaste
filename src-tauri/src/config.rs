@@ -7,11 +7,79 @@ use std::sync::RwLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub app: AppSettings,
+    #[serde(default)]
+    pub asr: AsrConfig,
+    #[serde(default)]
+    pub asr_online: AsrOnlineConfig,
+    #[serde(default)]
+    pub asr_offline: AsrOfflineConfig,
     pub connection: ConnectionConfig,
     pub audio: AudioConfig,
     pub request: RequestConfig,
     #[serde(default)]
     pub llm: LlmConfig,
+}
+
+// -- New ASR config sections --
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsrConfig {
+    #[serde(default = "default_asr_engine")]
+    pub engine: String,
+    #[serde(default)]
+    pub active_model: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsrOnlineConfig {
+    #[serde(default)]
+    pub doubao: DoubaoOnlineConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DoubaoOnlineConfig {
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub resource_id: String,
+    #[serde(default)]
+    pub app_id: String,
+    #[serde(default)]
+    pub access_token: String,
+    #[serde(default)]
+    pub secret_key: String,
+    #[serde(default)]
+    pub language: String,
+    #[serde(default = "default_true")]
+    pub enable_ddc: bool,
+    #[serde(default = "default_true")]
+    pub enable_itn: bool,
+    #[serde(default)]
+    pub enable_nonstream: bool,
+    #[serde(default = "default_true")]
+    pub enable_punc: bool,
+    #[serde(default)]
+    pub boosting_table_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsrOfflineConfig {
+    #[serde(default = "default_num_threads")]
+    pub num_threads: u32,
+    #[serde(default)]
+    pub vad: VadConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VadConfig {
+    #[serde(default = "default_vad_threshold")]
+    pub threshold: f32,
+    #[serde(default = "default_vad_min_silence")]
+    pub min_silence_duration: f32,
+    #[serde(default = "default_vad_min_speech")]
+    pub min_speech_duration: f32,
+    #[serde(default = "default_vad_max_speech")]
+    pub max_speech_duration: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -164,6 +232,24 @@ pub struct PromptItem {
 }
 
 // Default value functions
+fn default_asr_engine() -> String {
+    "doubao".to_string()
+}
+fn default_num_threads() -> u32 {
+    2
+}
+fn default_vad_threshold() -> f32 {
+    0.2
+}
+fn default_vad_min_silence() -> f32 {
+    0.2
+}
+fn default_vad_min_speech() -> f32 {
+    0.2
+}
+fn default_vad_max_speech() -> f32 {
+    10.0
+}
 fn default_hotkey() -> serde_norway::Value {
     serde_norway::Value::String("F13".to_string())
 }
@@ -204,6 +290,61 @@ fn default_llm_provider() -> String {
     "deepseek".to_string()
 }
 
+impl Default for AsrConfig {
+    fn default() -> Self {
+        Self {
+            engine: default_asr_engine(),
+            active_model: String::new(),
+        }
+    }
+}
+
+impl Default for DoubaoOnlineConfig {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            resource_id: String::new(),
+            app_id: String::new(),
+            access_token: String::new(),
+            secret_key: String::new(),
+            language: String::new(),
+            enable_ddc: true,
+            enable_itn: true,
+            enable_nonstream: false,
+            enable_punc: true,
+            boosting_table_id: String::new(),
+        }
+    }
+}
+
+impl Default for AsrOnlineConfig {
+    fn default() -> Self {
+        Self {
+            doubao: DoubaoOnlineConfig::default(),
+        }
+    }
+}
+
+impl Default for VadConfig {
+    fn default() -> Self {
+        Self {
+            threshold: default_vad_threshold(),
+            min_silence_duration: default_vad_min_silence(),
+            min_speech_duration: default_vad_min_speech(),
+            max_speech_duration: default_vad_max_speech(),
+        }
+    }
+}
+
+impl Default for AsrOfflineConfig {
+    fn default() -> Self {
+        Self {
+            num_threads: default_num_threads(),
+            vad: VadConfig::default(),
+        }
+    }
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
@@ -217,6 +358,9 @@ impl Default for AppConfig {
                 sound: None,
                 beta_updates: false,
             },
+            asr: AsrConfig::default(),
+            asr_online: AsrOnlineConfig::default(),
+            asr_offline: AsrOfflineConfig::default(),
             connection: ConnectionConfig {
                 url: String::new(),
                 app_id: String::new(),
@@ -390,6 +534,7 @@ impl ConfigManager {
     }
 
     /// Read config from disk and parse into AppConfig.
+    /// Performs bidirectional migration between old and new config structures.
     fn read_config_from_disk(config_path: &Path) -> AppConfig {
         let content = match fs::read_to_string(config_path) {
             Ok(c) => c,
@@ -399,7 +544,63 @@ impl ConfigManager {
             Ok(v) => v,
             Err(_) => return AppConfig::default(),
         };
-        serde_norway::from_value(raw).unwrap_or_default()
+        let mut config: AppConfig = serde_norway::from_value(raw).unwrap_or_default();
+
+        // Bidirectional migration: ensure both old and new fields are populated
+        if config.connection.url.is_empty() && !config.asr_online.doubao.url.is_empty() {
+            // New config → populate old fields for backward compat
+            config.connection = ConnectionConfig {
+                url: config.asr_online.doubao.url.clone(),
+                resource_id: config.asr_online.doubao.resource_id.clone(),
+                app_id: config.asr_online.doubao.app_id.clone(),
+                access_token: config.asr_online.doubao.access_token.clone(),
+                secret_key: config.asr_online.doubao.secret_key.clone(),
+            };
+            config.request.enable_ddc = config.asr_online.doubao.enable_ddc;
+            config.request.enable_itn = config.asr_online.doubao.enable_itn;
+            config.request.enable_nonstream = Some(config.asr_online.doubao.enable_nonstream);
+            config.request.enable_punc = config.asr_online.doubao.enable_punc;
+            if !config.asr_online.doubao.boosting_table_id.is_empty() {
+                let mut corpus = serde_norway::Mapping::new();
+                corpus.insert(
+                    serde_norway::Value::String("boosting_table_id".to_string()),
+                    serde_norway::Value::String(
+                        config.asr_online.doubao.boosting_table_id.clone(),
+                    ),
+                );
+                config.request.corpus = Some(serde_norway::Value::Mapping(corpus));
+            }
+        } else if !config.connection.url.is_empty()
+            && config.asr_online.doubao.url.is_empty()
+        {
+            // Old config → populate new fields
+            config.asr = AsrConfig::default();
+            config.asr_online = AsrOnlineConfig {
+                doubao: DoubaoOnlineConfig {
+                    url: config.connection.url.clone(),
+                    resource_id: config.connection.resource_id.clone(),
+                    app_id: config.connection.app_id.clone(),
+                    access_token: config.connection.access_token.clone(),
+                    secret_key: config.connection.secret_key.clone(),
+                    language: String::new(),
+                    enable_ddc: config.request.enable_ddc,
+                    enable_itn: config.request.enable_itn,
+                    enable_nonstream: config.request.enable_nonstream.unwrap_or(false),
+                    enable_punc: config.request.enable_punc,
+                    boosting_table_id: config
+                        .request
+                        .corpus
+                        .as_ref()
+                        .and_then(|c| c.get("boosting_table_id"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                },
+            };
+            config.asr_offline = AsrOfflineConfig::default();
+        }
+
+        config
     }
 
     /// Read prompts from disk, merge with defaults, and optionally save merged result.

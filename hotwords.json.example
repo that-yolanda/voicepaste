@@ -1,0 +1,10 @@
+{
+  "active_group": "default",
+  "groups": [
+    {
+      "id": "default",
+      "name": "默认热词表",
+      "words": []
+    }
+  ]
+}

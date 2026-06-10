@@ -5,6 +5,7 @@ mod asr;
 mod commands;
 mod config;
 mod hotkey;
+mod hotword;
 mod llm;
 mod overlay;
 mod paste;
@@ -61,6 +62,18 @@ pub fn run() {
             let config_manager = config::ConfigManager::new(&data_dir, &resource_dir);
             let log_path = data_dir.join("voicepaste.log");
             let stats_service = stats::StatsService::new(&data_dir);
+            let hotword_manager = hotword::HotwordManager::new(&data_dir, &resource_dir);
+
+            // Import legacy hotwords from config.yaml into hotwords.json (one-time migration)
+            if let Ok(cfg) = config_manager.load_config() {
+                if let Some(corpus) = &cfg.request.corpus {
+                    if let Some(hw) = corpus.get("context_hotwords").and_then(|v| v.as_str()) {
+                        if !hw.is_empty() {
+                            let _ = hotword_manager.import_from_legacy(hw);
+                        }
+                    }
+                }
+            }
 
             // Initialize global logger (must be before any log_*! calls)
             let voice_logger = logger::VoiceLogger::new(log_path.clone());
@@ -79,7 +92,7 @@ pub fn run() {
                 .map(|c| c.app.hotkey_mode.clone())
                 .unwrap_or_else(|_| "toggle".to_string());
 
-            let app_state = create_app_state(config_manager, log_path, stats_service);
+            let app_state = create_app_state(config_manager, hotword_manager, log_path, stats_service);
             app.manage(app_state);
 
             // Recording state toggle (used by global shortcut handler)
@@ -144,6 +157,8 @@ pub fn run() {
             commands::play_sound_file,
             commands::get_log_path,
             commands::get_config_path,
+            commands::load_hotwords,
+            commands::save_hotwords,
             #[cfg(desktop)]
             updater::check_for_update,
             #[cfg(desktop)]
