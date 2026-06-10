@@ -20,7 +20,7 @@ pub struct AppInner {
     pub config_manager: ConfigManager,
     pub log_path: std::path::PathBuf,
     pub stats: Mutex<StatsService>,
-    pub asr_session: Mutex<Option<Arc<AsrSession>>>,
+    pub asr_session: Mutex<Option<Arc<dyn AsrSession>>>,
     pub asr_events: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<AsrEvent>>>,
     pub pending_audio_stop: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     pub pending_audio_warmup: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,

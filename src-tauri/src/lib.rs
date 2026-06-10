@@ -12,6 +12,7 @@ mod stats;
 mod updater;
 
 use app_state::*;
+use asr::AsrEngine;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -615,10 +616,15 @@ async fn start_recording(app_handle: AppHandle) {
     }
 
     // 3. Create ASR session
-    match crate::asr::create_asr_session(&config.connection, &config.audio, &config.request)
-        .await
-    {
+    let engine = crate::asr::doubao::DoubaoEngine::new(
+        config.connection.clone(),
+        config.audio.clone(),
+        config.request.clone(),
+    );
+    match engine.create_session(&[]).await {
         Ok((session, event_rx)) => {
+            let session: Arc<dyn crate::asr::AsrSession> = Arc::from(session);
+
             // Check if recording was cancelled during ASR connection
             if !*recording_state.0.lock().unwrap() {
                 log_rec!(warn, "Cancelled during ASR connection, closing session");
@@ -631,7 +637,7 @@ async fn start_recording(app_handle: AppHandle) {
                 return;
             }
 
-            *app_inner.asr_session.lock().await = Some(session.clone());
+            *app_inner.asr_session.lock().await = Some(session);
             set_app_state(&app_handle, &app_inner, app_state::AppState::Recording).await;
 
             let _ = app_handle.emit(
@@ -922,7 +928,7 @@ async fn forward_asr_events(
                 log_events!(info, "ASR connection opened");
             }
             AsrEvent::Close { code, reason } => {
-                log_events!(info, "ASR connection closed (code={}, reason={:?})", code, reason);
+                log_events!(info, "ASR connection closed (code={:?}, reason={:?})", code, reason);
                 // If connection closed during recording, auto-stop
                 // Extract the flag eagerly to avoid holding MutexGuard across .await
                 let was_recording = app

@@ -323,36 +323,33 @@ pub async fn delete_history(
     Ok(serde_json::json!({ "ok": true }))
 }
 
-/// Compute a 0..1 loudness level from a base64 PCM16 chunk for the overlay waveform.
+/// Compute a 0..1 loudness level from f32 PCM samples for the overlay waveform.
 /// Mirrors the web AnalyserNode mapping (RMS + peak, mild compression).
 #[cfg(target_os = "macos")]
-fn compute_audio_level(base64_chunk: &str) -> Option<f64> {
-    use base64::Engine as _;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(base64_chunk)
-        .ok()?;
-    let count = bytes.len() / 2;
-    if count == 0 {
+fn compute_audio_level(samples: &[f32]) -> Option<f64> {
+    if samples.is_empty() {
         return None;
     }
     let mut sum_squares = 0f64;
     let mut peak = 0f64;
-    for frame in bytes.chunks_exact(2) {
-        let sample = i16::from_le_bytes([frame[0], frame[1]]) as f64 / 32768.0;
-        sum_squares += sample * sample;
-        peak = peak.max(sample.abs());
+    for &sample in samples {
+        let s = sample as f64;
+        sum_squares += s * s;
+        peak = peak.max(s.abs() as f64);
     }
-    let rms = (sum_squares / count as f64).sqrt();
+    let rms = (sum_squares / samples.len() as f64).sqrt();
     Some((rms * 13.0 + peak * 2.8).powf(0.82).min(1.0))
 }
 
-/// Receive an audio chunk from the renderer (base64-encoded PCM).
+/// Receive an audio chunk from the renderer (base64-encoded i16 PCM),
+/// decode to f32 samples and forward to the active ASR session.
 #[tauri::command]
 pub async fn send_audio_chunk(
     _app: AppHandle,
     state: State<'_, AppState>,
     base64_chunk: String,
 ) -> Result<serde_json::Value, String> {
+    use base64::Engine as _;
     use std::sync::atomic::{AtomicU64, Ordering};
     static CHUNK_COUNT: AtomicU64 = AtomicU64::new(0);
     let n = CHUNK_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -363,12 +360,27 @@ pub async fn send_audio_chunk(
     let session = state.asr_session.lock().await;
     if let Some(ref session) = *session {
         if session.is_ready() {
-            session.append_audio(&base64_chunk);
+            // Decode base64 → i16 PCM bytes → f32 samples
+            let bytes = match base64::engine::general_purpose::STANDARD.decode(&base64_chunk) {
+                Ok(data) => data,
+                Err(_) => {
+                    log_audio!(warn, "Chunk #{} base64 decode failed", n);
+                    return Ok(serde_json::json!({ "ok": false, "message": "音频数据解码失败" }));
+                }
+            };
+            let samples: Vec<f32> = bytes
+                .chunks_exact(2)
+                .map(|chunk| {
+                    let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
+                    sample as f32 / 32768.0
+                })
+                .collect();
             // Drive the native waveform (macOS only) from the same PCM the ASR receives.
             #[cfg(target_os = "macos")]
-            if let Some(level) = compute_audio_level(&base64_chunk) {
+            if let Some(level) = compute_audio_level(&samples) {
                 crate::overlay::set_audio_level(&_app, level);
             }
+            session.append_audio(&samples);
             return Ok(serde_json::json!({ "ok": true }));
         }
         log_audio!(warn, "Chunk #{} dropped: session not ready", n);
