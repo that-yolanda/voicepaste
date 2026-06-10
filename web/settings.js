@@ -6,7 +6,6 @@
   let currentThemePreference = "system";
   let currentHotkeyMode = "toggle";
   let currentOverlayStyle = "liquid";
-  let currentOverlayGlassMode = "auto";
   let currentPlatform = "";
   let currentLlmProvider = "deepseek";
   let hasAutoCheckedUpdates = false;
@@ -103,8 +102,6 @@
     autoStart: $("autoStart"),
     overlayStyleRow: $("overlayStyleRow"),
     overlayStyleSelector: $("overlayStyleSelector"),
-    overlayGlassModeRow: $("overlayGlassModeRow"),
-    overlayGlassModeSelector: $("overlayGlassModeSelector"),
     micDot: $("micDot"),
     micText: $("micText"),
     checkMicBtn: $("checkMicBtn"),
@@ -197,19 +194,45 @@
   // ===== Theme =====
 
   function applyTheme(resolved) {
-    if (resolved === "light") {
+    // Double-resolve is safe: "light" stays "light", "dark" stays "dark",
+    // and any stray "system" gets resolved via matchMedia.
+    if (resolveTheme(resolved) === "light") {
       document.documentElement.setAttribute("data-theme", "light");
     } else {
       document.documentElement.removeAttribute("data-theme");
     }
   }
 
+  // Resolve a theme preference ("system" / "light" / "dark") to an actual
+  // light / dark value, using the browserʼs prefers-color-scheme media query
+  // as a fallback when the backend hasnʼt resolved "system" yet.
+  function resolveTheme(preference) {
+    if (preference === "system") {
+      return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+    }
+    return preference || "dark";
+  }
+
   function initThemeSelector(data) {
     const info = data.runtime?.theme || {};
     currentThemePreference = info.preference || "system";
-    applyTheme(info.resolved || "dark");
+    // resolved is now properly resolved by the Rust backend; resolveTheme
+    // provides a client-side fallback for "system" in edge cases.
+    applyTheme(resolveTheme(info.resolved || "dark"));
     document.querySelectorAll(".theme-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.themeVal === currentThemePreference);
+    });
+  }
+
+  // Watch for system light/dark preference changes. When the user has chosen
+  // "system" mode we update the theme live whenever the OS toggles.
+  function watchSystemTheme() {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (!mq) return;
+    mq.addEventListener("change", (e) => {
+      if (currentThemePreference === "system") {
+        applyTheme(e.matches ? "dark" : "light");
+      }
     });
   }
 
@@ -383,14 +406,6 @@
     });
   }
 
-  function updateOverlayGlassModeVisibility() {
-    if (!el.overlayGlassModeRow) return;
-    // The light/dark glass variant only applies to the macOS Liquid Glass UI,
-    // so hide it on non-macOS and when the Vibrancy backup is selected.
-    const show = currentPlatform === "macos" && currentOverlayStyle === "liquid";
-    el.overlayGlassModeRow.style.display = show ? "" : "none";
-  }
-
   function setOverlayStyle(style) {
     currentOverlayStyle = style === "vibrancy" ? "vibrancy" : "liquid";
     if (el.overlayStyleSelector) {
@@ -398,15 +413,6 @@
         btn.classList.toggle("active", btn.dataset.val === currentOverlayStyle);
       });
     }
-    updateOverlayGlassModeVisibility();
-  }
-
-  function setOverlayGlassMode(mode) {
-    currentOverlayGlassMode = ["light", "dark"].includes(mode) ? mode : "auto";
-    if (!el.overlayGlassModeSelector) return;
-    el.overlayGlassModeSelector.querySelectorAll(".seg-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.val === currentOverlayGlassMode);
-    });
   }
 
   function setHotkeyHint(text, level) {
@@ -537,8 +543,7 @@
     el.configPath.textContent = data.configPath || "-";
 
     currentPlatform = data.runtime?.platform || currentPlatform;
-    setOverlayGlassMode(c.app?.overlay_glass_mode);
-    setOverlayStyle(c.app?.overlay_style); // also refreshes glass-mode row visibility
+    setOverlayStyle(c.app?.overlay_style);
     if (currentPlatform !== "macos" && el.overlayStyleRow) {
       el.overlayStyleRow.style.display = "none";
     }
@@ -615,7 +620,6 @@
     config.app.keep_clipboard = el.keepClipboard.checked;
     config.app.theme = currentThemePreference;
     config.app.overlay_style = currentOverlayStyle;
-    config.app.overlay_glass_mode = currentOverlayGlassMode;
     config.app.sound = {
       enabled: el.soundEnabled.checked,
       start_sound: el.startSoundName.dataset.path || "",
@@ -1424,16 +1428,6 @@ SOFTWARE.`;
     });
   }
 
-  // Liquid Glass light/dark mode (macOS Liquid Glass only)
-  if (el.overlayGlassModeSelector) {
-    el.overlayGlassModeSelector.addEventListener("click", (e) => {
-      const btn = e.target.closest(".seg-btn");
-      if (!btn) return;
-      setOverlayGlassMode(btn.dataset.val);
-      saveFormNow();
-    });
-  }
-
   // Auto-start
   el.autoStart.addEventListener("change", async () => {
     await window.voiceSettings.setLoginItemSettings(el.autoStart.checked);
@@ -1807,6 +1801,7 @@ SOFTWARE.`;
       updateMicStatus(event.payload?.status || "unknown");
     }
     if (event.type === "theme-changed") {
+      currentThemePreference = event.payload.preference || currentThemePreference;
       applyTheme(event.payload.resolved);
     }
   });
@@ -1816,4 +1811,5 @@ SOFTWARE.`;
   loadAppIcon();
   loadSettings();
   loadHomeData();
+  watchSystemTheme();
 })();

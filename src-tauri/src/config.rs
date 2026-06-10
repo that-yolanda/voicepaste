@@ -28,8 +28,6 @@ pub struct AppSettings {
     pub theme: String,
     #[serde(default = "default_overlay_style")]
     pub overlay_style: String,
-    #[serde(default = "default_overlay_glass_mode")]
-    pub overlay_glass_mode: String,
     #[serde(default)]
     pub sound: Option<SoundConfig>,
     /// When true, check for beta (prerelease) updates instead of stable only.
@@ -181,9 +179,6 @@ fn default_theme() -> String {
 fn default_overlay_style() -> String {
     "liquid".to_string()
 }
-fn default_overlay_glass_mode() -> String {
-    "auto".to_string()
-}
 fn default_format() -> String {
     "pcm".to_string()
 }
@@ -219,7 +214,6 @@ impl Default for AppConfig {
                 keep_clipboard: true,
                 theme: default_theme(),
                 overlay_style: default_overlay_style(),
-                overlay_glass_mode: default_overlay_glass_mode(),
                 sound: None,
                 beta_updates: false,
             },

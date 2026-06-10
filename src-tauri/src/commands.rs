@@ -7,6 +7,57 @@ use tauri::{AppHandle, Emitter, Manager, State};
 // Re-export paste::PasteResult for use in commands
 use paste::PasteResult;
 
+/// Detect the actual OS-level light/dark theme preference.
+fn detect_system_theme() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        // AppleInterfaceStyle key is "Dark" in dark mode, absent in light mode.
+        if let Ok(output) = std::process::Command::new("defaults")
+            .args(["read", "-g", "AppleInterfaceStyle"])
+            .output()
+        {
+            if String::from_utf8_lossy(&output.stdout).trim() == "Dark" {
+                return "dark";
+            }
+        }
+        "light"
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Check registry: AppsUseLightTheme DWORD — 0 = dark, 1 = light.
+        if let Ok(output) = std::process::Command::new("reg")
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "/v",
+                "AppsUseLightTheme",
+            ])
+            .output()
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if stdout.contains("0x0") {
+                return "dark";
+            }
+            if stdout.contains("0x1") {
+                return "light";
+            }
+        }
+        "dark"
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        "dark"
+    }
+}
+
+/// Resolve a theme preference ("system" / "light" / "dark") to an actual theme value.
+fn resolve_theme(preference: &str) -> String {
+    match preference {
+        "system" => detect_system_theme().to_string(),
+        other => other.to_string(),
+    }
+}
+
 /// Get app configuration for the overlay.
 #[tauri::command]
 pub async fn get_app_config(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
@@ -26,7 +77,7 @@ pub async fn get_app_config(state: State<'_, AppState>) -> Result<serde_json::Va
         "hotkey": hotkey,
         "platform": std::env::consts::OS,
         "overlayStyle": config.app.overlay_style,
-        "glass": config.app.overlay_glass_mode,
+        "theme": config.app.theme,
         "sound": {
             "enabled": config.app.sound.as_ref().map(|s| s.enabled).unwrap_or(true),
             "start_sound": config.app.sound.as_ref().map(|s| s.start_sound.clone()).unwrap_or_default(),
@@ -68,8 +119,8 @@ pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json:
             "version": version,
             "platform": std::env::consts::OS,
             "theme": {
-                "preference": config.app.theme,
-                "resolved": config.app.theme,
+                "preference": config.app.theme.clone(),
+                "resolved": resolve_theme(&config.app.theme),
             },
         },
     }))
@@ -102,7 +153,19 @@ pub async fn save_config(
             "payload": {
                 "platform": std::env::consts::OS,
                 "overlayStyle": updated_config.app.overlay_style,
-                "glass": updated_config.app.overlay_glass_mode,
+                "theme": updated_config.app.theme,
+            }
+        }),
+    );
+
+    // Notify the settings window when the theme changes.
+    let _ = app.emit(
+        "settings:event",
+        serde_json::json!({
+            "type": "theme-changed",
+            "payload": {
+                "preference": updated_config.app.theme,
+                "resolved": resolve_theme(&updated_config.app.theme),
             }
         }),
     );
@@ -150,7 +213,19 @@ pub async fn save_config_object(
             "payload": {
                 "platform": std::env::consts::OS,
                 "overlayStyle": updated_config.app.overlay_style,
-                "glass": updated_config.app.overlay_glass_mode,
+                "theme": updated_config.app.theme,
+            }
+        }),
+    );
+
+    // Notify the settings window when the theme changes.
+    let _ = app.emit(
+        "settings:event",
+        serde_json::json!({
+            "type": "theme-changed",
+            "payload": {
+                "preference": updated_config.app.theme,
+                "resolved": resolve_theme(&updated_config.app.theme),
             }
         }),
     );

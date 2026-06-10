@@ -389,7 +389,12 @@
       if (!config.app) config.app = {};
       config.app.theme = preference;
       await invoke("save_config_object", { configObject: config });
-      return { preference, resolved: preference };
+      // Re-read to get the properly resolved theme from the backend.
+      const updated = await invoke("get_settings_data");
+      return {
+        preference,
+        resolved: updated.runtime?.theme?.resolved || preference,
+      };
     },
 
     /**

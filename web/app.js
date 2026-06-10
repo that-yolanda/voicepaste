@@ -37,14 +37,14 @@ const statusBarItems = elements.statusBars
   : [];
 
 // Latest appearance, used to decide whether to drive the native macOS glass view.
-const currentAppearance = { platform: "", overlayStyle: "liquid", glass: "auto" };
+const currentAppearance = { platform: "", overlayStyle: "liquid", theme: "system" };
 
-// Resolve the effective light/dark variant. "auto" follows the system theme via
-// the webview's prefers-color-scheme (the native glass also follows the system in
-// auto mode, so text colour and glass tint stay in sync).
+// Resolve the effective light/dark variant from the app-level theme setting:
+//   "light" / "dark" → use directly
+//   "system"         → follow the OS preference via matchMedia
 function resolvedGlassVariant() {
-  const g = currentAppearance.glass;
-  if (g === "light" || g === "dark") return g;
+  const t = currentAppearance.theme;
+  if (t === "light" || t === "dark") return t;
   return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
 }
 
@@ -75,10 +75,11 @@ function syncGlassRect() {
 // Swap the glass treatment without touching any recording/ASR logic.
 // platform: "macos" → macOS (Tauri std::env::consts::OS), anything else → Windows-style Mica.
 // overlayStyle (macOS only): "liquid" (default) | "vibrancy" (backup).
-function applyAppearance({ platform, overlayStyle, glass } = {}) {
+// theme: "system" (default) | "light" | "dark" — controls both settings UI and overlay light/dark.
+function applyAppearance({ platform, overlayStyle, theme } = {}) {
   currentAppearance.platform = platform || "";
   currentAppearance.overlayStyle = overlayStyle || "liquid";
-  currentAppearance.glass = glass || "auto";
+  currentAppearance.theme = theme || "system";
   const isMac = platform === "macos";
   const isVibrancy = isMac && overlayStyle === "vibrancy";
   elements.bubble.classList.toggle("platform-mac", isMac);
