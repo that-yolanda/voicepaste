@@ -6,6 +6,8 @@ mod commands;
 mod config;
 mod hotkey;
 mod hotword;
+#[allow(dead_code)]
+mod model;
 mod llm;
 mod overlay;
 mod paste;
@@ -159,6 +161,10 @@ pub fn run() {
             commands::get_config_path,
             commands::load_hotwords,
             commands::save_hotwords,
+            commands::get_model_registry,
+            commands::get_downloaded_models,
+            commands::download_model,
+            commands::delete_model,
             #[cfg(desktop)]
             updater::check_for_update,
             #[cfg(desktop)]
@@ -630,13 +636,38 @@ async fn start_recording(app_handle: AppHandle) {
         return;
     }
 
-    // 3. Create ASR session
-    let engine = crate::asr::doubao::DoubaoEngine::new(
-        config.connection.clone(),
-        config.audio.clone(),
-        config.request.clone(),
-    );
-    match engine.create_session(&[]).await {
+    // 3. Create ASR session (select engine based on config)
+    let engine_name = config.asr.engine.as_str();
+    let result = match engine_name {
+        "sherpa-onnx" => {
+            let active_model = if config.asr.active_model.is_empty() {
+                "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8".to_string()
+            } else {
+                config.asr.active_model.clone()
+            };
+            let data_dir = app_handle
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let engine = crate::asr::sherpa_onnx::SherpaOnnxEngine::new(
+                data_dir,
+                active_model,
+                config.asr_offline.clone(),
+            );
+            engine.create_session(&[]).await
+        }
+        _ => {
+            // Default: Doubao online engine
+            let engine = crate::asr::doubao::DoubaoEngine::new(
+                config.connection.clone(),
+                config.audio.clone(),
+                config.request.clone(),
+            );
+            engine.create_session(&[]).await
+        }
+    };
+
+    match result {
         Ok((session, event_rx)) => {
             let session: Arc<dyn crate::asr::AsrSession> = Arc::from(session);
 
@@ -661,6 +692,18 @@ async fn start_recording(app_handle: AppHandle) {
                     "type": "recording:start",
                 }),
             );
+
+            // For non-streaming engines, show a "recording" hint since
+            // partial results won't appear during recording.
+            if engine_name == "sherpa-onnx" {
+                let _ = app_handle.emit(
+                    "overlay:event",
+                    serde_json::json!({
+                        "type": "hint",
+                        "payload": { "text": "录制中…", "level": "info", "variant": "recording" }
+                    }),
+                );
+            }
 
             let app_for_events = app_handle.clone();
             tauri::async_runtime::spawn(async move {

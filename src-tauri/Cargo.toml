@@ -28,7 +28,7 @@ serde_norway = "0.9"
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 flate2 = "1"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 log = { version = "0.4", features = ["std"] }
@@ -39,6 +39,8 @@ url = "2"
 futures-util = "0.3"
 keytap = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
+sherpa-onnx = { version = "1.13", default-features = false }
+tar = "0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

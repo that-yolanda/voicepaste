@@ -1,6 +1,7 @@
 use crate::app_state::AppHandle as AppState;
 use crate::config::PromptItem;
 use crate::hotword::HotwordData;
+use crate::model;
 use crate::paste;
 use crate::HotkeyMode;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -610,5 +611,67 @@ pub async fn save_hotwords(
     data: HotwordData,
 ) -> Result<serde_json::Value, String> {
     state.hotword_manager.save(&data)?;
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+// ---------------------------------------------------------------------------
+// Model management commands
+// ---------------------------------------------------------------------------
+
+/// Get the model registry.
+#[tauri::command]
+pub async fn get_model_registry(app: AppHandle) -> Result<serde_json::Value, String> {
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to resolve resource dir: {}", e))?;
+    let registry = model::load_registry(&resource_dir);
+    serde_json::to_value(&registry)
+        .map_err(|e| format!("Failed to serialize registry: {}", e))
+}
+
+/// Get list of downloaded model IDs.
+#[tauri::command]
+pub async fn get_downloaded_models(app: AppHandle) -> Result<serde_json::Value, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve data dir: {}", e))?;
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to resolve resource dir: {}", e))?;
+    let registry = model::load_registry(&resource_dir);
+    let downloaded = model::get_downloaded_models(&data_dir, &registry);
+    Ok(serde_json::json!({ "models": downloaded }))
+}
+
+/// Download a model by ID.
+#[tauri::command]
+pub async fn download_model(
+    app: AppHandle,
+    model_id: String,
+) -> Result<serde_json::Value, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve data dir: {}", e))?;
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to resolve resource dir: {}", e))?;
+    let registry = model::load_registry(&resource_dir);
+    model::download_model(&app, &data_dir, &registry, &model_id).await?;
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+/// Delete a downloaded model.
+#[tauri::command]
+pub async fn delete_model(app: AppHandle, model_id: String) -> Result<serde_json::Value, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve data dir: {}", e))?;
+    model::delete_model(&data_dir, &model_id)?;
     Ok(serde_json::json!({ "ok": true }))
 }

@@ -1,4 +1,6 @@
 pub mod doubao;
+pub mod sherpa_onnx;
+pub mod vad;
 
 use async_trait::async_trait;
 use tokio::sync::mpsc;
