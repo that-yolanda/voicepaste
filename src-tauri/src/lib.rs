@@ -660,7 +660,7 @@ async fn start_recording(app_handle: AppHandle) {
                 data_dir,
                 resource_dir,
                 engine_model_id.to_string(),
-                config.asr_offline.clone(),
+                config.asr_offline.vad.clone(),
             );
             engine.create_session(&hotwords).await
         }

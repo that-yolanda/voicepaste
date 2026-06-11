@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 use super::{AsrEngine, AsrEvent, AsrSession};
-use crate::asr::vad::VadProcessor;
-use crate::config::AsrOfflineConfig;
+use crate::asr::vad::{VadConfig, VadProcessor};
+use crate::config::VadParams;
 use crate::model::{self, ModelEntry};
 
 /// Wraps both offline and online sherpa-onnx recognizers.
@@ -26,7 +26,7 @@ pub struct SherpaOnnxEngine {
     data_dir: PathBuf,
     resource_dir: PathBuf,
     active_model_id: String,
-    offline_config: AsrOfflineConfig,
+    vad_params: VadParams,
 }
 
 impl SherpaOnnxEngine {
@@ -34,13 +34,13 @@ impl SherpaOnnxEngine {
         data_dir: PathBuf,
         resource_dir: PathBuf,
         active_model_id: String,
-        offline_config: AsrOfflineConfig,
+        vad_params: VadParams,
     ) -> Self {
         Self {
             data_dir,
             resource_dir,
             active_model_id,
-            offline_config,
+            vad_params,
         }
     }
 
@@ -209,10 +209,14 @@ impl AsrEngine for SherpaOnnxEngine {
             })?;
 
         // Build recognizer based on capabilities.streaming
+        let vad_entry = registry.models.iter().find(|m| m.id == "silero-vad");
+        let vad_base = VadConfig::from_registry(vad_entry.and_then(|e| e.default_config.as_ref()));
+        let vad_config = VadConfig::merged(&vad_base, &self.vad_params);
+
         let (recognizer, supports_hotwords) = Self::build_recognizer(
             &model_dir,
             entry,
-            self.offline_config.num_threads,
+            vad_config.num_threads,
         )?;
 
         // For transducer models with hotwords support, pre-load tokens.txt to
@@ -240,11 +244,7 @@ impl AsrEngine for SherpaOnnxEngine {
 
         // Build VAD
         let vad_dir = model::model_path(&self.data_dir, "silero-vad");
-        let vad = VadProcessor::new(
-            &vad_dir,
-            &self.offline_config.vad,
-            self.offline_config.num_threads,
-        )?;
+        let vad = VadProcessor::new(&vad_dir, &vad_config)?;
 
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let _ = event_tx.send(AsrEvent::Open);

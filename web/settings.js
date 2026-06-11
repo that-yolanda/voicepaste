@@ -163,12 +163,6 @@
     currentModelBadge: $("currentModelBadge"),
     offlineModelList: $("offlineModelList"),
     vadDownloadHint: $("vadDownloadHint"),
-    // VAD advanced
-    vadThreshold: $("vadThreshold"),
-    vadMinSilence: $("vadMinSilence"),
-    vadMinSpeech: $("vadMinSpeech"),
-    vadMaxSpeech: $("vadMaxSpeech"),
-    numThreads: $("numThreads"),
     // Hotword groups
     hotwordGroupsList: $("hotwordGroupsList"),
     addHotwordGroupBtn: $("addHotwordGroupBtn"),
@@ -1927,6 +1921,28 @@ SOFTWARE.`;
         }
         body += `</div>`; // end model-card-head
 
+        // VAD model gets expand/collapse config section
+        if (isVad) {
+          const vad = c.asr_offline?.vad || {};
+          const defaults = model.default_config || {};
+          body += `<div class="model-expand-wrap">`;
+          body += `<button type="button" class="model-expand-btn vad-expand-btn">`;
+          body += `<span class="nav-icon" data-icon="chevron-down"></span>`;
+          body += `<span>展开配置</span>`;
+          body += `</button></div>`;
+          body += `<div class="model-card-config hidden vad-config">`;
+          body += `<div class="config-group">`;
+          body += `<div class="config-row"><span class="config-label">灵敏度阈值 <span class="config-hint">(0-1，越低越灵敏)</span></span>`;
+          body += `<input type="number" class="input-field vad-param" data-param="threshold" value="${vad.threshold ?? defaults.threshold ?? 0.2}" step="0.05" min="0.01" max="0.99" /></div>`;
+          body += `<div class="config-row"><span class="config-label">最短静音时长 (秒)</span>`;
+          body += `<input type="number" class="input-field vad-param" data-param="min_silence_duration" value="${vad.min_silence_duration ?? defaults.min_silence_duration ?? 0.2}" step="0.1" min="0.05" max="5.0" /></div>`;
+          body += `<div class="config-row"><span class="config-label">最短语音时长 (秒)</span>`;
+          body += `<input type="number" class="input-field vad-param" data-param="min_speech_duration" value="${vad.min_speech_duration ?? defaults.min_speech_duration ?? 0.2}" step="0.1" min="0.05" max="5.0" /></div>`;
+          body += `<div class="config-row"><span class="config-label">最长语音时长 (秒)</span>`;
+          body += `<input type="number" class="input-field vad-param" data-param="max_speech_duration" value="${vad.max_speech_duration ?? defaults.max_speech_duration ?? 10.0}" step="1.0" min="1.0" max="30.0" /></div>`;
+          body += `</div></div>`;
+        }
+
         body += `<div class="model-card-status">`;
         if (isDownloaded) {
           body += `<span class="model-downloaded">已下载${model.file_size ? ` · ${model.file_size}MB` : ""}</span>`;
@@ -1951,6 +1967,40 @@ SOFTWARE.`;
             if (t !== e.target) t.checked = false;
           });
           await saveModelSelection(modelId);
+        }
+      });
+    });
+
+    // VAD config expand/collapse
+    const vadExpandBtn = el.offlineModelList.querySelector(".vad-expand-btn");
+    if (vadExpandBtn) {
+      vadExpandBtn.addEventListener("click", () => {
+        const config = el.offlineModelList.querySelector(".vad-config");
+        const isHidden = config.classList.contains("hidden");
+        config.classList.toggle("hidden", !isHidden);
+        vadExpandBtn.classList.toggle("expanded", isHidden);
+        vadExpandBtn.querySelector("span:last-child").textContent = isHidden
+          ? "收起配置"
+          : "展开配置";
+      });
+    }
+
+    // VAD param auto-save
+    el.offlineModelList.querySelectorAll(".vad-param").forEach((input) => {
+      input.addEventListener("change", async () => {
+        const config = JSON.parse(JSON.stringify(parsedConfig));
+        config.asr_offline = config.asr_offline || {};
+        config.asr_offline.vad = config.asr_offline.vad || {};
+        const param = input.dataset.param;
+        const val = parseFloat(input.value);
+        if (!Number.isNaN(val)) {
+          config.asr_offline.vad[param] = val;
+        }
+        try {
+          await window.voiceSettings.saveConfigObject(config);
+          parsedConfig = config;
+        } catch (_err) {
+          /* ignore */
         }
       });
     });

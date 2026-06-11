@@ -261,7 +261,7 @@ function updateView() {
   const hintText = getVisibleHintText();
   const hasHint = Boolean(hintText);
   const showTranscript = !hasHint;
-  const showWaveform = visualState === "recording" && !hasHint;
+  const showWaveform = visualState === "recording";
 
   elements.stage.dataset.state = visualState;
   elements.stage.dataset.mode = hasHint ? "hint" : "transcript";

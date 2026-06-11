@@ -36,6 +36,22 @@ pub struct AsrOnlineConfig {
     pub doubao: DoubaoOnlineConfig,
 }
 
+/// User-overridable VAD parameters stored in config.yaml.
+/// All fields are `Option` so omitted values fall back to registry defaults.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VadParams {
+    pub threshold: Option<f32>,
+    pub min_silence_duration: Option<f32>,
+    pub min_speech_duration: Option<f32>,
+    pub max_speech_duration: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AsrOfflineConfig {
+    #[serde(default)]
+    pub vad: VadParams,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoubaoOnlineConfig {
     #[serde(default)]
@@ -60,26 +76,6 @@ pub struct DoubaoOnlineConfig {
     pub enable_punc: bool,
     #[serde(default)]
     pub boosting_table_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AsrOfflineConfig {
-    #[serde(default = "default_num_threads")]
-    pub num_threads: u32,
-    #[serde(default)]
-    pub vad: VadConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VadConfig {
-    #[serde(default = "default_vad_threshold")]
-    pub threshold: f32,
-    #[serde(default = "default_vad_min_silence")]
-    pub min_silence_duration: f32,
-    #[serde(default = "default_vad_min_speech")]
-    pub min_speech_duration: f32,
-    #[serde(default = "default_vad_max_speech")]
-    pub max_speech_duration: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,21 +231,6 @@ pub struct PromptItem {
 fn default_asr_engine() -> String {
     "doubao-streaming".to_string()
 }
-fn default_num_threads() -> u32 {
-    2
-}
-fn default_vad_threshold() -> f32 {
-    0.2
-}
-fn default_vad_min_silence() -> f32 {
-    0.2
-}
-fn default_vad_min_speech() -> f32 {
-    0.2
-}
-fn default_vad_max_speech() -> f32 {
-    10.0
-}
 fn default_hotkey() -> serde_norway::Value {
     serde_norway::Value::String("F13".to_string())
 }
@@ -321,26 +302,6 @@ impl Default for AsrOnlineConfig {
     fn default() -> Self {
         Self {
             doubao: DoubaoOnlineConfig::default(),
-        }
-    }
-}
-
-impl Default for VadConfig {
-    fn default() -> Self {
-        Self {
-            threshold: default_vad_threshold(),
-            min_silence_duration: default_vad_min_silence(),
-            min_speech_duration: default_vad_min_speech(),
-            max_speech_duration: default_vad_max_speech(),
-        }
-    }
-}
-
-impl Default for AsrOfflineConfig {
-    fn default() -> Self {
-        Self {
-            num_threads: default_num_threads(),
-            vad: VadConfig::default(),
         }
     }
 }

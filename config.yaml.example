@@ -31,14 +31,13 @@ asr_online:
     enable_punc: true            # 自动标点
     boosting_table_id: ""        # 热词表 ID（自学习平台）
 
-# === 本地模型通用配置 ===
+# === 本地模型 VAD 覆盖（留空使用模型注册表默认值） ===
 asr_offline:
-  num_threads: 2                 # 识别线程数
-  vad:
-    threshold: 0.2               # 灵敏度阈值 (0-1)
-    min_silence_duration: 0.2    # 最短静音时长 (秒)
-    min_speech_duration: 0.2     # 最短语音时长 (秒)
-    max_speech_duration: 10.0    # 最长语音时长 (秒)
+  vad: {}
+  # threshold: 0.2               # 灵敏度阈值 (0-1)
+  # min_silence_duration: 0.2    # 最短静音时长 (秒)
+  # min_speech_duration: 0.2     # 最短语音时长 (秒)
+  # max_speech_duration: 10.0    # 最长语音时长 (秒)
 
 # === 以下为兼容旧版字段（由新字段同步填充，无需手动维护） ===
 connection:

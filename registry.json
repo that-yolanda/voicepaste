@@ -41,7 +41,14 @@
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
       "file_size": 2,
       "mem_size": 50,
-      "model_files": { "model": "silero_vad.onnx" }
+      "model_files": { "model": "silero_vad.onnx" },
+      "default_config": {
+        "threshold": 0.2,
+        "min_silence_duration": 0.2,
+        "min_speech_duration": 0.2,
+        "max_speech_duration": 10.0,
+        "num_threads": 2
+      }
     },
     {
       "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8",

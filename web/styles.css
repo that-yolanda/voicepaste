@@ -223,7 +223,7 @@ body {
   align-items: center;
   height: 20px;
 }
-.stage[data-state="recording"][data-mode="transcript"] .wave {
+.stage[data-state="recording"] .wave {
   display: flex;
 }
 .pill .status-bars {
