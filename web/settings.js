@@ -659,6 +659,39 @@
     loadAndRenderPrompts();
   }
 
+  /**
+   * Apply consistent cleanup and state-variable overrides to a config payload
+   * before saving. Ensures every save path produces the same output regardless
+   * of whether it goes through collectConfig() or directly clones parsedConfig.
+   */
+  function finalizeConfigPayload(config) {
+    // Clean up legacy / deprecated top-level keys
+    delete config.connection;
+    delete config.request;
+    delete config.asr_online;
+    delete config.asr_offline;
+
+    // Clean up deprecated llm flat fields (moved to per-provider config maps)
+    if (config.llm) {
+      delete config.llm.base_url;
+      delete config.llm.url;
+      delete config.llm.api_key;
+      delete config.llm.model;
+      delete config.llm.prompt_id;
+    }
+
+    // State variables always win over whatever was in parsedConfig,
+    // so cloned-parsedConfig saves never regress to stale values.
+    config.app = config.app || {};
+    config.app.theme = currentThemePreference;
+    config.app.hotkey_mode = currentHotkeyMode;
+    config.app.overlay_style = currentOverlayStyle;
+    config.llm = config.llm || {};
+    config.llm.provider = currentLlmProvider;
+
+    return config;
+  }
+
   function collectConfig() {
     persistVisibleProviderFields();
     const config = JSON.parse(JSON.stringify(parsedConfig));
@@ -712,20 +745,7 @@
       });
     }
 
-    delete config.connection;
-    delete config.request;
-    delete config.asr_online;
-    delete config.asr_offline;
-
-    config.llm = config.llm || {};
-    config.llm.provider = currentLlmProvider;
-    delete config.llm.base_url;
-    delete config.llm.url;
-    delete config.llm.api_key;
-    delete config.llm.model;
-    delete config.llm.prompt_id;
-
-    return config;
+    return finalizeConfigPayload(config);
   }
 
   async function saveFromForm() {
@@ -1456,17 +1476,34 @@ SOFTWARE.`;
   document.querySelectorAll(".theme-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const preference = btn.dataset.themeVal;
+      const previousPreference = currentThemePreference;
+
+      // Optimistic UI update
       document.querySelectorAll(".theme-btn").forEach((b) => {
         b.classList.toggle("active", b.dataset.themeVal === preference);
       });
+      currentThemePreference = preference;
+      if (parsedConfig.app) {
+        parsedConfig.app.theme = preference;
+      }
+      applyTheme(resolveTheme(preference));
+
+      // Save through unified path so cleanup + state overrides are consistent
+      const config = JSON.parse(JSON.stringify(parsedConfig));
+      finalizeConfigPayload(config);
       try {
-        const result = await window.voiceSettings.setTheme(preference);
-        applyTheme(result.resolved);
-        currentThemePreference = preference;
+        await window.voiceSettings.saveConfigObject(config);
+        // theme-changed event will also call applyTheme (double-safe)
       } catch (_err) {
+        // Revert on error
+        currentThemePreference = previousPreference;
+        if (parsedConfig.app) {
+          parsedConfig.app.theme = previousPreference;
+        }
         document.querySelectorAll(".theme-btn").forEach((b) => {
-          b.classList.toggle("active", b.dataset.themeVal === currentThemePreference);
+          b.classList.toggle("active", b.dataset.themeVal === previousPreference);
         });
+        applyTheme(resolveTheme(previousPreference));
       }
     });
   });
@@ -1825,6 +1862,10 @@ SOFTWARE.`;
     }
     if (event.type === "theme-changed") {
       currentThemePreference = event.payload.preference || currentThemePreference;
+      // Keep parsedConfig in sync so direct saves don't overwrite with stale value.
+      if (parsedConfig.app && event.payload.preference) {
+        parsedConfig.app.theme = event.payload.preference;
+      }
       applyTheme(event.payload.resolved);
     }
   });
@@ -1880,10 +1921,12 @@ SOFTWARE.`;
   }
 
   async function saveModelSelection(modelId) {
-    const config = parsedConfig || {};
+    // Clone parsedConfig to avoid mutating it in-place before saving.
+    const config = JSON.parse(JSON.stringify(parsedConfig || {}));
     if (!config.audio) config.audio = {};
     config.audio.provider = modelId;
     ensureModelConfig(config, modelId);
+    finalizeConfigPayload(config);
     try {
       await window.voiceSettings.saveConfigObject(config);
       await loadSettings();
@@ -2043,6 +2086,7 @@ SOFTWARE.`;
         if (value !== undefined) {
           modelConfig[param] = value;
         }
+        finalizeConfigPayload(config);
         try {
           await window.voiceSettings.saveConfigObject(config);
           parsedConfig = config;

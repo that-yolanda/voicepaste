@@ -358,24 +358,6 @@
     },
 
     /**
-     * Set theme preference.
-     */
-    async setTheme(preference) {
-      // Save theme to config
-      const data = await invoke("get_settings_data");
-      const config = data.parsedConfig;
-      if (!config.app) config.app = {};
-      config.app.theme = preference;
-      await invoke("save_config_object", { configObject: config });
-      // Re-read to get the properly resolved theme from the backend.
-      const updated = await invoke("get_settings_data");
-      return {
-        preference,
-        resolved: updated.runtime?.theme?.resolved || preference,
-      };
-    },
-
-    /**
      * Get usage statistics.
      */
     async getStats() {
