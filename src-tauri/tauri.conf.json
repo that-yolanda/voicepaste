@@ -4,7 +4,7 @@
   "identifier": "com.yolanda.voicepaste",
   "build": {
     "frontendDist": "../web",
-    "beforeDevCommand": "",
+    "beforeDevCommand": "node scripts/prepare-assets.js && node scripts/validate-json.js",
     "beforeBuildCommand": "node scripts/prepare-assets.js && node scripts/validate-json.js"
   },
   "app": {
