@@ -500,6 +500,8 @@ fn load_default_prompts(example_path: &Option<PathBuf>) -> Vec<PromptItem> {
 pub struct ConfigManager {
     config_path: PathBuf,
     prompts_path: PathBuf,
+    pub data_dir: PathBuf,
+    pub resource_dir: PathBuf,
     cached_config: RwLock<AppConfig>,
     cached_prompts: RwLock<Vec<PromptItem>>,
 }
@@ -546,6 +548,8 @@ impl ConfigManager {
         Self {
             config_path,
             prompts_path,
+            data_dir: data_dir.to_path_buf(),
+            resource_dir: resource_dir.to_path_buf(),
             cached_config: RwLock::new(config),
             cached_prompts: RwLock::new(prompts),
         }

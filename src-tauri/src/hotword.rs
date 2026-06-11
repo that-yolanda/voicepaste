@@ -130,6 +130,11 @@ impl HotwordManager {
         Ok(())
     }
 
+    /// Get the id of the currently active group.
+    pub fn active_group_id(&self) -> String {
+        self.cached.read().unwrap().active_group.clone()
+    }
+
     /// Get the words from the currently active group.
     pub fn active_words(&self) -> Vec<String> {
         let data = self.cached.read().unwrap();
@@ -165,6 +170,25 @@ impl HotwordManager {
     }
 }
 
+/// Extract the pure word from a "word|weight" entry (strip weight suffix).
+/// Returns the whole entry if no `|` is found.
+pub fn strip_weight(entry: &str) -> &str {
+    entry.split('|').next().unwrap_or(entry).trim()
+}
+
+/// Parse a hotword entry in "word" or "word|weight" format.
+/// Weight defaults to 4.0 and is clamped to [1.0, 10.0].
+pub fn parse_hotword_entry(entry: &str) -> (String, f32) {
+    let trimmed = entry.trim();
+    if let Some(pos) = trimmed.rfind('|') {
+        let word = trimmed[..pos].trim().to_string();
+        let w: f32 = trimmed[pos + 1..].trim().parse().unwrap_or(4.0);
+        (word, w.clamp(1.0, 10.0))
+    } else {
+        (trimmed.to_string(), 4.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{HotwordData, HotwordGroup, HotwordManager};
@@ -184,5 +208,39 @@ mod tests {
         assert!(HotwordManager::merge_defaults(&mut data, defaults.clone()));
         assert_eq!(data.groups[0].words, vec!["Claude", "OpenAI"]);
         assert!(!HotwordManager::merge_defaults(&mut data, defaults));
+    }
+
+    #[test]
+    fn parse_hotword_with_weight() {
+        let (w, s) = super::parse_hotword_entry("Claude Code|10");
+        assert_eq!(w, "Claude Code");
+        assert!((s - 10.0).abs() < f32::EPSILON);
+
+        let (w, s) = super::parse_hotword_entry("流式输出|8");
+        assert_eq!(w, "流式输出");
+        assert!((s - 8.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn parse_hotword_without_weight() {
+        let (w, s) = super::parse_hotword_entry("Claude Code");
+        assert_eq!(w, "Claude Code");
+        assert!((s - 4.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn parse_hotword_clamps_weight() {
+        let (_, s) = super::parse_hotword_entry("word|15");
+        assert!((s - 10.0).abs() < f32::EPSILON);
+
+        let (_, s) = super::parse_hotword_entry("word|0");
+        assert!((s - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn strip_weight_removes_suffix() {
+        assert_eq!(super::strip_weight("Claude Code|10"), "Claude Code");
+        assert_eq!(super::strip_weight("skill"), "skill");
+        assert_eq!(super::strip_weight("word|"), "word");
     }
 }

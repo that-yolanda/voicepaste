@@ -1,0 +1,4 @@
+按产品类型来分，首先是各类智能模型产品，其中包括 CLAUDE CODE、CLAUDE、OPENAI、CHATGPT 以及 GLM，这些都是当下主流的大语言模型。
+其次是功能工具与辅助组件，这里有 MERMAID、CODEX、CRONJOB、HERMES 和 OPENCLAW，它们常被用于开发、调度与内容编辑场景。
+再来看看笔记与架构相关工具，OBSIDIAN 是常用的知识库软件，搭配 SCHEMA 可以规范数据结构，也能充分发挥对应的 SKILL 与 SKILLS 能力。
+在智能应用领域，AGENT 智能体是热门方向，而 ETSY 则是知名的线上交易平台。最后我们重点测试一下流式输出的识别效果。

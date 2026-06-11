@@ -47,12 +47,17 @@ audio:
     num_threads: 2
 
   sherpa-onnx-streaming-zipformer-zh-en:
+    num_threads: 2
+    chunk_size: 3200
+    max_active_paths: 4
+    hotwords_score: 2.0
     enable_endpoint: true
     rule1_min_trailing_silence: 2.4
     rule2_min_trailing_silence: 0.8
     rule3_min_utterance_length: 20
 
   sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8:
+    num_threads: 2
     use_itn: true
     language: auto
 

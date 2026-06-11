@@ -1,13 +1,15 @@
 use async_trait::async_trait;
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OnlineRecognizer,
-    OnlineRecognizerConfig,
+    OnlineRecognizerConfig, OnlineStream,
 };
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc as std_mpsc;
 use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 use tokio::sync::mpsc;
 
 use super::{AsrEngine, AsrEvent, AsrSession};
@@ -20,6 +22,10 @@ enum RecognizerBackend {
     Offline(OfflineRecognizer),
     Online(OnlineRecognizer),
 }
+
+const SAMPLE_RATE: i32 = 16000;
+const DEFAULT_STREAMING_CHUNK_SIZE: usize = 3200;
+const AUDIO_QUEUE_CAPACITY: usize = 64;
 
 fn merged_model_config(
     base: Option<&serde_json::Value>,
@@ -43,6 +49,20 @@ fn json_f32(config: &serde_json::Value, key: &str) -> Option<f32> {
     config.get(key).and_then(|v| v.as_f64()).map(|v| v as f32)
 }
 
+fn json_u32(config: &serde_json::Value, key: &str) -> Option<u32> {
+    config
+        .get(key)
+        .and_then(|v| v.as_u64())
+        .and_then(|v| u32::try_from(v).ok())
+}
+
+fn json_usize(config: &serde_json::Value, key: &str) -> Option<usize> {
+    config
+        .get(key)
+        .and_then(|v| v.as_u64())
+        .and_then(|v| usize::try_from(v).ok())
+}
+
 fn json_string(config: &serde_json::Value, key: &str) -> Option<String> {
     config
         .get(key)
@@ -57,6 +77,7 @@ pub struct SherpaOnnxEngine {
     data_dir: PathBuf,
     resource_dir: PathBuf,
     active_model_id: String,
+    hotword_group_id: String,
     vad_params: VadParams,
     model_config: Option<serde_json::Value>,
 }
@@ -66,6 +87,7 @@ impl SherpaOnnxEngine {
         data_dir: PathBuf,
         resource_dir: PathBuf,
         active_model_id: String,
+        hotword_group_id: String,
         vad_params: VadParams,
         model_config: Option<serde_json::Value>,
     ) -> Self {
@@ -73,6 +95,7 @@ impl SherpaOnnxEngine {
             data_dir,
             resource_dir,
             active_model_id,
+            hotword_group_id,
             vad_params,
             model_config,
         }
@@ -86,7 +109,8 @@ impl SherpaOnnxEngine {
         model_dir: &Path,
         entry: &ModelEntry,
         num_threads: u32,
-        user_config: Option<&serde_json::Value>,
+        model_config: &serde_json::Value,
+        hotwords_file: Option<&str>,
     ) -> Result<(RecognizerBackend, bool), String> {
         let p = |key: &str| -> Option<String> {
             let filename = entry.model_files.get(key)?;
@@ -100,7 +124,6 @@ impl SherpaOnnxEngine {
         let supports_hotwords = entry.capabilities.hotwords;
         let arch = entry.architecture.as_deref().unwrap_or("");
         let streaming = entry.capabilities.streaming;
-        let model_config = merged_model_config(entry.default_config.as_ref(), user_config);
 
         if streaming {
             // ── Online recognizer (streaming transducer, e.g. Zipformer) ──
@@ -111,7 +134,6 @@ impl SherpaOnnxEngine {
             config.model_config.tokens = p("tokens");
             config.model_config.num_threads = num_threads as i32;
             config.model_config.debug = cfg!(debug_assertions);
-            config.model_config.model_type = Some(arch.to_string());
             config.enable_endpoint = json_bool(&model_config, "enable_endpoint").unwrap_or(true);
             config.rule1_min_trailing_silence =
                 json_f32(&model_config, "rule1_min_trailing_silence").unwrap_or(0.0);
@@ -119,7 +141,26 @@ impl SherpaOnnxEngine {
                 json_f32(&model_config, "rule2_min_trailing_silence").unwrap_or(0.0);
             config.rule3_min_utterance_length =
                 json_f32(&model_config, "rule3_min_utterance_length").unwrap_or(0.0);
-            config.decoding_method = Some("greedy_search".to_string());
+            if let Some(file_path) = hotwords_file {
+                config.decoding_method = Some("modified_beam_search".to_string());
+                config.max_active_paths =
+                    json_u32(&model_config, "max_active_paths").unwrap_or(4) as i32;
+                config.hotwords_score = json_f32(&model_config, "hotwords_score").unwrap_or(2.0);
+                config.hotwords_file = Some(file_path.to_string());
+
+                // Set modeling unit (required for hotwords tokenization)
+                config.model_config.modeling_unit =
+                    json_string(&model_config, "modeling_unit");
+
+                // Set bpe_vocab for bpe or cjkchar+bpe models
+                let bpe_vocab_path = model_dir.join("bpe.vocab");
+                if bpe_vocab_path.exists() {
+                    config.model_config.bpe_vocab =
+                        bpe_vocab_path.to_str().map(|s| s.to_string());
+                }
+            } else {
+                config.decoding_method = Some("greedy_search".to_string());
+            }
 
             let recognizer = OnlineRecognizer::create(&config)
                 .ok_or_else(|| format!("创建在线识别器失败 (model: {})", entry.id))?;
@@ -179,40 +220,254 @@ fn decode_offline_segment(
         .filter(|t| !t.is_empty())
 }
 
-/// Process a segment with an OnlineRecognizer.
-///
-/// Streaming transducer models (Zipformer) expect audio in small incremental
-/// chunks, followed by tail padding (silence) to flush the decoder state.
-/// This mirrors the official sherpa-onnx streaming examples.
-fn decode_online_segment(recognizer: &OnlineRecognizer, samples: &[f32]) -> Option<String> {
-    const CHUNK_SIZE: usize = 3200; // 200ms at 16kHz — matches sherpa-onnx examples
+enum WorkerCommand {
+    Audio(Vec<f32>),
+    Finish(std_mpsc::Sender<String>),
+    Close,
+}
 
-    let stream = recognizer.create_stream();
+fn append_text(accumulated: &mut String, text: &str) {
+    let text = text.trim();
+    if text.is_empty() {
+        return;
+    }
+    if !accumulated.is_empty() {
+        accumulated.push(' ');
+    }
+    accumulated.push_str(text);
+}
 
-    // Feed audio in fixed-size chunks so the streaming transducer can build
-    // internal state incrementally.
-    for chunk in samples.chunks(CHUNK_SIZE) {
-        stream.accept_waveform(16000, chunk);
-        while recognizer.is_ready(&stream) {
-            recognizer.decode(&stream);
+fn final_text_for_partial(finalized: &str) -> String {
+    if finalized.is_empty() {
+        String::new()
+    } else {
+        format!("{} ", finalized)
+    }
+}
+
+fn send_transcript(
+    event_tx: &mpsc::UnboundedSender<AsrEvent>,
+    final_text: String,
+    partial_text: String,
+) {
+    let _ = event_tx.send(AsrEvent::Transcript {
+        final_text,
+        partial_text,
+    });
+}
+
+fn process_offline_segments(
+    recognizer: &OfflineRecognizer,
+    segments: Vec<Vec<f32>>,
+    use_hotwords: bool,
+    hotwords_str: &str,
+    accumulated: &mut String,
+    event_tx: &mpsc::UnboundedSender<AsrEvent>,
+) {
+    for segment_samples in segments {
+        let duration = segment_samples.len() as f32 / SAMPLE_RATE as f32;
+        if duration < 0.1 {
+            continue;
+        }
+
+        if let Some(text) =
+            decode_offline_segment(recognizer, &segment_samples, use_hotwords, hotwords_str)
+        {
+            append_text(accumulated, &text);
+            send_transcript(event_tx, accumulated.clone(), String::new());
         }
     }
+}
 
-    // Tail padding: ~0.3s of silence flushes remaining decoder state.
-    // Without this padding the model may not produce output for short segments.
-    let tail: Vec<f32> = vec![0.0; (0.3 * 16000.0) as usize];
-    stream.accept_waveform(16000, &tail);
-    stream.input_finished();
+fn run_offline_worker(
+    recognizer: OfflineRecognizer,
+    mut vad: VadProcessor,
+    use_hotwords: bool,
+    hotwords_str: String,
+    event_tx: mpsc::UnboundedSender<AsrEvent>,
+    rx: std_mpsc::Receiver<WorkerCommand>,
+) {
+    let mut accumulated = String::new();
 
-    // Final decode — drain the decoder after signalling end-of-stream.
-    while recognizer.is_ready(&stream) {
-        recognizer.decode(&stream);
+    while let Ok(command) = rx.recv() {
+        match command {
+            WorkerCommand::Audio(samples) => {
+                let segments = vad.accept_waveform(&samples);
+                process_offline_segments(
+                    &recognizer,
+                    segments,
+                    use_hotwords,
+                    &hotwords_str,
+                    &mut accumulated,
+                    &event_tx,
+                );
+            }
+            WorkerCommand::Finish(reply_tx) => {
+                let segments = vad.flush();
+                process_offline_segments(
+                    &recognizer,
+                    segments,
+                    use_hotwords,
+                    &hotwords_str,
+                    &mut accumulated,
+                    &event_tx,
+                );
+                let _ = reply_tx.send(accumulated.clone());
+                break;
+            }
+            WorkerCommand::Close => break,
+        }
+    }
+}
+
+fn decode_online_ready(
+    recognizer: &OnlineRecognizer,
+    stream: &OnlineStream,
+    finalized: &mut String,
+    last_partial: &mut String,
+    event_tx: &mpsc::UnboundedSender<AsrEvent>,
+) {
+    while recognizer.is_ready(stream) {
+        recognizer.decode(stream);
+
+        if let Some(result) = recognizer.get_result(stream) {
+            let text = result.text.trim().to_string();
+            if !text.is_empty() && text != *last_partial {
+                *last_partial = text.clone();
+                send_transcript(event_tx, final_text_for_partial(finalized), text);
+            }
+        }
+
+        if recognizer.is_endpoint(stream) {
+            if let Some(result) = recognizer.get_result(stream) {
+                let text = result.text.trim();
+                if !text.is_empty() {
+                    append_text(finalized, text);
+                    send_transcript(event_tx, finalized.clone(), String::new());
+                }
+            }
+            last_partial.clear();
+            recognizer.reset(stream);
+        }
+    }
+}
+
+fn accept_online_samples(
+    recognizer: &OnlineRecognizer,
+    stream: &OnlineStream,
+    buffer: &mut Vec<f32>,
+    samples: &[f32],
+    chunk_size: usize,
+    finalized: &mut String,
+    last_partial: &mut String,
+    event_tx: &mpsc::UnboundedSender<AsrEvent>,
+) {
+    buffer.extend_from_slice(samples);
+
+    while buffer.len() >= chunk_size {
+        let chunk: Vec<f32> = buffer.drain(..chunk_size).collect();
+        stream.accept_waveform(SAMPLE_RATE, &chunk);
+        decode_online_ready(recognizer, stream, finalized, last_partial, event_tx);
+    }
+}
+
+fn finish_online_stream(
+    recognizer: &OnlineRecognizer,
+    stream: &OnlineStream,
+    buffer: &mut Vec<f32>,
+    finalized: &mut String,
+    last_partial: &mut String,
+    event_tx: &mpsc::UnboundedSender<AsrEvent>,
+) {
+    if !buffer.is_empty() {
+        stream.accept_waveform(SAMPLE_RATE, buffer.as_slice());
+        buffer.clear();
+        decode_online_ready(recognizer, stream, finalized, last_partial, event_tx);
     }
 
-    recognizer
-        .get_result(&stream)
-        .map(|r| r.text.trim().to_string())
-        .filter(|t| !t.is_empty())
+    let tail: Vec<f32> = vec![0.0; (0.3 * SAMPLE_RATE as f32) as usize];
+    stream.accept_waveform(SAMPLE_RATE, &tail);
+    stream.input_finished();
+
+    decode_online_ready(recognizer, stream, finalized, last_partial, event_tx);
+
+    if let Some(result) = recognizer.get_result(stream) {
+        let text = result.text.trim();
+        if !text.is_empty() {
+            append_text(finalized, text);
+        }
+    }
+    last_partial.clear();
+    send_transcript(event_tx, finalized.clone(), String::new());
+}
+
+fn run_online_worker(
+    recognizer: OnlineRecognizer,
+    stream: OnlineStream,
+    chunk_size: usize,
+    event_tx: mpsc::UnboundedSender<AsrEvent>,
+    rx: std_mpsc::Receiver<WorkerCommand>,
+) {
+    let mut finalized = String::new();
+    let mut last_partial = String::new();
+    let mut buffer = Vec::with_capacity(chunk_size * 2);
+
+    while let Ok(command) = rx.recv() {
+        match command {
+            WorkerCommand::Audio(samples) => {
+                accept_online_samples(
+                    &recognizer,
+                    &stream,
+                    &mut buffer,
+                    &samples,
+                    chunk_size,
+                    &mut finalized,
+                    &mut last_partial,
+                    &event_tx,
+                );
+            }
+            WorkerCommand::Finish(reply_tx) => {
+                finish_online_stream(
+                    &recognizer,
+                    &stream,
+                    &mut buffer,
+                    &mut finalized,
+                    &mut last_partial,
+                    &event_tx,
+                );
+                let _ = reply_tx.send(finalized.clone());
+                break;
+            }
+            WorkerCommand::Close => break,
+        }
+    }
+}
+
+fn spawn_worker(
+    recognizer: RecognizerBackend,
+    vad: Option<VadProcessor>,
+    use_hotwords: bool,
+    hotwords_str: String,
+    streaming_chunk_size: usize,
+    event_tx: mpsc::UnboundedSender<AsrEvent>,
+    rx: std_mpsc::Receiver<WorkerCommand>,
+) -> Result<JoinHandle<()>, String> {
+    thread::Builder::new()
+        .name("sherpa-onnx-asr".to_string())
+        .spawn(move || match recognizer {
+            RecognizerBackend::Offline(recognizer) => {
+                let Some(vad) = vad else {
+                    let _ = event_tx.send(AsrEvent::Error("本地离线识别缺少 VAD".to_string()));
+                    return;
+                };
+                run_offline_worker(recognizer, vad, use_hotwords, hotwords_str, event_tx, rx);
+            }
+            RecognizerBackend::Online(recognizer) => {
+                let stream = recognizer.create_stream();
+                run_online_worker(recognizer, stream, streaming_chunk_size, event_tx, rx);
+            }
+        })
+        .map_err(|e| format!("启动本地识别线程失败: {}", e))
 }
 
 #[async_trait]
@@ -246,18 +501,29 @@ impl AsrEngine for SherpaOnnxEngine {
         let vad_entry = registry.models.iter().find(|m| m.id == "silero-vad");
         let vad_base = VadConfig::from_registry(vad_entry.and_then(|e| e.default_config.as_ref()));
         let vad_config = VadConfig::merged(&vad_base, &self.vad_params);
+        let model_config =
+            merged_model_config(entry.default_config.as_ref(), self.model_config.as_ref());
+        let asr_num_threads =
+            json_u32(&model_config, "num_threads").unwrap_or(vad_config.num_threads);
+        let streaming_chunk_size = json_usize(&model_config, "chunk_size")
+            .unwrap_or(DEFAULT_STREAMING_CHUNK_SIZE)
+            .max(1);
 
-        let (recognizer, supports_hotwords) = Self::build_recognizer(
-            &model_dir,
-            entry,
-            vad_config.num_threads,
-            self.model_config.as_ref(),
-        )?;
+        // For pure cjkchar transducer models, pre-load tokens.txt to validate
+        // hotwords at the character level.  sherpa-onnx throws an uncatchable C++
+        // exception when hotwords contain out-of-vocabulary characters.
+        //
+        // For bpe or cjkchar+bpe models, we skip this pre-validation because:
+        //   1. English words are tokenized by the bpe vocabulary into subword
+        //      units, so word-level matching against tokens.txt is meaningless.
+        //   2. sherpa-onnx handles OOV safely for bpe-based tokenization.
+        let modeling_unit =
+            json_string(&model_config, "modeling_unit").unwrap_or_default();
+        let is_cjkchar_only = modeling_unit == "cjkchar";
 
-        // For transducer models with hotwords support, pre-load tokens.txt to
-        // validate hotwords.  sherpa-onnx throws an uncatchable C++ exception
-        // when hotwords contain tokens not in the model's vocabulary.
-        let valid_tokens: Option<Arc<HashSet<String>>> = if supports_hotwords {
+        let valid_tokens: Option<Arc<HashSet<String>>> = if entry.capabilities.hotwords
+            && is_cjkchar_only
+        {
             let tokens_path = entry.model_files.get("tokens").map(|f| model_dir.join(f));
             let tokens = tokens_path
                 .filter(|p| p.exists())
@@ -265,8 +531,7 @@ impl AsrEngine for SherpaOnnxEngine {
                 .map(|content| {
                     content
                         .lines()
-                        .map(|line| line.trim().to_string())
-                        .filter(|s| !s.is_empty())
+                        .filter_map(parse_token_line)
                         .collect::<HashSet<_>>()
                 });
             tokens.map(Arc::new)
@@ -274,23 +539,127 @@ impl AsrEngine for SherpaOnnxEngine {
             None
         };
 
-        // Build VAD
-        let vad_dir = model::model_path(&self.data_dir, "silero-vad");
-        let vad = VadProcessor::new(&vad_dir, &vad_config)?;
+        // Only apply character-level OOV filtering for pure cjkchar models.
+        // For bpe / cjkchar+bpe models, pass hotwords through as-is.
+        let mut filtered_hotwords = if is_cjkchar_only {
+            filter_valid_hotwords(hotwords, valid_tokens.as_deref())
+        } else {
+            hotwords.to_vec()
+        };
+
+        // For bpe-based models, additionally filter hotwords that contain
+        // ASCII characters not supported by the bpe vocabulary (e.g. `.`
+        // in "AGENTS.md").  Such characters cause sherpa-onnx to emit
+        // "Cannot find ID for token" errors during InitHotwords.
+        if modeling_unit.contains("bpe") {
+            let bpe_vocab_path = model_dir.join("bpe.vocab");
+            let bpe_chars = bpe_char_set(&bpe_vocab_path);
+            if !bpe_chars.is_empty() {
+                let before = filtered_hotwords.len();
+                filtered_hotwords = filter_bpe_chars(&filtered_hotwords, &bpe_chars);
+                if filtered_hotwords.len() < before {
+                    log_asr!(
+                        debug,
+                        "BPE char filter removed {} hotword(s), {} remaining",
+                        before - filtered_hotwords.len(),
+                        filtered_hotwords.len()
+                    );
+                }
+            }
+        }
+        let use_hotwords = entry.capabilities.hotwords && !filtered_hotwords.is_empty();
+        let hotwords_str = if use_hotwords {
+            // Build sherpa-onnx hotwords file with per-word scores.
+            // User input format: "word" or "word|weight" (weight 1-10, default 4).
+            // sherpa-onnx format: "CLEANED_WORD :score" (colon, not pipe).
+            // Words are cleaned: punctuation removed, uppercased for bpe models.
+            let is_bpe = modeling_unit.contains("bpe");
+            let lines: Vec<String> = filtered_hotwords
+                .iter()
+                .map(|hw| {
+                    let (word, weight) = crate::hotword::parse_hotword_entry(hw);
+                    let cleaned = clean_hotword_for_file(&word, is_bpe);
+                    format!("{} :{weight}", cleaned)
+                })
+                .collect();
+            lines.join("\n")
+        } else {
+            String::new()
+        };
+
+        // Use (or lazily create) the per-model hotword file.
+        // Normally the file is kept up-to-date by `refresh_hotword_file`
+        // called from `save_hotwords`.  We only write here if the file
+        // doesn't exist yet (first-ever recording with this model).
+        let hotwords_file_path: Option<PathBuf> = if entry.capabilities.streaming && use_hotwords {
+            let filename = format!("hotwords-sherpa-onnx-{}.txt", &self.hotword_group_id);
+            let path = self.data_dir.join(&filename);
+            if !path.exists() {
+                if let Err(e) = fs::write(&path, hotwords_str.as_bytes()) {
+                    log_asr!(warn, "Failed to write sherpa-onnx hotwords file: {}", e);
+                } else {
+                    log_asr!(
+                        debug,
+                        "Created initial sherpa-onnx hotwords file ({} entries) at {}",
+                        filtered_hotwords.len(),
+                        path.display()
+                    );
+                }
+            }
+            path.exists().then_some(path)
+        } else {
+            None
+        };
+
+        if use_hotwords {
+            log_asr!(
+                debug,
+                "Using {} sherpa-onnx hotwords",
+                filtered_hotwords.len()
+            );
+        } else if entry.capabilities.hotwords && !hotwords.is_empty() {
+            log_asr!(warn, "All sherpa-onnx hotwords were filtered as OOV");
+        }
+
+        let hotwords_file_str = hotwords_file_path
+            .as_ref()
+            .and_then(|p| p.to_str());
+
+        let (recognizer, _) = Self::build_recognizer(
+            &model_dir,
+            entry,
+            asr_num_threads,
+            &model_config,
+            hotwords_file_str,
+        )?;
+
+        // Streaming Zipformer uses sherpa-onnx online endpointing directly; VAD
+        // is only needed for offline segment recognizers.
+        let vad = if entry.capabilities.streaming {
+            None
+        } else {
+            let vad_dir = model::model_path(&self.data_dir, "silero-vad");
+            Some(VadProcessor::new(&vad_dir, &vad_config)?)
+        };
 
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let _ = event_tx.send(AsrEvent::Open);
+        let (worker_tx, worker_rx) = std_mpsc::sync_channel(AUDIO_QUEUE_CAPACITY);
+        let worker_handle = spawn_worker(
+            recognizer,
+            vad,
+            use_hotwords,
+            hotwords_str,
+            streaming_chunk_size,
+            event_tx,
+            worker_rx,
+        )?;
 
         let session = SherpaOnnxSession {
             is_ready: Arc::new(AtomicBool::new(true)),
             is_committed: Arc::new(AtomicBool::new(false)),
-            recognizer: Arc::new(Mutex::new(Some(recognizer))),
-            vad: Arc::new(Mutex::new(Some(vad))),
-            accumulated_text: Arc::new(Mutex::new(String::new())),
-            hotwords: hotwords.to_vec(),
-            supports_hotwords,
-            valid_tokens,
-            event_tx: Arc::new(Mutex::new(event_tx)),
+            worker_tx: Mutex::new(Some(worker_tx)),
+            worker_handle: Mutex::new(Some(worker_handle)),
         };
 
         Ok((Box::new(session), event_rx))
@@ -302,18 +671,27 @@ impl AsrEngine for SherpaOnnxEngine {
 // ---------------------------------------------------------------------------
 
 /// Sherpa-ONNX ASR session using VAD + recognizer (offline or online).
-/// All shared state uses std::sync::Mutex for access from blocking threads.
 struct SherpaOnnxSession {
     is_ready: Arc<AtomicBool>,
     is_committed: Arc<AtomicBool>,
-    recognizer: Arc<Mutex<Option<RecognizerBackend>>>,
-    vad: Arc<Mutex<Option<VadProcessor>>>,
-    accumulated_text: Arc<Mutex<String>>,
-    hotwords: Vec<String>,
-    supports_hotwords: bool,
-    valid_tokens: Option<Arc<HashSet<String>>>,
-    /// Sends AsrEvent::Transcript to the overlay when new text is decoded.
-    event_tx: Arc<Mutex<mpsc::UnboundedSender<AsrEvent>>>,
+    worker_tx: Mutex<Option<std_mpsc::SyncSender<WorkerCommand>>>,
+    worker_handle: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl SherpaOnnxSession {
+    fn stop_worker(&self) {
+        if let Ok(mut tx_guard) = self.worker_tx.lock() {
+            if let Some(tx) = tx_guard.take() {
+                let _ = tx.try_send(WorkerCommand::Close);
+            }
+        }
+
+        if let Ok(mut handle_guard) = self.worker_handle.lock() {
+            if let Some(handle) = handle_guard.take() {
+                let _ = handle.join();
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -327,80 +705,21 @@ impl AsrSession for SherpaOnnxSession {
             return;
         }
 
-        let vad = self.vad.clone();
-        let recognizer = self.recognizer.clone();
-        let accumulated = self.accumulated_text.clone();
-        let hotwords = self.hotwords.clone();
-        let supports_hotwords = self.supports_hotwords;
-        let valid_tokens = self.valid_tokens.clone();
-        let event_tx = self.event_tx.clone();
-        let samples = samples.to_vec();
-
-        std::thread::spawn(move || {
-            let mut vad_guard = match vad.lock() {
-                Ok(g) => g,
-                Err(_) => return,
-            };
-            let vad_proc = match vad_guard.as_mut() {
-                Some(v) => v,
-                None => return,
-            };
-
-            let segments = vad_proc.accept_waveform(&samples);
-            if segments.is_empty() {
-                return;
+        let Ok(tx_guard) = self.worker_tx.lock() else {
+            return;
+        };
+        let Some(tx) = tx_guard.as_ref() else {
+            return;
+        };
+        match tx.try_send(WorkerCommand::Audio(samples.to_vec())) {
+            Ok(()) => {}
+            Err(std_mpsc::TrySendError::Full(_)) => {
+                log_asr!(warn, "Dropped local ASR audio chunk: worker queue is full");
             }
-
-            let filtered = filter_valid_hotwords(&hotwords, valid_tokens.as_deref());
-            let use_hotwords = supports_hotwords && !filtered.is_empty();
-            let hotwords_str = if use_hotwords {
-                filtered.join("\n")
-            } else {
-                String::new()
-            };
-
-            let mut rec_guard = match recognizer.lock() {
-                Ok(g) => g,
-                Err(_) => return,
-            };
-            let rec = match rec_guard.as_mut() {
-                Some(r) => r,
-                None => return,
-            };
-
-            for segment_samples in segments {
-                let duration = segment_samples.len() as f32 / 16000.0;
-                if duration < 0.1 {
-                    continue;
-                }
-
-                let text = match rec {
-                    RecognizerBackend::Offline(r) => {
-                        decode_offline_segment(r, &segment_samples, use_hotwords, &hotwords_str)
-                    }
-                    RecognizerBackend::Online(r) => decode_online_segment(r, &segment_samples),
-                };
-
-                if let Some(text) = text {
-                    if let Ok(mut acc) = accumulated.lock() {
-                        if !acc.is_empty() {
-                            acc.push(' ');
-                        }
-                        acc.push_str(&text);
-                        // Emit transcript event so the overlay shows partial
-                        // results in real-time (especially for streaming models).
-                        let current = acc.clone();
-                        drop(acc);
-                        if let Ok(tx) = event_tx.lock() {
-                            let _ = tx.send(AsrEvent::Transcript {
-                                final_text: current,
-                                partial_text: String::new(),
-                            });
-                        }
-                    }
-                }
+            Err(std_mpsc::TrySendError::Disconnected(_)) => {
+                log_asr!(warn, "Dropped local ASR audio chunk: worker is closed");
             }
-        });
+        }
     }
 
     async fn commit_and_await_final(&self) -> Result<String, String> {
@@ -412,89 +731,47 @@ impl AsrSession for SherpaOnnxSession {
         }
         self.is_committed.store(true, Ordering::SeqCst);
 
-        let vad = self.vad.clone();
-        let recognizer = self.recognizer.clone();
-        let accumulated = self.accumulated_text.clone();
-        let hotwords = self.hotwords.clone();
-        let supports_hotwords = self.supports_hotwords;
-        let valid_tokens = self.valid_tokens.clone();
+        let tx = self
+            .worker_tx
+            .lock()
+            .map_err(|_| "ASR worker 状态异常".to_string())?
+            .take()
+            .ok_or_else(|| "ASR worker 已关闭".to_string())?;
+        let handle = self
+            .worker_handle
+            .lock()
+            .map_err(|_| "ASR worker 状态异常".to_string())?
+            .take();
 
-        let final_text = tokio::task::spawn_blocking(move || {
-            // Flush remaining audio through VAD
-            let mut vad_guard = match vad.lock() {
-                Ok(g) => g,
-                Err(_) => return accumulated.lock().map(|a| a.clone()).unwrap_or_default(),
-            };
-            let vad_proc = match vad_guard.as_mut() {
-                Some(v) => v,
-                None => return accumulated.lock().map(|a| a.clone()).unwrap_or_default(),
-            };
-
-            let segments = vad_proc.flush();
-            if segments.is_empty() {
-                return accumulated.lock().map(|a| a.clone()).unwrap_or_default();
+        let result = tokio::task::spawn_blocking(move || {
+            let (reply_tx, reply_rx) = std_mpsc::channel();
+            tx.send(WorkerCommand::Finish(reply_tx))
+                .map_err(|_| "ASR worker 已关闭".to_string())?;
+            let final_text = reply_rx
+                .recv()
+                .map_err(|_| "ASR worker 未返回最终结果".to_string())?;
+            if let Some(handle) = handle {
+                let _ = handle.join();
             }
-
-            let filtered = filter_valid_hotwords(&hotwords, valid_tokens.as_deref());
-            let use_hotwords = supports_hotwords && !filtered.is_empty();
-            let hotwords_str = if use_hotwords {
-                filtered.join("\n")
-            } else {
-                String::new()
-            };
-
-            let mut rec_guard = match recognizer.lock() {
-                Ok(g) => g,
-                Err(_) => return accumulated.lock().map(|a| a.clone()).unwrap_or_default(),
-            };
-            let rec = match rec_guard.as_mut() {
-                Some(r) => r,
-                None => return accumulated.lock().map(|a| a.clone()).unwrap_or_default(),
-            };
-
-            let mut new_text = String::new();
-            for segment_samples in segments {
-                let duration = segment_samples.len() as f32 / 16000.0;
-                if duration < 0.1 {
-                    continue;
-                }
-
-                let text = match rec {
-                    RecognizerBackend::Offline(r) => {
-                        decode_offline_segment(r, &segment_samples, use_hotwords, &hotwords_str)
-                    }
-                    RecognizerBackend::Online(r) => decode_online_segment(r, &segment_samples),
-                };
-
-                if let Some(text) = text {
-                    if !new_text.is_empty() {
-                        new_text.push(' ');
-                    }
-                    new_text.push_str(&text);
-                }
-            }
-
-            // Append new text to accumulated
-            if let Ok(mut acc) = accumulated.lock() {
-                if !new_text.is_empty() {
-                    if !acc.is_empty() {
-                        acc.push(' ');
-                    }
-                    acc.push_str(&new_text);
-                }
-                acc.clone()
-            } else {
-                new_text
-            }
+            Ok::<_, String>(final_text)
         })
         .await
-        .unwrap_or_else(|e| format!("识别失败: {}", e));
+        .unwrap_or_else(|e| Err(format!("识别失败: {}", e)));
 
-        Ok(final_text)
+        self.is_ready.store(false, Ordering::SeqCst);
+        result
     }
 
     fn close(&self) {
         self.is_ready.store(false, Ordering::SeqCst);
+        self.stop_worker();
+    }
+}
+
+impl Drop for SherpaOnnxSession {
+    fn drop(&mut self) {
+        self.is_ready.store(false, Ordering::SeqCst);
+        self.stop_worker();
     }
 }
 
@@ -502,12 +779,29 @@ impl AsrSession for SherpaOnnxSession {
 // Hotword vocabulary validation
 // ---------------------------------------------------------------------------
 
-/// Filter hotwords to only include those whose space-separated words are all
-/// present in the model's tokens.txt vocabulary.
+pub(crate) fn parse_token_line(line: &str) -> Option<String> {
+    line.split_whitespace().next().map(str::to_string)
+}
+
+pub(crate) fn hotword_tokens_for_validation(hotword: &str) -> Vec<String> {
+    let trimmed = hotword.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    if trimmed.split_whitespace().count() > 1 {
+        return trimmed.split_whitespace().map(str::to_string).collect();
+    }
+    if trimmed.is_ascii() {
+        return vec![trimmed.to_string()];
+    }
+    trimmed.chars().map(|ch| ch.to_string()).collect()
+}
+
+/// Filter hotwords to only include words/pieces present in tokens.txt.
 ///
 /// sherpa-onnx transducer models throw an uncatchable C++ exception when
 /// hotwords contain out-of-vocabulary tokens, so we pre-validate them here.
-fn filter_valid_hotwords(hotwords: &[String], tokens: Option<&HashSet<String>>) -> Vec<String> {
+pub(crate) fn filter_valid_hotwords(hotwords: &[String], tokens: Option<&HashSet<String>>) -> Vec<String> {
     let Some(vocab) = tokens else {
         return hotwords.to_vec();
     };
@@ -515,7 +809,8 @@ fn filter_valid_hotwords(hotwords: &[String], tokens: Option<&HashSet<String>>) 
     hotwords
         .iter()
         .filter(|hw| {
-            let valid = hw.split_whitespace().all(|word| vocab.contains(word));
+            let pieces = hotword_tokens_for_validation(hw);
+            let valid = !pieces.is_empty() && pieces.iter().all(|piece| vocab.contains(piece));
             if !valid {
                 log_asr!(debug, "Skipping hotword (OOV): {:?}", hw);
             }
@@ -524,3 +819,266 @@ fn filter_valid_hotwords(hotwords: &[String], tokens: Option<&HashSet<String>>) 
         .cloned()
         .collect()
 }
+
+/// Build a set of all characters that appear in the bpe.vocab file.
+///
+/// The bpe tokenizer can only encode characters that appear somewhere in its
+/// vocabulary.  Hotwords containing characters outside this set (e.g. `.`)
+/// will cause sherpa-onnx `EncodeBase: Cannot find ID for token` errors.
+fn bpe_char_set(bpe_vocab_path: &Path) -> HashSet<char> {
+    let Ok(content) = fs::read_to_string(bpe_vocab_path) else {
+        return HashSet::new();
+    };
+    content
+        .lines()
+        .filter_map(|line| {
+            let token = line.split('\t').next()?;
+            if token.starts_with('<') {
+                return None; // skip special tokens like <blk>, <unk>
+            }
+            // Strip the bpe word-boundary marker ▁ before collecting chars
+            Some(token.trim_start_matches('▁').chars().collect::<Vec<_>>())
+        })
+        .flatten()
+        .collect()
+}
+
+/// Clean a hotword for writing to a sherpa-onnx hotwords file:
+/// remove ASCII punctuation, convert to uppercase for bpe models.
+fn clean_hotword_for_file(word: &str, is_bpe: bool) -> String {
+    let cleaned: String = word
+        .chars()
+        .filter(|c| !c.is_ascii_punctuation())
+        .collect();
+    if is_bpe {
+        cleaned.to_uppercase()
+    } else {
+        cleaned
+    }
+}
+
+/// Filter hotwords for bpe-based models: remove words containing ASCII
+/// characters that the bpe vocabulary cannot encode (e.g. `.` in "AGENTS.md").
+///
+/// Punctuation is stripped before validation so that hotwords like
+/// "AGENTS.md" are checked as "AGENTSMD" — the dot itself would never
+/// appear in bpe.vocab but the remaining chars are all encodable.
+fn filter_bpe_chars(hotwords: &[String], bpe_chars: &HashSet<char>) -> Vec<String> {
+    hotwords
+        .iter()
+        .filter(|hw| {
+            let (word, _weight) = crate::hotword::parse_hotword_entry(hw);
+            let cleaned: String = word
+                .chars()
+                .filter(|c| !c.is_ascii_punctuation())
+                .collect();
+            if cleaned.is_empty() {
+                log_asr!(debug, "Skipping hotword (empty after cleaning): {:?}", hw);
+                return false;
+            }
+            let valid = cleaned.chars().all(|c| {
+                !c.is_ascii_graphic() || c.is_ascii_alphabetic() || bpe_chars.contains(&c)
+            });
+            if !valid {
+                log_asr!(debug, "Skipping hotword (char unsupported by bpe vocab): {:?}", hw);
+            }
+            valid
+        })
+        .cloned()
+        .collect()
+}
+
+/// Regenerate the sherpa-onnx hotword file whenever hotwords are modified.
+///
+/// Called from `save_hotwords` to keep the file in sync with user edits.
+/// Silently skips if the model isn't downloaded or the registry is missing.
+pub fn refresh_hotword_file(
+    data_dir: &Path,
+    resource_dir: &Path,
+    active_model_id: &str,
+    hotword_group_id: &str,
+    hotwords: &[String],
+    model_config: Option<&serde_json::Value>,
+) {
+    let model_dir = crate::model::model_path(data_dir, active_model_id);
+    if !model_dir.exists() {
+        return;
+    }
+
+    let registry = crate::model::load_registry(data_dir, resource_dir);
+    let Some(entry) = registry.models.iter().find(|m| m.id == active_model_id) else {
+        return;
+    };
+    if !entry.capabilities.hotwords || !entry.capabilities.streaming {
+        return;
+    }
+
+    let merged = merged_model_config(entry.default_config.as_ref(), model_config);
+    let modeling_unit = json_string(&merged, "modeling_unit").unwrap_or_default();
+    let is_bpe = modeling_unit.contains("bpe");
+
+    let lines: Vec<String> = hotwords
+        .iter()
+        .filter_map(|hw| {
+            let (word, weight) = crate::hotword::parse_hotword_entry(hw);
+            let cleaned = clean_hotword_for_file(&word, is_bpe);
+            if cleaned.is_empty() {
+                return None;
+            }
+            Some(format!("{} :{weight}", cleaned))
+        })
+        .collect();
+
+    if lines.is_empty() {
+        return;
+    }
+
+    let filename = format!("hotwords-sherpa-onnx-{hotword_group_id}.txt");
+    let path = data_dir.join(&filename);
+    if let Err(e) = fs::write(&path, lines.join("\n").as_bytes()) {
+        log_asr!(warn, "Failed to refresh sherpa-onnx hotword file: {e}");
+    } else {
+        log_asr!(debug, "Refreshed {} sherpa-onnx hotwords at {}", lines.len(), path.display());
+    }
+}
+
+/// Restore original hotword casing and punctuation in recognized text.
+///
+/// Uses two matching strategies:
+///   1. Space-aware: for multi-word hotwords like "Claude Code" →
+///      the model preserves spaces, so we normalize with spaces.
+///   2. Alphanumeric-only: for hotwords with punctuation like "AGENTS.md" →
+///      the model strips punctuation, so we match purely on alphanumerics.
+pub fn restore_hotword_case(text: &str, hotwords: &[String]) -> String {
+    // Strategy A: normalize keeping single spaces (↵ replaced by space, collapsed).
+    fn normalize_spaces(s: &str) -> (String, Vec<usize>) {
+        let mut norm = String::new();
+        let mut positions = Vec::new();
+        let mut last_was_space = true; // skip leading spaces
+        for (i, c) in s.char_indices() {
+            if c.is_alphanumeric() {
+                norm.push_str(&c.to_uppercase().to_string());
+                positions.push(i);
+                last_was_space = false;
+            } else if !last_was_space {
+                norm.push(' ');
+                positions.push(i);
+                last_was_space = true;
+            }
+        }
+        if norm.ends_with(' ') {
+            norm.pop();
+            positions.pop();
+        }
+        (norm, positions)
+    }
+
+    // Strategy B: normalize to alphanumeric only (no spaces, no punctuation).
+    fn normalize_alpha(s: &str) -> (String, Vec<usize>) {
+        let mut norm = String::new();
+        let mut positions = Vec::new();
+        for (i, c) in s.char_indices() {
+            if c.is_alphanumeric() {
+                norm.push_str(&c.to_uppercase().to_string());
+                positions.push(i);
+            }
+        }
+        (norm, positions)
+    }
+
+    let mut result = text.to_string();
+
+    // Build (needle, original_word, use_spaces) tuples, longest first
+    let mut replacements: Vec<(String, String, bool)> = hotwords
+        .iter()
+        .filter_map(|hw| {
+            let (original_word, _weight) = crate::hotword::parse_hotword_entry(hw);
+
+            // Determine which strategy to use based on whether the hotword
+            // contains spaces (space-aware) or only punctuation (alpha-only).
+            let has_space = original_word.contains(' ');
+            let (needle, _) = if has_space {
+                normalize_spaces(&original_word)
+            } else {
+                normalize_alpha(&original_word)
+            };
+
+            if needle.is_empty() {
+                return None;
+            }
+            // Skip no-ops: already uppercase and matches its normalized form
+            if !has_space
+                && original_word == original_word.to_uppercase()
+                && original_word.chars().all(|c| c.is_alphanumeric())
+            {
+                return None;
+            }
+            Some((needle, original_word, has_space))
+        })
+        .collect();
+
+    if replacements.is_empty() {
+        return result;
+    }
+
+    replacements.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+
+    for (needle, original, use_spaces) in &replacements {
+        let needle_chars: Vec<char> = needle.chars().collect();
+        let mut search_start = 0;
+
+        loop {
+            let (haystack_str, pos_map) = if *use_spaces {
+                normalize_spaces(&result)
+            } else {
+                normalize_alpha(&result)
+            };
+            let haystack_chars: Vec<char> = haystack_str.chars().collect();
+            if search_start >= haystack_chars.len() {
+                break;
+            }
+            // Character-level search to avoid byte-offset issues with CJK
+            let pos = haystack_chars[search_start..]
+                .windows(needle_chars.len())
+                .position(|w| w == needle_chars.as_slice());
+            let Some(pos) = pos else {
+                break;
+            };
+            let norm_start = search_start + pos;
+            let norm_end = norm_start + needle_chars.len();
+            if norm_end > pos_map.len() {
+                break;
+            }
+
+            let mut byte_start = pos_map[norm_start];
+            let mut byte_end = if norm_end < pos_map.len() {
+                pos_map[norm_end]
+            } else {
+                result.len()
+            };
+            // Trim surrounding spaces from the matched range
+            let result_bytes = result.as_bytes();
+            while byte_start < byte_end && result_bytes[byte_start] == b' ' {
+                byte_start += 1;
+            }
+            while byte_end > byte_start && result_bytes[byte_end - 1] == b' ' {
+                byte_end -= 1;
+            }
+
+            // Skip if already the original text (prevents infinite loop)
+            if &result[byte_start..byte_end] == original.as_str() {
+                search_start = norm_start + 1;
+                continue;
+            }
+
+            result.replace_range(byte_start..byte_end, original);
+            search_start = 0;
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+#[path = "test/sherpa_onnx_test.rs"]
+mod tests;

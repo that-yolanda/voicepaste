@@ -2227,7 +2227,7 @@ SOFTWARE.`;
           `</div>` +
           `</div>` +
           `<div class="hotword-input-group">` +
-          `<input type="text" class="input-field hw-input" data-group="${group.id}" placeholder="输入热词后按回车添加" />` +
+          `<input type="text" class="input-field hw-input" data-group="${group.id}" placeholder="输入热词（支持 热词|权重，1-10，默认4）" />` +
           `<button type="button" class="btn btn-sm hw-add-btn" data-group="${group.id}">添加</button>` +
           `</div>` +
           `<div class="tag-list" style="margin-top: 8px">${tags}</div>` +

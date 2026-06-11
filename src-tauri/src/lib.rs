@@ -659,6 +659,7 @@ async fn start_recording(app_handle: AppHandle) {
                 data_dir,
                 resource_dir,
                 engine_model_id.to_string(),
+                app_inner.hotword_manager.active_group_id(),
                 config.vad_params(),
                 config.model_config_json(engine_model_id),
             );
@@ -792,6 +793,25 @@ async fn stop_recording(app_handle: AppHandle) {
             // 5. Load config for LLM / behavior settings
             let config = app_inner.config_manager.load_config().ok();
 
+            // 5b. Post-process: restore original hotword casing/symbols for
+            //     sherpa-onnx (which strips punctuation and uppercases).
+            let trimmed = {
+                let provider = config
+                    .as_ref()
+                    .map(|c| c.audio_provider())
+                    .unwrap_or("");
+                if provider.starts_with("sherpa-onnx") {
+                    let hotwords = app_inner.hotword_manager.active_words();
+                    if !hotwords.is_empty() {
+                        crate::asr::sherpa_onnx::restore_hotword_case(&trimmed, &hotwords)
+                    } else {
+                        trimmed
+                    }
+                } else {
+                    trimmed
+                }
+            };
+
             let mut trimmed = trimmed;
             if config
                 .as_ref()
@@ -825,7 +845,12 @@ async fn stop_recording(app_handle: AppHandle) {
                     // When using sherpa-onnx (local) engine, append hotwords to the LLM prompt
                     // as a fallback hint for proper-noun accuracy.
                     if config.audio_provider().starts_with("sherpa-onnx") {
-                        let hw = app_inner.hotword_manager.active_words();
+                        let hw: Vec<String> = app_inner
+                            .hotword_manager
+                            .active_words()
+                            .iter()
+                            .map(|w| crate::hotword::strip_weight(w).to_string())
+                            .collect();
                         if !hw.is_empty() {
                             system_prompt = format!(
                                 "{}\n\n需要注意以下专有名词的准确拼写：{}",
