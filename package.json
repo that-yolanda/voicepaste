@@ -32,7 +32,8 @@
     "lint": "biome lint ./web",
     "format": "biome format --write ./web",
     "check": "biome check --write ./web",
-    "lint:ci": "biome ci ./web"
+    "lint:ci": "biome ci ./web",
+    "validate:json": "node scripts/validate-json.js"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",

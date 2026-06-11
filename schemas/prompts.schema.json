@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voicepaste.local/schemas/prompts.schema.json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "title", "hotkey", "hotkey_mode", "prompt"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "string" },
+      "title": { "type": "string" },
+      "hotkey": {
+        "type": "array",
+        "items": { "type": ["string", "integer"] }
+      },
+      "hotkey_mode": { "type": "string", "enum": ["toggle", "hold"] },
+      "prompt": { "type": "string" }
+    }
+  }
+}

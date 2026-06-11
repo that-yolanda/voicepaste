@@ -622,11 +622,15 @@ pub async fn save_hotwords(
 /// Get the model registry.
 #[tauri::command]
 pub async fn get_model_registry(app: AppHandle) -> Result<serde_json::Value, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve data dir: {}", e))?;
     let resource_dir = app
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to resolve resource dir: {}", e))?;
-    let registry = model::load_registry(&resource_dir);
+    let registry = model::load_registry(&data_dir, &resource_dir);
     serde_json::to_value(&registry)
         .map_err(|e| format!("Failed to serialize registry: {}", e))
 }
@@ -642,7 +646,7 @@ pub async fn get_downloaded_models(app: AppHandle) -> Result<serde_json::Value, 
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to resolve resource dir: {}", e))?;
-    let registry = model::load_registry(&resource_dir);
+    let registry = model::load_registry(&data_dir, &resource_dir);
     let downloaded = model::get_downloaded_models(&data_dir, &registry);
     Ok(serde_json::json!({ "models": downloaded }))
 }
@@ -661,7 +665,7 @@ pub async fn download_model(
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to resolve resource dir: {}", e))?;
-    let registry = model::load_registry(&resource_dir);
+    let registry = model::load_registry(&data_dir, &resource_dir);
     model::download_model(&app, &data_dir, &registry, &model_id).await?;
     Ok(serde_json::json!({ "ok": true }))
 }

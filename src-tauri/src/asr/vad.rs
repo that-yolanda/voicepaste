@@ -61,13 +61,9 @@ impl VadConfig {
             min_silence_duration: user
                 .min_silence_duration
                 .unwrap_or(base.min_silence_duration),
-            min_speech_duration: user
-                .min_speech_duration
-                .unwrap_or(base.min_speech_duration),
-            max_speech_duration: user
-                .max_speech_duration
-                .unwrap_or(base.max_speech_duration),
-            num_threads: base.num_threads,
+            min_speech_duration: user.min_speech_duration.unwrap_or(base.min_speech_duration),
+            max_speech_duration: user.max_speech_duration.unwrap_or(base.max_speech_duration),
+            num_threads: user.num_threads.unwrap_or(base.num_threads),
         }
     }
 }
@@ -85,10 +81,7 @@ impl VadProcessor {
     pub fn new(vad_model_dir: &Path, config: &VadConfig) -> Result<Self, String> {
         let model_path = vad_model_dir.join("silero_vad.onnx");
         if !model_path.exists() {
-            return Err(format!(
-                "VAD 模型文件不存在: {}",
-                model_path.display()
-            ));
+            return Err(format!("VAD 模型文件不存在: {}", model_path.display()));
         }
 
         let silero_config = SileroVadModelConfig {

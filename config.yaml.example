@@ -1,73 +1,65 @@
 app:
   hotkey: ControlLeft+Space
-  hotkey_mode: toggle             # 热键模式：toggle=按一次开始再按一次结束，hold=按住说话松开结束
+  hotkey_mode: toggle             # toggle=按一次开始再按一次结束，hold=按住说话松开结束
   remove_trailing_period: true   # 自动删除识别结果末尾的句号（。或 .）
   keep_clipboard: true           # 保留识别结果在剪贴板，便于失败后手动再次粘贴
   theme: system                  # 外观主题：dark / light / system（跟随系统），同时控制悬浮窗明暗
   overlay_style: liquid          # macOS 悬浮窗外观：liquid=液态玻璃·通透(默认) / liquid-standard=液态玻璃·标准 / vibrancy=普通毛玻璃(备用)，仅 macOS 生效；明暗跟随 app.theme
   sound:
-    enabled: true                # 录音开始和粘贴完成时播放提示音
-    start_sound: ""              # 就绪提示音文件路径，留空使用内置音效
-    end_sound: ""                # 完成提示音文件路径，留空使用内置音效
-  beta_updates: false            # 接收 Beta 版本更新（可能不稳定）
+    enabled: true
+    start_sound: ""
+    end_sound: ""
+  beta_updates: false
 
-# === 引擎选择 ===
 asr:
-  engine: doubao                 # doubao=豆包在线 | sherpa-onnx=本地离线
-  active_model: ""               # 本地模型 ID（sherpa-onnx 引擎时生效）
+  provider: doubao-streaming
 
-# === 豆包在线模型配置 ===
-asr_online:
-  doubao:
+audio:
+  doubao-streaming:
     url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
     app_id: ""
     access_token: ""
     secret_key: ""
     resource_id: "volc.seedasr.sauc.duration"
-    language: ""                 # 留空自动检测，如 zh-CN, en-US, ja-JP
-    enable_ddc: true             # 语义顺滑：去除停顿词、语气词、重复词
-    enable_itn: true             # 数字格式化
-    enable_nonstream: false      # 二遍识别
-    enable_punc: true            # 自动标点
-    boosting_table_id: ""        # 热词表 ID（自学习平台）
+    format: pcm
+    rate: 16000
+    bits: 16
+    channel: 1
+    model_name: bigmodel
+    model_version: "400"
+    operation: submit
+    sequence: 0
+    language: ""
+    enable_ddc: true
+    enable_itn: true
+    enable_nonstream: false
+    enable_punc: true
+    show_utterances: true
+    result_type: full
+    enable_accelerate_text: true
+    accelerate_score: 10
+    corpus:
+      boosting_table_id: ""
 
-# === 本地模型 VAD 覆盖（留空使用模型注册表默认值） ===
-asr_offline:
-  vad: {}
-  # threshold: 0.2               # 灵敏度阈值 (0-1)
-  # min_silence_duration: 0.2    # 最短静音时长 (秒)
-  # min_speech_duration: 0.2     # 最短语音时长 (秒)
-  # max_speech_duration: 10.0    # 最长语音时长 (秒)
+  silero-vad:
+    threshold: 0.2
+    min_silence_duration: 0.2
+    min_speech_duration: 0.2
+    max_speech_duration: 10.0
+    num_threads: 2
 
-# === 以下为兼容旧版字段（由新字段同步填充，无需手动维护） ===
-connection:
-  url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
-  app_id: ""
-  access_token: ""
-  secret_key: ""
-  resource_id: "volc.seedasr.sauc.duration"
+  sherpa-onnx-streaming-zipformer-zh-en:
+    enable_endpoint: true
+    rule1_min_trailing_silence: 2.4
+    rule2_min_trailing_silence: 0.8
+    rule3_min_utterance_length: 20
 
-audio:
-  format: pcm
-  rate: 16000
-  bits: 16
-  channel: 1
-
-request:
-  model_name: bigmodel
-  model_version: "400"
-  operation: submit
-  sequence: 0
-  enable_itn: true
-  enable_punc: true
-  enable_ddc: true
-  show_utterances: true
-  result_type: full
-  enable_accelerate_text: true
-  accelerate_score: 10
+  sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8:
+    use_itn: true
+    language: auto
 
 llm:
-  provider: deepseek          # deepseek / openai / anthropic / gemini / openrouter / siliconflow / ollama / openai_compatible
+  provider: deepseek
   deepseek:
     url: ""
     api_key: ""
@@ -75,7 +67,7 @@ llm:
   openai:
     url: ""
     api_key: ""
-    model: gpt-4o-mini
+    model: gpt-4.1-mini
   anthropic:
     url: ""
     api_key: ""

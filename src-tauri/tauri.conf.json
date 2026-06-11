@@ -55,8 +55,8 @@
     ],
     "resources": {
       "../config.yaml.example": "config.yaml.example",
-      "../prompts.json.example": "prompts.json.example",
-      "../hotwords.json.example": "hotwords.json.example",
+      "../prompts.json": "prompts.json",
+      "../hotwords.json": "hotwords.json",
       "../registry.json": "registry.json",
       "../assets/sounds/start.mp3": "sounds/start.mp3",
       "../assets/sounds/end.mp3": "sounds/end.mp3",

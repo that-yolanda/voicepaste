@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voicepaste.local/schemas/registry.schema.json",
+  "type": "object",
+  "required": ["version", "updated_at", "models"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer" },
+    "updated_at": { "type": "string" },
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "category",
+          "engine",
+          "name",
+          "description",
+          "tags",
+          "capabilities",
+          "languages"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "enum": ["online", "offline"] },
+          "category": { "type": "string", "enum": ["asr", "vad", "punctuation"] },
+          "engine": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "capabilities": {
+            "type": "object",
+            "required": ["streaming", "hotwords", "punctuation", "itn"],
+            "additionalProperties": false,
+            "properties": {
+              "streaming": { "type": "boolean" },
+              "hotwords": { "type": "boolean" },
+              "punctuation": { "type": "boolean" },
+              "itn": { "type": "boolean" }
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requires_config": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "architecture": { "type": "string" },
+          "download_url": { "type": "string" },
+          "file_size": { "type": "integer" },
+          "mem_size": { "type": "integer" },
+          "model_files": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "default_config": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  }
+}

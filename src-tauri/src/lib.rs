@@ -59,6 +59,7 @@ pub fn run() {
 
             // Ensure data directory exists
             std::fs::create_dir_all(&data_dir).ok();
+            model::ensure_registry(&data_dir, &resource_dir);
 
             // Initialize services
             let config_manager = config::ConfigManager::new(&data_dir, &resource_dir);
@@ -66,9 +67,9 @@ pub fn run() {
             let stats_service = stats::StatsService::new(&data_dir);
             let hotword_manager = hotword::HotwordManager::new(&data_dir, &resource_dir);
 
-            // Import legacy hotwords from config.yaml into hotwords.json (one-time migration)
+            // Import configured Doubao hotwords into hotwords.json (one-time bootstrap)
             if let Ok(cfg) = config_manager.load_config() {
-                if let Some(corpus) = &cfg.request.corpus {
+                if let Some(corpus) = &cfg.doubao_streaming_config().corpus {
                     if let Some(hw) = corpus.get("context_hotwords").and_then(|v| v.as_str()) {
                         if !hw.is_empty() {
                             let _ = hotword_manager.import_from_legacy(hw);
@@ -636,7 +637,7 @@ async fn start_recording(app_handle: AppHandle) {
         return;
     }
 
-    // 3. Create ASR session (engine chosen by model ID → registry provider)
+    // 3. Create ASR session (engine chosen by model ID → registry engine)
     let hotwords = app_inner.hotword_manager.active_words();
     log_rec!(debug, "Active hotwords ({}): {:?}", hotwords.len(), hotwords);
 
@@ -644,32 +645,34 @@ async fn start_recording(app_handle: AppHandle) {
         .path()
         .resource_dir()
         .unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let registry = crate::model::load_registry(&resource_dir);
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let registry = crate::model::load_registry(&data_dir, &resource_dir);
 
-    // Resolve engine from model ID: config.asr.engine stores the model ID.
-    let engine_model_id = config.asr.engine.as_str();
+    // Resolve engine from model ID: config.asr.provider stores the model ID.
+    let engine_model_id = config.asr_provider();
     let entry = registry.models.iter().find(|m| m.id == engine_model_id);
 
     let result = match entry {
-        Some(entry) if entry.provider == "sherpa-onnx" => {
-            let data_dir = app_handle
-                .path()
-                .app_data_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        Some(entry) if entry.engine == "sherpa-onnx" => {
             let engine = crate::asr::sherpa_onnx::SherpaOnnxEngine::new(
                 data_dir,
                 resource_dir,
                 engine_model_id.to_string(),
-                config.asr_offline.vad.clone(),
+                config.vad_params(),
+                config.model_config_json(engine_model_id),
             );
             engine.create_session(&hotwords).await
         }
         _ => {
             // Default / volcengine: Doubao online engine
+            let doubao_config = config.doubao_streaming_config();
             let engine = crate::asr::doubao::DoubaoEngine::new(
-                config.connection.clone(),
-                config.audio.clone(),
-                config.request.clone(),
+                doubao_config.to_connection_config(),
+                doubao_config.to_audio_config(),
+                doubao_config.to_request_config(),
             );
             engine.create_session(&hotwords).await
         }
@@ -823,7 +826,7 @@ async fn stop_recording(app_handle: AppHandle) {
 
                     // When using sherpa-onnx (local) engine, append hotwords to the LLM prompt
                     // as a fallback hint for proper-noun accuracy.
-                    if config.asr.engine.starts_with("sherpa-onnx") {
+                    if config.asr_provider().starts_with("sherpa-onnx") {
                         let hw = app_inner.hotword_manager.active_words();
                         if !hw.is_empty() {
                             system_prompt = format!(

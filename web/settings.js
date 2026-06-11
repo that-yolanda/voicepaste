@@ -68,6 +68,49 @@
     },
   };
 
+  const DOUBAO_MODEL_ID = "doubao-streaming";
+  const DOUBAO_VISIBLE_PARAMS = new Set([
+    "url",
+    "app_id",
+    "access_token",
+    "secret_key",
+    "resource_id",
+    "language",
+    "enable_ddc",
+    "enable_itn",
+    "enable_nonstream",
+    "enable_punc",
+    "corpus",
+  ]);
+  const MODEL_PARAM_LABELS = {
+    format: "音频格式",
+    rate: "采样率",
+    bits: "采样位数",
+    channel: "声道数",
+    model_name: "模型名称",
+    model_version: "模型版本",
+    operation: "操作类型",
+    sequence: "请求序号",
+    show_utterances: "显示分句",
+    result_type: "结果类型",
+    enable_accelerate_text: "启用文本加速",
+    accelerate_score: "加速分数",
+    vad_segment_duration: "VAD 分段时长",
+    end_window_size: "结束窗口",
+    force_to_speech_time: "强制语音时间",
+    threshold: "灵敏度阈值",
+    min_silence_duration: "最短静音时长",
+    min_speech_duration: "最短语音时长",
+    max_speech_duration: "最长语音时长",
+    num_threads: "线程数",
+    enable_endpoint: "启用端点检测",
+    rule1_min_trailing_silence: "规则 1 静音时长",
+    rule2_min_trailing_silence: "规则 2 静音时长",
+    rule3_min_utterance_length: "规则 3 语句长度",
+    use_itn: "数字格式化",
+    language: "语言",
+  };
+
   const $ = (id) => document.getElementById(id);
 
   // ===== Icon helper =====
@@ -160,6 +203,7 @@
     enableDoubao: $("enableDoubao"),
     doubaoExpandBtn: $("doubaoExpandBtn"),
     doubaoConfig: $("doubaoConfig"),
+    doubaoAdvancedConfig: $("doubaoAdvancedConfig"),
     currentModelBadge: $("currentModelBadge"),
     offlineModelList: $("offlineModelList"),
     vadDownloadHint: $("vadDownloadHint"),
@@ -491,6 +535,12 @@
       const data = await window.voiceSettings.getData();
       _originalConfigText = data.configText || "";
       parsedConfig = data.parsedConfig || {};
+      try {
+        const regResult = await window.voiceSettings.getModelRegistry();
+        _modelRegistry = regResult?.models || [];
+      } catch (_) {
+        _modelRegistry = [];
+      }
       populateForm(data);
       initThemeSelector(data);
       el.yamlEditor.value = data.configText || "";
@@ -523,13 +573,6 @@
 
       clearDirty();
       autoCheckUpdatesOnce();
-      // Load registry early so badge and filters can use it
-      try {
-        const regResult = await window.voiceSettings.getModelRegistry();
-        _modelRegistry = regResult?.models || [];
-      } catch (_) {
-        _modelRegistry = [];
-      }
       updateCurrentModelBadge();
       loadHotwordGroups();
     } catch (err) {
@@ -584,14 +627,15 @@
           : "当前系统无需额外权限配置。";
     }
 
-    el.wsUrl.value = c.connection?.url || "";
-    el.resourceId.value = c.connection?.resource_id || "";
-    el.language.value = c.audio?.language || "";
+    const doubaoConfig = getMergedModelConfig(c, DOUBAO_MODEL_ID);
+    el.wsUrl.value = doubaoConfig.url || "";
+    el.resourceId.value = doubaoConfig.resource_id || "";
+    el.language.value = doubaoConfig.language || "";
 
-    el.enableDdc.checked = c.request?.enable_ddc !== false;
-    el.enableNonstream.checked = Boolean(c.request?.enable_nonstream);
-    el.enableItn.checked = c.request?.enable_itn !== false;
-    el.enablePunc.checked = c.request?.enable_punc !== false;
+    el.enableDdc.checked = doubaoConfig.enable_ddc !== false;
+    el.enableNonstream.checked = Boolean(doubaoConfig.enable_nonstream);
+    el.enableItn.checked = doubaoConfig.enable_itn !== false;
+    el.enablePunc.checked = doubaoConfig.enable_punc !== false;
     if (el.removeTrailingPeriod) {
       el.removeTrailingPeriod.checked = c.app?.remove_trailing_period !== false;
     }
@@ -599,16 +643,24 @@
       el.keepClipboard.checked = c.app?.keep_clipboard !== false;
     }
 
-    el.boostingTableId.value = c.request?.corpus?.boosting_table_id || "";
+    el.boostingTableId.value = doubaoConfig.corpus?.boosting_table_id || "";
 
-    el.appId.value = c.connection?.app_id || "";
-    el.accessToken.value = c.connection?.access_token || "";
-    el.secretKey.value = c.connection?.secret_key || "";
+    el.appId.value = doubaoConfig.app_id || "";
+    el.accessToken.value = doubaoConfig.access_token || "";
+    el.secretKey.value = doubaoConfig.secret_key || "";
+    if (el.doubaoAdvancedConfig) {
+      const advanced = Object.fromEntries(
+        Object.entries(doubaoConfig).filter(([key]) => !DOUBAO_VISIBLE_PARAMS.has(key)),
+      );
+      el.doubaoAdvancedConfig.innerHTML = renderModelConfigRows(DOUBAO_MODEL_ID, advanced);
+      el.doubaoAdvancedConfig.querySelectorAll(".model-param").forEach((input) => {
+        input.addEventListener("change", saveFormNow);
+      });
+    }
 
-    // Model enable toggles: only the active engine's toggle should be on
+    // Model enable toggles: only the active provider's toggle should be on
     if (el.enableDoubao) {
-      const engine = c.asr?.engine || "doubao-streaming";
-      el.enableDoubao.checked = !engine.startsWith("sherpa-onnx");
+      el.enableDoubao.checked = getAsrProvider(c) === DOUBAO_MODEL_ID;
     }
 
     setLlmProvider(c.llm?.provider || (c.llm?.url ? "openai_compatible" : "deepseek"));
@@ -651,30 +703,43 @@
     };
     config.app.beta_updates = el.betaUpdates.checked;
 
-    config.connection = config.connection || {};
-    config.connection.url = el.wsUrl.value.trim();
-    config.connection.resource_id = el.resourceId.value.trim();
-    config.connection.app_id = el.appId.value.trim();
-    config.connection.access_token = el.accessToken.value.trim();
-    config.connection.secret_key = el.secretKey.value.trim();
+    config.asr = config.asr || {};
+    config.asr.provider = getAsrProvider(config);
+    delete config.asr.engine;
+    delete config.asr.active_model;
 
-    config.audio = config.audio || {};
+    const doubaoConfig = ensureModelConfig(config, DOUBAO_MODEL_ID);
+    doubaoConfig.url = el.wsUrl.value.trim();
+    doubaoConfig.resource_id = el.resourceId.value.trim();
+    doubaoConfig.app_id = el.appId.value.trim();
+    doubaoConfig.access_token = el.accessToken.value.trim();
+    doubaoConfig.secret_key = el.secretKey.value.trim();
     const lang = el.language.value.trim();
     if (lang) {
-      config.audio.language = lang;
+      doubaoConfig.language = lang;
     } else {
-      delete config.audio.language;
+      delete doubaoConfig.language;
     }
 
-    config.request = config.request || {};
-    config.request.enable_ddc = el.enableDdc.checked;
-    config.request.enable_nonstream = el.enableNonstream.checked;
-    config.request.enable_itn = el.enableItn.checked;
-    config.request.enable_punc = el.enablePunc.checked;
-    delete config.request.remove_trailing_period;
+    doubaoConfig.enable_ddc = el.enableDdc.checked;
+    doubaoConfig.enable_nonstream = el.enableNonstream.checked;
+    doubaoConfig.enable_itn = el.enableItn.checked;
+    doubaoConfig.enable_punc = el.enablePunc.checked;
+    doubaoConfig.corpus = doubaoConfig.corpus || {};
+    doubaoConfig.corpus.boosting_table_id = el.boostingTableId.value.trim();
+    if (el.doubaoAdvancedConfig) {
+      el.doubaoAdvancedConfig.querySelectorAll(".model-param").forEach((input) => {
+        const value = readModelParamInput(input);
+        if (value !== undefined) {
+          doubaoConfig[input.dataset.param] = value;
+        }
+      });
+    }
 
-    config.request.corpus = config.request.corpus || {};
-    config.request.corpus.boosting_table_id = el.boostingTableId.value.trim();
+    delete config.connection;
+    delete config.request;
+    delete config.asr_online;
+    delete config.asr_offline;
 
     config.llm = config.llm || {};
     config.llm.provider = currentLlmProvider;
@@ -806,6 +871,68 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  function clonePlain(value) {
+    return JSON.parse(JSON.stringify(value || {}));
+  }
+
+  function getAsrProvider(config = parsedConfig) {
+    return config.asr?.provider || config.asr?.engine || DOUBAO_MODEL_ID;
+  }
+
+  function getRegistryModel(modelId) {
+    return Array.isArray(_modelRegistry)
+      ? _modelRegistry.find((entry) => entry.id === modelId)
+      : null;
+  }
+
+  function defaultModelConfig(modelId) {
+    return clonePlain(getRegistryModel(modelId)?.default_config || {});
+  }
+
+  function ensureModelConfig(config, modelId) {
+    config.audio = config.audio || {};
+    if (!config.audio[modelId] || typeof config.audio[modelId] !== "object") {
+      config.audio[modelId] = defaultModelConfig(modelId);
+    }
+    return config.audio[modelId];
+  }
+
+  function getMergedModelConfig(config, modelId) {
+    return {
+      ...defaultModelConfig(modelId),
+      ...(config.audio?.[modelId] || {}),
+    };
+  }
+
+  function labelForModelParam(key) {
+    return MODEL_PARAM_LABELS[key] || key.replace(/_/g, " ");
+  }
+
+  function renderModelConfigRows(modelId, values) {
+    return Object.entries(values || {})
+      .map(([key, value]) => {
+        const label = escapeHtml(labelForModelParam(key));
+        const escapedKey = escapeHtml(key);
+        if (typeof value === "boolean") {
+          return `<div class="config-row"><span class="config-label">${label}</span><label class="toggle"><input type="checkbox" class="model-param" data-model-id="${escapeHtml(modelId)}" data-param="${escapedKey}" data-value-type="boolean" ${value ? "checked" : ""} /><span class="track"></span><span class="thumb"></span></label></div>`;
+        }
+        if (typeof value === "number") {
+          return `<div class="config-row"><span class="config-label">${label}</span><input type="number" class="input-field model-param" data-model-id="${escapeHtml(modelId)}" data-param="${escapedKey}" data-value-type="number" value="${escapeHtml(String(value))}" step="0.1" /></div>`;
+        }
+        return `<div class="config-row"><span class="config-label">${label}</span><input type="text" class="input-field model-param" data-model-id="${escapeHtml(modelId)}" data-param="${escapedKey}" data-value-type="string" value="${escapeHtml(String(value ?? ""))}" /></div>`;
+      })
+      .join("");
+  }
+
+  function readModelParamInput(input) {
+    if (input.dataset.valueType === "boolean") return input.checked;
+    if (input.dataset.valueType === "number") {
+      const val = parseFloat(input.value);
+      return Number.isNaN(val) ? undefined : val;
+    }
+    return input.value.trim();
   }
 
   // ===== Password toggle =====
@@ -1811,7 +1938,7 @@ SOFTWARE.`;
             t.checked = false;
           });
         }
-        await saveModelSelection("doubao-streaming");
+        await saveModelSelection(DOUBAO_MODEL_ID);
       }
     });
   }
@@ -1826,7 +1953,10 @@ SOFTWARE.`;
   async function saveModelSelection(modelId) {
     const config = parsedConfig || {};
     if (!config.asr) config.asr = {};
-    config.asr.engine = modelId;
+    config.asr.provider = modelId;
+    delete config.asr.engine;
+    delete config.asr.active_model;
+    ensureModelConfig(config, modelId);
     try {
       await window.voiceSettings.saveConfigObject(config);
       await loadSettings();
@@ -1837,7 +1967,7 @@ SOFTWARE.`;
 
   function updateCurrentModelBadge() {
     const c = parsedConfig || {};
-    const modelId = c.asr?.engine || "doubao-streaming";
+    const modelId = getAsrProvider(c);
     if (el.currentModelBadge) {
       const item = Array.isArray(_modelRegistry)
         ? _modelRegistry.find((entry) => entry.id === modelId)
@@ -1874,7 +2004,7 @@ SOFTWARE.`;
     }
 
     const c = parsedConfig || {};
-    const currentModelId = c.asr?.engine || "doubao-streaming";
+    const currentModelId = getAsrProvider(c);
 
     // Sort: VAD first, then ASR
     const sorted = [...offlineModels].sort((a, b) => {
@@ -1921,25 +2051,16 @@ SOFTWARE.`;
         }
         body += `</div>`; // end model-card-head
 
-        // VAD model gets expand/collapse config section
-        if (isVad) {
-          const vad = c.asr_offline?.vad || {};
-          const defaults = model.default_config || {};
+        if (model.default_config && Object.keys(model.default_config).length > 0) {
+          const configValues = getMergedModelConfig(c, model.id);
           body += `<div class="model-expand-wrap">`;
-          body += `<button type="button" class="model-expand-btn vad-expand-btn">`;
+          body += `<button type="button" class="model-expand-btn model-config-expand-btn" data-model-id="${escapeHtml(model.id)}">`;
           body += `<span class="nav-icon" data-icon="chevron-down"></span>`;
           body += `<span>展开配置</span>`;
           body += `</button></div>`;
-          body += `<div class="model-card-config hidden vad-config">`;
+          body += `<div class="model-card-config hidden model-config" data-model-id="${escapeHtml(model.id)}">`;
           body += `<div class="config-group">`;
-          body += `<div class="config-row"><span class="config-label">灵敏度阈值 <span class="config-hint">(0-1，越低越灵敏)</span></span>`;
-          body += `<input type="number" class="input-field vad-param" data-param="threshold" value="${vad.threshold ?? defaults.threshold ?? 0.2}" step="0.05" min="0.01" max="0.99" /></div>`;
-          body += `<div class="config-row"><span class="config-label">最短静音时长 (秒)</span>`;
-          body += `<input type="number" class="input-field vad-param" data-param="min_silence_duration" value="${vad.min_silence_duration ?? defaults.min_silence_duration ?? 0.2}" step="0.1" min="0.05" max="5.0" /></div>`;
-          body += `<div class="config-row"><span class="config-label">最短语音时长 (秒)</span>`;
-          body += `<input type="number" class="input-field vad-param" data-param="min_speech_duration" value="${vad.min_speech_duration ?? defaults.min_speech_duration ?? 0.2}" step="0.1" min="0.05" max="5.0" /></div>`;
-          body += `<div class="config-row"><span class="config-label">最长语音时长 (秒)</span>`;
-          body += `<input type="number" class="input-field vad-param" data-param="max_speech_duration" value="${vad.max_speech_duration ?? defaults.max_speech_duration ?? 10.0}" step="1.0" min="1.0" max="30.0" /></div>`;
+          body += renderModelConfigRows(model.id, configValues);
           body += `</div></div>`;
         }
 
@@ -1971,30 +2092,29 @@ SOFTWARE.`;
       });
     });
 
-    // VAD config expand/collapse
-    const vadExpandBtn = el.offlineModelList.querySelector(".vad-expand-btn");
-    if (vadExpandBtn) {
-      vadExpandBtn.addEventListener("click", () => {
-        const config = el.offlineModelList.querySelector(".vad-config");
+    // Model config expand/collapse
+    el.offlineModelList.querySelectorAll(".model-config-expand-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const config = [...el.offlineModelList.querySelectorAll(".model-config")].find(
+          (item) => item.dataset.modelId === btn.dataset.modelId,
+        );
+        if (!config) return;
         const isHidden = config.classList.contains("hidden");
         config.classList.toggle("hidden", !isHidden);
-        vadExpandBtn.classList.toggle("expanded", isHidden);
-        vadExpandBtn.querySelector("span:last-child").textContent = isHidden
-          ? "收起配置"
-          : "展开配置";
+        btn.classList.toggle("expanded", isHidden);
+        btn.querySelector("span:last-child").textContent = isHidden ? "收起配置" : "展开配置";
       });
-    }
+    });
 
-    // VAD param auto-save
-    el.offlineModelList.querySelectorAll(".vad-param").forEach((input) => {
+    // Model param auto-save
+    el.offlineModelList.querySelectorAll(".model-param").forEach((input) => {
       input.addEventListener("change", async () => {
         const config = JSON.parse(JSON.stringify(parsedConfig));
-        config.asr_offline = config.asr_offline || {};
-        config.asr_offline.vad = config.asr_offline.vad || {};
+        const modelConfig = ensureModelConfig(config, input.dataset.modelId);
         const param = input.dataset.param;
-        const val = parseFloat(input.value);
-        if (!Number.isNaN(val)) {
-          config.asr_offline.vad[param] = val;
+        const value = readModelParamInput(input);
+        if (value !== undefined) {
+          modelConfig[param] = value;
         }
         try {
           await window.voiceSettings.saveConfigObject(config);

@@ -49,7 +49,7 @@ pub struct HotwordManager {
 impl HotwordManager {
     pub fn new(data_dir: &Path, resource_dir: &Path) -> Self {
         let path = data_dir.join("hotwords.json");
-        let example_path = resource_dir.join("hotwords.json.example");
+        let example_path = resource_dir.join("hotwords.json");
 
         // Ensure file exists
         if !path.exists() {
@@ -125,8 +125,7 @@ impl HotwordManager {
     pub fn save(&self, data: &HotwordData) -> Result<(), String> {
         let json = serde_json::to_string_pretty(data)
             .map_err(|e| format!("Failed to serialize hotwords: {}", e))?;
-        fs::write(&self.path, json)
-            .map_err(|e| format!("Failed to write hotwords: {}", e))?;
+        fs::write(&self.path, json).map_err(|e| format!("Failed to write hotwords: {}", e))?;
         *self.cached.write().unwrap() = data.clone();
         Ok(())
     }

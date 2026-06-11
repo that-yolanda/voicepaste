@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use sherpa_onnx::{
-    OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig,
-    OnlineRecognizer, OnlineRecognizerConfig,
+    OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OnlineRecognizer,
+    OnlineRecognizerConfig,
 };
 use std::collections::HashSet;
 use std::fs;
@@ -21,12 +21,44 @@ enum RecognizerBackend {
     Online(OnlineRecognizer),
 }
 
+fn merged_model_config(
+    base: Option<&serde_json::Value>,
+    user: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    let mut merged = base.cloned().unwrap_or_else(|| serde_json::json!({}));
+    if let (Some(target), Some(source)) = (merged.as_object_mut(), user.and_then(|v| v.as_object()))
+    {
+        for (key, value) in source {
+            target.insert(key.clone(), value.clone());
+        }
+    }
+    merged
+}
+
+fn json_bool(config: &serde_json::Value, key: &str) -> Option<bool> {
+    config.get(key).and_then(|v| v.as_bool())
+}
+
+fn json_f32(config: &serde_json::Value, key: &str) -> Option<f32> {
+    config.get(key).and_then(|v| v.as_f64()).map(|v| v as f32)
+}
+
+fn json_string(config: &serde_json::Value, key: &str) -> Option<String> {
+    config
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(ToString::to_string)
+}
+
 /// Sherpa-ONNX ASR engine for local models.
 pub struct SherpaOnnxEngine {
     data_dir: PathBuf,
     resource_dir: PathBuf,
     active_model_id: String,
     vad_params: VadParams,
+    model_config: Option<serde_json::Value>,
 }
 
 impl SherpaOnnxEngine {
@@ -35,12 +67,14 @@ impl SherpaOnnxEngine {
         resource_dir: PathBuf,
         active_model_id: String,
         vad_params: VadParams,
+        model_config: Option<serde_json::Value>,
     ) -> Self {
         Self {
             data_dir,
             resource_dir,
             active_model_id,
             vad_params,
+            model_config,
         }
     }
 
@@ -52,6 +86,7 @@ impl SherpaOnnxEngine {
         model_dir: &Path,
         entry: &ModelEntry,
         num_threads: u32,
+        user_config: Option<&serde_json::Value>,
     ) -> Result<(RecognizerBackend, bool), String> {
         let p = |key: &str| -> Option<String> {
             let filename = entry.model_files.get(key)?;
@@ -65,6 +100,7 @@ impl SherpaOnnxEngine {
         let supports_hotwords = entry.capabilities.hotwords;
         let arch = entry.architecture.as_deref().unwrap_or("");
         let streaming = entry.capabilities.streaming;
+        let model_config = merged_model_config(entry.default_config.as_ref(), user_config);
 
         if streaming {
             // ── Online recognizer (streaming transducer, e.g. Zipformer) ──
@@ -76,7 +112,13 @@ impl SherpaOnnxEngine {
             config.model_config.num_threads = num_threads as i32;
             config.model_config.debug = cfg!(debug_assertions);
             config.model_config.model_type = Some(arch.to_string());
-            config.enable_endpoint = true;
+            config.enable_endpoint = json_bool(&model_config, "enable_endpoint").unwrap_or(true);
+            config.rule1_min_trailing_silence =
+                json_f32(&model_config, "rule1_min_trailing_silence").unwrap_or(0.0);
+            config.rule2_min_trailing_silence =
+                json_f32(&model_config, "rule2_min_trailing_silence").unwrap_or(0.0);
+            config.rule3_min_utterance_length =
+                json_f32(&model_config, "rule3_min_utterance_length").unwrap_or(0.0);
             config.decoding_method = Some("greedy_search".to_string());
 
             let recognizer = OnlineRecognizer::create(&config)
@@ -91,17 +133,12 @@ impl SherpaOnnxEngine {
 
             match arch {
                 "sense_voice" => {
-                    let model = p("model")
-                        .ok_or_else(|| format!("模型 {} 缺少 model 文件", entry.id))?;
+                    let model =
+                        p("model").ok_or_else(|| format!("模型 {} 缺少 model 文件", entry.id))?;
                     config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
                         model: Some(model),
-                        use_itn: entry
-                            .default_config
-                            .as_ref()
-                            .and_then(|c| c.get("use_itn"))
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(true),
-                        ..Default::default()
+                        language: json_string(&model_config, "language"),
+                        use_itn: json_bool(&model_config, "use_itn").unwrap_or(true),
                     };
                     config.model_config.tokens = p("tokens");
                     config.model_config.model_type = Some(arch.to_string());
@@ -147,10 +184,7 @@ fn decode_offline_segment(
 /// Streaming transducer models (Zipformer) expect audio in small incremental
 /// chunks, followed by tail padding (silence) to flush the decoder state.
 /// This mirrors the official sherpa-onnx streaming examples.
-fn decode_online_segment(
-    recognizer: &OnlineRecognizer,
-    samples: &[f32],
-) -> Option<String> {
+fn decode_online_segment(recognizer: &OnlineRecognizer, samples: &[f32]) -> Option<String> {
     const CHUNK_SIZE: usize = 3200; // 200ms at 16kHz — matches sherpa-onnx examples
 
     let stream = recognizer.create_stream();
@@ -196,7 +230,7 @@ impl AsrEngine for SherpaOnnxEngine {
         }
 
         // Load registry and find the model entry
-        let registry = model::load_registry(&self.resource_dir);
+        let registry = model::load_registry(&self.data_dir, &self.resource_dir);
         let entry = registry
             .models
             .iter()
@@ -217,16 +251,14 @@ impl AsrEngine for SherpaOnnxEngine {
             &model_dir,
             entry,
             vad_config.num_threads,
+            self.model_config.as_ref(),
         )?;
 
         // For transducer models with hotwords support, pre-load tokens.txt to
         // validate hotwords.  sherpa-onnx throws an uncatchable C++ exception
         // when hotwords contain tokens not in the model's vocabulary.
         let valid_tokens: Option<Arc<HashSet<String>>> = if supports_hotwords {
-            let tokens_path = entry
-                .model_files
-                .get("tokens")
-                .map(|f| model_dir.join(f));
+            let tokens_path = entry.model_files.get("tokens").map(|f| model_dir.join(f));
             let tokens = tokens_path
                 .filter(|p| p.exists())
                 .and_then(|p| fs::read_to_string(p).ok())
@@ -346,9 +378,7 @@ impl AsrSession for SherpaOnnxSession {
                     RecognizerBackend::Offline(r) => {
                         decode_offline_segment(r, &segment_samples, use_hotwords, &hotwords_str)
                     }
-                    RecognizerBackend::Online(r) => {
-                        decode_online_segment(r, &segment_samples)
-                    }
+                    RecognizerBackend::Online(r) => decode_online_segment(r, &segment_samples),
                 };
 
                 if let Some(text) = text {
@@ -433,9 +463,7 @@ impl AsrSession for SherpaOnnxSession {
                     RecognizerBackend::Offline(r) => {
                         decode_offline_segment(r, &segment_samples, use_hotwords, &hotwords_str)
                     }
-                    RecognizerBackend::Online(r) => {
-                        decode_online_segment(r, &segment_samples)
-                    }
+                    RecognizerBackend::Online(r) => decode_online_segment(r, &segment_samples),
                 };
 
                 if let Some(text) = text {
@@ -487,9 +515,7 @@ fn filter_valid_hotwords(hotwords: &[String], tokens: Option<&HashSet<String>>) 
     hotwords
         .iter()
         .filter(|hw| {
-            let valid = hw
-                .split_whitespace()
-                .all(|word| vocab.contains(word));
+            let valid = hw.split_whitespace().all(|word| vocab.contains(word));
             if !valid {
                 log_asr!(debug, "Skipping hotword (OOV): {:?}", hw);
             }

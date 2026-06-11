@@ -34,8 +34,8 @@ pub struct ModelEntry {
     pub model_type: String,
     /// "asr" | "vad" | "punctuation"
     pub category: ModelCategory,
-    /// Engine/provider: "volcengine" | "sherpa-onnx"
-    pub provider: String,
+    /// Runtime engine: "volcengine" | "sherpa-onnx"
+    pub engine: String,
     /// Display name in the UI.
     pub name: String,
     /// Display description in the UI.
@@ -84,18 +84,73 @@ pub struct ModelRegistry {
     pub models: Vec<ModelEntry>,
 }
 
-/// Load the model registry from the resource directory, falling back to a minimal default.
-pub fn load_registry(resource_dir: &Path) -> ModelRegistry {
-    let registry_path = resource_dir.join("registry.json");
-    if registry_path.exists() {
-        if let Ok(content) = fs::read_to_string(&registry_path) {
-            if let Ok(registry) = serde_json::from_str(&content) {
-                return registry;
-            }
+/// Ensure the editable registry exists under app data and is upgraded from bundled defaults.
+pub fn ensure_registry(data_dir: &Path, resource_dir: &Path) {
+    let data_path = registry_path(data_dir);
+    let resource_path = resource_registry_path(resource_dir);
+    let bundled = read_registry_file(&resource_path).unwrap_or_else(minimal_registry);
+
+    if let Some(current) = read_registry_file(&data_path) {
+        if bundled.version > current.version {
+            let merged = merge_registry(current, bundled);
+            let _ = write_registry_file(&data_path, &merged);
+        }
+        return;
+    }
+
+    if data_path.exists() {
+        let backup_path = data_dir.join("registry.invalid.json");
+        let _ = fs::rename(&data_path, backup_path);
+    }
+
+    let _ = write_registry_file(&data_path, &bundled);
+}
+
+/// Load the editable model registry from app data, falling back to bundled defaults.
+pub fn load_registry(data_dir: &Path, resource_dir: &Path) -> ModelRegistry {
+    ensure_registry(data_dir, resource_dir);
+    read_registry_file(&registry_path(data_dir))
+        .or_else(|| read_registry_file(&resource_registry_path(resource_dir)))
+        .unwrap_or_else(minimal_registry)
+}
+
+fn registry_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("registry.json")
+}
+
+fn resource_registry_path(resource_dir: &Path) -> PathBuf {
+    resource_dir.join("registry.json")
+}
+
+fn read_registry_file(path: &Path) -> Option<ModelRegistry> {
+    let content = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+fn write_registry_file(path: &Path, registry: &ModelRegistry) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建 registry 目录失败: {}", e))?;
+    }
+    let json = serde_json::to_string_pretty(registry)
+        .map_err(|e| format!("序列化 registry 失败: {}", e))?;
+    fs::write(path, json + "\n").map_err(|e| format!("写入 registry 失败: {}", e))
+}
+
+fn merge_registry(mut current: ModelRegistry, bundled: ModelRegistry) -> ModelRegistry {
+    for bundled_model in bundled.models {
+        if let Some(existing) = current
+            .models
+            .iter_mut()
+            .find(|model| model.id == bundled_model.id)
+        {
+            *existing = bundled_model;
+        } else {
+            current.models.push(bundled_model);
         }
     }
-    // Fallback: minimal registry with just the online Doubao entry
-    minimal_registry()
+    current.version = bundled.version;
+    current.updated_at = bundled.updated_at;
+    current
 }
 
 fn minimal_registry() -> ModelRegistry {
@@ -106,7 +161,7 @@ fn minimal_registry() -> ModelRegistry {
             id: "doubao-streaming".to_string(),
             model_type: "online".to_string(),
             category: ModelCategory::Asr,
-            provider: "volcengine".to_string(),
+            engine: "volcengine".to_string(),
             name: "火山引擎 - 豆包流式输出大模型".to_string(),
             description: "基于豆包大模型的流式语音识别服务".to_string(),
             tags: vec![
@@ -195,8 +250,7 @@ pub async fn download_model(
 
     let dir = models_dir(data_dir);
     let model_dir = dir.join(model_id);
-    fs::create_dir_all(&model_dir)
-        .map_err(|e| format!("创建模型目录失败: {}", e))?;
+    fs::create_dir_all(&model_dir).map_err(|e| format!("创建模型目录失败: {}", e))?;
 
     log_app!(info, "Downloading model {} from {}", model_id, url);
 
@@ -274,10 +328,7 @@ pub async fn download_model(
     }
 
     if !is_model_downloaded(&dir, entry) {
-        return Err(format!(
-            "模型 {} 下载完成但文件校验失败，请重试",
-            model_id
-        ));
+        return Err(format!("模型 {} 下载完成但文件校验失败，请重试", model_id));
     }
 
     let _ = app.emit(

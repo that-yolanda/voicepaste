@@ -230,7 +230,11 @@ fn parse_context_hotwords(value: &serde_norway::Value) -> Vec<Value> {
     }
 }
 
-fn build_api_request_body(audio_config: &AudioConfig, request_config: &RequestConfig) -> Value {
+fn build_api_request_body(
+    audio_config: &AudioConfig,
+    request_config: &RequestConfig,
+    hotwords: &[String],
+) -> Value {
     let mut audio = serde_json::Map::new();
     audio.insert("format".to_string(), json!(audio_config.format));
     audio.insert("rate".to_string(), json!(audio_config.rate));
@@ -245,6 +249,14 @@ fn build_api_request_body(audio_config: &AudioConfig, request_config: &RequestCo
     );
     request.insert("operation".to_string(), json!(request_config.operation));
     request.insert("sequence".to_string(), json!(request_config.sequence));
+    if let Some(language) = request_config
+        .language
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        request.insert("language".to_string(), json!(language));
+    }
     request.insert("enable_itn".to_string(), json!(request_config.enable_itn));
     request.insert("enable_punc".to_string(), json!(request_config.enable_punc));
     request.insert("enable_ddc".to_string(), json!(request_config.enable_ddc));
@@ -272,17 +284,25 @@ fn build_api_request_body(audio_config: &AudioConfig, request_config: &RequestCo
     if let Some(v) = request_config.enable_accelerate_text {
         request.insert("enable_accelerate_text".to_string(), json!(v));
     }
+    let mut context_hotwords: Vec<Value> = hotwords
+        .iter()
+        .map(|word| word.trim())
+        .filter(|word| !word.is_empty())
+        .map(|word| json!({ "word": word }))
+        .collect();
+
     if let Some(corpus_value) = &request_config.corpus {
         if let Some(corpus) = corpus_value.as_mapping() {
             let mut corpus_json = serde_json::Map::new();
-            let mut context_hotwords = Vec::new();
 
             for (key, value) in corpus {
                 let Some(key) = key.as_str() else {
                     continue;
                 };
                 if key == "context_hotwords" {
-                    context_hotwords = parse_context_hotwords(value);
+                    if context_hotwords.is_empty() {
+                        context_hotwords = parse_context_hotwords(value);
+                    }
                     continue;
                 }
                 if is_empty_yaml_value(value) {
@@ -295,16 +315,21 @@ fn build_api_request_body(audio_config: &AudioConfig, request_config: &RequestCo
                 }
             }
 
-            if !context_hotwords.is_empty() {
-                corpus_json.insert(
-                    "context".to_string(),
-                    json!(serde_json::json!({ "hotwords": context_hotwords }).to_string()),
-                );
-            }
-
             if !corpus_json.is_empty() {
                 request.insert("corpus".to_string(), Value::Object(corpus_json));
             }
+        }
+    }
+
+    if !context_hotwords.is_empty() {
+        let corpus = request
+            .entry("corpus".to_string())
+            .or_insert_with(|| Value::Object(serde_json::Map::new()));
+        if let Some(corpus_json) = corpus.as_object_mut() {
+            corpus_json.insert(
+                "context".to_string(),
+                json!(serde_json::json!({ "hotwords": context_hotwords }).to_string()),
+            );
         }
     }
 
@@ -406,20 +431,24 @@ impl DoubaoEngine {
 impl AsrEngine for DoubaoEngine {
     async fn create_session(
         &self,
-        _hotwords: &[String],
+        hotwords: &[String],
     ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), String> {
         // Validate required fields
         if self.connection.url.is_empty() {
-            return Err("语音识别模型还未配置，缺少 connection.url".to_string());
+            return Err("语音识别模型还未配置，缺少 audio.doubao-streaming.url".to_string());
         }
         if self.connection.resource_id.is_empty() {
-            return Err("语音识别模型还未配置，缺少 connection.resource_id".to_string());
+            return Err(
+                "语音识别模型还未配置，缺少 audio.doubao-streaming.resource_id".to_string(),
+            );
         }
         if self.connection.app_id.is_empty() {
-            return Err("语音识别模型还未配置，缺少 connection.app_id".to_string());
+            return Err("语音识别模型还未配置，缺少 audio.doubao-streaming.app_id".to_string());
         }
         if self.connection.access_token.is_empty() {
-            return Err("语音识别模型还未配置，缺少 connection.access_token".to_string());
+            return Err(
+                "语音识别模型还未配置，缺少 audio.doubao-streaming.access_token".to_string(),
+            );
         }
 
         let connect_id = Uuid::new_v4().to_string();
@@ -455,7 +484,8 @@ impl AsrEngine for DoubaoEngine {
         let (sink, mut stream) = ws_stream.split();
 
         // Send initial request
-        let request_body = build_api_request_body(&self.audio_config, &self.request_config);
+        let request_body =
+            build_api_request_body(&self.audio_config, &self.request_config, hotwords);
         let init_frame = encode_full_client_request(&request_body);
         let mut sink = sink;
         sink.send(Message::Binary(init_frame.into()))
@@ -510,8 +540,7 @@ impl AsrEngine for DoubaoEngine {
                                 continue;
                             }
 
-                            if let Some(raw_text) =
-                                payload.get("raw_text").and_then(|v| v.as_str())
+                            if let Some(raw_text) = payload.get("raw_text").and_then(|v| v.as_str())
                             {
                                 let cleaned = clean_asr_text(raw_text.trim());
                                 if is_ignorable_raw_text(&cleaned, &connect_id) {
@@ -668,14 +697,11 @@ impl AsrEngine for DoubaoEngine {
                                                 .and_then(|v| v.as_bool())
                                                 .unwrap_or(false)
                                             {
-                                                let text =
-                                                    latest_result_text.lock().await.clone();
+                                                let text = latest_result_text.lock().await.clone();
                                                 *final_text.lock().await = text.clone();
                                                 *partial_text.lock().await = String::new();
 
-                                                if let Some(tx) =
-                                                    commit_tx.lock().await.take()
-                                                {
+                                                if let Some(tx) = commit_tx.lock().await.take() {
                                                     let _ = tx.send(text);
                                                 }
                                             }
@@ -692,13 +718,10 @@ impl AsrEngine for DoubaoEngine {
                             if payload.get("type").and_then(|v| v.as_str()) == Some("error") {
                                 let message = payload
                                     .get("message")
-                                    .or_else(|| {
-                                        payload.get("error").and_then(|e| e.get("message"))
-                                    })
+                                    .or_else(|| payload.get("error").and_then(|e| e.get("message")))
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("ASR 服务异常");
-                                let _ =
-                                    event_tx_clone.send(AsrEvent::Error(message.to_string()));
+                                let _ = event_tx_clone.send(AsrEvent::Error(message.to_string()));
                             }
                         }
                     }

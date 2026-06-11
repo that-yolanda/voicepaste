@@ -1,39 +1,28 @@
 use serde::{Deserialize, Serialize};
 use serde_norway;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
+
+pub const DOUBAO_STREAMING_ID: &str = "doubao-streaming";
+pub const SILERO_VAD_ID: &str = "silero-vad";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub app: AppSettings,
     #[serde(default)]
     pub asr: AsrConfig,
-    #[serde(default)]
-    pub asr_online: AsrOnlineConfig,
-    #[serde(default)]
-    pub asr_offline: AsrOfflineConfig,
-    pub connection: ConnectionConfig,
-    pub audio: AudioConfig,
-    pub request: RequestConfig,
+    #[serde(default = "default_audio_profiles")]
+    pub audio: BTreeMap<String, serde_norway::Value>,
     #[serde(default)]
     pub llm: LlmConfig,
 }
 
-// -- New ASR config sections --
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AsrConfig {
-    #[serde(default = "default_asr_engine")]
-    pub engine: String,
-    #[serde(default)]
-    pub active_model: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AsrOnlineConfig {
-    #[serde(default)]
-    pub doubao: DoubaoOnlineConfig,
+    #[serde(default = "default_asr_provider")]
+    pub provider: String,
 }
 
 /// User-overridable VAD parameters stored in config.yaml.
@@ -44,26 +33,37 @@ pub struct VadParams {
     pub min_silence_duration: Option<f32>,
     pub min_speech_duration: Option<f32>,
     pub max_speech_duration: Option<f32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct AsrOfflineConfig {
-    #[serde(default)]
-    pub vad: VadParams,
+    pub num_threads: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DoubaoOnlineConfig {
+pub struct DoubaoStreamingConfig {
     #[serde(default)]
     pub url: String,
-    #[serde(default)]
-    pub resource_id: String,
     #[serde(default)]
     pub app_id: String,
     #[serde(default)]
     pub access_token: String,
     #[serde(default)]
     pub secret_key: String,
+    #[serde(default)]
+    pub resource_id: String,
+    #[serde(default = "default_format")]
+    pub format: String,
+    #[serde(default = "default_rate")]
+    pub rate: u32,
+    #[serde(default = "default_bits")]
+    pub bits: u32,
+    #[serde(default = "default_channel")]
+    pub channel: u32,
+    #[serde(default = "default_model_name")]
+    pub model_name: String,
+    #[serde(default)]
+    pub model_version: String,
+    #[serde(default = "default_operation")]
+    pub operation: String,
+    #[serde(default)]
+    pub sequence: u32,
     #[serde(default)]
     pub language: String,
     #[serde(default = "default_true")]
@@ -75,7 +75,21 @@ pub struct DoubaoOnlineConfig {
     #[serde(default = "default_true")]
     pub enable_punc: bool,
     #[serde(default)]
-    pub boosting_table_id: String,
+    pub show_utterances: bool,
+    #[serde(default = "default_result_type")]
+    pub result_type: String,
+    #[serde(default)]
+    pub end_window_size: Option<u32>,
+    #[serde(default)]
+    pub force_to_speech_time: Option<u32>,
+    #[serde(default)]
+    pub accelerate_score: Option<u32>,
+    #[serde(default)]
+    pub vad_segment_duration: Option<u32>,
+    #[serde(default)]
+    pub enable_accelerate_text: Option<bool>,
+    #[serde(default)]
+    pub corpus: Option<serde_norway::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,6 +159,8 @@ pub struct RequestConfig {
     pub operation: String,
     #[serde(default)]
     pub sequence: u32,
+    #[serde(default)]
+    pub language: Option<String>,
     #[serde(default = "default_true")]
     pub enable_itn: bool,
     #[serde(default = "default_true")]
@@ -228,8 +244,8 @@ pub struct PromptItem {
 }
 
 // Default value functions
-fn default_asr_engine() -> String {
-    "doubao-streaming".to_string()
+fn default_asr_provider() -> String {
+    DOUBAO_STREAMING_ID.to_string()
 }
 fn default_hotkey() -> serde_norway::Value {
     serde_norway::Value::String("F13".to_string())
@@ -271,37 +287,128 @@ fn default_llm_provider() -> String {
     "deepseek".to_string()
 }
 
+fn default_audio_profiles() -> BTreeMap<String, serde_norway::Value> {
+    let mut profiles = BTreeMap::new();
+    if let Ok(value) = serde_norway::to_value(DoubaoStreamingConfig::default()) {
+        profiles.insert(DOUBAO_STREAMING_ID.to_string(), value);
+    }
+    profiles
+}
+
+fn profile_to_json(value: &serde_norway::Value) -> Option<serde_json::Value> {
+    serde_json::to_value(value).ok()
+}
+
 impl Default for AsrConfig {
     fn default() -> Self {
         Self {
-            engine: default_asr_engine(),
-            active_model: String::new(),
+            provider: default_asr_provider(),
         }
     }
 }
 
-impl Default for DoubaoOnlineConfig {
+impl DoubaoStreamingConfig {
+    pub fn to_connection_config(&self) -> ConnectionConfig {
+        ConnectionConfig {
+            url: self.url.clone(),
+            app_id: self.app_id.clone(),
+            access_token: self.access_token.clone(),
+            secret_key: self.secret_key.clone(),
+            resource_id: self.resource_id.clone(),
+        }
+    }
+
+    pub fn to_audio_config(&self) -> AudioConfig {
+        AudioConfig {
+            format: self.format.clone(),
+            rate: self.rate,
+            bits: self.bits,
+            channel: self.channel,
+        }
+    }
+
+    pub fn to_request_config(&self) -> RequestConfig {
+        RequestConfig {
+            model_name: self.model_name.clone(),
+            model_version: self.model_version.clone(),
+            operation: self.operation.clone(),
+            sequence: self.sequence,
+            language: if self.language.trim().is_empty() {
+                None
+            } else {
+                Some(self.language.clone())
+            },
+            enable_itn: self.enable_itn,
+            enable_punc: self.enable_punc,
+            enable_ddc: self.enable_ddc,
+            show_utterances: self.show_utterances,
+            result_type: self.result_type.clone(),
+            end_window_size: self.end_window_size,
+            force_to_speech_time: self.force_to_speech_time,
+            accelerate_score: self.accelerate_score,
+            vad_segment_duration: self.vad_segment_duration,
+            enable_nonstream: Some(self.enable_nonstream),
+            enable_accelerate_text: self.enable_accelerate_text,
+            corpus: self.corpus.clone(),
+        }
+    }
+}
+
+impl AppConfig {
+    pub fn asr_provider(&self) -> &str {
+        self.asr.provider.as_str()
+    }
+
+    pub fn doubao_streaming_config(&self) -> DoubaoStreamingConfig {
+        self.audio
+            .get(DOUBAO_STREAMING_ID)
+            .cloned()
+            .and_then(|value| serde_norway::from_value(value).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn vad_params(&self) -> VadParams {
+        self.audio
+            .get(SILERO_VAD_ID)
+            .cloned()
+            .and_then(|value| serde_norway::from_value(value).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn model_config_json(&self, model_id: &str) -> Option<serde_json::Value> {
+        self.audio.get(model_id).and_then(profile_to_json)
+    }
+}
+
+impl Default for DoubaoStreamingConfig {
     fn default() -> Self {
         Self {
-            url: String::new(),
-            resource_id: String::new(),
+            url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".to_string(),
             app_id: String::new(),
             access_token: String::new(),
             secret_key: String::new(),
+            resource_id: "volc.seedasr.sauc.duration".to_string(),
+            format: default_format(),
+            rate: default_rate(),
+            bits: default_bits(),
+            channel: default_channel(),
+            model_name: default_model_name(),
+            model_version: "400".to_string(),
+            operation: default_operation(),
+            sequence: 0,
             language: String::new(),
             enable_ddc: true,
             enable_itn: true,
             enable_nonstream: false,
             enable_punc: true,
-            boosting_table_id: String::new(),
-        }
-    }
-}
-
-impl Default for AsrOnlineConfig {
-    fn default() -> Self {
-        Self {
-            doubao: DoubaoOnlineConfig::default(),
+            show_utterances: true,
+            result_type: default_result_type(),
+            end_window_size: None,
+            force_to_speech_time: None,
+            accelerate_score: Some(10),
+            vad_segment_duration: None,
+            enable_accelerate_text: Some(true),
+            corpus: Some(serde_norway::Value::Mapping(serde_norway::Mapping::new())),
         }
     }
 }
@@ -320,39 +427,7 @@ impl Default for AppConfig {
                 beta_updates: false,
             },
             asr: AsrConfig::default(),
-            asr_online: AsrOnlineConfig::default(),
-            asr_offline: AsrOfflineConfig::default(),
-            connection: ConnectionConfig {
-                url: String::new(),
-                app_id: String::new(),
-                access_token: String::new(),
-                secret_key: String::new(),
-                resource_id: String::new(),
-            },
-            audio: AudioConfig {
-                format: default_format(),
-                rate: default_rate(),
-                bits: default_bits(),
-                channel: default_channel(),
-            },
-            request: RequestConfig {
-                model_name: default_model_name(),
-                model_version: "400".to_string(),
-                operation: default_operation(),
-                sequence: 0,
-                enable_itn: true,
-                enable_punc: true,
-                enable_ddc: true,
-                show_utterances: true,
-                result_type: default_result_type(),
-                end_window_size: None,
-                force_to_speech_time: None,
-                accelerate_score: None,
-                vad_segment_duration: None,
-                enable_nonstream: None,
-                enable_accelerate_text: None,
-                corpus: None,
-            },
+            audio: default_audio_profiles(),
             llm: LlmConfig {
                 provider: default_llm_provider(),
                 deepseek: None,
@@ -457,8 +532,8 @@ impl ConfigManager {
             None
         };
 
-        let prompts_example_path = if resource_dir.join("prompts.json.example").exists() {
-            Some(resource_dir.join("prompts.json.example"))
+        let prompts_example_path = if resource_dir.join("prompts.json").exists() {
+            Some(resource_dir.join("prompts.json"))
         } else {
             None
         };
@@ -495,86 +570,12 @@ impl ConfigManager {
     }
 
     /// Read config from disk and parse into AppConfig.
-    /// Performs bidirectional migration between old and new config structures.
     fn read_config_from_disk(config_path: &Path) -> AppConfig {
         let content = match fs::read_to_string(config_path) {
             Ok(c) => c,
             Err(_) => return AppConfig::default(),
         };
-        let raw: serde_norway::Value = match serde_norway::from_str(&content) {
-            Ok(v) => v,
-            Err(_) => return AppConfig::default(),
-        };
-        let mut config: AppConfig = serde_norway::from_value(raw).unwrap_or_default();
-
-        // Migrate old engine values to new model-ID format:
-        //   "doubao"      → "doubao-streaming"
-        //   "sherpa-onnx" → active_model (or sensible default)
-        if config.asr.engine == "doubao" {
-            config.asr.engine = "doubao-streaming".to_string();
-        } else if config.asr.engine == "sherpa-onnx" {
-            config.asr.engine = if config.asr.active_model.is_empty() {
-                "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8".to_string()
-            } else {
-                std::mem::take(&mut config.asr.active_model)
-            };
-        }
-
-        // Bidirectional migration: ensure both old and new fields are populated
-        if config.connection.url.is_empty() && !config.asr_online.doubao.url.is_empty() {
-            // New config → populate old fields for backward compat
-            config.connection = ConnectionConfig {
-                url: config.asr_online.doubao.url.clone(),
-                resource_id: config.asr_online.doubao.resource_id.clone(),
-                app_id: config.asr_online.doubao.app_id.clone(),
-                access_token: config.asr_online.doubao.access_token.clone(),
-                secret_key: config.asr_online.doubao.secret_key.clone(),
-            };
-            config.request.enable_ddc = config.asr_online.doubao.enable_ddc;
-            config.request.enable_itn = config.asr_online.doubao.enable_itn;
-            config.request.enable_nonstream = Some(config.asr_online.doubao.enable_nonstream);
-            config.request.enable_punc = config.asr_online.doubao.enable_punc;
-            if !config.asr_online.doubao.boosting_table_id.is_empty() {
-                let mut corpus = serde_norway::Mapping::new();
-                corpus.insert(
-                    serde_norway::Value::String("boosting_table_id".to_string()),
-                    serde_norway::Value::String(
-                        config.asr_online.doubao.boosting_table_id.clone(),
-                    ),
-                );
-                config.request.corpus = Some(serde_norway::Value::Mapping(corpus));
-            }
-        } else if !config.connection.url.is_empty()
-            && config.asr_online.doubao.url.is_empty()
-        {
-            // Old config → populate new fields
-            config.asr = AsrConfig::default();
-            config.asr_online = AsrOnlineConfig {
-                doubao: DoubaoOnlineConfig {
-                    url: config.connection.url.clone(),
-                    resource_id: config.connection.resource_id.clone(),
-                    app_id: config.connection.app_id.clone(),
-                    access_token: config.connection.access_token.clone(),
-                    secret_key: config.connection.secret_key.clone(),
-                    language: String::new(),
-                    enable_ddc: config.request.enable_ddc,
-                    enable_itn: config.request.enable_itn,
-                    enable_nonstream: config.request.enable_nonstream.unwrap_or(false),
-                    enable_punc: config.request.enable_punc,
-                    boosting_table_id: config
-                        .request
-                        .corpus
-                        .as_ref()
-                        .and_then(|c| c.get("boosting_table_id"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                },
-            };
-            config.asr_offline = AsrOfflineConfig::default();
-        }
-
-        config
+        serde_norway::from_str(&content).unwrap_or_default()
     }
 
     /// Read prompts from disk, merge with defaults, and optionally save merged result.
@@ -641,8 +642,7 @@ impl ConfigManager {
     pub fn save_config(&self, config: &serde_norway::Value) -> Result<(), String> {
         let yaml = serde_norway::to_string(config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        let parsed: AppConfig =
-            serde_norway::from_value(config.clone()).unwrap_or_default();
+        let parsed: AppConfig = serde_norway::from_value(config.clone()).unwrap_or_default();
         fs::write(&self.config_path, yaml).map_err(|e| format!("Failed to write config: {}", e))?;
         *self.cached_config.write().unwrap() = parsed;
         Ok(())
@@ -663,7 +663,8 @@ impl ConfigManager {
             .ok_or("config.yaml.example not found")?;
         let content = fs::read_to_string(example_path)
             .map_err(|e| format!("Failed to read example config: {}", e))?;
-        fs::write(&self.config_path, &content).map_err(|e| format!("Failed to write config: {}", e))?;
+        fs::write(&self.config_path, &content)
+            .map_err(|e| format!("Failed to write config: {}", e))?;
         let config: AppConfig = serde_norway::from_str(&content).unwrap_or_default();
         *self.cached_config.write().unwrap() = config;
         Ok(())
@@ -684,7 +685,8 @@ impl ConfigManager {
     pub fn save_prompts(&self, prompts: &[PromptItem]) -> Result<(), String> {
         let json = serde_json::to_string_pretty(prompts)
             .map_err(|e| format!("Failed to serialize prompts: {}", e))?;
-        fs::write(&self.prompts_path, json).map_err(|e| format!("Failed to write prompts: {}", e))?;
+        fs::write(&self.prompts_path, json)
+            .map_err(|e| format!("Failed to write prompts: {}", e))?;
         *self.cached_prompts.write().unwrap() = prompts.to_vec();
         Ok(())
     }
