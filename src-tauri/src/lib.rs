@@ -137,9 +137,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_config,
             commands::get_settings_data,
-            commands::save_config,
             commands::save_config_object,
-            commands::reset_config,
             commands::load_prompts,
             commands::save_prompts,
             commands::get_stats,
@@ -651,8 +649,8 @@ async fn start_recording(app_handle: AppHandle) {
         .unwrap_or_else(|_| std::path::PathBuf::from("."));
     let registry = crate::model::load_registry(&data_dir, &resource_dir);
 
-    // Resolve engine from model ID: config.asr.provider stores the model ID.
-    let engine_model_id = config.asr_provider();
+    // Resolve engine from model ID: config.audio.provider stores the model ID.
+    let engine_model_id = config.audio_provider();
     let entry = registry.models.iter().find(|m| m.id == engine_model_id);
 
     let result = match entry {
@@ -826,7 +824,7 @@ async fn stop_recording(app_handle: AppHandle) {
 
                     // When using sherpa-onnx (local) engine, append hotwords to the LLM prompt
                     // as a fallback hint for proper-noun accuracy.
-                    if config.asr_provider().starts_with("sherpa-onnx") {
+                    if config.audio_provider().starts_with("sherpa-onnx") {
                         let hw = app_inner.hotword_manager.active_words();
                         if !hw.is_empty() {
                             system_prompt = format!(

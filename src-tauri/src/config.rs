@@ -11,18 +11,10 @@ pub const SILERO_VAD_ID: &str = "silero-vad";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub app: AppSettings,
-    #[serde(default)]
-    pub asr: AsrConfig,
-    #[serde(default = "default_audio_profiles")]
+    #[serde(default = "default_audio_settings")]
     pub audio: BTreeMap<String, serde_norway::Value>,
     #[serde(default)]
     pub llm: LlmConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AsrConfig {
-    #[serde(default = "default_asr_provider")]
-    pub provider: String,
 }
 
 /// User-overridable VAD parameters stored in config.yaml.
@@ -244,9 +236,15 @@ pub struct PromptItem {
 }
 
 // Default value functions
-fn default_asr_provider() -> String {
-    DOUBAO_STREAMING_ID.to_string()
+fn default_audio_settings() -> BTreeMap<String, serde_norway::Value> {
+    let mut map = BTreeMap::new();
+    map.insert(
+        "provider".to_string(),
+        serde_norway::Value::String(DOUBAO_STREAMING_ID.to_string()),
+    );
+    map
 }
+
 fn default_hotkey() -> serde_norway::Value {
     serde_norway::Value::String("F13".to_string())
 }
@@ -287,24 +285,8 @@ fn default_llm_provider() -> String {
     "deepseek".to_string()
 }
 
-fn default_audio_profiles() -> BTreeMap<String, serde_norway::Value> {
-    let mut profiles = BTreeMap::new();
-    if let Ok(value) = serde_norway::to_value(DoubaoStreamingConfig::default()) {
-        profiles.insert(DOUBAO_STREAMING_ID.to_string(), value);
-    }
-    profiles
-}
-
 fn profile_to_json(value: &serde_norway::Value) -> Option<serde_json::Value> {
     serde_json::to_value(value).ok()
-}
-
-impl Default for AsrConfig {
-    fn default() -> Self {
-        Self {
-            provider: default_asr_provider(),
-        }
-    }
 }
 
 impl DoubaoStreamingConfig {
@@ -355,8 +337,11 @@ impl DoubaoStreamingConfig {
 }
 
 impl AppConfig {
-    pub fn asr_provider(&self) -> &str {
-        self.asr.provider.as_str()
+    pub fn audio_provider(&self) -> &str {
+        self.audio
+            .get("provider")
+            .and_then(|v| v.as_str())
+            .unwrap_or(DOUBAO_STREAMING_ID)
     }
 
     pub fn doubao_streaming_config(&self) -> DoubaoStreamingConfig {
@@ -426,8 +411,7 @@ impl Default for AppConfig {
                 sound: None,
                 beta_updates: false,
             },
-            asr: AsrConfig::default(),
-            audio: default_audio_profiles(),
+            audio: default_audio_settings(),
             llm: LlmConfig {
                 provider: default_llm_provider(),
                 deepseek: None,
@@ -516,7 +500,6 @@ fn load_default_prompts(example_path: &Option<PathBuf>) -> Vec<PromptItem> {
 pub struct ConfigManager {
     config_path: PathBuf,
     prompts_path: PathBuf,
-    config_example_path: Option<PathBuf>,
     cached_config: RwLock<AppConfig>,
     cached_prompts: RwLock<Vec<PromptItem>>,
 }
@@ -563,7 +546,6 @@ impl ConfigManager {
         Self {
             config_path,
             prompts_path,
-            config_example_path,
             cached_config: RwLock::new(config),
             cached_prompts: RwLock::new(prompts),
         }
@@ -623,28 +605,15 @@ impl ConfigManager {
         Ok(self.cached_config.read().unwrap().clone())
     }
 
-    /// Read raw YAML text from disk (used by settings UI).
-    pub fn read_config_text(&self) -> Result<String, String> {
-        fs::read_to_string(&self.config_path).map_err(|e| format!("Failed to read config: {}", e))
-    }
-
-    /// Save config as raw YAML text, update memory cache and disk.
-    pub fn save_config_text(&self, text: &str) -> Result<(), String> {
-        let raw: serde_norway::Value =
-            serde_norway::from_str(text).map_err(|e| format!("Invalid YAML: {}", e))?;
-        let config: AppConfig = serde_norway::from_value(raw).unwrap_or_default();
-        fs::write(&self.config_path, text).map_err(|e| format!("Failed to write config: {}", e))?;
-        *self.cached_config.write().unwrap() = config;
-        Ok(())
-    }
-
     /// Save config as a parsed YAML value, update memory cache and disk.
     pub fn save_config(&self, config: &serde_norway::Value) -> Result<(), String> {
         let yaml = serde_norway::to_string(config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        let parsed: AppConfig = serde_norway::from_value(config.clone()).unwrap_or_default();
-        fs::write(&self.config_path, yaml).map_err(|e| format!("Failed to write config: {}", e))?;
-        *self.cached_config.write().unwrap() = parsed;
+        fs::write(&self.config_path, yaml)
+            .map_err(|e| format!("Failed to write config: {}", e))?;
+        // Re-read from disk to populate cache, avoiding JSON→YAML value round-trip
+        // deserialization issues that can cause silent fallback to defaults.
+        *self.cached_config.write().unwrap() = Self::read_config_from_disk(&self.config_path);
         Ok(())
     }
 
@@ -653,21 +622,6 @@ impl ConfigManager {
         let content = fs::read_to_string(&self.config_path)
             .map_err(|e| format!("Failed to read config: {}", e))?;
         serde_norway::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
-    }
-
-    /// Reset config to default, update memory cache and disk.
-    pub fn reset_to_default(&self) -> Result<(), String> {
-        let example_path = self
-            .config_example_path
-            .as_ref()
-            .ok_or("config.yaml.example not found")?;
-        let content = fs::read_to_string(example_path)
-            .map_err(|e| format!("Failed to read example config: {}", e))?;
-        fs::write(&self.config_path, &content)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
-        let config: AppConfig = serde_norway::from_str(&content).unwrap_or_default();
-        *self.cached_config.write().unwrap() = config;
-        Ok(())
     }
 
     pub fn config_path(&self) -> &PathBuf {

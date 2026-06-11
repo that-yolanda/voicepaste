@@ -92,7 +92,6 @@ pub async fn get_app_config(state: State<'_, AppState>) -> Result<serde_json::Va
 #[tauri::command]
 pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let config = state.config_manager.load_config()?;
-    let config_text = state.config_manager.read_config_text()?;
     let parsed_config = state.config_manager.get_editable_config()?;
 
     let hotkey = match &config.app.hotkey {
@@ -109,9 +108,16 @@ pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json:
 
     let version = env!("CARGO_PKG_VERSION").to_string();
 
+    // Read theme from disk (parsed_config) to avoid stale cache after save
+    let theme_preference = parsed_config
+        .get("app")
+        .and_then(|v| v.get("theme"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("system")
+        .to_string();
+
     Ok(serde_json::json!({
         "configPath": state.config_manager.config_path().to_string_lossy(),
-        "configText": config_text,
         "parsedConfig": parsed_config,
         "runtime": {
             "hotkey": hotkey,
@@ -121,70 +127,9 @@ pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json:
             "version": version,
             "platform": std::env::consts::OS,
             "theme": {
-                "preference": config.app.theme.clone(),
-                "resolved": resolve_theme(&config.app.theme),
+                "preference": theme_preference.clone(),
+                "resolved": resolve_theme(&theme_preference),
             },
-        },
-    }))
-}
-
-/// Save config as raw YAML text.
-#[tauri::command]
-pub async fn save_config(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    config_text: String,
-) -> Result<serde_json::Value, String> {
-    state.config_manager.save_config_text(&config_text)?;
-
-    // Re-register shortcuts with the new hotkey from the saved config
-    let updated_config = state.config_manager.load_config()?;
-
-    // Sync hotkey mode
-    if let Some(hotkey_mode) = app.try_state::<HotkeyMode>() {
-        *hotkey_mode.0.lock().unwrap() = updated_config.app.hotkey_mode.clone();
-    }
-
-    crate::reload_hotkey_bindings(&app);
-
-    // Notify the overlay so it can re-apply the glass appearance live.
-    let _ = app.emit(
-        "overlay:event",
-        serde_json::json!({
-            "type": "appearance",
-            "payload": {
-                "platform": std::env::consts::OS,
-                "overlayStyle": updated_config.app.overlay_style,
-                "theme": updated_config.app.theme,
-            }
-        }),
-    );
-
-    // Notify the settings window when the theme changes.
-    let _ = app.emit(
-        "settings:event",
-        serde_json::json!({
-            "type": "theme-changed",
-            "payload": {
-                "preference": updated_config.app.theme,
-                "resolved": resolve_theme(&updated_config.app.theme),
-            }
-        }),
-    );
-
-    let updated_text = state.config_manager.read_config_text()?;
-    let config = state.config_manager.load_config()?;
-    let hotkey = match &config.app.hotkey {
-        serde_norway::Value::String(s) => s.clone(),
-        _ => String::new(),
-    };
-
-    Ok(serde_json::json!({
-        "ok": true,
-        "configText": updated_text,
-        "runtime": {
-            "hotkey": hotkey,
-            "hotkeyDisplay": hotkey,
         },
     }))
 }
@@ -232,7 +177,6 @@ pub async fn save_config_object(
         }),
     );
 
-    let config_text = state.config_manager.read_config_text()?;
     let parsed = state.config_manager.get_editable_config()?;
     let config = state.config_manager.load_config()?;
     let hotkey = match &config.app.hotkey {
@@ -242,37 +186,11 @@ pub async fn save_config_object(
 
     Ok(serde_json::json!({
         "ok": true,
-        "configText": config_text,
         "parsedConfig": parsed,
         "runtime": {
             "hotkey": hotkey,
             "hotkeyDisplay": hotkey,
         },
-    }))
-}
-
-/// Reset config to default and reload shortcuts.
-#[tauri::command]
-pub async fn reset_config(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    state.config_manager.reset_to_default()?;
-
-    // Reload shortcuts with the default hotkey
-    let config = state.config_manager.load_config()?;
-    if let Some(hotkey_mode) = app.try_state::<HotkeyMode>() {
-        *hotkey_mode.0.lock().unwrap() = config.app.hotkey_mode.clone();
-    }
-    crate::reload_hotkey_bindings(&app);
-
-    let config_text = state.config_manager.read_config_text()?;
-    let parsed = state.config_manager.get_editable_config()?;
-
-    Ok(serde_json::json!({
-        "ok": true,
-        "configText": config_text,
-        "parsedConfig": parsed,
     }))
 }
 

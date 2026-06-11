@@ -1,7 +1,5 @@
 (() => {
   let parsedConfig = {};
-  let _originalConfigText = "";
-  let isDirty = false;
   let currentThemePreference = "system";
   let currentHotkeyMode = "toggle";
   let currentOverlayStyle = "liquid"; // "liquid" | "liquid-standard" | "vibrancy"
@@ -168,10 +166,6 @@
     removeTrailingPeriod: $("removeTrailingPeriod"),
     keepClipboard: $("keepClipboard"),
     boostingTableId: $("boostingTableId"),
-    yamlEditor: $("yamlEditor"),
-    reloadYamlBtn: $("reloadYamlBtn"),
-    resetBtn: $("resetBtn"),
-    saveYamlBtn: $("saveYamlBtn"),
     versionText: $("versionText"),
     aboutUpdateBtn: $("aboutUpdateBtn"),
     aboutUpdateStatus: $("aboutUpdateStatus"),
@@ -217,7 +211,6 @@
   let _saveTimer = null;
 
   function autoSaveForm() {
-    isDirty = true;
     if (_saveTimer) clearTimeout(_saveTimer);
     _saveTimer = setTimeout(() => {
       saveFromForm();
@@ -230,14 +223,6 @@
       _saveTimer = null;
     }
     saveFromForm();
-  }
-
-  function clearDirty() {
-    isDirty = false;
-    if (_saveTimer) {
-      clearTimeout(_saveTimer);
-      _saveTimer = null;
-    }
   }
 
   // ===== Theme =====
@@ -533,7 +518,6 @@
   async function loadSettings() {
     try {
       const data = await window.voiceSettings.getData();
-      _originalConfigText = data.configText || "";
       parsedConfig = data.parsedConfig || {};
       try {
         const regResult = await window.voiceSettings.getModelRegistry();
@@ -543,8 +527,6 @@
       }
       populateForm(data);
       initThemeSelector(data);
-      el.yamlEditor.value = data.configText || "";
-      autoResizeYamlEditor();
       updateMicStatus(data.runtime?.microphoneStatus || "unknown");
       updateAccessibilityStatus(data.runtime?.accessibilityStatus || "unknown");
 
@@ -571,7 +553,6 @@
       el.versionText.textContent = data.runtime?.version ? `v${data.runtime.version}` : "-";
       document.title = data.runtime?.version ? `VoicePaste v${data.runtime.version}` : "VoicePaste";
 
-      clearDirty();
       autoCheckUpdatesOnce();
       updateCurrentModelBadge();
       loadHotwordGroups();
@@ -703,10 +684,8 @@
     };
     config.app.beta_updates = el.betaUpdates.checked;
 
-    config.asr = config.asr || {};
-    config.asr.provider = getAsrProvider(config);
-    delete config.asr.engine;
-    delete config.asr.active_model;
+    config.audio = config.audio || {};
+    config.audio.provider = getAsrProvider(config);
 
     const doubaoConfig = ensureModelConfig(config, DOUBAO_MODEL_ID);
     doubaoConfig.url = el.wsUrl.value.trim();
@@ -759,26 +738,6 @@
       await loadSettings();
     } catch (_err) {
       /* ignore */
-    }
-  }
-
-  async function saveFromYaml() {
-    try {
-      await window.voiceSettings.saveConfig({
-        configText: el.yamlEditor.value,
-      });
-      await loadSettings();
-    } catch (_err) {
-      /* ignore */
-    }
-  }
-
-  async function syncFormToYaml() {
-    // If there are unsaved form changes, save them first so YAML reflects current state
-    if (isDirty) {
-      await saveFromForm();
-    } else {
-      await loadSettings();
     }
   }
 
@@ -878,7 +837,7 @@
   }
 
   function getAsrProvider(config = parsedConfig) {
-    return config.asr?.provider || config.asr?.engine || DOUBAO_MODEL_ID;
+    return config.audio?.provider || DOUBAO_MODEL_ID;
   }
 
   function getRegistryModel(modelId) {
@@ -1177,9 +1136,6 @@
 
     if (id === "home") {
       loadHomeData();
-    }
-    if (id === "yaml") {
-      syncFormToYaml();
     }
 
     document.querySelector(".main").scrollTop = 0;
@@ -1822,30 +1778,6 @@ SOFTWARE.`;
     await savePromptsNow();
   });
 
-  // YAML section
-  el.reloadYamlBtn.addEventListener("click", loadSettings);
-  el.saveYamlBtn.addEventListener("click", saveFromYaml);
-  el.resetBtn.addEventListener("click", async () => {
-    if (!confirm("确定要还原为默认配置吗？当前配置将被覆盖。")) return;
-    try {
-      await window.voiceSettings.resetConfig();
-      await loadSettings();
-    } catch (_err) {
-      /* ignore */
-    }
-  });
-
-  function autoResizeYamlEditor() {
-    el.yamlEditor.style.height = "auto";
-    const maxHeight = Math.round(window.innerHeight * 0.6);
-    el.yamlEditor.style.height = `${Math.min(el.yamlEditor.scrollHeight, maxHeight)}px`;
-  }
-
-  el.yamlEditor.addEventListener("input", () => {
-    isDirty = true;
-    autoResizeYamlEditor();
-  });
-
   // Update
   el.aboutUpdateBtn.addEventListener("click", handleUpdateClick);
 
@@ -1952,10 +1884,8 @@ SOFTWARE.`;
 
   async function saveModelSelection(modelId) {
     const config = parsedConfig || {};
-    if (!config.asr) config.asr = {};
-    config.asr.provider = modelId;
-    delete config.asr.engine;
-    delete config.asr.active_model;
+    if (!config.audio) config.audio = {};
+    config.audio.provider = modelId;
     ensureModelConfig(config, modelId);
     try {
       await window.voiceSettings.saveConfigObject(config);

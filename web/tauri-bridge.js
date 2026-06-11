@@ -88,24 +88,10 @@
     },
 
     /**
-     * Save config as raw YAML text.
-     */
-    async saveConfig(payload) {
-      return invoke("save_config", { configText: payload?.configText || "" });
-    },
-
-    /**
      * Save config as a parsed object.
      */
     async saveConfigObject(config) {
       return invoke("save_config_object", { configObject: config });
-    },
-
-    /**
-     * Reset config to default.
-     */
-    async resetConfig() {
-      return invoke("reset_config");
     },
 
     /**

@@ -55,6 +55,9 @@ body {
   height: 26px;
   border-radius: 6px;
   flex-shrink: 0;
+  /* Compensate for macOS icon padding so the squircle content
+     appears at the intended visual size (content ≈82% of canvas) */
+  transform: scale(1.18);
 }
 
 .app-name {
@@ -935,6 +938,9 @@ kbd {
   height: 42px;
   border-radius: 10px;
   flex-shrink: 0;
+  /* Compensate for macOS icon padding so the squircle content
+     appears at the intended visual size (content ≈82% of canvas) */
+  transform: scale(1.18);
 }
 
 /* ===== License Overlay ===== */

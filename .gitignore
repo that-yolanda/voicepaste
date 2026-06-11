@@ -18,3 +18,5 @@ src-tauri/Cargo.lock
 
 # Auto-generated (beforeBuildCommand)
 web/lucide-icons.js
+web/icon.png
+src-tauri/icons/

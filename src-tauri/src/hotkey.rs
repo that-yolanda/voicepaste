@@ -13,7 +13,7 @@ use std::sync::{Arc, RwLock};
 // ---------------------------------------------------------------------------
 
 /// A registered hotkey binding: a set of keys + metadata.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HotkeyBinding {
     /// The set of keys that must all be held simultaneously.
     pub keys: BTreeSet<Key>,
@@ -576,14 +576,12 @@ pub fn reload_bindings(
     main_mode: &str,
     prompts: &[PromptItem],
 ) {
-    let mut cfg = config.write().unwrap();
-    let mut bindings = Vec::new();
+    let mut new_bindings = Vec::new();
 
     // Main hotkey
     if !main_hotkey_str.is_empty() {
         if let Some(keys) = parse_hotkey_string(main_hotkey_str) {
-            log_hotkey!(debug, "Main binding: {:?} (mode: {})", keys, main_mode);
-            bindings.push(HotkeyBinding {
+            new_bindings.push(HotkeyBinding {
                 keys,
                 mode: main_mode.to_string(),
                 prompt_id: None,
@@ -596,8 +594,7 @@ pub fn reload_bindings(
     // Prompt hotkeys
     for prompt in prompts {
         if let Some(keys) = parse_prompt_hotkey_to_keys(&prompt.hotkey) {
-            log_hotkey!(debug, "Prompt '{}' binding: {:?} (mode: {})", prompt.title, keys, prompt.hotkey_mode);
-            bindings.push(HotkeyBinding {
+            new_bindings.push(HotkeyBinding {
                 keys,
                 mode: prompt.hotkey_mode.clone(),
                 prompt_id: Some(prompt.id.clone()),
@@ -608,7 +605,13 @@ pub fn reload_bindings(
         }
     }
 
-    cfg.bindings = bindings;
+    let mut cfg = config.write().unwrap();
+    if cfg.bindings == new_bindings {
+        return; // No change, skip re-registration and logging
+    }
+
+    log_hotkey!(debug, "Hotkey bindings changed, loading {} binding(s)", new_bindings.len());
+    cfg.bindings = new_bindings;
 }
 
 /// Toggle escape-key cancellation on or off.

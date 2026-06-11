@@ -25,15 +25,12 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build",
-    "start": "tauri dev",
     "pack": "node --env-file=.env scripts/pack.js",
     "clean": "node scripts/clean.js",
     "lint": "biome lint ./web",
     "format": "biome format --write ./web",
     "check": "biome check --write ./web",
-    "lint:ci": "biome ci ./web",
-    "validate:json": "node scripts/validate-json.js"
+    "lint:ci": "biome ci ./web"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",

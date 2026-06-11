@@ -11,10 +11,8 @@ app:
     end_sound: ""
   beta_updates: false
 
-asr:
-  provider: doubao-streaming
-
 audio:
+  provider: doubao-streaming
   doubao-streaming:
     url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
     app_id: ""

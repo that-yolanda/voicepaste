@@ -5,7 +5,7 @@
   "build": {
     "frontendDist": "../web",
     "beforeDevCommand": "",
-    "beforeBuildCommand": "node scripts/extract-icons.js"
+    "beforeBuildCommand": "node scripts/prepare-assets.js && node scripts/validate-json.js"
   },
   "app": {
     "macOSPrivateApi": true,
