@@ -5,7 +5,8 @@
   let isDirty = false;
   let currentThemePreference = "system";
   let currentHotkeyMode = "toggle";
-  let currentOverlayStyle = "liquid";
+  let currentOverlayType = "liquid"; // "liquid" | "vibrancy"
+  let currentLiquidVariant = "liquid"; // "liquid" (通透) | "liquid-standard" (标准)
   let currentPlatform = "";
   let currentLlmProvider = "deepseek";
   let hasAutoCheckedUpdates = false;
@@ -101,7 +102,9 @@
     configPath: $("configPath"),
     autoStart: $("autoStart"),
     overlayStyleRow: $("overlayStyleRow"),
-    overlayStyleSelector: $("overlayStyleSelector"),
+    overlayTypeSelector: $("overlayTypeSelector"),
+    overlayLiquidVariantRow: $("overlayLiquidVariantRow"),
+    overlayLiquidVariantSelector: $("overlayLiquidVariantSelector"),
     micDot: $("micDot"),
     micText: $("micText"),
     checkMicBtn: $("checkMicBtn"),
@@ -406,13 +409,31 @@
     });
   }
 
-  function setOverlayStyle(style) {
-    currentOverlayStyle = style === "vibrancy" ? "vibrancy" : "liquid";
-    if (el.overlayStyleSelector) {
-      el.overlayStyleSelector.querySelectorAll(".seg-btn").forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.val === currentOverlayStyle);
-      });
-    }
+  function setSegActive(selector, value) {
+    if (!selector) return;
+    selector.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.val === value);
+    });
+  }
+
+  // Show the "液态玻璃风格" (通透/标准) row only for Liquid Glass on macOS. Vibrancy has
+  // no sub-row — its light/dark follows the global app.theme. (Overlay is web-rendered
+  // on non-macOS, so the row hides there too.)
+  function updateOverlaySubVisibility() {
+    if (!el.overlayLiquidVariantRow) return;
+    const show = currentPlatform === "macos" && currentOverlayType === "liquid";
+    el.overlayLiquidVariantRow.style.display = show ? "" : "none";
+  }
+
+  function setOverlayType(type) {
+    currentOverlayType = type === "vibrancy" ? "vibrancy" : "liquid";
+    setSegActive(el.overlayTypeSelector, currentOverlayType);
+    updateOverlaySubVisibility();
+  }
+
+  function setLiquidVariant(variant) {
+    currentLiquidVariant = variant === "liquid-standard" ? "liquid-standard" : "liquid";
+    setSegActive(el.overlayLiquidVariantSelector, currentLiquidVariant);
   }
 
   function setHotkeyHint(text, level) {
@@ -543,7 +564,15 @@
     el.configPath.textContent = data.configPath || "-";
 
     currentPlatform = data.runtime?.platform || currentPlatform;
-    setOverlayStyle(c.app?.overlay_style);
+    // Map the single `overlay_style` config into the type + liquid-variant UI.
+    const style = c.app?.overlay_style;
+    if (style === "vibrancy") {
+      setLiquidVariant("liquid");
+      setOverlayType("vibrancy");
+    } else {
+      setLiquidVariant(style === "liquid-standard" ? "liquid-standard" : "liquid");
+      setOverlayType("liquid");
+    }
     if (currentPlatform !== "macos" && el.overlayStyleRow) {
       el.overlayStyleRow.style.display = "none";
     }
@@ -619,7 +648,8 @@
     config.app.remove_trailing_period = el.removeTrailingPeriod.checked;
     config.app.keep_clipboard = el.keepClipboard.checked;
     config.app.theme = currentThemePreference;
-    config.app.overlay_style = currentOverlayStyle;
+    config.app.overlay_style =
+      currentOverlayType === "vibrancy" ? "vibrancy" : currentLiquidVariant;
     config.app.sound = {
       enabled: el.soundEnabled.checked,
       start_sound: el.startSoundName.dataset.path || "",
@@ -1418,12 +1448,22 @@ SOFTWARE.`;
     saveFormNow();
   });
 
-  // Overlay glass style (macOS only)
-  if (el.overlayStyleSelector) {
-    el.overlayStyleSelector.addEventListener("click", (e) => {
+  // Overlay material type (macOS only): 液态玻璃 / 磨砂毛玻璃
+  if (el.overlayTypeSelector) {
+    el.overlayTypeSelector.addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-btn");
       if (!btn) return;
-      setOverlayStyle(btn.dataset.val);
+      setOverlayType(btn.dataset.val);
+      saveFormNow();
+    });
+  }
+
+  // Liquid Glass sub-variant: 通透 (Clear) / 标准 (Regular)
+  if (el.overlayLiquidVariantSelector) {
+    el.overlayLiquidVariantSelector.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      setLiquidVariant(btn.dataset.val);
       saveFormNow();
     });
   }
