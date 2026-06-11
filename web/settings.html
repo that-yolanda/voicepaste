@@ -1,772 +1,1087 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';"
-    />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VoicePaste</title>
-    <link rel="stylesheet" href="./settings.css" />
-  </head>
-  <body>
-    <div class="shell">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <img class="app-logo" src="./icon.png" data-icon-src="app-logo" alt="VoicePaste" />
-          <span class="app-name">VoicePaste</span>
-        </div>
-        <nav class="sidebar-nav">
-          <div class="nav-group-label">概览</div>
-          <div class="nav-item active" data-section="home">
-            <span class="nav-icon" data-icon="home"></span>
-            <span>首页</span>
-          </div>
-          <div class="nav-divider"></div>
-          <div class="nav-group-label">设置</div>
-          <div class="nav-item" data-section="hotkey">
-            <span class="nav-icon" data-icon="keyboard"></span>
-            <span>快捷键</span>
-          </div>
-          <div class="nav-item" data-section="app">
-            <span class="nav-icon" data-icon="settings-2"></span>
-            <span>应用设置</span>
-          </div>
-          <div class="nav-item" data-section="permissions">
-            <span class="nav-icon" data-icon="shield-check"></span>
-            <span>系统权限</span>
-            <span class="nav-badge" id="permBadge" style="display: none"></span>
-          </div>
-          <div class="nav-divider"></div>
-          <div class="nav-group-label">模型</div>
-          <div class="nav-item" data-section="service">
-            <span class="nav-icon" data-icon="mic"></span>
-            <span>音频模型</span>
-          </div>
-          <div class="nav-item" data-section="hotwords">
-            <span class="nav-icon" data-icon="book-open"></span>
-            <span>热词库</span>
-          </div>
-          <div class="nav-divider"></div>
-          <div class="nav-group-label">处理</div>
-          <div class="nav-item" data-section="llm">
-            <span class="nav-icon" data-icon="sparkles"></span>
-            <span>文本润色</span>
-          </div>
-          <div class="nav-divider"></div>
-          <div class="nav-group-label">高级</div>
-          <div class="nav-item" data-section="advanced">
-            <span class="nav-icon" data-icon="sliders-horizontal"></span>
-            <span>高级配置</span>
-          </div>
-          <div class="nav-item" data-section="yaml">
-            <span class="nav-icon" data-icon="file-code-2"></span>
-            <span>完整配置</span>
-          </div>
-          <div class="nav-divider"></div>
-          <div class="nav-group-label">支持</div>
-          <a class="nav-item" href="https://github.com/that-yolanda/voicepaste" target="_blank">
-            <span class="nav-icon" data-icon="book-open"></span>
-            <span>帮助文档</span>
-          </a>
-          <div class="nav-item" data-section="about">
-            <span class="nav-icon" data-icon="info"></span>
-            <span>关于</span>
-            <span class="nav-badge" id="updateBadge" style="display: none">更新</span>
-          </div>
-        </nav>
-        <div class="sidebar-footer">
-          <div class="theme-row">
-            <button
-              type="button"
-              class="theme-btn"
-              data-theme-val="light"
-              title="浅色模式"
-            >
-              <span class="nav-icon" data-icon="sun"></span>
-            </button>
-            <button
-              type="button"
-              class="theme-btn"
-              data-theme-val="dark"
-              title="深色模式"
-            >
-              <span class="nav-icon" data-icon="moon"></span>
-            </button>
-            <button
-              type="button"
-              class="theme-btn active"
-              data-theme-val="system"
-              title="跟随系统"
-            >
-              <span class="nav-icon" data-icon="monitor"></span>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      <main class="main">
-        <div class="main-inner">
-          <!-- 首页 -->
-          <section class="section" id="section-home">
-            <div class="welcome-text"><span id="greetingText">下午好</span></div>
-
-            <div style="margin-top: 20px">
-              <div class="achievements-grid">
-                <div class="achievement-item">
-                  <div class="achievement-thumb"><span data-icon="calendar-days"></span></div>
-                  <div class="achievement-text">
-                    <div class="achievement-value" id="achDaysUsed">0</div>
-                    <div class="achievement-label">已使用天数</div>
-                  </div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';"
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>VoicePaste</title>
+        <link rel="stylesheet" href="./settings.css" />
+    </head>
+    <body>
+        <div class="shell">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <img
+                        class="app-logo"
+                        src="./icon.png"
+                        data-icon-src="app-logo"
+                        alt="VoicePaste"
+                    />
+                    <span class="app-name">VoicePaste</span>
                 </div>
-                <div class="achievement-item">
-                  <div class="achievement-thumb"><span data-icon="mic"></span></div>
-                  <div class="achievement-text">
-                    <div class="achievement-value" id="achSessions">0</div>
-                    <div class="achievement-label">会话次数</div>
-                  </div>
-                </div>
-                <div class="achievement-item">
-                  <div class="achievement-thumb"><span data-icon="keyboard"></span></div>
-                  <div class="achievement-text">
-                    <div class="achievement-value" id="achCharacters">0</div>
-                    <div class="achievement-label">总输入字数</div>
-                  </div>
-                </div>
-                <div class="achievement-item">
-                  <div class="achievement-thumb"><span data-icon="timer"></span></div>
-                  <div class="achievement-text">
-                    <div class="achievement-value" id="achTimeSaved">0s</div>
-                    <div class="achievement-label">节省时间</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style="margin-top: 20px">
-              <div class="section-header">
-                <div><div class="section-title">使用统计</div></div>
-              </div>
-              <div class="section-card" style="padding: 16px 18px">
-                <div class="heatmap-layout">
-                  <div class="heatmap-left">
-                    <div class="heatmap-months" id="heatmapMonths"></div>
-                    <div class="heatmap-body">
-                      <div class="heatmap-days">
-                        <span></span>
-                        <span>一</span>
-                        <span></span>
-                        <span>三</span>
-                        <span></span>
-                        <span>五</span>
-                        <span></span>
-                      </div>
-                      <div class="heatmap-grid" id="heatmapGrid"></div>
+                <nav class="sidebar-nav">
+                    <div class="nav-group-label">概览</div>
+                    <div class="nav-item active" data-section="home">
+                        <span class="nav-icon" data-icon="home"></span>
+                        <span>首页</span>
                     </div>
-                  </div>
-                  <div class="heatmap-stats">
-                    <span class="heatmap-stats-range">过去 26 周</span>
-                    <span class="heatmap-stats-total" id="heatmapTotal">共输入 <strong>0</strong> 字</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style="margin-top: 20px">
-              <div class="section-header">
-                <div><div class="section-title">输入记录</div></div>
-              </div>
-              <div class="section-card" id="historyContainer"></div>
-            </div>
-          </section>
-
-          <!-- 快捷键 -->
-          <section class="section hidden" id="section-hotkey">
-            <div class="section-header">
-              <div>
-                <div class="section-title">快捷键</div>
-                <div class="section-subtitle">设置语音输入的触发方式</div>
-              </div>
-            </div>
-            <div class="hotkey-section-title">默认（无文本润色）</div>
-            <div class="section-card">
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">
-                    触发快捷键
-                    <span class="dev-path" title="配置路径：app.hotkey">app.hotkey</span>
-                  </div>
-                  <div class="desc">按下快捷键开始/结束语音输入</div>
-                </div>
-                <div class="hotkey-display" id="hotkeyDisplay">
-                  <kbd><span class="hotkey-symbol">⌘</span></kbd
-                  ><kbd><span class="hotkey-symbol">⇧</span></kbd
-                  ><kbd>V</kbd>
-                </div>
-                <button type="button" class="btn btn-sm" id="hotkeyRecordBtn">
-                  <span class="nav-icon" data-icon="keyboard"></span> 录制
-                </button>
-              </div>
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">
-                    触发模式
-                    <span class="dev-path" title="配置路径：app.hotkey_mode"
-                      >app.hotkey_mode</span
+                    <div class="nav-divider"></div>
+                    <div class="nav-group-label">设置</div>
+                    <div class="nav-item" data-section="hotkey">
+                        <span class="nav-icon" data-icon="keyboard"></span>
+                        <span>快捷键</span>
+                    </div>
+                    <div class="nav-item" data-section="app">
+                        <span class="nav-icon" data-icon="settings-2"></span>
+                        <span>应用设置</span>
+                    </div>
+                    <div class="nav-item" data-section="permissions">
+                        <span class="nav-icon" data-icon="shield-check"></span>
+                        <span>系统权限</span>
+                        <span
+                            class="nav-badge"
+                            id="permBadge"
+                            style="display: none"
+                        ></span>
+                    </div>
+                    <div class="nav-divider"></div>
+                    <div class="nav-group-label">模型</div>
+                    <div class="nav-item" data-section="service">
+                        <span class="nav-icon" data-icon="mic"></span>
+                        <span>音频模型</span>
+                    </div>
+                    <div class="nav-item" data-section="hotwords">
+                        <span class="nav-icon" data-icon="book-open"></span>
+                        <span>热词库</span>
+                    </div>
+                    <div class="nav-divider"></div>
+                    <div class="nav-group-label">处理</div>
+                    <div class="nav-item" data-section="llm">
+                        <span class="nav-icon" data-icon="sparkles"></span>
+                        <span>文本润色</span>
+                    </div>
+                    <div class="nav-divider"></div>
+                    <div class="nav-group-label">支持</div>
+                    <a
+                        class="nav-item"
+                        href="https://github.com/that-yolanda/voicepaste"
+                        target="_blank"
                     >
-                  </div>
-                  <div class="desc">选择快捷键的触发行为</div>
-                </div>
-                <div class="seg-control" id="hotkeyModeSelector">
-                  <button type="button" class="seg-btn active" data-val="toggle">
-                    点击切换
-                  </button>
-                  <button type="button" class="seg-btn" data-val="hold">
-                    按住说话
-                  </button>
-                </div>
-              </div>
-              <div class="row" id="hotkeyHintRow" style="display: none">
-                <div class="hint-text" id="hotkeyHint"></div>
-              </div>
-            </div>
-            <div id="promptHotkeyList" class="hotkey-section-list"></div>
-          </section>
-
-          <!-- 应用设置 -->
-          <section class="section hidden" id="section-app">
-            <div class="section-header">
-              <div>
-                <div class="section-title">应用设置</div>
-                <div class="section-subtitle">启动行为与配置文件</div>
-              </div>
-            </div>
-            <div class="section-card">
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">开机自动启动</div>
-                  <div class="desc">登录时自动在后台运行 VoicePaste</div>
-                </div>
-                <label class="toggle">
-                  <input type="checkbox" id="autoStart" checked />
-                  <span class="track"></span>
-                  <span class="thumb"></span>
-                </label>
-              </div>
-              <div class="row" id="overlayStyleRow">
-                <div class="row-label">
-                  <div class="title">悬浮窗外观</div>
-                  <div class="desc">通透：背景透出更多、液态感更强；磨砂：磨砂感更明显、可读性更高；跟随主题：传统毛玻璃、明暗跟随外观主题</div>
-                </div>
-                <div class="seg-control" id="overlayStyleSelector">
-                  <button type="button" class="seg-btn active" data-val="liquid">
-                    通透
-                  </button>
-                  <button type="button" class="seg-btn" data-val="liquid-standard">
-                    磨砂
-                  </button>
-                  <button type="button" class="seg-btn" data-val="vibrancy">
-                    跟随主题
-                  </button>
-                </div>
-              </div>
-              <div class="row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-                <div class="row-label">
-                  <div class="title">配置文件路径</div>
-                </div>
-                <span class="mono-text" id="configPath" style="word-break: break-all; font-size: 12px; line-height: 1.5;">-</span>
-              </div>
-            </div>
-            <div class="section-card" style="margin-top: 16px">
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">提示音</div>
-                  <div class="desc">录音开始和粘贴完成时播放音效提醒</div>
-                </div>
-                <label class="toggle">
-                  <input type="checkbox" id="soundEnabled" checked />
-                  <span class="track"></span>
-                  <span class="thumb"></span>
-                </label>
-              </div>
-              <div class="row vertical" id="soundFilesRow">
-                <div class="row-label">
-                  <div class="title">就绪提示音</div>
-                  <div class="desc">按下快捷键开始录音时播放</div>
-                </div>
-                <div class="sound-file-row">
-                  <span class="mono-text sound-file-name" id="startSoundName">内置默认</span>
-                  <button type="button" class="btn btn-sm" id="startSoundSelect">选择文件</button>
-                  <button type="button" class="btn btn-sm" id="startSoundReset" style="display:none">重置</button>
-                </div>
-              </div>
-              <div class="row vertical" id="endSoundFilesRow">
-                <div class="row-label">
-                  <div class="title">完成提示音</div>
-                  <div class="desc">语音识别完成并粘贴后播放</div>
-                </div>
-                <div class="sound-file-row">
-                  <span class="mono-text sound-file-name" id="endSoundName">内置默认</span>
-                  <button type="button" class="btn btn-sm" id="endSoundSelect">选择文件</button>
-                  <button type="button" class="btn btn-sm" id="endSoundReset" style="display:none">重置</button>
-                </div>
-              </div>
-            </div>
-            <div class="section-card" style="margin-top: 16px">
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">
-                    移除末尾句号
-                    <span class="dev-path" title="配置路径：app.remove_trailing_period">app.remove_trailing_period</span>
-                  </div>
-                  <div class="desc">粘贴前自动移除识别结果末尾的句号</div>
-                </div>
-                <label class="toggle">
-                  <input type="checkbox" id="removeTrailingPeriod" checked />
-                  <span class="track"></span>
-                  <span class="thumb"></span>
-                </label>
-              </div>
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">
-                    保留剪贴板
-                    <span class="dev-path" title="配置路径：app.keep_clipboard">app.keep_clipboard</span>
-                  </div>
-                  <div class="desc">输入完成后恢复原剪贴板内容</div>
-                </div>
-                <label class="toggle">
-                  <input type="checkbox" id="keepClipboard" checked />
-                  <span class="track"></span>
-                  <span class="thumb"></span>
-                </label>
-              </div>
-            </div>
-          </section>
-          <section class="section hidden" id="section-permissions">
-            <div class="section-header">
-              <div>
-                <div class="section-title">系统权限</div>
-                <div class="section-subtitle">
-                  VoicePaste 需要以下系统权限才能正常工作
-                </div>
-              </div>
-            </div>
-            <div class="section-card">
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">麦克风</div>
-                  <div class="desc">用于录制语音输入</div>
-                </div>
-                <span class="status-dot" id="micDot"></span>
-                <span class="status-text" id="micText">检测中</span>
-                <button type="button" class="btn btn-sm" id="checkMicBtn">
-                  检测
-                </button>
-              </div>
-              <div class="row" id="accessibilityRow">
-                <div class="row-label">
-                  <div class="title">辅助功能</div>
-                  <div class="desc">用于将文字输入到其他应用</div>
-                </div>
-                <span class="status-dot yellow" id="accDot"></span>
-                <span class="status-text" id="accText">未授权</span>
-                <button type="button" class="btn btn-sm" id="openAccBtn">
-                  前往授权
-                </button>
-              </div>
-            </div>
-            <div class="hint-text" id="permHint" style="margin-top: 12px"></div>
-          </section>
-
-          <!-- 音频模型 -->
-          <section class="section hidden" id="section-service">
-            <div class="section-header">
-              <div>
-                <div class="section-title">音频模型</div>
-                <div class="section-subtitle">选择并配置语音识别引擎</div>
-              </div>
-              <div class="current-model-badge" id="currentModelBadge">当前：豆包流式输出大模型</div>
-            </div>
-
-            <!-- Tab switcher -->
-            <div class="seg-control" id="modelTabs">
-              <button type="button" class="seg-btn active" data-tab="online">在线模型</button>
-              <button type="button" class="seg-btn" data-tab="offline">本地模型</button>
-            </div>
-
-            <!-- Online models tab -->
-            <div class="model-tab-content" id="tab-online">
-              <div class="model-card model-card-active" id="model-card-doubao">
-                <div class="model-card-head">
-                  <div class="model-card-info">
-                    <div class="model-card-name">火山引擎 - 豆包流式输出大模型</div>
-                    <div class="model-card-tags">
-                      <span class="model-tag">流式输出</span>
-                      <span class="model-tag">免费可用</span>
-                      <span class="model-tag">热词库</span>
-                      <span class="model-tag">中文,英文,方言</span>
+                        <span class="nav-icon" data-icon="book-open"></span>
+                        <span>帮助文档</span>
+                    </a>
+                    <div class="nav-item" data-section="about">
+                        <span class="nav-icon" data-icon="info"></span>
+                        <span>关于</span>
+                        <span
+                            class="nav-badge"
+                            id="updateBadge"
+                            style="display: none"
+                            >更新</span
+                        >
                     </div>
-                  </div>
-                  <label class="toggle model-enable-toggle">
-                    <input type="checkbox" id="enableDoubao" checked />
-                    <span class="track"></span>
-                    <span class="thumb"></span>
-                  </label>
+                </nav>
+                <div class="sidebar-footer">
+                    <div class="theme-row">
+                        <button
+                            type="button"
+                            class="theme-btn"
+                            data-theme-val="light"
+                            title="浅色模式"
+                        >
+                            <span class="nav-icon" data-icon="sun"></span>
+                        </button>
+                        <button
+                            type="button"
+                            class="theme-btn"
+                            data-theme-val="dark"
+                            title="深色模式"
+                        >
+                            <span class="nav-icon" data-icon="moon"></span>
+                        </button>
+                        <button
+                            type="button"
+                            class="theme-btn active"
+                            data-theme-val="system"
+                            title="跟随系统"
+                        >
+                            <span class="nav-icon" data-icon="monitor"></span>
+                        </button>
+                    </div>
                 </div>
-                <a
-                  class="section-link"
-                  href="https://console.volcengine.com/speech/app"
-                  target="_blank"
-                  style="margin: 8px 0"
-                  >如何获取 API 凭据？</a
-                >
-                <button type="button" class="model-expand-btn" id="doubaoExpandBtn">
-                  <span class="nav-icon" data-icon="chevron-down"></span>
-                  <span>展开配置</span>
-                </button>
-                <div class="model-card-config hidden" id="doubaoConfig">
-                  <div class="row vertical">
-                    <div class="row-label"><div class="title">WebSocket 地址</div></div>
-                    <input type="text" id="wsUrl" class="input-field mono" placeholder="wss://..." />
-                  </div>
-                  <div class="row vertical">
-                    <div class="row-label"><div class="title">Resource ID</div></div>
-                    <input type="text" id="resourceId" class="input-field mono" placeholder="输入 Resource ID" />
-                  </div>
-                  <div class="row vertical">
-                    <div class="row-label">
-                      <div class="title">语言</div>
-                      <div class="desc">留空则自动检测</div>
-                    </div>
-                    <input type="text" id="language" class="input-field" placeholder="如 zh-CN, en-US, ja-JP" />
-                  </div>
-                  <div class="row vertical">
-                    <div class="row-label"><div class="title">App ID</div></div>
-                    <input type="text" id="appId" class="input-field mono" placeholder="输入 App ID" />
-                  </div>
-                  <div class="row vertical">
-                    <div class="row-label"><div class="title">Access Token</div></div>
-                    <div class="input-group">
-                      <input type="password" id="accessToken" class="input-field mono" placeholder="输入 Access Token" />
-                      <button type="button" class="pw-toggle" id="toggleAccessToken">
-                        <span class="nav-icon" data-icon="eye"></span>
-                      </button>
-                    </div>
-                  </div>
-                  <div class="row vertical">
-                    <div class="row-label"><div class="title">Secret Key</div></div>
-                    <div class="input-group">
-                      <input type="password" id="secretKey" class="input-field mono" placeholder="输入 Secret Key" />
-                      <button type="button" class="pw-toggle" id="toggleSecretKey">
-                        <span class="nav-icon" data-icon="eye"></span>
-                      </button>
-                    </div>
-                  </div>
-                  <div class="row vertical">
-                    <div class="row-label"><div class="title">热词表 ID</div></div>
-                    <input type="text" id="boostingTableId" class="input-field mono" placeholder="输入热词表 ID" />
-                  </div>
-                  <div class="toggle-grid" style="margin-top: 8px">
-                    <div class="row">
-                      <div class="row-label"><div class="title">语义顺滑</div></div>
-                      <label class="toggle"><input type="checkbox" id="enableDdc" checked /><span class="track"></span><span class="thumb"></span></label>
-                    </div>
-                    <div class="row">
-                      <div class="row-label"><div class="title">数字格式化</div></div>
-                      <label class="toggle"><input type="checkbox" id="enableItn" checked /><span class="track"></span><span class="thumb"></span></label>
-                    </div>
-                    <div class="row">
-                      <div class="row-label"><div class="title">二遍识别</div></div>
-                      <label class="toggle"><input type="checkbox" id="enableNonstream" /><span class="track"></span><span class="thumb"></span></label>
-                    </div>
-                    <div class="row">
-                      <div class="row-label"><div class="title">自动标点</div></div>
-                      <label class="toggle"><input type="checkbox" id="enablePunc" checked /><span class="track"></span><span class="thumb"></span></label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            </aside>
 
-            <!-- Offline models tab -->
-            <div class="model-tab-content hidden" id="tab-offline">
-              <div id="offlineModelList"></div>
-              <div class="hint-text" style="margin-top: 12px" id="vadDownloadHint"></div>
-            </div>
-          </section>
+            <main class="main">
+                <div class="main-inner">
+                    <!-- 首页 -->
+                    <section class="section" id="section-home">
+                        <div class="welcome-text">
+                            <span id="greetingText">下午好</span>
+                        </div>
 
-          <!-- 热词库 -->
-          <section class="section hidden" id="section-hotwords">
-            <div class="section-header">
-              <div>
-                <div class="section-title">热词库</div>
-                <div class="section-subtitle">管理热词组，提升专有词汇识别准确率</div>
-              </div>
-            </div>
-            <button type="button" class="btn btn-sm" id="addHotwordGroupBtn" style="margin-bottom: 12px">
-              + 添加热词表
-            </button>
-            <div id="hotwordGroupsList"></div>
-            <div class="hint-text" style="margin-top: 16px">
-              内置支持热词库的模型可直接生效，其他模型会将热词追加到 LLM 提示词中
-            </div>
-          </section>
+                        <div style="margin-top: 20px">
+                            <div class="achievements-grid">
+                                <div class="achievement-item">
+                                    <div class="achievement-thumb">
+                                        <span data-icon="calendar-days"></span>
+                                    </div>
+                                    <div class="achievement-text">
+                                        <div
+                                            class="achievement-value"
+                                            id="achDaysUsed"
+                                        >
+                                            0
+                                        </div>
+                                        <div class="achievement-label">
+                                            已使用天数
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="achievement-item">
+                                    <div class="achievement-thumb">
+                                        <span data-icon="mic"></span>
+                                    </div>
+                                    <div class="achievement-text">
+                                        <div
+                                            class="achievement-value"
+                                            id="achSessions"
+                                        >
+                                            0
+                                        </div>
+                                        <div class="achievement-label">
+                                            会话次数
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="achievement-item">
+                                    <div class="achievement-thumb">
+                                        <span data-icon="keyboard"></span>
+                                    </div>
+                                    <div class="achievement-text">
+                                        <div
+                                            class="achievement-value"
+                                            id="achCharacters"
+                                        >
+                                            0
+                                        </div>
+                                        <div class="achievement-label">
+                                            总输入字数
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="achievement-item">
+                                    <div class="achievement-thumb">
+                                        <span data-icon="timer"></span>
+                                    </div>
+                                    <div class="achievement-text">
+                                        <div
+                                            class="achievement-value"
+                                            id="achTimeSaved"
+                                        >
+                                            0s
+                                        </div>
+                                        <div class="achievement-label">
+                                            节省时间
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-          <!-- 文本润色 -->
-          <section class="section hidden" id="section-llm">
-            <div class="section-header">
-              <div>
-                <div class="section-title">文本润色</div>
-                <div class="section-subtitle">使用 LLM 对识别结果进行自动格式化</div>
-              </div>
-            </div>
-            <div class="section-card">
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    模型厂商
-                    <span class="dev-path" title="配置路径：llm.provider">llm.provider</span>
-                  </div>
-                  <div class="desc">选择厂商后会自动填入默认接口和模型，可继续手动修改</div>
-                </div>
-                <div class="provider-grid" id="llmProviderGrid">
-                  <button type="button" class="provider-chip" data-provider="deepseek">
-                    DeepSeek
-                  </button>
-                  <button type="button" class="provider-chip" data-provider="openai">
-                    OpenAI
-                  </button>
-                  <button type="button" class="provider-chip" data-provider="openrouter">
-                    OpenRouter
-                  </button>
-                  <button type="button" class="provider-chip" data-provider="siliconflow">
-                    硅基流动
-                  </button>
-                  <button type="button" class="provider-chip" data-provider="gemini">
-                    Gemini
-                  </button>
-                  <button type="button" class="provider-chip" data-provider="anthropic">
-                    Anthropic
-                  </button>
-                  <button type="button" class="provider-chip" data-provider="ollama">
-                    Ollama 本地
-                  </button>
-                  <button type="button" class="provider-chip" data-provider="openai_compatible">
-                    自定义
-                  </button>
-                </div>
-              </div>
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    API 地址
-                    <span class="dev-path" title="配置路径：llm.<provider>.url"
-                      >llm.*.url</span
-                    >
-                  </div>
-                  <div class="desc" id="llmBaseUrlDesc">内置厂商可留空；自定义和 Ollama 使用该地址</div>
-                </div>
-                <input
-                  type="text"
-                  id="llmBaseUrl"
-                  class="input-field mono"
-                  placeholder="https://api.example.com/v1"
-                />
-              </div>
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    API Key
-                    <span class="dev-path" title="配置路径：llm.<provider>.api_key"
-                      >llm.*.api_key</span
-                    >
-                  </div>
-                </div>
-                <div class="input-group">
-                  <input
-                    type="password"
-                    id="llmApiKey"
-                    class="input-field mono"
-                    placeholder="sk-..."
-                  />
-                  <button type="button" class="pw-toggle" id="toggleLlmApiKey">
-                    <span class="nav-icon" data-icon="eye"></span>
-                  </button>
-                </div>
-              </div>
-              <div class="row vertical">
-                <div class="row-label">
-                  <div class="title">
-                    模型名称
-                    <span class="dev-path" title="配置路径：llm.<provider>.model"
-                      >llm.*.model</span
-                    >
-                  </div>
-                  <div class="desc" id="llmModelDesc">如 deepseek-chat, gpt-4o-mini 等</div>
-                </div>
-                <input
-                  type="text"
-                  id="llmModel"
-                  class="input-field mono"
-                  placeholder="gpt-4o-mini"
-                />
-              </div>
-            </div>
-            <div class="section-card prompt-config-card" style="margin-top: 12px">
-              <div class="row vertical prompt-config-head">
-                <div class="row-label">
-                  <div class="title">润色模板</div>
-                  <div class="desc">编辑文本润色模板内容；模板快捷键在“快捷键”页面配置</div>
-                </div>
-                <button type="button" class="seg-btn prompt-add-btn" id="addPromptBtn">
-                  + 添加模板
-                </button>
-              </div>
-              <div id="promptsList" class="prompt-list"></div>
-            </div>
-          </section>
+                        <div style="margin-top: 20px">
+                            <div class="section-header">
+                                <div>
+                                    <div class="section-title">使用统计</div>
+                                </div>
+                            </div>
+                            <div
+                                class="section-card"
+                                style="padding: 16px 18px"
+                            >
+                                <div class="heatmap-layout">
+                                    <div class="heatmap-left">
+                                        <div
+                                            class="heatmap-months"
+                                            id="heatmapMonths"
+                                        ></div>
+                                        <div class="heatmap-body">
+                                            <div class="heatmap-days">
+                                                <span></span>
+                                                <span>一</span>
+                                                <span></span>
+                                                <span>三</span>
+                                                <span></span>
+                                                <span>五</span>
+                                                <span></span>
+                                            </div>
+                                            <div
+                                                class="heatmap-grid"
+                                                id="heatmapGrid"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                    <div class="heatmap-stats">
+                                        <span class="heatmap-stats-range"
+                                            >过去 26 周</span
+                                        >
+                                        <span
+                                            class="heatmap-stats-total"
+                                            id="heatmapTotal"
+                                            >共输入 <strong>0</strong> 字</span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-          <!-- 高级配置 -->
-          <section class="section hidden" id="section-advanced">
-            <div class="section-header">
-              <div>
-                <div class="section-title">高级配置</div>
-                <div class="section-subtitle">调整本地模型 VAD 参数与高级选项</div>
-              </div>
-            </div>
-            <div class="section-card">
-              <div class="section-title" style="margin-bottom: 8px">VAD 语音分段</div>
-              <div class="row vertical">
-                <div class="row-label"><div class="title">灵敏度阈值</div><div class="desc">0-1，越低越灵敏</div></div>
-                <input type="number" id="vadThreshold" class="input-field" value="0.2" step="0.05" min="0.01" max="0.99" />
-              </div>
-              <div class="row vertical">
-                <div class="row-label"><div class="title">最短静音时长 (秒)</div></div>
-                <input type="number" id="vadMinSilence" class="input-field" value="0.2" step="0.1" min="0.05" max="5.0" />
-              </div>
-              <div class="row vertical">
-                <div class="row-label"><div class="title">最短语音时长 (秒)</div></div>
-                <input type="number" id="vadMinSpeech" class="input-field" value="0.2" step="0.1" min="0.05" max="5.0" />
-              </div>
-              <div class="row vertical">
-                <div class="row-label"><div class="title">最长语音时长 (秒)</div></div>
-                <input type="number" id="vadMaxSpeech" class="input-field" value="10.0" step="1.0" min="1.0" max="30.0" />
-              </div>
-              <div class="row vertical">
-                <div class="row-label"><div class="title">识别线程数</div><div class="desc">本地模型并发线程</div></div>
-                <input type="number" id="numThreads" class="input-field" value="2" step="1" min="1" max="16" />
-              </div>
-            </div>
-          </section>
+                        <div style="margin-top: 20px">
+                            <div class="section-header">
+                                <div>
+                                    <div class="section-title">输入记录</div>
+                                </div>
+                            </div>
+                            <div
+                                class="section-card"
+                                id="historyContainer"
+                            ></div>
+                        </div>
+                    </section>
 
-          <!-- 完整配置 -->
-          <section class="section hidden" id="section-yaml">
-            <div class="section-header">
-              <div>
-                <div class="section-title">完整配置</div>
-                <div class="section-subtitle">
-                  直接编辑 YAML 配置文件，适合高级用户
-                </div>
-              </div>
-            </div>
-            <div class="section-card" style="padding: 16px">
-              <div class="yaml-toolbar">
-                <span class="yaml-filename">config.yml</span>
-                <div class="yaml-actions">
-                  <button type="button" class="btn btn-sm" id="reloadYamlBtn">
-                    <span class="nav-icon" data-icon="refresh-cw"></span> 刷新
-                  </button>
-                  <button type="button" class="btn btn-sm" id="resetBtn">
-                    恢复默认
-                  </button>
-                  <button type="button" class="btn btn-sm btn-accent" id="saveYamlBtn">
-                    保存 YAML
-                  </button>
-                </div>
-              </div>
-              <textarea
-                id="yamlEditor"
-                class="yaml-editor"
-                spellcheck="false"
-              ></textarea>
-            </div>
-          </section>
+                    <!-- 快捷键 -->
+                    <section class="section hidden" id="section-hotkey">
+                        <div class="section-header">
+                            <div>
+                                <div class="section-title">快捷键</div>
+                                <div class="section-subtitle">
+                                    设置语音输入的触发方式
+                                </div>
+                            </div>
+                        </div>
+                        <div class="hotkey-section-title">
+                            默认（无文本润色）
+                        </div>
+                        <div class="section-card">
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">
+                                        触发快捷键
+                                        <span
+                                            class="dev-path"
+                                            title="配置路径：app.hotkey"
+                                            >app.hotkey</span
+                                        >
+                                    </div>
+                                    <div class="desc">
+                                        按下快捷键开始/结束语音输入
+                                    </div>
+                                </div>
+                                <div class="hotkey-display" id="hotkeyDisplay">
+                                    <kbd
+                                        ><span class="hotkey-symbol"
+                                            >⌘</span
+                                        ></kbd
+                                    ><kbd
+                                        ><span class="hotkey-symbol"
+                                            >⇧</span
+                                        ></kbd
+                                    ><kbd>V</kbd>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm"
+                                    id="hotkeyRecordBtn"
+                                >
+                                    <span
+                                        class="nav-icon"
+                                        data-icon="keyboard"
+                                    ></span>
+                                    录制
+                                </button>
+                            </div>
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">
+                                        触发模式
+                                        <span
+                                            class="dev-path"
+                                            title="配置路径：app.hotkey_mode"
+                                            >app.hotkey_mode</span
+                                        >
+                                    </div>
+                                    <div class="desc">选择快捷键的触发行为</div>
+                                </div>
+                                <div
+                                    class="seg-control"
+                                    id="hotkeyModeSelector"
+                                >
+                                    <button
+                                        type="button"
+                                        class="seg-btn active"
+                                        data-val="toggle"
+                                    >
+                                        点击切换
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="seg-btn"
+                                        data-val="hold"
+                                    >
+                                        按住说话
+                                    </button>
+                                </div>
+                            </div>
+                            <div
+                                class="row"
+                                id="hotkeyHintRow"
+                                style="display: none"
+                            >
+                                <div class="hint-text" id="hotkeyHint"></div>
+                            </div>
+                        </div>
+                        <div
+                            id="promptHotkeyList"
+                            class="hotkey-section-list"
+                        ></div>
+                    </section>
 
-          <!-- 关于 -->
-          <section class="section hidden" id="section-about">
-            <div class="section-header">
-              <div>
-                <div class="section-title">关于</div>
-                <div class="section-subtitle">版本信息与更新</div>
-              </div>
-            </div>
-            <div class="section-card">
-              <div class="row" style="gap: 14px">
-                <img class="about-icon" src="./icon.png" data-icon-src="app-logo" alt="VoicePaste" />
-                <div class="row-label">
-                  <div class="title" style="font-size: 15px; font-weight: 600">
-                    VoicePaste
-                  </div>
-                  <div class="desc">语音输入工具，将语音实时转为文字并输入到任意应用</div>
+                    <!-- 应用设置 -->
+                    <section class="section hidden" id="section-app">
+                        <div class="section-header">
+                            <div>
+                                <div class="section-title">应用设置</div>
+                                <div class="section-subtitle">
+                                    启动行为与配置文件
+                                </div>
+                            </div>
+                        </div>
+                        <div class="section-card">
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">开机自动启动</div>
+                                    <div class="desc">
+                                        登录时自动在后台运行 VoicePaste
+                                    </div>
+                                </div>
+                                <label class="toggle">
+                                    <input
+                                        type="checkbox"
+                                        id="autoStart"
+                                        checked
+                                    />
+                                    <span class="track"></span>
+                                    <span class="thumb"></span>
+                                </label>
+                            </div>
+                            <div class="row" id="overlayStyleRow">
+                                <div class="row-label">
+                                    <div class="title">悬浮窗外观</div>
+                                    <div class="desc">通透：背景透出更多、液态感更强；磨砂：磨砂感更明显、可读性更高；跟随主题：传统毛玻璃、明暗跟随外观主题</div>
+                                </div>
+                                <div class="seg-control" id="overlayStyleSelector">
+                                    <button type="button" class="seg-btn active" data-val="liquid">通透</button>
+                                    <button type="button" class="seg-btn" data-val="liquid-standard">磨砂</button>
+                                    <button type="button" class="seg-btn" data-val="vibrancy">跟随主题</button>
+                                </div>
+                            </div>
+                            <div
+                                class="row"
+                                style="
+                                    flex-direction: column;
+                                    align-items: flex-start;
+                                    gap: 4px;
+                                "
+                            >
+                                <div class="row-label">
+                                    <div class="title">配置文件路径</div>
+                                </div>
+                                <span
+                                    class="mono-text"
+                                    id="configPath"
+                                    style="
+                                        word-break: break-all;
+                                        font-size: 12px;
+                                        line-height: 1.5;
+                                    "
+                                    >-</span
+                                >
+                            </div>
+                        </div>
+                        <div class="section-card" style="margin-top: 16px">
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">提示音</div>
+                                    <div class="desc">
+                                        录音开始和粘贴完成时播放音效提醒
+                                    </div>
+                                </div>
+                                <label class="toggle">
+                                    <input
+                                        type="checkbox"
+                                        id="soundEnabled"
+                                        checked
+                                    />
+                                    <span class="track"></span>
+                                    <span class="thumb"></span>
+                                </label>
+                            </div>
+                            <div class="row vertical" id="soundFilesRow">
+                                <div class="row-label">
+                                    <div class="title">就绪提示音</div>
+                                    <div class="desc">
+                                        按下快捷键开始录音时播放
+                                    </div>
+                                </div>
+                                <div class="sound-file-row">
+                                    <span
+                                        class="mono-text sound-file-name"
+                                        id="startSoundName"
+                                        >内置默认</span
+                                    >
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm"
+                                        id="startSoundSelect"
+                                    >
+                                        选择文件
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm"
+                                        id="startSoundReset"
+                                        style="display: none"
+                                    >
+                                        重置
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row vertical" id="endSoundFilesRow">
+                                <div class="row-label">
+                                    <div class="title">完成提示音</div>
+                                    <div class="desc">
+                                        语音识别完成并粘贴后播放
+                                    </div>
+                                </div>
+                                <div class="sound-file-row">
+                                    <span
+                                        class="mono-text sound-file-name"
+                                        id="endSoundName"
+                                        >内置默认</span
+                                    >
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm"
+                                        id="endSoundSelect"
+                                    >
+                                        选择文件
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm"
+                                        id="endSoundReset"
+                                        style="display: none"
+                                    >
+                                        重置
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="section-card" style="margin-top: 16px">
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">
+                                        移除末尾句号
+                                        <span
+                                            class="dev-path"
+                                            title="配置路径：app.remove_trailing_period"
+                                            >app.remove_trailing_period</span
+                                        >
+                                    </div>
+                                    <div class="desc">
+                                        粘贴前自动移除识别结果末尾的句号
+                                    </div>
+                                </div>
+                                <label class="toggle">
+                                    <input
+                                        type="checkbox"
+                                        id="removeTrailingPeriod"
+                                        checked
+                                    />
+                                    <span class="track"></span>
+                                    <span class="thumb"></span>
+                                </label>
+                            </div>
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">
+                                        保留剪贴板
+                                        <span
+                                            class="dev-path"
+                                            title="配置路径：app.keep_clipboard"
+                                            >app.keep_clipboard</span
+                                        >
+                                    </div>
+                                    <div class="desc">
+                                        输入完成后恢复原剪贴板内容
+                                    </div>
+                                </div>
+                                <label class="toggle">
+                                    <input
+                                        type="checkbox"
+                                        id="keepClipboard"
+                                        checked
+                                    />
+                                    <span class="track"></span>
+                                    <span class="thumb"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="section hidden" id="section-permissions">
+                        <div class="section-header">
+                            <div>
+                                <div class="section-title">系统权限</div>
+                                <div class="section-subtitle">
+                                    VoicePaste 需要以下系统权限才能正常工作
+                                </div>
+                            </div>
+                        </div>
+                        <div class="section-card">
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">麦克风</div>
+                                    <div class="desc">用于录制语音输入</div>
+                                </div>
+                                <span class="status-dot" id="micDot"></span>
+                                <span class="status-text" id="micText"
+                                    >检测中</span
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-sm"
+                                    id="checkMicBtn"
+                                >
+                                    检测
+                                </button>
+                            </div>
+                            <div class="row" id="accessibilityRow">
+                                <div class="row-label">
+                                    <div class="title">辅助功能</div>
+                                    <div class="desc">
+                                        用于将文字输入到其他应用
+                                    </div>
+                                </div>
+                                <span
+                                    class="status-dot yellow"
+                                    id="accDot"
+                                ></span>
+                                <span class="status-text" id="accText"
+                                    >未授权</span
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-sm"
+                                    id="openAccBtn"
+                                >
+                                    前往授权
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="hint-text"
+                            id="permHint"
+                            style="margin-top: 12px"
+                        ></div>
+                    </section>
+
+                    <!-- 音频模型 -->
+                    <section class="section hidden" id="section-service">
+                        <div class="section-header">
+                            <div>
+                                <div class="section-title">音频模型</div>
+                                <div class="section-subtitle">
+                                    选择并配置语音识别引擎
+                                </div>
+                            </div>
+                            <div
+                                class="current-model-badge"
+                                id="currentModelBadge"
+                            >
+                                当前：豆包流式输出大模型
+                            </div>
+                        </div>
+
+                        <!-- Tab switcher -->
+                        <div class="seg-control" id="modelTabs">
+                            <button
+                                type="button"
+                                class="seg-btn active"
+                                data-tab="online"
+                            >
+                                在线模型
+                            </button>
+                            <button
+                                type="button"
+                                class="seg-btn"
+                                data-tab="offline"
+                            >
+                                本地模型
+                            </button>
+                        </div>
+
+                        <!-- Online models tab -->
+                        <div class="model-tab-content" id="tab-online">
+                            <div class="model-card" id="model-card-doubao">
+                                <div class="model-card-head">
+                                    <div class="model-card-info">
+                                        <div class="model-card-name">
+                                            火山引擎 - 豆包流式输出大模型
+                                        </div>
+                                        <div class="model-card-tags">
+                                            <span class="model-tag"
+                                                >流式输出</span
+                                            >
+                                            <span class="model-tag"
+                                                >免费可用</span
+                                            >
+                                            <span class="model-tag"
+                                                >热词库</span
+                                            >
+                                            <span class="model-tag"
+                                                >中文,英文,方言</span
+                                            >
+                                        </div>
+                                    </div>
+                                    <div class="model-card-head-right">
+                                        <a
+                                            class="section-link"
+                                            href="https://console.volcengine.com/speech/app"
+                                            target="_blank"
+                                            >如何获取 API 凭据？</a
+                                        >
+                                        <label class="toggle model-enable-toggle">
+                                            <input
+                                                type="checkbox"
+                                                id="enableDoubao"
+                                                checked
+                                            />
+                                            <span class="track"></span>
+                                            <span class="thumb"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="model-expand-wrap">
+                                    <button
+                                        type="button"
+                                        class="model-expand-btn"
+                                        id="doubaoExpandBtn"
+                                >
+                                    <span
+                                        class="nav-icon"
+                                        data-icon="chevron-down"
+                                    ></span>
+                                    <span>展开配置</span>
+                                    </button>
+                                </div>
+                                <div
+                                    class="model-card-config hidden"
+                                    id="doubaoConfig"
+                                >
+                                    <!-- 凭证组 -->
+                                    <div class="config-group">
+                                        <div class="config-row">
+                                            <span class="config-label">WebSocket 地址</span>
+                                            <input type="text" id="wsUrl" class="input-field mono" placeholder="wss://..." />
+                                        </div>
+                                        <div class="config-row">
+                                            <span class="config-label">App ID</span>
+                                            <input type="text" id="appId" class="input-field mono" placeholder="输入 App ID" />
+                                        </div>
+                                        <div class="config-row">
+                                            <span class="config-label">Access Token</span>
+                                            <div class="input-group">
+                                                <input type="password" id="accessToken" class="input-field mono" placeholder="输入 Access Token" />
+                                                <button type="button" class="pw-toggle" id="toggleAccessToken">
+                                                    <span class="nav-icon" data-icon="eye"></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="config-row">
+                                            <span class="config-label">Secret Key</span>
+                                            <div class="input-group">
+                                                <input type="password" id="secretKey" class="input-field mono" placeholder="输入 Secret Key" />
+                                                <button type="button" class="pw-toggle" id="toggleSecretKey">
+                                                    <span class="nav-icon" data-icon="eye"></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="config-group-divider"></div>
+                                    <!-- 设置组 -->
+                                    <div class="config-group">
+                                        <div class="config-row">
+                                            <span class="config-label">Resource ID</span>
+                                            <input type="text" id="resourceId" class="input-field mono" placeholder="输入 Resource ID" />
+                                        </div>
+                                        <div class="config-row">
+                                            <span class="config-label">语言</span>
+                                            <input type="text" id="language" class="input-field" placeholder="留空则自动检测" />
+                                        </div>
+                                        <div class="config-row">
+                                            <span class="config-label">热词表 ID</span>
+                                            <input type="text" id="boostingTableId" class="input-field mono" placeholder="输入热词表 ID" />
+                                        </div>
+                                    </div>
+	                                    <div class="config-group">
+	                                        <div class="toggle-grid">
+                                            <div class="row">
+                                                <div class="row-label"><div class="title">语义顺滑</div></div>
+                                                <label class="toggle"><input type="checkbox" id="enableDdc" checked /><span class="track"></span><span class="thumb"></span></label>
+                                            </div>
+                                            <div class="row">
+                                                <div class="row-label"><div class="title">数字格式化</div></div>
+                                                <label class="toggle"><input type="checkbox" id="enableItn" checked /><span class="track"></span><span class="thumb"></span></label>
+                                            </div>
+                                            <div class="row">
+                                                <div class="row-label"><div class="title">二遍识别</div></div>
+                                                <label class="toggle"><input type="checkbox" id="enableNonstream" /><span class="track"></span><span class="thumb"></span></label>
+                                            </div>
+                                            <div class="row">
+                                                <div class="row-label"><div class="title">自动标点</div></div>
+                                                <label class="toggle"><input type="checkbox" id="enablePunc" checked /><span class="track"></span><span class="thumb"></span></label>
+	                                            </div>
+	                                        </div>
+	                                    </div>
+	                                    <div class="config-group-divider"></div>
+	                                    <div class="config-group" id="doubaoAdvancedConfig"></div>
+	                                </div>
+	                            </div>
+                        </div>
+
+                        <!-- Offline models tab -->
+                        <div class="model-tab-content hidden" id="tab-offline">
+                            <div id="offlineModelList"></div>
+                        </div>
+                    </section>
+
+                    <!-- 热词库 -->
+                    <section class="section hidden" id="section-hotwords">
+                        <div class="section-header">
+                            <div>
+                                <div class="section-title">热词库</div>
+                                <div class="section-subtitle">
+                                    管理热词组，提升专有词汇识别准确率
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            id="addHotwordGroupBtn"
+                            style="margin-bottom: 12px"
+                        >
+                            + 添加热词表
+                        </button>
+                        <div id="hotwordGroupsList"></div>
+                        <div class="hint-text" style="margin-top: 16px">
+                            内置支持热词库的模型可直接生效，其他模型会将热词追加到
+                            LLM 提示词中
+                        </div>
+                    </section>
+
+                    <!-- 文本润色 -->
+                    <section class="section hidden" id="section-llm">
+                        <div class="section-header">
+                            <div>
+                                <div class="section-title">文本润色</div>
+                                <div class="section-subtitle">
+                                    使用 LLM 对识别结果进行自动格式化
+                                </div>
+                            </div>
+                        </div>
+                        <div class="section-card">
+                            <div class="row vertical">
+                                <div class="row-label">
+                                    <div class="title">
+                                        模型厂商
+                                        <span
+                                            class="dev-path"
+                                            title="配置路径：llm.provider"
+                                            >llm.provider</span
+                                        >
+                                    </div>
+                                    <div class="desc">
+                                        选择厂商后会自动填入默认接口和模型，可继续手动修改
+                                    </div>
+                                </div>
+                                <div class="provider-grid" id="llmProviderGrid">
+                                    <button
+                                        type="button"
+                                        class="provider-chip"
+                                        data-provider="deepseek"
+                                    >
+                                        DeepSeek
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="provider-chip"
+                                        data-provider="openai"
+                                    >
+                                        OpenAI
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="provider-chip"
+                                        data-provider="openrouter"
+                                    >
+                                        OpenRouter
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="provider-chip"
+                                        data-provider="siliconflow"
+                                    >
+                                        硅基流动
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="provider-chip"
+                                        data-provider="gemini"
+                                    >
+                                        Gemini
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="provider-chip"
+                                        data-provider="anthropic"
+                                    >
+                                        Anthropic
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="provider-chip"
+                                        data-provider="ollama"
+                                    >
+                                        Ollama 本地
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="provider-chip"
+                                        data-provider="openai_compatible"
+                                    >
+                                        自定义
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row vertical">
+                                <div class="row-label">
+                                    <div class="title">
+                                        API 地址
+                                        <span
+                                            class="dev-path"
+                                            title="配置路径：llm.<provider>.url"
+                                            >llm.*.url</span
+                                        >
+                                    </div>
+                                    <div class="desc" id="llmBaseUrlDesc">
+                                        内置厂商可留空；自定义和 Ollama
+                                        使用该地址
+                                    </div>
+                                </div>
+                                <input
+                                    type="text"
+                                    id="llmBaseUrl"
+                                    class="input-field mono"
+                                    placeholder="https://api.example.com/v1"
+                                />
+                            </div>
+                            <div class="row vertical">
+                                <div class="row-label">
+                                    <div class="title">
+                                        API Key
+                                        <span
+                                            class="dev-path"
+                                            title="配置路径：llm.<provider>.api_key"
+                                            >llm.*.api_key</span
+                                        >
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <input
+                                        type="password"
+                                        id="llmApiKey"
+                                        class="input-field mono"
+                                        placeholder="sk-..."
+                                    />
+                                    <button
+                                        type="button"
+                                        class="pw-toggle"
+                                        id="toggleLlmApiKey"
+                                    >
+                                        <span
+                                            class="nav-icon"
+                                            data-icon="eye"
+                                        ></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row vertical">
+                                <div class="row-label">
+                                    <div class="title">
+                                        模型名称
+                                        <span
+                                            class="dev-path"
+                                            title="配置路径：llm.<provider>.model"
+                                            >llm.*.model</span
+                                        >
+                                    </div>
+                                    <div class="desc" id="llmModelDesc">
+                                        如 deepseek-chat, gpt-4o-mini 等
+                                    </div>
+                                </div>
+                                <input
+                                    type="text"
+                                    id="llmModel"
+                                    class="input-field mono"
+                                    placeholder="gpt-4o-mini"
+                                />
+                            </div>
+                        </div>
+                        <div
+                            class="section-card prompt-config-card"
+                            style="margin-top: 12px"
+                        >
+                            <div class="row vertical prompt-config-head">
+                                <div class="row-label">
+                                    <div class="title">润色模板</div>
+                                    <div class="desc">
+                                        编辑文本润色模板内容；模板快捷键在“快捷键”页面配置
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="seg-btn prompt-add-btn"
+                                    id="addPromptBtn"
+                                >
+                                    + 添加模板
+                                </button>
+                            </div>
+                            <div id="promptsList" class="prompt-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- 关于 -->
+                    <section class="section hidden" id="section-about">
+                        <div class="section-header">
+                            <div>
+                                <div class="section-title">关于</div>
+                                <div class="section-subtitle">
+                                    版本信息与更新
+                                </div>
+                            </div>
+                        </div>
+                        <div class="section-card">
+                            <div class="row" style="gap: 14px">
+                                <img
+                                    class="about-icon"
+                                    src="./icon.png"
+                                    data-icon-src="app-logo"
+                                    alt="VoicePaste"
+                                />
+                                <div class="row-label">
+                                    <div
+                                        class="title"
+                                        style="
+                                            font-size: 15px;
+                                            font-weight: 600;
+                                        "
+                                    >
+                                        VoicePaste
+                                    </div>
+                                    <div class="desc">
+                                        语音输入工具，将语音实时转为文字并输入到任意应用
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">当前版本</div>
+                                </div>
+                                <span class="mono-text" id="versionText"
+                                    >-</span
+                                >
+                            </div>
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">检查更新</div>
+                                    <div class="desc" id="aboutUpdateStatus">
+                                        -
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm"
+                                    id="aboutUpdateBtn"
+                                >
+                                    <span
+                                        class="nav-icon"
+                                        data-icon="refresh-cw"
+                                    ></span>
+                                    检查更新
+                                </button>
+                            </div>
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">Beta 更新</div>
+                                    <div class="desc">
+                                        接收测试版本以体验新功能（可能不稳定）
+                                    </div>
+                                </div>
+                                <label class="toggle">
+                                    <input type="checkbox" id="betaUpdates" />
+                                    <span class="track"></span>
+                                    <span class="thumb"></span>
+                                </label>
+                            </div>
+                            <div class="row">
+                                <div class="row-label">
+                                    <div class="title">开源许可</div>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm"
+                                    id="licenseBtn"
+                                >
+                                    查看
+                                </button>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-              </div>
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">当前版本</div>
-                </div>
-                <span class="mono-text" id="versionText">-</span>
-              </div>
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">检查更新</div>
-                  <div class="desc" id="aboutUpdateStatus">-</div>
-                </div>
-                <button type="button" class="btn btn-sm" id="aboutUpdateBtn">
-                  <span class="nav-icon" data-icon="refresh-cw"></span> 检查更新
-                </button>
-              </div>
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">Beta 更新</div>
-                  <div class="desc">接收测试版本以体验新功能（可能不稳定）</div>
-                </div>
-                <label class="toggle">
-                  <input type="checkbox" id="betaUpdates">
-                  <span class="track"></span>
-                  <span class="thumb"></span>
-                </label>
-              </div>
-              <div class="row">
-                <div class="row-label">
-                  <div class="title">开源许可</div>
-                </div>
-                <button type="button" class="btn btn-sm" id="licenseBtn">
-                  查看
-                </button>
-              </div>
-            </div>
-          </section>
+            </main>
         </div>
 
-      </main>
-    </div>
-
-    <!-- License overlay -->
-    <div class="license-overlay" id="licenseOverlay" style="display: none">
-      <div class="license-card">
-        <div class="license-header">
-          <span class="license-title">开源许可</span>
-          <button type="button" class="btn btn-sm" id="licenseCloseBtn">关闭</button>
+        <!-- License overlay -->
+        <div class="license-overlay" id="licenseOverlay" style="display: none">
+            <div class="license-card">
+                <div class="license-header">
+                    <span class="license-title">开源许可</span>
+                    <button
+                        type="button"
+                        class="btn btn-sm"
+                        id="licenseCloseBtn"
+                    >
+                        关闭
+                    </button>
+                </div>
+                <pre class="license-text" id="licenseText"></pre>
+            </div>
         </div>
-        <pre class="license-text" id="licenseText"></pre>
-      </div>
-    </div>
 
-    <script src="./tauri-bridge.js"></script>
-    <script src="./lucide-icons.js"></script>
-    <script src="./settings.js"></script>
-  </body>
+        <script src="./tauri-bridge.js"></script>
+        <script src="./lucide-icons.js"></script>
+        <script src="./settings.js"></script>
+    </body>
 </html>

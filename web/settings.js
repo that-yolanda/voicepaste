@@ -440,13 +440,6 @@
     });
   }
 
-  function setSegActive(selector, value) {
-    if (!selector) return;
-    selector.querySelectorAll(".seg-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.val === value);
-    });
-  }
-
   function setOverlayStyle(style) {
     if (style === "vibrancy") {
       currentOverlayStyle = "vibrancy";
@@ -455,7 +448,11 @@
     } else {
       currentOverlayStyle = "liquid";
     }
-    setSegActive(el.overlayStyleSelector, currentOverlayStyle);
+    if (el.overlayStyleSelector) {
+      el.overlayStyleSelector.querySelectorAll(".seg-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.val === currentOverlayStyle);
+      });
+    }
   }
 
   function setHotkeyHint(text, level) {
@@ -592,7 +589,7 @@
     el.configPath.textContent = data.configPath || "-";
 
     currentPlatform = data.runtime?.platform || currentPlatform;
-    setOverlayStyle(c.app?.overlay_style || "liquid");
+    setOverlayStyle(c.app?.overlay_style);
     if (currentPlatform !== "macos" && el.overlayStyleRow) {
       el.overlayStyleRow.style.display = "none";
     }
@@ -1487,7 +1484,7 @@ SOFTWARE.`;
     saveFormNow();
   });
 
-  // Overlay style (macOS only): 通透 / 标准 / 磨砂
+  // Overlay glass style (macOS only)
   if (el.overlayStyleSelector) {
     el.overlayStyleSelector.addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-btn");

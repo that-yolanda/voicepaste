@@ -727,9 +727,10 @@ mod macos {
                 && matches!(model.app_state.as_str(), "recording" | "finishing");
             let want_wrap = !has_hint && (model.layout_wrap || measured_w > SINGLE_LINE_LIMIT);
 
-            // Waveform shows on the right while recording (reserve its width so the
-            // pill doesn't jump when bars fade in/out — mirrors app.js chrome math).
-            let show_wave = !has_hint && model.app_state == "recording";
+            // Waveform shows on the right while recording, even when a hint
+            // (e.g. "录制中…" for non-streaming engines) is displayed. Reserve
+            // its width so the text never overlaps the bars.
+            let show_wave = model.app_state == "recording";
 
             // Chrome around the text (left pad + indicator + gap + right pad + waveform).
             let wave_reserve = if show_wave {
