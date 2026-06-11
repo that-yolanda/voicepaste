@@ -187,7 +187,12 @@ fn setup_overlay_window(app: &App) {
 }
 
 /// Position the overlay at bottom-center of the primary screen.
-/// Called from RunEvent::Ready to avoid macOS window server timing warnings.
+///
+/// Called from RunEvent::Ready (to avoid macOS window server timing warnings) and
+/// again every time the overlay is about to be shown. Re-running it on each show is
+/// what lets the overlay follow display changes: when an external monitor is plugged
+/// in or unplugged the primary monitor (and its work area) changes, but the window
+/// keeps its old frame until repositioned — which previously required an app restart.
 fn position_overlay(app_handle: &AppHandle) {
     if let Some(overlay) = app_handle.get_webview_window("overlay") {
         // Set window properties here (RunEvent::Ready) rather than during setup()
@@ -535,6 +540,7 @@ async fn start_recording(app_handle: AppHandle) {
             *recording_state.0.lock().unwrap() = false;
             // Show overlay with error, auto-hide after delay
             let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
+            position_overlay(&app_handle);
             if let Some(overlay) = app_handle.get_webview_window("overlay") {
                 let _ = overlay.show();
             }
@@ -564,6 +570,9 @@ async fn start_recording(app_handle: AppHandle) {
 
     *app_inner.latest_transcript.lock().await = (String::new(), String::new());
     let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
+    // Re-position before showing so the overlay follows the current display layout
+    // (e.g. after an external monitor was connected/disconnected).
+    position_overlay(&app_handle);
     if let Some(overlay) = app_handle.get_webview_window("overlay") {
         let _ = overlay.show();
     }
