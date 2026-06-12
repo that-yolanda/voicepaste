@@ -4,7 +4,7 @@ use crate::hotword::HotwordData;
 use crate::model;
 use crate::paste;
 use crate::HotkeyMode;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{utils::Theme, AppHandle, Emitter, Manager, State};
 
 // Re-export paste::PasteResult for use in commands
 use paste::PasteResult;
@@ -58,6 +58,15 @@ fn resolve_theme(preference: &str) -> String {
         "system" => detect_system_theme().to_string(),
         other => other.to_string(),
     }
+}
+
+pub(crate) fn apply_app_theme(app: &AppHandle, preference: &str) {
+    let theme = match preference {
+        "light" => Some(Theme::Light),
+        "dark" => Some(Theme::Dark),
+        _ => None,
+    };
+    app.set_theme(theme);
 }
 
 /// Get app configuration for the overlay.
@@ -145,6 +154,8 @@ pub async fn save_config_object(
 
     // Sync hotkey mode from saved config
     let updated_config = state.config_manager.load_config()?;
+    apply_app_theme(&app, &updated_config.app.theme);
+
     if let Some(hotkey_mode) = app.try_state::<HotkeyMode>() {
         *hotkey_mode.0.lock().unwrap() = updated_config.app.hotkey_mode.clone();
     }

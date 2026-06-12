@@ -90,11 +90,17 @@ pub fn run() {
                 .expect("Failed to set global logger");
             log::set_max_level(log_level);
 
-            // Read hotkey mode before config_manager is moved into app state
-            let hotkey_mode = config_manager
-                .load_config()
+            // Read startup config before config_manager is moved into app state.
+            let startup_config = config_manager.load_config().ok();
+            let hotkey_mode = startup_config
+                .as_ref()
                 .map(|c| c.app.hotkey_mode.clone())
-                .unwrap_or_else(|_| "toggle".to_string());
+                .unwrap_or_else(|| "toggle".to_string());
+            let initial_theme = startup_config
+                .as_ref()
+                .map(|c| c.app.theme.as_str())
+                .unwrap_or("system")
+                .to_string();
 
             let app_state = create_app_state(config_manager, hotword_manager, log_path, stats_service);
             app.manage(app_state);
@@ -107,6 +113,8 @@ pub fn run() {
 
             // Active prompt ID for the current recording session (None = main hotkey)
             app.manage(ActivePromptId(std::sync::Mutex::new(None)));
+
+            commands::apply_app_theme(app.handle(), &initial_theme);
 
             log_app!(info, "Setup complete");
             log_app!(debug, "data_dir: {:?}", data_dir);
