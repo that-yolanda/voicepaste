@@ -363,6 +363,16 @@ impl AppConfig {
     pub fn model_config_json(&self, model_id: &str) -> Option<serde_json::Value> {
         self.audio.get(model_id).and_then(profile_to_json)
     }
+
+    /// Whether to enable simulated streaming for non-streaming models.
+    /// When enabled, offline ASR models use VAD + interim decoding to produce
+    /// partial results during recording, mimicking streaming behavior.
+    pub fn stream_simulate(&self) -> bool {
+        self.audio
+            .get("stream_simulate")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+    }
 }
 
 impl Default for DoubaoStreamingConfig {

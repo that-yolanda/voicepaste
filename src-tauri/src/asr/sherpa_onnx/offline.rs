@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use tokio::sync::mpsc;
 
+use super::punct::PunctuationProcessor;
 use super::vad::VadProcessor;
 use super::{
     append_text, send_transcript, AsrEvent, AsrSession, SAMPLE_RATE, WorkerCommand,
@@ -16,18 +17,21 @@ pub(crate) struct OfflineSession {
     is_committed: Arc<AtomicBool>,
     worker_tx: Mutex<Option<std_mpsc::SyncSender<WorkerCommand>>>,
     worker_handle: Mutex<Option<JoinHandle<()>>>,
+    punct_processor: Option<Arc<PunctuationProcessor>>,
 }
 
 impl OfflineSession {
     pub(crate) fn new(
         worker_tx: std_mpsc::SyncSender<WorkerCommand>,
         worker_handle: JoinHandle<()>,
+        punct_processor: Option<Arc<PunctuationProcessor>>,
     ) -> Self {
         Self {
             is_ready: Arc::new(AtomicBool::new(true)),
             is_committed: Arc::new(AtomicBool::new(false)),
             worker_tx: Mutex::new(Some(worker_tx)),
             worker_handle: Mutex::new(Some(worker_handle)),
+            punct_processor,
         }
     }
 
@@ -108,10 +112,17 @@ impl AsrSession for OfflineSession {
             Ok::<_, String>(final_text)
         })
         .await
-        .unwrap_or_else(|e| Err(format!("识别失败: {}", e)));
+        .unwrap_or_else(|e| Err(format!("识别失败: {}", e)))?;
+
+        // Post-process: apply punctuation restoration
+        let result = if let Some(ref punct) = self.punct_processor {
+            punct.add_punctuation(&result)
+        } else {
+            result
+        };
 
         self.is_ready.store(false, Ordering::SeqCst);
-        result
+        Ok(result)
     }
 
     fn close(&self) {
@@ -212,6 +223,7 @@ pub(crate) fn spawn_offline_worker(
     use_hotwords: bool,
     hotwords_str: String,
     event_tx: mpsc::UnboundedSender<AsrEvent>,
+    punct_processor: Option<Arc<PunctuationProcessor>>,
 ) -> Result<(OfflineSession, std_mpsc::SyncSender<WorkerCommand>), String> {
     let (worker_tx, worker_rx) = std_mpsc::sync_channel(super::AUDIO_QUEUE_CAPACITY);
 
@@ -222,5 +234,5 @@ pub(crate) fn spawn_offline_worker(
         })
         .map_err(|e| format!("启动离线识别线程失败: {}", e))?;
 
-    Ok((OfflineSession::new(worker_tx.clone(), handle), worker_tx))
+    Ok((OfflineSession::new(worker_tx.clone(), handle, punct_processor), worker_tx))
 }

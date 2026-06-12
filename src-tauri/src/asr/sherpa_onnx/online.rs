@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use tokio::sync::mpsc;
 
+use super::punct::PunctuationProcessor;
 use super::vad::VadProcessor;
 use super::{
     append_text, send_transcript, AsrEvent, AsrSession, SAMPLE_RATE, WorkerCommand,
@@ -282,39 +283,68 @@ fn run_online_worker(
     let mut finalized = String::new();
     let mut last_partial = String::new();
     let mut buffer = Vec::with_capacity(chunk_size * 2);
+    let mut live_feeding = false;
 
     while let Ok(command) = rx.recv() {
         match command {
             WorkerCommand::Audio(samples) => {
-                // Run VAD to detect speech segments; only feed speech to recognizer
                 let speech_segments = vad.accept_waveform(&samples);
-                for segment in speech_segments {
+
+                if !speech_segments.is_empty() {
+                    // VAD produced completed segments.  If we were already
+                    // live-feeding raw audio (path below), skip the segment
+                    // — that audio was already sent to the recognizer.
+                    // Otherwise, feed the segment normally.
+                    if !live_feeding {
+                        for segment in speech_segments {
+                            accept_online_samples(
+                                &recognizer,
+                                &stream,
+                                &mut buffer,
+                                &segment,
+                                chunk_size,
+                                &mut finalized,
+                                &mut last_partial,
+                                &event_tx,
+                            );
+                        }
+                    }
+                    live_feeding = false;
+                } else if vad.detected() {
+                    // VAD detects active speech but hasn't completed a segment
+                    // yet — feed the raw audio so the recognizer can produce
+                    // partial results without waiting for silence.
+                    live_feeding = true;
                     accept_online_samples(
                         &recognizer,
                         &stream,
                         &mut buffer,
-                        &segment,
+                        &samples,
                         chunk_size,
                         &mut finalized,
                         &mut last_partial,
                         &event_tx,
                     );
                 }
+                // Pure silence: skip, don't feed to recognizer.
             }
             WorkerCommand::Finish(reply_tx) => {
-                // Flush remaining VAD segments
+                // Flush remaining VAD segments.  Skip them when we were
+                // live-feeding — the audio was already sent to the recognizer.
                 let remaining = vad.flush();
-                for segment in remaining {
-                    accept_online_samples(
-                        &recognizer,
-                        &stream,
-                        &mut buffer,
-                        &segment,
-                        chunk_size,
-                        &mut finalized,
-                        &mut last_partial,
-                        &event_tx,
-                    );
+                if !live_feeding {
+                    for segment in remaining {
+                        accept_online_samples(
+                            &recognizer,
+                            &stream,
+                            &mut buffer,
+                            &segment,
+                            chunk_size,
+                            &mut finalized,
+                            &mut last_partial,
+                            &event_tx,
+                        );
+                    }
                 }
                 finish_online_stream(
                     &recognizer,
@@ -340,6 +370,7 @@ pub(crate) fn spawn_online_worker(
     chunk_size: usize,
     hotwords_for_restore: Vec<String>,
     event_tx: mpsc::UnboundedSender<AsrEvent>,
+    punct_processor: Option<Arc<PunctuationProcessor>>,
 ) -> Result<(OnlineSession, std_mpsc::SyncSender<WorkerCommand>), String> {
     let (worker_tx, worker_rx) = std_mpsc::sync_channel(super::AUDIO_QUEUE_CAPACITY);
 
@@ -351,7 +382,7 @@ pub(crate) fn spawn_online_worker(
         .map_err(|e| format!("启动在线识别线程失败: {}", e))?;
 
     Ok((
-        OnlineSession::new(worker_tx.clone(), handle, hotwords_for_restore),
+        OnlineSession::new(worker_tx.clone(), handle, hotwords_for_restore, punct_processor),
         worker_tx,
     ))
 }
@@ -367,6 +398,7 @@ pub(crate) struct OnlineSession {
     worker_tx: Mutex<Option<std_mpsc::SyncSender<WorkerCommand>>>,
     worker_handle: Mutex<Option<JoinHandle<()>>>,
     hotwords_for_restore: Vec<String>,
+    punct_processor: Option<Arc<PunctuationProcessor>>,
 }
 
 impl OnlineSession {
@@ -374,6 +406,7 @@ impl OnlineSession {
         worker_tx: std_mpsc::SyncSender<WorkerCommand>,
         worker_handle: JoinHandle<()>,
         hotwords_for_restore: Vec<String>,
+        punct_processor: Option<Arc<PunctuationProcessor>>,
     ) -> Self {
         Self {
             is_ready: Arc::new(AtomicBool::new(true)),
@@ -381,6 +414,7 @@ impl OnlineSession {
             worker_tx: Mutex::new(Some(worker_tx)),
             worker_handle: Mutex::new(Some(worker_handle)),
             hotwords_for_restore,
+            punct_processor,
         }
     }
 
@@ -465,7 +499,14 @@ impl AsrSession for OnlineSession {
         .await
         .unwrap_or_else(|e| Err(format!("识别失败: {}", e)))?;
 
-        // Post-process: restore original hotword casing and punctuation
+        // Post-process: apply punctuation first, then restore hotword case
+        // (punctuation changes text structure which affects hotword matching)
+        let result = if let Some(ref punct) = self.punct_processor {
+            punct.add_punctuation(&result)
+        } else {
+            result
+        };
+
         let result = if hotwords.is_empty() {
             result
         } else {

@@ -133,6 +133,12 @@ impl VadProcessor {
         segments
     }
 
+    /// Whether the VAD is currently detecting voice activity.
+    /// Returns `true` from the moment speech starts until a complete segment is formed.
+    pub fn detected(&self) -> bool {
+        self.detector.detected()
+    }
+
     /// Flush any remaining buffered audio and return final speech segments.
     pub fn flush(&mut self) -> Vec<Vec<f32>> {
         // Zero-pad remaining buffer to window size

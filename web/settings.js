@@ -165,6 +165,7 @@
     enablePunc: $("enablePunc"),
     removeTrailingPeriod: $("removeTrailingPeriod"),
     keepClipboard: $("keepClipboard"),
+    streamSimulate: $("streamSimulate"),
     boostingTableId: $("boostingTableId"),
     versionText: $("versionText"),
     aboutUpdateBtn: $("aboutUpdateBtn"),
@@ -620,6 +621,9 @@
     if (el.keepClipboard) {
       el.keepClipboard.checked = c.app?.keep_clipboard !== false;
     }
+    if (el.streamSimulate) {
+      el.streamSimulate.checked = c.audio?.stream_simulate !== false;
+    }
 
     el.boostingTableId.value = doubaoConfig.corpus?.boosting_table_id || "";
 
@@ -705,6 +709,8 @@
     config.app.keep_clipboard = el.keepClipboard
       ? el.keepClipboard.checked
       : config.app.keep_clipboard !== false;
+    config.audio = config.audio || {};
+    config.audio.stream_simulate = el.streamSimulate ? el.streamSimulate.checked : true;
     config.app.theme = currentThemePreference;
     config.app.overlay_style = currentOverlayStyle;
     config.app.sound = {
@@ -1850,6 +1856,7 @@ SOFTWARE.`;
     el.enablePunc,
     el.removeTrailingPeriod,
     el.keepClipboard,
+    el.streamSimulate,
   ];
   toggles.forEach((toggle) => {
     if (toggle) toggle.addEventListener("change", saveFormNow);
@@ -1990,6 +1997,7 @@ SOFTWARE.`;
         const isDownloaded = _downloadedModels.includes(model.id);
         const isActive = currentModelId === model.id;
         const isVad = model.category === "vad";
+        const isBaseModel = model.category === "vad" || model.category === "punctuation";
         const tags = (model.tags || [])
           .map((t) => `<span class="model-tag${isVad ? " vad-tag" : ""}">${escapeHtml(t)}</span>`)
           .join("");
@@ -2013,7 +2021,7 @@ SOFTWARE.`;
         }
         body += `</div>`;
         // ASR models get enable toggle; VAD/punctuation are base models — no toggle
-        if (!isVad) {
+        if (!isBaseModel) {
           body += `<label class="toggle model-enable-toggle">`;
           body += `<input type="checkbox" data-model-id="${model.id}" class="offline-model-toggle" ${isActive ? "checked" : ""} ${!isDownloaded ? "disabled" : ""} />`;
           body += `<span class="track"></span><span class="thumb"></span>`;

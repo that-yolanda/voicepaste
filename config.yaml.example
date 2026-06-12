@@ -13,6 +13,8 @@ app:
 
 audio:
   provider: doubao-streaming
+  # 模拟流式输出：针对不支持流式输出的模型，通过 VAD + 间歇解码模拟实时效果（默认开启）
+  stream_simulate: true
   doubao-streaming:
     url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
     app_id: ""

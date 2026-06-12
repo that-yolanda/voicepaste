@@ -667,6 +667,7 @@ async fn start_recording(app_handle: AppHandle) {
                 engine_model_id.to_string(),
                 config.vad_params(),
                 config.model_config_json(engine_model_id),
+                config.stream_simulate(),
             );
             engine.create_session(&hotwords).await
         }
@@ -708,9 +709,11 @@ async fn start_recording(app_handle: AppHandle) {
                 }),
             );
 
-            // For non-streaming engines, show a "recording" hint since
-            // partial results won't appear during recording.
-            if entry.map_or(false, |e| !e.capabilities.streaming) {
+            // For non-streaming engines without simulated streaming,
+            // show a "recording" hint since partial results won't appear.
+            if entry.map_or(false, |e| !e.capabilities.streaming)
+                && !config.stream_simulate()
+            {
                 let _ = app_handle.emit(
                     "overlay:event",
                     serde_json::json!({

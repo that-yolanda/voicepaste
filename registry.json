@@ -1,6 +1,6 @@
 {
-  "version": 10,
-  "updated_at": "2026-06-11",
+  "version": 11,
+  "updated_at": "2026-06-12",
   "models": [
     {
       "id": "doubao-streaming",
@@ -80,13 +80,13 @@
       "category": "asr",
       "engine": "sherpa-onnx",
       "name": "SenseVoice 多语言",
-      "description": "高精度离线模型，支持中英日韩粤等 80+ 种语言",
-      "tags": ["80 种语言", "中文识别率高", "自动标点"],
+      "description": "高精度离线模型，支持中英日韩粤 5种语言",
+      "tags": ["中文识别率高", "低延时", "低内存占用"],
       "capabilities": {
         "streaming": false,
         "hotwords": false,
-        "punctuation": true,
-        "itn": true
+        "punctuation": false,
+        "itn": false
       },
       "languages": ["zh", "en", "ja", "ko", "yue"],
       "architecture": "sense_voice",
@@ -110,7 +110,7 @@
       "engine": "sherpa-onnx",
       "name": "FunASR-Nano 中英日三语",
       "description": "基于 FunASR-Nano-2512 的高精度离线模型，支持中英日三语、多种方言及歌词识别",
-      "tags": ["中英日三语", "方言识别", "歌词识别", "自动标点", "ITN"],
+      "tags": ["中英日三语", "方言识别", "歌词识别", "自动标点", "热词库", "ITN 口语转书面"],
       "capabilities": {
         "streaming": false,
         "hotwords": true,
@@ -147,7 +147,7 @@
       "engine": "sherpa-onnx",
       "name": "Zipformer 流式中英双语",
       "description": "实时流式本地模型，支持中英双语低延迟识别",
-      "tags": ["中英混说", "流式输出", "热词库", "低延时", "内存占用小"],
+      "tags": ["中英混说", "流式输出", "热词库", "低延时", "低内存占用"],
       "capabilities": {
         "streaming": true,
         "hotwords": true,
@@ -173,6 +173,32 @@
         "rule1_min_trailing_silence": 2.4,
         "rule2_min_trailing_silence": 0.8,
         "rule3_min_utterance_length": 20
+      }
+    },
+    {
+      "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12",
+      "type": "offline",
+      "category": "punctuation",
+      "engine": "sherpa-onnx",
+      "name": "CT-Transformer 标点恢复",
+      "description": "中英双语标点恢复模型，为不支持自动标点的 ASR 模型添加标点符号，下载后自动生效",
+      "tags": ["基础模型"],
+      "capabilities": {
+        "streaming": false,
+        "hotwords": false,
+        "punctuation": true,
+        "itn": false
+      },
+      "languages": ["zh", "en"],
+      "architecture": "punct_ct_transformer",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
+      "file_size": 20,
+      "mem_size": 200,
+      "model_files": {
+        "model": "model.int8.onnx"
+      },
+      "default_config": {
+        "num_threads": 2
       }
     }
   ]

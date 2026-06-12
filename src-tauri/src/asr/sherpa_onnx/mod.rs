@@ -1,15 +1,19 @@
 pub mod online;
 pub mod offline;
+pub mod punct;
 pub mod sense_voice;
 pub mod funasr_nano;
+pub mod simulated_streaming;
 pub mod vad;
 
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use super::{AsrEngine, AsrEvent, AsrSession};
+use self::punct::PunctuationProcessor;
 use self::vad::{VadConfig, VadProcessor};
 use crate::config::VadParams;
 use crate::model;
@@ -124,6 +128,7 @@ pub struct SherpaOnnxEngine {
     active_model_id: String,
     vad_params: VadParams,
     model_config: Option<serde_json::Value>,
+    stream_simulate: bool,
 }
 
 impl SherpaOnnxEngine {
@@ -133,6 +138,7 @@ impl SherpaOnnxEngine {
         active_model_id: String,
         vad_params: VadParams,
         model_config: Option<serde_json::Value>,
+        stream_simulate: bool,
     ) -> Self {
         Self {
             data_dir,
@@ -140,6 +146,65 @@ impl SherpaOnnxEngine {
             active_model_id,
             vad_params,
             model_config,
+            stream_simulate,
+        }
+    }
+
+    /// Create a PunctuationProcessor if:
+    /// 1. The ASR model does NOT have built-in punctuation
+    /// 2. The punctuation model exists in the registry and is downloaded
+    fn create_punctuation_processor(
+        &self,
+        registry: &model::ModelRegistry,
+        asr_entry: &model::ModelEntry,
+    ) -> Option<Arc<PunctuationProcessor>> {
+        // Skip if the ASR model already has built-in punctuation
+        if asr_entry.capabilities.punctuation {
+            log_asr!(
+                info,
+                "ASR model '{}' has built-in punctuation, skipping external model",
+                asr_entry.id
+            );
+            return None;
+        }
+
+        let punct_entry = match registry
+            .models
+            .iter()
+            .find(|m| m.category == model::ModelCategory::Punctuation)
+        {
+            Some(e) => e,
+            None => {
+                log_asr!(info, "No punctuation model found in registry");
+                return None;
+            }
+        };
+
+        let model_dir = model::model_path(&self.data_dir, &punct_entry.id);
+        if !model_dir.exists() {
+            log_asr!(
+                info,
+                "Punctuation model not downloaded at {}, skipping",
+                model_dir.display()
+            );
+            return None;
+        }
+
+        let num_threads = punct_entry
+            .default_config
+            .as_ref()
+            .and_then(|c| json_u32(c, "num_threads"))
+            .unwrap_or(2);
+
+        match PunctuationProcessor::new(&model_dir, num_threads) {
+            Ok(p) => {
+                log_asr!(info, "Punctuation processor created for model '{}'", asr_entry.id);
+                Some(Arc::new(p))
+            }
+            Err(e) => {
+                log_asr!(warn, "Failed to create punctuation processor: {}", e);
+                None
+            }
         }
     }
 }
@@ -188,6 +253,9 @@ impl AsrEngine for SherpaOnnxEngine {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let _ = event_tx.send(AsrEvent::Open);
 
+        // Create punctuation processor for ASR models without built-in punctuation
+        let punct_processor = self.create_punctuation_processor(&registry, entry);
+
         if entry.capabilities.streaming {
             // ── Online (streaming transducer, e.g. Zipformer) ──
             let modeling_unit =
@@ -232,6 +300,45 @@ impl AsrEngine for SherpaOnnxEngine {
                 streaming_chunk_size,
                 hotwords_for_restore,
                 event_tx,
+                punct_processor,
+            )?;
+
+            Ok((Box::new(session), event_rx))
+        } else if self.stream_simulate {
+            // ── Simulated streaming (offline model with interim decoding) ──
+            let arch = entry.architecture.as_deref().unwrap_or("");
+
+            let recognizer = match arch {
+                "sense_voice" => sense_voice::build_sense_voice_recognizer(
+                    &model_dir,
+                    entry,
+                    asr_num_threads,
+                    &model_config,
+                )?,
+                "funasr_nano" => funasr_nano::build_funasr_nano_recognizer(
+                    &model_dir,
+                    entry,
+                    asr_num_threads,
+                    &model_config,
+                    None, // hotwords are injected via model config in the builder
+                )?,
+                other => {
+                    return Err(format!(
+                        "非流式模型 {} 的 architecture '{}' 不支持",
+                        entry.id, other
+                    ));
+                }
+            };
+
+            // Create VAD for simulated streaming
+            let vad_dir = model::model_path(&self.data_dir, "silero-vad");
+            let vad = VadProcessor::new(&vad_dir, &vad_config)?;
+
+            let (session, _worker_tx) = simulated_streaming::spawn_simulated_streaming_worker(
+                recognizer,
+                vad,
+                event_tx,
+                punct_processor,
             )?;
 
             Ok((Box::new(session), event_rx))
@@ -286,6 +393,7 @@ impl AsrEngine for SherpaOnnxEngine {
                 use_hotwords,
                 hotwords_str,
                 event_tx,
+                punct_processor,
             )?;
 
             Ok((Box::new(session), event_rx))
