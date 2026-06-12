@@ -877,6 +877,18 @@ async fn stop_recording(app_handle: AppHandle) {
 
             // 7. Write to clipboard
             use tauri_plugin_clipboard_manager::ClipboardExt;
+
+            // Save original clipboard content if we need to restore it later
+            let keep_clipboard = config
+                .as_ref()
+                .map(|c| c.app.keep_clipboard)
+                .unwrap_or(true);
+            let original_clipboard: Option<String> = if !keep_clipboard {
+                app_handle.clipboard().read_text().ok()
+            } else {
+                None
+            };
+
             if let Err(e) = app_handle.clipboard().write_text(&final_text) {
                 log_rec!(error, "Clipboard write failed: {}", e);
                 let _ = app_handle.emit("overlay:event", serde_json::json!({
@@ -887,6 +899,13 @@ async fn stop_recording(app_handle: AppHandle) {
 
             // 8. Simulate paste keystroke
             let _result = crate::paste::simulate_paste();
+
+            // Restore original clipboard content if keep_clipboard is disabled
+            if let Some(original) = original_clipboard {
+                if let Err(e) = app_handle.clipboard().write_text(&original) {
+                    log_rec!(error, "Failed to restore clipboard: {}", e);
+                }
+            }
 
             // 9. Record usage stats
             app_inner.stats.lock().await.record_session(&final_text);

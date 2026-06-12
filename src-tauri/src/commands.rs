@@ -367,6 +367,14 @@ pub async fn paste_text(
 ) -> Result<PasteResult, String> {
     // Write to clipboard using Tauri clipboard plugin
     use tauri_plugin_clipboard_manager::ClipboardExt;
+
+    // Save original clipboard content if we need to restore it later
+    let original_clipboard: Option<String> = if !keep_clipboard {
+        app.clipboard().read_text().ok()
+    } else {
+        None
+    };
+
     app.clipboard()
         .write_text(&text)
         .map_err(|e| format!("Failed to write to clipboard: {}", e))?;
@@ -375,8 +383,10 @@ pub async fn paste_text(
     let result = paste::simulate_paste();
 
     // Restore previous clipboard if needed
-    if !keep_clipboard {
-        // The clipboard already has the text, user may want it to stay
+    if let Some(original) = original_clipboard {
+        app.clipboard()
+            .write_text(&original)
+            .map_err(|e| format!("Failed to restore clipboard: {}", e))?;
     }
 
     Ok(result)
