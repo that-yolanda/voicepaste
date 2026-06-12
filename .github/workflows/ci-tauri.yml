@@ -21,8 +21,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint:ci
 
-  rust-check:
-    runs-on: macos-latest
+  rust-test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -34,5 +34,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - working-directory: src-tauri
+      - name: Check Rust compilation
+        working-directory: src-tauri
         run: cargo check --all-targets
+      - name: Run Rust unit tests
+        working-directory: src-tauri
+        run: cargo test

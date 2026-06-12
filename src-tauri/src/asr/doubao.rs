@@ -843,3 +843,224 @@ impl AsrSession for DoubaoSession {
         });
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // ── build_header tests ────────────────────────────────────────────────
+
+    #[test]
+    fn header_structure() {
+        let header = build_header(0x01, 0x00, 0x01, 0x01);
+        // byte 0: protocol magic 0x11
+        assert_eq!(header[0], 0x11);
+        // byte 1: (message_type << 4) | (flags & 0x0f) → (0x01 << 4) | 0x00 = 0x10
+        assert_eq!(header[1], 0x10);
+        // byte 2: (serialization << 4) | (compression & 0x0f) → (0x01 << 4) | 0x01 = 0x11
+        assert_eq!(header[2], 0x11);
+        // byte 3: reserved, always 0x00
+        assert_eq!(header[3], 0x00);
+    }
+
+    #[test]
+    fn header_message_type_changes_byte1() {
+        let header = build_header(0x02, 0x00, 0x00, 0x00);
+        assert_eq!(header[0], 0x11);
+        assert_eq!(header[1], 0x20); // 0x02 << 4
+        assert_eq!(header[2], 0x00);
+    }
+
+    // ── encode_full_client_request ────────────────────────────────────────
+
+    #[test]
+    fn full_request_has_header_and_size() {
+        let payload = json!({"test": "hello"});
+        let frame = encode_full_client_request(&payload);
+        assert!(frame.len() > 8); // header(4) + size(4) + gzipped payload
+        // First byte is protocol magic
+        assert_eq!(frame[0], 0x11);
+        // Bytes 4-7 are the payload size (big-endian)
+        let size = u32::from_be_bytes([frame[4], frame[5], frame[6], frame[7]]);
+        assert_eq!(size as usize, frame.len() - 8);
+    }
+
+    // ── encode_audio_only_request ─────────────────────────────────────────
+
+    #[test]
+    fn audio_only_normal_frame() {
+        let audio = vec![0u8; 100];
+        let frame = encode_audio_only_request(&audio, false);
+        assert_eq!(frame[0], 0x11);
+        // byte 1: message_type=0x02, flags=0x00 → 0x20
+        assert_eq!(frame[1], 0x20);
+        let size = u32::from_be_bytes([frame[4], frame[5], frame[6], frame[7]]);
+        assert_eq!(size, 100);
+    }
+
+    #[test]
+    fn audio_only_last_frame_has_flag() {
+        let audio = vec![0u8; 50];
+        let frame = encode_audio_only_request(&audio, true);
+        // byte 1: (0x02 << 4) | 0x02 = 0x22
+        assert_eq!(frame[1], 0x22);
+    }
+
+    // ── clean_asr_text ────────────────────────────────────────────────────
+
+    #[test]
+    fn clean_cjk_removes_spaces_between_chars() {
+        assert_eq!(clean_asr_text("语 音 输 入"), "语音输入");
+    }
+
+    #[test]
+    fn clean_preserves_english_spaces() {
+        assert_eq!(clean_asr_text("hello world"), "hello world");
+    }
+
+    #[test]
+    fn clean_mixed_cjk_english() {
+        let input = "使用 Claude Code 和 语 音 识 别";
+        let output = clean_asr_text(input);
+        // English word spaces preserved, CJK spaces removed
+        assert!(output.contains("语音识别"));
+        assert!(output.contains("Claude Code"));
+    }
+
+    // ── is_ignorable_raw_text ─────────────────────────────────────────────
+
+    #[test]
+    fn ignorable_empty_string() {
+        assert!(is_ignorable_raw_text("", "conn-123"));
+        assert!(is_ignorable_raw_text("   ", "conn-123"));
+    }
+
+    #[test]
+    fn ignorable_connect_id() {
+        assert!(is_ignorable_raw_text("conn-abc", "conn-abc"));
+    }
+
+    #[test]
+    fn ignorable_uuid() {
+        assert!(is_ignorable_raw_text(
+            "550e8400-e29b-41d4-a716-446655440000",
+            "conn-123"
+        ));
+    }
+
+    #[test]
+    fn not_ignorable_normal_text() {
+        assert!(!is_ignorable_raw_text("hello world", "conn-123"));
+    }
+
+    // ── normalize_error_message ───────────────────────────────────────────
+
+    #[test]
+    fn normalize_error_401_auth() {
+        let msg = normalize_error_message("HTTP 401 Unauthorized");
+        assert!(msg.contains("鉴权失败"));
+    }
+
+    #[test]
+    fn normalize_error_403_auth() {
+        let msg = normalize_error_message("403 Forbidden");
+        assert!(msg.contains("鉴权失败"));
+    }
+
+    #[test]
+    fn normalize_error_enotfound_network() {
+        let msg = normalize_error_message("ENOTFOUND: DNS lookup failed");
+        assert!(msg.contains("网络连接失败"));
+    }
+
+    #[test]
+    fn normalize_error_econnrefused_network() {
+        let msg = normalize_error_message("ECONNREFUSED");
+        assert!(msg.contains("网络连接失败"));
+    }
+
+    #[test]
+    fn normalize_error_45000001_invalid_params() {
+        let msg = normalize_error_message("Error 45000001");
+        assert!(msg.contains("参数无效"));
+    }
+
+    #[test]
+    fn normalize_error_45000081_timeout() {
+        let msg = normalize_error_message("Error 45000081");
+        assert!(msg.contains("等包超时"));
+    }
+
+    #[test]
+    fn normalize_error_unknown_passthrough() {
+        let original = "Some random error";
+        let msg = normalize_error_message(original);
+        assert_eq!(msg, original);
+    }
+
+    // ── is_empty_yaml_value ──────────────────────────────────────────────
+
+    #[test]
+    fn yaml_null_is_empty() {
+        assert!(is_empty_yaml_value(&serde_norway::Value::Null));
+    }
+
+    #[test]
+    fn yaml_empty_string_is_empty() {
+        assert!(is_empty_yaml_value(&serde_norway::Value::String(
+            "".to_string()
+        )));
+    }
+
+    #[test]
+    fn yaml_whitespace_string_is_empty() {
+        assert!(is_empty_yaml_value(&serde_norway::Value::String(
+            "   ".to_string()
+        )));
+    }
+
+    #[test]
+    fn yaml_empty_sequence_is_empty() {
+        assert!(is_empty_yaml_value(&serde_norway::Value::Sequence(vec![])));
+    }
+
+    #[test]
+    fn yaml_non_empty_string_is_not_empty() {
+        assert!(!is_empty_yaml_value(&serde_norway::Value::String(
+            "hello".to_string()
+        )));
+    }
+
+    // ── parse_context_hotwords ───────────────────────────────────────────
+
+    #[test]
+    fn context_hotwords_comma_separated_string() {
+        let value = serde_norway::Value::String("Claude Code,OpenAI,ChatGPT".to_string());
+        let words = parse_context_hotwords(&value);
+        assert_eq!(words.len(), 3);
+        assert_eq!(words[0]["word"], "Claude Code");
+        assert_eq!(words[1]["word"], "OpenAI");
+        assert_eq!(words[2]["word"], "ChatGPT");
+    }
+
+    #[test]
+    fn context_hotwords_sequence_format() {
+        let value = serde_norway::Value::Sequence(vec![
+            serde_norway::Value::String("Claude Code".to_string()),
+            serde_norway::Value::String("OpenAI".to_string()),
+        ]);
+        let words = parse_context_hotwords(&value);
+        assert_eq!(words.len(), 2);
+    }
+
+    #[test]
+    fn context_hotwords_null_returns_empty() {
+        let words = parse_context_hotwords(&serde_norway::Value::Null);
+        assert!(words.is_empty());
+    }
+}

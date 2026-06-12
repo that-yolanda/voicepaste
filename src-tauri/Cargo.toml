@@ -43,6 +43,11 @@ sherpa-onnx = { version = "1.13", default-features = false }
 tar = "0.4"
 bzip2 = "0.4"
 
+[features]
+default = []
+asr-integration = []
+llm-integration = []
+
 [dev-dependencies]
 tempfile = "3"
 wiremock = "0.6"

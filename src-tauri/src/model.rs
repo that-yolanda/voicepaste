@@ -376,3 +376,116 @@ pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<(), String> {
 pub fn model_path(data_dir: &Path, model_id: &str) -> PathBuf {
     models_dir(data_dir).join(model_id)
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_entry_is_downloadable_with_url() {
+        let entry = ModelEntry {
+            id: "test".to_string(),
+            model_type: "offline".to_string(),
+            category: ModelCategory::Asr,
+            engine: "sherpa-onnx".to_string(),
+            name: "Test".to_string(),
+            description: "Test model".to_string(),
+            tags: vec![],
+            capabilities: Capabilities {
+                streaming: false,
+                hotwords: false,
+                punctuation: false,
+                itn: false,
+            },
+            languages: vec![],
+            requires_config: None,
+            architecture: None,
+            download_url: Some("https://example.com/model.tar.gz".to_string()),
+            file_size: Some(100),
+            mem_size: None,
+            model_files: std::collections::HashMap::new(),
+            default_config: None,
+        };
+        assert!(entry.is_downloadable());
+    }
+
+    #[test]
+    fn model_entry_not_downloadable_without_url() {
+        let entry = ModelEntry {
+            id: "doubao".to_string(),
+            model_type: "online".to_string(),
+            category: ModelCategory::Asr,
+            engine: "volcengine".to_string(),
+            name: "Doubao".to_string(),
+            description: "Online ASR".to_string(),
+            tags: vec![],
+            capabilities: Capabilities {
+                streaming: true,
+                hotwords: true,
+                punctuation: true,
+                itn: true,
+            },
+            languages: vec!["zh".to_string()],
+            requires_config: Some(vec!["url".to_string()]),
+            architecture: None,
+            download_url: None,
+            file_size: None,
+            mem_size: None,
+            model_files: std::collections::HashMap::new(),
+            default_config: None,
+        };
+        assert!(!entry.is_downloadable());
+    }
+
+    #[test]
+    fn minimal_registry_contains_doubao() {
+        let registry = minimal_registry();
+        assert_eq!(registry.version, 3);
+        assert!(registry.models.iter().any(|m| m.id == "doubao-streaming"));
+    }
+
+    #[test]
+    fn merge_registry_updates_version() {
+        let current = minimal_registry();
+        let mut bundled = minimal_registry();
+        bundled.version = 5;
+        let merged = merge_registry(current, bundled);
+        assert_eq!(merged.version, 5);
+    }
+
+    #[test]
+    fn merge_registry_adds_new_model() {
+        let current = minimal_registry();
+        let mut bundled = minimal_registry();
+        bundled.models.push(ModelEntry {
+            id: "new-model".to_string(),
+            model_type: "offline".to_string(),
+            category: ModelCategory::Asr,
+            engine: "sherpa-onnx".to_string(),
+            name: "New Model".to_string(),
+            description: "A new model".to_string(),
+            tags: vec![],
+            capabilities: Capabilities {
+                streaming: false,
+                hotwords: false,
+                punctuation: false,
+                itn: false,
+            },
+            languages: vec![],
+            requires_config: None,
+            architecture: None,
+            download_url: Some("https://example.com/model.tar.gz".to_string()),
+            file_size: None,
+            mem_size: None,
+            model_files: std::collections::HashMap::new(),
+            default_config: None,
+        });
+        let merged = merge_registry(current, bundled);
+        assert!(merged.models.iter().any(|m| m.id == "new-model"));
+        assert!(merged.models.iter().any(|m| m.id == "doubao-streaming"));
+    }
+}

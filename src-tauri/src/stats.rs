@@ -186,3 +186,162 @@ impl StatsService {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    // ── Stats defaults & serialization ───────────────────────────────────
+
+    #[test]
+    fn stats_default_values() {
+        let s = Stats::default();
+        assert_eq!(s.first_used_at, None);
+        assert_eq!(s.total_sessions, 0);
+        assert_eq!(s.total_characters, 0);
+        assert!(s.daily_counts.is_empty());
+    }
+
+    #[test]
+    fn stats_serialize_roundtrip() {
+        let mut s = Stats::default();
+        s.total_sessions = 5;
+        s.total_characters = 100;
+        let json = serde_json::to_string(&s).unwrap();
+        let restored: Stats = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.total_sessions, 5);
+        assert_eq!(restored.total_characters, 100);
+    }
+
+    #[test]
+    fn history_entry_serialize() {
+        let entry = HistoryEntry {
+            ts: "2025-01-01T00:00:00+00:00".to_string(),
+            text: "hello".to_string(),
+            chars: 5,
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("hello"));
+        assert!(json.contains("2025-01-01"));
+    }
+
+    // ── StatsService with temp dir ───────────────────────────────────────
+
+    fn new_stats_service() -> (StatsService, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let svc = StatsService::new(dir.path());
+        (svc, dir)
+    }
+
+    #[test]
+    fn record_session_increments_counters() {
+        let (mut svc, _dir) = new_stats_service();
+        svc.record_session("hello world");
+        let stats = svc.get_stats();
+        assert_eq!(stats.total_sessions, 1);
+        assert_eq!(stats.total_characters, 11); // "hello world".len()
+        assert!(stats.first_used_at.is_some());
+    }
+
+    #[test]
+    fn record_session_empty_text_ignored() {
+        let (mut svc, _dir) = new_stats_service();
+        svc.record_session("");
+        let stats = svc.get_stats();
+        assert_eq!(stats.total_sessions, 0);
+    }
+
+    #[test]
+    fn record_session_multiple_increments() {
+        let (mut svc, _dir) = new_stats_service();
+        svc.record_session("first");
+        svc.record_session("second");
+        let stats = svc.get_stats();
+        assert_eq!(stats.total_sessions, 2);
+        assert_eq!(stats.total_characters, 11);
+    }
+
+    #[test]
+    fn daily_counts_populated() {
+        let (mut svc, _dir) = new_stats_service();
+        svc.record_session("test");
+        let stats = svc.get_stats();
+        assert_eq!(stats.daily_counts.len(), 1);
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        assert!(stats.daily_counts.contains_key(&today));
+    }
+
+    #[test]
+    fn get_history_empty() {
+        let (svc, _dir) = new_stats_service();
+        let history = svc.get_history(7);
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn get_history_persists_and_retrieves() {
+        let dir = tempdir().unwrap();
+        let svc_path = dir.path().join("stats.json");
+
+        // Write a pre-populated stats and history
+        let mut stats = Stats::default();
+        stats.total_sessions = 1;
+        stats.total_characters = 10;
+        stats.first_used_at = Some("2025-01-01T00:00:00+00:00".to_string());
+        let _ = fs::write(&svc_path, serde_json::to_string(&stats).unwrap());
+
+        // Write a history entry for today
+        let history_dir = dir.path().join("history");
+        let _ = fs::create_dir_all(&history_dir);
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let history_file = history_dir.join(format!("{}.jsonl", today));
+        let entry = serde_json::json!({"ts": "2025-06-01T12:00:00+00:00", "text": "hello", "chars": 5});
+        let _ = fs::write(&history_file, format!("{}\n", entry));
+
+        let svc = StatsService::new(dir.path());
+        let stats = svc.get_stats();
+        assert_eq!(stats.total_sessions, 1);
+
+        let history = svc.get_history(365);
+        assert!(!history.is_empty());
+    }
+
+    #[test]
+    fn delete_history_removes_entry() {
+        let dir = tempdir().unwrap();
+        let history_dir = dir.path().join("history");
+        let _ = fs::create_dir_all(&history_dir);
+
+        // Use a timestamp that maps to today's date in local timezone
+        // so the history file and the entry's date key match.
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let ts = format!("{}T12:00:00+00:00", today);
+        let history_file = history_dir.join(format!("{}.jsonl", today));
+
+        let _ = fs::write(
+            &history_file,
+            format!(
+                "{}\n",
+                serde_json::json!({"ts": ts, "text": "hello", "chars": 5})
+            ),
+        );
+
+        let svc_path = dir.path().join("stats.json");
+        let _ = fs::write(
+            &svc_path,
+            serde_json::to_string(&Stats::default()).unwrap(),
+        );
+
+        let mut svc = StatsService::new(dir.path());
+        svc.delete_history(&ts);
+
+        let history = svc.get_history(365);
+        let has_entry = history.iter().any(|e| e.ts == ts);
+        assert!(!has_entry, "Entry should have been deleted");
+    }
+}

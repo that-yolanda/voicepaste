@@ -147,3 +147,94 @@ macro_rules! log_tray {
 macro_rules! log_update {
     ($l:ident, $($t:tt)*) => { log::$l!(target: "Update", $($t)*) };
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::tempdir;
+
+    #[test]
+    fn voice_logger_new_creates_file() {
+        let dir = tempdir().unwrap();
+        let log_path = dir.path().join("test.log");
+        let _logger = VoiceLogger::new(log_path.clone());
+        // The logger should be constructable without errors
+        // File is created lazily on first write, so just verify no panic
+    }
+
+    #[test]
+    fn voice_logger_log_level_filtering() {
+        let dir = tempdir().unwrap();
+        let log_path = dir.path().join("test.log");
+        let logger = VoiceLogger::new(log_path.clone());
+
+        // Write an info-level log line directly to file
+        logger.write_to_file("[App][INFO] test message");
+
+        // Verify file was written
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert!(content.contains("test message"));
+    }
+
+    #[test]
+    fn write_to_file_appends() {
+        let dir = tempdir().unwrap();
+        let log_path = dir.path().join("test.log");
+        let logger = VoiceLogger::new(log_path.clone());
+
+        logger.write_to_file("line 1");
+        logger.write_to_file("line 2");
+
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("line 1"));
+        assert!(lines[1].contains("line 2"));
+    }
+
+    #[test]
+    fn log_rotation_writes_gz() {
+        let dir = tempdir().unwrap();
+        let log_path = dir.path().join("test.log");
+        let gz_path = dir.path().join("test.log.gz");
+
+        // Create a log file that's over the size limit
+        let big_line = "x".repeat(1000);
+        {
+            let mut file = std::fs::File::create(&log_path).unwrap();
+            for _ in 0..400 {
+                // 400 * 1000 = 400KB > 300KB limit
+                writeln!(file, "{}", big_line).unwrap();
+            }
+        }
+
+        // Create logger — should trigger rotation
+        let _logger = VoiceLogger::new(log_path.clone());
+
+        // After rotation, the .gz file should exist
+        assert!(gz_path.exists(), "Rotated .gz file should exist");
+    }
+
+    #[test]
+    fn no_rotation_under_limit() {
+        let dir = tempdir().unwrap();
+        let log_path = dir.path().join("test.log");
+        let gz_path = dir.path().join("test.log.gz");
+
+        // Create a small log file
+        {
+            let mut file = std::fs::File::create(&log_path).unwrap();
+            writeln!(file, "small log").unwrap();
+        }
+
+        let _logger = VoiceLogger::new(log_path.clone());
+
+        // No rotation should happen for small files
+        assert!(!gz_path.exists(), "No .gz file should be created for small logs");
+    }
+}

@@ -649,3 +649,211 @@ impl ConfigManager {
         Ok(())
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── DoubaoStreamingConfig defaults ───────────────────────────────────
+
+    #[test]
+    fn doubao_streaming_default_values() {
+        let cfg = DoubaoStreamingConfig::default();
+        assert!(cfg.url.contains("openspeech.bytedance.com"));
+        assert_eq!(cfg.format, "pcm");
+        assert_eq!(cfg.rate, 16000);
+        assert_eq!(cfg.bits, 16);
+        assert_eq!(cfg.channel, 1);
+        assert_eq!(cfg.model_name, "bigmodel");
+        assert_eq!(cfg.operation, "submit");
+        assert!(cfg.enable_itn);
+        assert!(cfg.enable_punc);
+    }
+
+    // ── DoubaoStreamingConfig conversions ────────────────────────────────
+
+    #[test]
+    fn to_connection_config_maps_fields() {
+        let cfg = DoubaoStreamingConfig::default();
+        let conn = cfg.to_connection_config();
+        assert_eq!(conn.url, cfg.url);
+        assert_eq!(conn.app_id, cfg.app_id);
+        assert_eq!(conn.access_token, cfg.access_token);
+        assert_eq!(conn.secret_key, cfg.secret_key);
+        assert_eq!(conn.resource_id, cfg.resource_id);
+    }
+
+    #[test]
+    fn to_audio_config_maps_fields() {
+        let cfg = DoubaoStreamingConfig::default();
+        let audio = cfg.to_audio_config();
+        assert_eq!(audio.format, cfg.format);
+        assert_eq!(audio.rate, cfg.rate);
+        assert_eq!(audio.bits, cfg.bits);
+        assert_eq!(audio.channel, cfg.channel);
+    }
+
+    #[test]
+    fn to_request_config_empty_language_becomes_none() {
+        let mut cfg = DoubaoStreamingConfig::default();
+        cfg.language = "".to_string();
+        let req = cfg.to_request_config();
+        assert_eq!(req.language, None);
+    }
+
+    #[test]
+    fn to_request_config_language_preserved() {
+        let mut cfg = DoubaoStreamingConfig::default();
+        cfg.language = "zh".to_string();
+        let req = cfg.to_request_config();
+        assert_eq!(req.language, Some("zh".to_string()));
+    }
+
+    #[test]
+    fn to_request_config_language_whitespace_becomes_none() {
+        let mut cfg = DoubaoStreamingConfig::default();
+        cfg.language = "   ".to_string();
+        let req = cfg.to_request_config();
+        assert_eq!(req.language, None);
+    }
+
+    // ── AppConfig defaults ───────────────────────────────────────────────
+
+    #[test]
+    fn app_config_default_hotkey_is_f13() {
+        let cfg = AppConfig::default();
+        match &cfg.app.hotkey {
+            serde_norway::Value::String(s) => assert_eq!(s, "F13"),
+            _ => panic!("hotkey should be a string"),
+        }
+    }
+
+    #[test]
+    fn app_config_default_mode_is_toggle() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.app.hotkey_mode, "toggle");
+    }
+
+    #[test]
+    fn app_config_default_remove_trailing_period() {
+        let cfg = AppConfig::default();
+        assert!(cfg.app.remove_trailing_period);
+    }
+
+    // ── audio_provider ───────────────────────────────────────────────────
+
+    #[test]
+    fn audio_provider_defaults_to_doubao() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.audio_provider(), "doubao-streaming");
+    }
+
+    #[test]
+    fn audio_provider_reads_custom() {
+        let mut cfg = AppConfig::default();
+        cfg.audio.insert(
+            "provider".to_string(),
+            serde_norway::Value::String("sherpa-onnx-funasr-nano".to_string()),
+        );
+        assert_eq!(cfg.audio_provider(), "sherpa-onnx-funasr-nano");
+    }
+
+    // ── VadParams ────────────────────────────────────────────────────────
+
+    #[test]
+    fn vad_params_default_all_none() {
+        let v: VadParams = serde_norway::from_str("{}").unwrap();
+        assert!(v.threshold.is_none());
+        assert!(v.min_silence_duration.is_none());
+        assert!(v.min_speech_duration.is_none());
+        assert!(v.max_speech_duration.is_none());
+        assert!(v.num_threads.is_none());
+    }
+
+    #[test]
+    fn vad_params_partial_deserialize() {
+        let yaml = r#"
+threshold: 0.5
+min_silence_duration: 0.3
+"#;
+        let v: VadParams = serde_norway::from_str(yaml).unwrap();
+        assert_eq!(v.threshold, Some(0.5));
+        assert_eq!(v.min_silence_duration, Some(0.3));
+        assert!(v.min_speech_duration.is_none());
+    }
+
+    // ── normalize_prompt_item ────────────────────────────────────────────
+
+    /// Convert a serde_json::Value to serde_norway::Value for test helpers.
+    fn to_norway(json: serde_json::Value) -> serde_norway::Value {
+        let s = serde_json::to_string(&json).unwrap();
+        serde_norway::from_str(&s).unwrap()
+    }
+
+    #[test]
+    fn normalize_prompt_item_full_fields() {
+        let json = serde_json::json!({
+            "id": "summarize",
+            "title": "Summarize",
+            "prompt": "Summarize the following",
+            "hotkey": ["Control+Shift+S"],
+            "hotkey_mode": "hold"
+        });
+        let v = to_norway(json);
+        let item = normalize_prompt_item(&v, 0);
+        assert_eq!(item.id, "summarize");
+        assert_eq!(item.title, "Summarize");
+        assert_eq!(item.prompt, "Summarize the following");
+        assert_eq!(item.hotkey_mode, "hold");
+    }
+
+    #[test]
+    fn normalize_prompt_item_missing_id_generates_fallback() {
+        let json = serde_json::json!({
+            "title": "No ID",
+            "prompt": "test"
+        });
+        let v = to_norway(json);
+        let item = normalize_prompt_item(&v, 2);
+        assert_eq!(item.id, "prompt-3"); // index 2 → prompt-3
+    }
+
+    #[test]
+    fn normalize_prompt_item_empty_id_uses_fallback() {
+        let json = serde_json::json!({
+            "id": "",
+            "title": "Empty ID",
+            "prompt": "test"
+        });
+        let v = to_norway(json);
+        let item = normalize_prompt_item(&v, 0);
+        assert_eq!(item.id, "prompt-1");
+    }
+
+    #[test]
+    fn normalize_prompt_item_default_mode_is_toggle() {
+        let json = serde_json::json!({
+            "id": "p1",
+            "prompt": "test"
+        });
+        let v = to_norway(json);
+        let item = normalize_prompt_item(&v, 0);
+        assert_eq!(item.hotkey_mode, "toggle");
+    }
+
+    #[test]
+    fn normalize_prompt_item_mode_hold() {
+        let json = serde_json::json!({
+            "id": "p1",
+            "prompt": "test",
+            "hotkey_mode": "hold"
+        });
+        let v = to_norway(json);
+        let item = normalize_prompt_item(&v, 0);
+        assert_eq!(item.hotkey_mode, "hold");
+    }
+}

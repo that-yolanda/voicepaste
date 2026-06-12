@@ -35,15 +35,48 @@ pnpm clean              # 清理构建产物与缓存
 
 ```bash
 pnpm test             # 运行所有测试（Rust + 前端）
-pnpm test:rust        # 仅运行 Rust 单元/集成测试
+pnpm test:rust        # 仅运行 Rust 单元测试
+pnpm test:asr         # 运行 ASR 集成测试（需已下载 sherpa-onnx 模型）
+pnpm test:llm         # 运行 LLM 集成测试（需配置 API Key）
 pnpm test:frontend    # 仅运行前端单元测试
 pnpm test:watch       # 监听模式运行前端测试
 ```
 
-### 测试结构
+### 测试策略
 
-- **Rust**：测试使用 `#[path = "tests/xxx.rs"]` 属性，文件放在 `src-tauri/src/asr/tests/` 下。通过 `cargo test` 运行。开发依赖包括 `tempfile`（隔离文件 I/O）和 `wiremock`（HTTP 模拟）。
-- **前端**：Vitest + jsdom。测试文件在 `web/tests/` 下，辅助文件在 `web/tests/helpers/` 下。通过 helper 文件模拟 `window.__TAURI__`、`window.voiceOverlay`、`window.voiceSettings` 及 Web API。
+| 层级 | 位置 | 运行方式 | 说明 |
+|------|------|---------|------|
+| **Rust 单元测试** | 各 `.rs` 文件底部 `#[cfg(test)] mod tests { ... }` | `pnpm test:rust` | 纯逻辑函数测试（解析、校验、序列化等）。使用 `tempfile` 隔离文件 I/O，不涉及网络/模型/API Key。在 CI 中运行。 |
+| **Rust 集成测试** | `src-tauri/src/tests/`，通过 Cargo features 控制 | `pnpm test:asr` / `pnpm test:llm` | 需外部资源：sherpa-onnx 模型文件（`asr-integration` feature）或 LLM API Key（`llm-integration` feature）。不在 CI 中运行。 |
+| **前端测试** | `web/tests/`（Vitest + jsdom） | `pnpm test:frontend` | 组件逻辑、纯函数测试。通过 `web/tests/helpers/` 模拟 `window.__TAURI__` 和 Web API。 |
+
+### Rust 单元测试规范
+
+- 遵循 Rust 官方惯例：单元测试**内联**写在源文件底部
+- 结构：`#[cfg(test)] mod tests { use super::*; ... }`
+- 纯逻辑函数（解析器、校验器、序列化器、规范化器）**必须**编写单元测试
+- 文件 I/O 测试使用 `tempfile::tempdir()` 隔离，自动清理
+- HTTP 测试使用 `wiremock` 启动模拟服务器验证请求/响应
+- 复杂类型应包含序列化往返测试
+
+### Rust 集成测试规范
+
+- 位于 `src-tauri/src/tests/`，通过 `Cargo.toml` 中的 features 控制编译
+- `asr-integration`：加载 sherpa-onnx 模型，对测试音频进行推理
+- `llm-integration`：通过环境变量获取凭证，调用真实 LLM API
+- 两个 feature 默认关闭，`cargo test` 不会运行集成测试
+- 集成测试通过 `use crate::...` 访问内部 API
+- 测试音频文件放在 `src-tauri/src/tests/fixtures/`
+- ASR 模型从应用数据目录读取（`~/Library/Application Support/com.yolanda.voicepaste/models/`），不会自动下载
+
+### 各阶段测试要求
+
+| 阶段 | 要求 |
+|------|------|
+| 核心功能开发 | 所有纯逻辑函数必须有单元测试 |
+| 跨模块功能 | 按需编写集成测试（模型推理、API 调用等） |
+| 代码审查前 | 所有单元测试通过（`pnpm test:rust`、`pnpm test:frontend`） |
+| 发布前 | 所有单元测试 + 集成测试通过（`pnpm test`、`pnpm test:asr`、`pnpm test:llm`） |
 
 ## 项目结构
 
@@ -60,7 +93,11 @@ voicepaste/
 ├── src-tauri/           # Rust 后端（Tauri v2）
 │   ├── src/
 │   │   ├── lib.rs       #   应用入口、状态机与快捷键管理
-│   │   ├── asr.rs       #   WebSocket ASR 客户端（二进制协议）
+│   │   ├── hotkey.rs    #   全局快捷键解析与监听（keytap）
+│   │   ├── asr/         #   ASR 引擎实现
+│   │   │   ├── doubao.rs      #   豆包流式 ASR（WebSocket 二进制协议）
+│   │   │   ├── sherpa_onnx.rs #   Sherpa-ONNX 离线识别（FunASR-Nano 等）
+│   │   │   └── vad.rs         #   VAD 配置（Silero VAD）
 │   │   ├── paste.rs     #   剪贴板写入、模拟粘贴与音效播放
 │   │   ├── config.rs    #   配置加载、模板与 YAML 处理
 │   │   ├── commands.rs  #   Tauri IPC 命令处理
@@ -69,7 +106,8 @@ voicepaste/
 │   │   ├── logger.rs    #   文件日志
 │   │   ├── stats.rs     #   使用统计与热力图数据
 │   │   ├── app_state.rs #   共享应用状态
-│   │   └── tests/       #   单元与集成测试
+│   │   ├── model.rs     #   模型注册表
+│   │   └── tests/       #   集成测试（Cargo feature gated）
 │   ├── icons/           #   应用与托盘图标（`tauri icon` 生成）
 │   ├── capabilities/    #   Tauri 权限配置
 │   ├── Cargo.toml       #   Rust 依赖

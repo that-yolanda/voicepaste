@@ -33,6 +33,8 @@
     "lint:ci": "biome ci ./web",
     "test": "npx vitest run && cargo test --manifest-path src-tauri/Cargo.toml",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:asr": "cargo test --manifest-path src-tauri/Cargo.toml --features asr-integration",
+    "test:llm": "cargo test --manifest-path src-tauri/Cargo.toml --features llm-integration",
     "test:frontend": "npx vitest run",
     "test:watch": "npx vitest"
   },

@@ -1151,6 +1151,154 @@ pub fn restore_hotword_case(text: &str, hotwords: &[String]) -> String {
     result
 }
 
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
-#[path = "tests/sherpa_onnx.rs"]
-mod tests;
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    // ── restore_hotword_case tests ──────────────────────────────────────────
+
+    #[test]
+    fn restore_case_mixed() {
+        let r = restore_hotword_case("CLAUDE CODE", &["Claude Code".to_string()]);
+        assert_eq!(r, "Claude Code");
+    }
+
+    #[test]
+    fn restore_case_lowercase_model_output() {
+        let r = restore_hotword_case("claude code", &["Claude Code".to_string()]);
+        assert_eq!(r, "Claude Code");
+    }
+
+    #[test]
+    fn restore_punctuation_stripped() {
+        let r = restore_hotword_case("AGENTSMD", &["AGENTS.md".to_string()]);
+        assert_eq!(r, "AGENTS.md");
+    }
+
+    #[test]
+    fn restore_punctuation_with_space() {
+        let r = restore_hotword_case("AGENTS MD", &["AGENTS.md".to_string()]);
+        assert_eq!(r, "AGENTS.md");
+    }
+
+    #[test]
+    fn no_change_for_chinese() {
+        let r = restore_hotword_case("流式输出", &["流式输出".to_string()]);
+        assert_eq!(r, "流式输出");
+    }
+
+    #[test]
+    fn restore_with_weight_format() {
+        let r = restore_hotword_case("CLAUDE CODE", &["Claude Code|10".to_string()]);
+        assert_eq!(r, "Claude Code");
+    }
+
+    #[test]
+    fn restore_single_hotword() {
+        let r = restore_hotword_case(
+            "使用 CLAUDE CODE 和 OPENAI",
+            &["Claude Code".to_string()],
+        );
+        assert_eq!(r, "使用 Claude Code 和 OPENAI");
+    }
+
+    #[test]
+    fn restore_multiple_in_sentence() {
+        let r = restore_hotword_case(
+            "使用 CLAUDE CODE 和 OPENAI",
+            &["Claude Code".to_string(), "OpenAI".to_string()],
+        );
+        assert_eq!(r, "使用 Claude Code 和 OpenAI");
+    }
+
+    // ── vocabulary validation tests ─────────────────────────────────────────
+
+    #[test]
+    fn parses_first_column_from_tokens_file() {
+        assert_eq!(parse_token_line("你 42").as_deref(), Some("你"));
+        assert_eq!(parse_token_line("<blk> 0").as_deref(), Some("<blk>"));
+        assert_eq!(parse_token_line("   ").as_deref(), None);
+    }
+
+    #[test]
+    fn validates_cjk_hotwords_by_character_token() {
+        let vocab = ["语", "音", "输", "入"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<HashSet<_>>();
+        let hotwords = vec!["语音输入".to_string(), "语音转写".to_string()];
+
+        assert_eq!(
+            hotword_tokens_for_validation("语音输入"),
+            vec!["语", "音", "输", "入"]
+        );
+        assert_eq!(
+            filter_valid_hotwords(&hotwords, Some(&vocab)),
+            vec!["语音输入"]
+        );
+    }
+
+    // ── FunASR-Nano hotwords tests ────────────────────────────────────────────
+
+    #[test]
+    fn funasr_hotwords_comma_separated() {
+        let hotwords = vec![
+            "Claude Code".to_string(),
+            "OpenAI".to_string(),
+            "ChatGPT".to_string(),
+        ];
+        let result = build_funasr_hotwords(&hotwords);
+        assert_eq!(result.as_deref(), Some("Claude Code,OpenAI,ChatGPT"));
+    }
+
+    #[test]
+    fn funasr_hotwords_strips_weight_suffix() {
+        let hotwords = vec![
+            "Claude Code|10".to_string(),
+            "OpenAI|5".to_string(),
+            "mermaid".to_string(),
+        ];
+        let result = build_funasr_hotwords(&hotwords);
+        assert_eq!(result.as_deref(), Some("Claude Code,OpenAI,mermaid"));
+    }
+
+    #[test]
+    fn funasr_hotwords_empty_returns_none() {
+        let result = build_funasr_hotwords(&[]);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn funasr_hotwords_single_word() {
+        let hotwords = vec!["Claude Code".to_string()];
+        let result = build_funasr_hotwords(&hotwords);
+        assert_eq!(result.as_deref(), Some("Claude Code"));
+    }
+
+    #[test]
+    fn funasr_hotwords_chinese_mixed() {
+        let hotwords = vec![
+            "流式输出".to_string(),
+            "热词".to_string(),
+            "OpenAI".to_string(),
+        ];
+        let result = build_funasr_hotwords(&hotwords);
+        assert_eq!(result.as_deref(), Some("流式输出,热词,OpenAI"));
+    }
+
+    #[test]
+    fn funasr_hotwords_preserves_original_case() {
+        let hotwords = vec![
+            "AGENTS.md".to_string(),
+            "Claude Code".to_string(),
+        ];
+        let result = build_funasr_hotwords(&hotwords);
+        assert_eq!(result.as_deref(), Some("AGENTS.md,Claude Code"));
+    }
+}

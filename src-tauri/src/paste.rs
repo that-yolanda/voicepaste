@@ -113,3 +113,62 @@ pub fn play_sound(file_path: &str) {
             .spawn();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paste_result_ok() {
+        let result = PasteResult {
+            ok: true,
+            message: None,
+            permission_error: None,
+        };
+        assert!(result.ok);
+        assert!(result.message.is_none());
+        assert!(result.permission_error.is_none());
+    }
+
+    #[test]
+    fn paste_result_error_with_message() {
+        let result = PasteResult {
+            ok: false,
+            message: Some("模拟粘贴失败".to_string()),
+            permission_error: None,
+        };
+        assert!(!result.ok);
+        assert_eq!(result.message.as_deref(), Some("模拟粘贴失败"));
+    }
+
+    #[test]
+    fn paste_result_accessibility_error() {
+        let result = PasteResult {
+            ok: false,
+            message: Some("not allowed".to_string()),
+            permission_error: Some("accessibility".to_string()),
+        };
+        assert!(result.permission_error.is_some());
+        assert_eq!(result.permission_error.as_deref(), Some("accessibility"));
+    }
+
+    #[test]
+    fn paste_result_non_accessibility_error() {
+        let result = PasteResult {
+            ok: false,
+            message: Some("generic error".to_string()),
+            permission_error: None,
+        };
+        assert!(result.permission_error.is_none());
+    }
+
+    #[test]
+    fn play_sound_empty_path_returns_early() {
+        // Should not panic on empty path
+        play_sound("");
+    }
+}

@@ -12,6 +12,8 @@ mod llm;
 mod overlay;
 mod paste;
 mod stats;
+#[cfg(test)]
+mod tests;
 mod updater;
 
 use app_state::*;
