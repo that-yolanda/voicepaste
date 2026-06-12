@@ -95,9 +95,14 @@ voicepaste/
 │   │   ├── lib.rs       #   应用入口、状态机与快捷键管理
 │   │   ├── hotkey.rs    #   全局快捷键解析与监听（keytap）
 │   │   ├── asr/         #   ASR 引擎实现
-│   │   │   ├── doubao.rs      #   豆包流式 ASR（WebSocket 二进制协议）
-│   │   │   ├── sherpa_onnx.rs #   Sherpa-ONNX 离线识别（FunASR-Nano 等）
-│   │   │   └── vad.rs         #   VAD 配置（Silero VAD）
+│   │   │   ├── doubao.rs            #   豆包流式 ASR（WebSocket 二进制协议）
+│   │   │   └── sherpa_onnx/         #   离线 ASR（sherpa-onnx）子模块
+│   │   │       ├── mod.rs           #     SherpaOnnxEngine 入口 + 共享工具
+│   │   │       ├── online.rs        #     Streaming transducer + 热词（hotwords_buf）
+│   │   │       ├── offline.rs       #     离线通用流程 + VAD 分段
+│   │   │       ├── sense_voice.rs   #     SenseVoice 模型 config
+│   │   │       ├── funasr_nano.rs   #     FunASR-Nano 模型 config + 热词
+│   │   │       └── vad.rs           #     Silero VAD 处理器
 │   │   ├── paste.rs     #   剪贴板写入、模拟粘贴与音效播放
 │   │   ├── config.rs    #   配置加载、模板与 YAML 处理
 │   │   ├── commands.rs  #   Tauri IPC 命令处理

@@ -130,11 +130,6 @@ impl HotwordManager {
         Ok(())
     }
 
-    /// Get the id of the currently active group.
-    pub fn active_group_id(&self) -> String {
-        self.cached.read().unwrap().active_group.clone()
-    }
-
     /// Get the words from the currently active group.
     pub fn active_words(&self) -> Vec<String> {
         let data = self.cached.read().unwrap();

@@ -531,25 +531,6 @@ pub async fn save_hotwords(
 ) -> Result<serde_json::Value, String> {
     state.hotword_manager.save(&data)?;
 
-    // Immediately refresh sherpa-onnx hotword files for every group,
-    // so files stay in sync with what the user sees in settings.
-    if let Ok(config) = state.config_manager.load_config() {
-        let provider = config.audio_provider();
-        if provider.starts_with("sherpa-onnx") {
-            let model_cfg = config.model_config_json(provider);
-            for group in &data.groups {
-                crate::asr::sherpa_onnx::refresh_hotword_file(
-                    &state.config_manager.data_dir,
-                    &state.config_manager.resource_dir,
-                    provider,
-                    &group.id,
-                    &group.words,
-                    model_cfg.as_ref(),
-                );
-            }
-        }
-    }
-
     Ok(serde_json::json!({ "ok": true }))
 }
 

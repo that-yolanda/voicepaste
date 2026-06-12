@@ -95,9 +95,14 @@ voicepaste/
 │   │   ├── lib.rs       #   App entry, state machine & hotkey management
 │   │   ├── hotkey.rs    #   Global hotkey parsing & listener (keytap)
 │   │   ├── asr/         #   ASR engine implementations
-│   │   │   ├── doubao.rs      #   Doubao streaming ASR (WebSocket binary protocol)
-│   │   │   ├── sherpa_onnx.rs #   Sherpa-ONNX offline recognition (FunASR-Nano, etc.)
-│   │   │   └── vad.rs         #   VAD configuration (Silero VAD)
+│   │   │   ├── doubao.rs            #   Doubao streaming ASR (WebSocket binary protocol)
+│   │   │   └── sherpa_onnx/         #   Local ASR (sherpa-onnx) sub-modules
+│   │   │       ├── mod.rs           #     SherpaOnnxEngine entry point + shared helpers
+│   │   │       ├── online.rs        #     Streaming transducer + hotwords (hotwords_buf)
+│   │   │       ├── offline.rs       #     Offline common flow + VAD segmentation
+│   │   │       ├── sense_voice.rs   #     SenseVoice model config
+│   │   │       ├── funasr_nano.rs   #     FunASR-Nano model config + hotwords
+│   │   │       └── vad.rs           #     Silero VAD processor
 │   │   ├── paste.rs     #   Clipboard write + simulated paste + sound
 │   │   ├── config.rs    #   Config loading, prompts & YAML handling
 │   │   ├── commands.rs  #   Tauri IPC command handlers
@@ -164,7 +169,7 @@ All logging uses the `log` crate with custom macros defined in `src-tauri/src/lo
 |-------|--------|---------|
 | `log_app!` | App | lib.rs (init, config, sound) |
 | `log_rec!` | Recording | lib.rs (recording state machine) |
-| `log_asr!` | ASR | asr.rs |
+| `log_asr!` | ASR | asr/ (doubao.rs, sherpa_onnx/) |
 | `log_audio!` | Audio | commands.rs (audio chunks) |
 | `log_hotkey!` | Hotkey | hotkey.rs |
 | `log_events!` | Events | lib.rs (event forwarding) |
