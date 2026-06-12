@@ -104,13 +104,22 @@ pub fn play_sound(file_path: &str) {
     }
 
     if cfg!(target_os = "macos") {
-        let _ = Command::new("afplay").arg(file_path).spawn();
+        if let Ok(mut child) = Command::new("afplay").arg(file_path).spawn() {
+            thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
     } else {
         let escaped = file_path.replace('\'', "''");
         let script = format!("(New-Object Media.SoundPlayer '{}').PlaySync()", escaped);
-        let _ = Command::new("powershell.exe")
+        if let Ok(mut child) = Command::new("powershell.exe")
             .args(["-NoProfile", "-Command", &script])
-            .spawn();
+            .spawn()
+        {
+            thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
     }
 }
 
