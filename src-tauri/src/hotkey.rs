@@ -138,8 +138,8 @@ fn parse_single_key(part: &str) -> Option<Key> {
         "comma" | "," => Some(Key::Comma),
         "period" | "." => Some(Key::Period),
         "slash" | "/" => Some(Key::Slash),
-        // Function keys
-        s if s.starts_with('f') && s.len() <= 3 => {
+        // Function keys (F1-F24, at least 2 chars)
+        s if s.starts_with('f') && s.len() >= 2 && s.len() <= 3 => {
             if let Ok(n) = s[1..].parse::<u32>() {
                 f_number_to_key(n)
             } else {
@@ -650,3 +650,11 @@ pub fn build_initial_bindings(
 
     bindings
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+#[path = "asr/tests/hotkey.rs"]
+mod tests;

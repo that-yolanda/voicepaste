@@ -2312,6 +2312,29 @@ SOFTWARE.`;
     });
   }
 
+  // ── Test-only exports ─────────────────────────────────────────────────
+  // Exposed only in Node.js test environments; has zero effect in WebView.
+  if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") {
+    module.exports = {
+      normalizeHotkeyLabel,
+      formatPromptHotkey,
+      formatCompact,
+      formatDuration,
+      escapeHtml,
+      clonePlain,
+      getAsrProvider,
+      getRegistryModel,
+      defaultModelConfig,
+      ensureModelConfig,
+      getMergedModelConfig,
+      labelForModelParam,
+      readModelParamInput,
+      soundFileName,
+      renderModelConfigRows,
+      resolveTheme,
+    };
+  }
+
   // ===== Init =====
   initIcons();
   loadAppIcon();

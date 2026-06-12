@@ -21,11 +21,11 @@ pnpm clean            # Remove build artifacts and caches
 pnpm check            # Biome check + auto-fix (lint + format) on web/
 pnpm lint             # Biome lint check
 pnpm lint:ci          # Biome CI check (read-only, for CI pipelines)
+pnpm test             # Run all tests (Rust + frontend)
+pnpm test:rust        # Run Rust unit/integration tests only
+pnpm test:frontend    # Run frontend unit tests only
+pnpm test:watch       # Run frontend tests in watch mode
 ```
-
-Pack platform keys: `apple_aarch64`, `apple_x64`, `win_x64`. Multiple platforms comma-separated. No `-p` flag builds all.
-
-No test framework is configured.
 
 ## Version Management
 
@@ -102,6 +102,27 @@ voicepaste/
 - After any code change, run `pnpm check` to ensure no lint or formatting issues remain
 - Fix all errors and warnings reported by Biome before considering a task complete
 - Rust code must compile with zero warnings (`cargo check`)
+- `cargo test` must pass with zero failures; `npx vitest run` must pass with zero failures
+
+## Testing
+
+### Overview
+
+- **Rust**: standard `cargo test` with `#[test]` functions. Dev-dependencies: `tempfile` for isolated file I/O, `wiremock` for HTTP mocking.
+- **Frontend**: Vitest + jsdom. Tests live in `web/tests/`, helpers in `web/tests/helpers/`.
+
+### File Organization
+
+- Rust tests use `#[path = "tests/xxx.rs"]` attribute, placed under `src-tauri/src/asr/tests/`.
+- Frontend tests follow `web/tests/<module>.test.js` naming.
+
+### Conventions
+
+- Prioritize testing pure logic functions over side-effect-heavy code.
+- File I/O tests use `tempfile::tempdir()` for isolation (auto-cleanup).
+- HTTP tests use `wiremock` to start a mock server and verify request/response.
+- Frontend tests mock `window.__TAURI__`, `window.voiceOverlay`, `window.voiceSettings`, and Web APIs via `web/tests/helpers/setup-app.js`.
+- settings.js exports pure functions via a `process.env.NODE_ENV === 'test'` guard at the end of the IIFE.
 
 ## Logging
 

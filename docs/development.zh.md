@@ -31,6 +31,20 @@ pnpm clean              # 清理构建产物与缓存
 - `config.yaml.example` 是打包产物默认携带的模板配置。
 - 当前桌面平台支持 macOS 和 Windows。
 
+## 测试
+
+```bash
+pnpm test             # 运行所有测试（Rust + 前端）
+pnpm test:rust        # 仅运行 Rust 单元/集成测试
+pnpm test:frontend    # 仅运行前端单元测试
+pnpm test:watch       # 监听模式运行前端测试
+```
+
+### 测试结构
+
+- **Rust**：测试使用 `#[path = "tests/xxx.rs"]` 属性，文件放在 `src-tauri/src/asr/tests/` 下。通过 `cargo test` 运行。开发依赖包括 `tempfile`（隔离文件 I/O）和 `wiremock`（HTTP 模拟）。
+- **前端**：Vitest + jsdom。测试文件在 `web/tests/` 下，辅助文件在 `web/tests/helpers/` 下。通过 helper 文件模拟 `window.__TAURI__`、`window.voiceOverlay`、`window.voiceSettings` 及 Web API。
+
 ## 项目结构
 
 ```text
@@ -54,7 +68,8 @@ voicepaste/
 │   │   ├── llm.rs       #   LLM 文本润色集成
 │   │   ├── logger.rs    #   文件日志
 │   │   ├── stats.rs     #   使用统计与热力图数据
-│   │   └── app_state.rs #   共享应用状态
+│   │   ├── app_state.rs #   共享应用状态
+│   │   └── tests/       #   单元与集成测试
 │   ├── icons/           #   应用与托盘图标（`tauri icon` 生成）
 │   ├── capabilities/    #   Tauri 权限配置
 │   ├── Cargo.toml       #   Rust 依赖
@@ -67,7 +82,8 @@ voicepaste/
 │   ├── settings.css     #   样式与主题变量
 │   ├── theme.css        #   亮/暗主题定义
 │   ├── tauri-bridge.js  #   IPC 桥接（替代 Electron preload）
-│   └── lucide-icons.js  #   SVG 图标定义（自动生成）
+│   ├── lucide-icons.js  #   SVG 图标定义（自动生成）
+│   └── tests/           #   前端单元测试（Vitest）
 ├── docs/                #   文档、截图
 ├── build/               #   中间构建产物（gitignore）
 ├── dist/                #   最终分发产物（gitignore）

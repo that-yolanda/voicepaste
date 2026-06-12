@@ -30,11 +30,18 @@
     "lint": "biome lint ./web",
     "format": "biome format --write ./web",
     "check": "biome check --write ./web",
-    "lint:ci": "biome ci ./web"
+    "lint:ci": "biome ci ./web",
+    "test": "npx vitest run && cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:frontend": "npx vitest run",
+    "test:watch": "npx vitest"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
     "@tauri-apps/cli": "^2",
-    "lucide": "^1.14.0"
+    "@vitest/coverage-v8": "^4.1.8",
+    "jsdom": "^29.1.1",
+    "lucide": "^1.14.0",
+    "vitest": "^4.1.8"
   }
 }
