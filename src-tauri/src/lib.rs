@@ -6,7 +6,6 @@ mod commands;
 mod config;
 mod hotkey;
 mod hotword;
-#[allow(dead_code)]
 mod model;
 mod llm;
 mod overlay;
@@ -475,14 +474,19 @@ fn setup_keytap_hotkeys(app: &mut App) -> Result<(), Box<dyn std::error::Error>>
 
     app.manage(hotkey_config);
     // Keep the manager alive for the app lifetime (its Drop stops the tap)
-    app.manage(HotkeyManagerState(std::sync::Mutex::new(hotkey_manager)));
+    app.manage(HotkeyManagerState {
+        _inner: std::sync::Mutex::new(hotkey_manager),
+    });
 
     Ok(())
 }
 
 /// Wrapper to keep the HotkeyManager alive as Tauri managed state.
-#[allow(dead_code)]
-struct HotkeyManagerState(std::sync::Mutex<hotkey::HotkeyManager>);
+/// The `_inner` field is intentionally never read — its purpose is to hold
+/// ownership of the HotkeyManager so its Drop stops the keytap listener.
+struct HotkeyManagerState {
+    _inner: std::sync::Mutex<hotkey::HotkeyManager>,
+}
 
 /// Simple recording toggle state managed by Tauri.
 struct RecordingState(std::sync::Mutex<bool>);
