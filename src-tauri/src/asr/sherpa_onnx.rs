@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use sherpa_onnx::{
-    OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OnlineRecognizer,
-    OnlineRecognizerConfig, OnlineStream,
+    OfflineFunASRNanoModelConfig, OfflineRecognizer, OfflineRecognizerConfig,
+    OfflineSenseVoiceModelConfig, OnlineRecognizer, OnlineRecognizerConfig, OnlineStream,
 };
 use std::collections::HashSet;
 use std::fs;
@@ -54,6 +54,13 @@ fn json_u32(config: &serde_json::Value, key: &str) -> Option<u32> {
         .get(key)
         .and_then(|v| v.as_u64())
         .and_then(|v| u32::try_from(v).ok())
+}
+
+fn json_i32(config: &serde_json::Value, key: &str) -> Option<i32> {
+    config
+        .get(key)
+        .and_then(|v| v.as_i64())
+        .and_then(|v| i32::try_from(v).ok())
 }
 
 fn json_usize(config: &serde_json::Value, key: &str) -> Option<usize> {
@@ -111,6 +118,7 @@ impl SherpaOnnxEngine {
         num_threads: u32,
         model_config: &serde_json::Value,
         hotwords_file: Option<&str>,
+        funasr_hotwords: Option<&str>,
     ) -> Result<(RecognizerBackend, bool), String> {
         let p = |key: &str| -> Option<String> {
             let filename = entry.model_files.get(key)?;
@@ -182,6 +190,32 @@ impl SherpaOnnxEngine {
                         use_itn: json_bool(&model_config, "use_itn").unwrap_or(true),
                     };
                     config.model_config.tokens = p("tokens");
+                    config.model_config.model_type = Some(arch.to_string());
+                }
+                "funasr_nano" => {
+                    let encoder_adaptor = p("encoder_adaptor")
+                        .ok_or_else(|| format!("模型 {} 缺少 encoder_adaptor 文件", entry.id))?;
+                    let llm = p("llm")
+                        .ok_or_else(|| format!("模型 {} 缺少 llm 文件", entry.id))?;
+                    let embedding = p("embedding")
+                        .ok_or_else(|| format!("模型 {} 缺少 embedding 文件", entry.id))?;
+                    let tokenizer = p("tokenizer")
+                        .ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
+                    config.model_config.funasr_nano = OfflineFunASRNanoModelConfig {
+                        encoder_adaptor: Some(encoder_adaptor),
+                        llm: Some(llm),
+                        embedding: Some(embedding),
+                        tokenizer: Some(tokenizer),
+                        system_prompt: json_string(&model_config, "system_prompt"),
+                        user_prompt: json_string(&model_config, "user_prompt"),
+                        max_new_tokens: json_i32(&model_config, "max_new_tokens").unwrap_or(512),
+                        temperature: json_f32(&model_config, "temperature").unwrap_or(1e-6),
+                        top_p: json_f32(&model_config, "top_p").unwrap_or(0.8),
+                        seed: json_i32(&model_config, "seed").unwrap_or(42),
+                        language: json_string(&model_config, "language"),
+                        itn: if json_bool(&model_config, "itn").unwrap_or(true) { 1 } else { 0 },
+                        hotwords: funasr_hotwords.map(|s| s.to_string()),
+                    };
                     config.model_config.model_type = Some(arch.to_string());
                 }
                 other => {
@@ -470,6 +504,28 @@ fn spawn_worker(
         .map_err(|e| format!("启动本地识别线程失败: {}", e))
 }
 
+/// Build a comma-separated hotwords string for FunASR-Nano models.
+///
+/// The model takes hotwords directly in its config as `"word1,word2,…"` — no
+/// file, no scores, no token validation needed.  This function extracts the
+/// raw word from each hotword entry (stripping optional `|weight` suffixes)
+/// and joins them with commas.
+///
+/// Returns `None` when the input list is empty.
+pub(crate) fn build_funasr_hotwords(hotwords: &[String]) -> Option<String> {
+    if hotwords.is_empty() {
+        return None;
+    }
+    let words: Vec<String> = hotwords
+        .iter()
+        .map(|hw| {
+            let (word, _) = crate::hotword::parse_hotword_entry(hw);
+            word.to_string()
+        })
+        .collect();
+    Some(words.join(","))
+}
+
 #[async_trait]
 impl AsrEngine for SherpaOnnxEngine {
     async fn create_session(
@@ -568,6 +624,15 @@ impl AsrEngine for SherpaOnnxEngine {
             }
         }
         let use_hotwords = entry.capabilities.hotwords && !filtered_hotwords.is_empty();
+
+        // FunASR-Nano takes hotwords as a comma-separated string directly in
+        // the model config, not via stream-level hotword injection.
+        let funasr_hotwords =
+            if entry.architecture.as_deref() == Some("funasr_nano") && use_hotwords {
+                build_funasr_hotwords(&filtered_hotwords)
+            } else {
+                None
+            };
         let hotwords_str = if use_hotwords {
             // Build sherpa-onnx hotwords file with per-word scores.
             // User input format: "word" or "word|weight" (weight 1-10, default 4).
@@ -631,6 +696,7 @@ impl AsrEngine for SherpaOnnxEngine {
             asr_num_threads,
             &model_config,
             hotwords_file_str,
+            funasr_hotwords.as_deref(),
         )?;
 
         // Streaming Zipformer uses sherpa-onnx online endpointing directly; VAD
@@ -645,10 +711,16 @@ impl AsrEngine for SherpaOnnxEngine {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let _ = event_tx.send(AsrEvent::Open);
         let (worker_tx, worker_rx) = std_mpsc::sync_channel(AUDIO_QUEUE_CAPACITY);
+
+        // FunASR-Nano handles hotwords internally via model config; disable
+        // stream-level hotword injection in the worker.
+        let is_funasr_nano = entry.architecture.as_deref() == Some("funasr_nano");
+        let worker_use_hotwords = use_hotwords && !is_funasr_nano;
+
         let worker_handle = spawn_worker(
             recognizer,
             vad,
-            use_hotwords,
+            worker_use_hotwords,
             hotwords_str,
             streaming_chunk_size,
             event_tx,
@@ -1080,5 +1152,5 @@ pub fn restore_hotword_case(text: &str, hotwords: &[String]) -> String {
 }
 
 #[cfg(test)]
-#[path = "test/sherpa_onnx_test.rs"]
+#[path = "tests/sherpa_onnx.rs"]
 mod tests;

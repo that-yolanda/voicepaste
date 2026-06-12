@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 10,
   "updated_at": "2026-06-11",
   "models": [
     {
@@ -100,6 +100,43 @@
       "default_config": {
         "use_itn": true,
         "language": "auto",
+        "num_threads": 2
+      }
+    },
+    {
+      "id": "sherpa-onnx-funasr-nano-zh-en-ja-int8",
+      "type": "offline",
+      "category": "asr",
+      "engine": "sherpa-onnx",
+      "name": "FunASR-Nano 中英日三语",
+      "description": "基于 FunASR-Nano-2512 的高精度离线模型，支持中英日三语、多种方言及歌词识别",
+      "tags": ["中英日三语", "方言识别", "歌词识别", "自动标点", "ITN"],
+      "capabilities": {
+        "streaming": false,
+        "hotwords": true,
+        "punctuation": true,
+        "itn": true
+      },
+      "languages": ["zh", "en", "ja"],
+      "architecture": "funasr_nano",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2",
+      "file_size": 948,
+      "mem_size": 2000,
+      "model_files": {
+        "encoder_adaptor": "encoder_adaptor.int8.onnx",
+        "llm": "llm.int8.onnx",
+        "embedding": "embedding.int8.onnx",
+        "tokenizer": "Qwen3-0.6B"
+      },
+      "default_config": {
+        "system_prompt": "You are a helpful assistant.",
+        "user_prompt": "语音转写：",
+        "max_new_tokens": 512,
+        "temperature": 1e-6,
+        "top_p": 0.8,
+        "seed": 42,
+        "language": "auto",
+        "itn": true,
         "num_threads": 2
       }
     },
