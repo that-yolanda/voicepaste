@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "updated_at": "2026-06-12",
   "models": [
     {
@@ -173,6 +173,75 @@
         "rule1_min_trailing_silence": 2.4,
         "rule2_min_trailing_silence": 0.8,
         "rule3_min_utterance_length": 20
+      }
+    },
+    {
+      "id": "sherpa-onnx-streaming-zipformer-zh-int8",
+      "type": "offline",
+      "category": "asr",
+      "engine": "sherpa-onnx",
+      "name": "Zipformer 流式中文",
+      "description": "实时流式本地模型，中文高精度低延迟识别",
+      "tags": ["中文识别率高", "流式输出", "热词库", "低延时", "低内存占用"],
+      "capabilities": {
+        "streaming": true,
+        "hotwords": true,
+        "punctuation": false,
+        "itn": false
+      },
+      "languages": ["zh"],
+      "architecture": "transducer",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
+      "file_size": 160,
+      "mem_size": 500,
+      "model_files": {
+        "encoder": "encoder.int8.onnx",
+        "decoder": "decoder.onnx",
+        "joiner": "joiner.int8.onnx",
+        "tokens": "tokens.txt"
+      },
+      "default_config": {
+        "num_threads": 2,
+        "max_active_paths": 4,
+        "modeling_unit": "cjkchar",
+        "enable_endpoint": true,
+        "rule1_min_trailing_silence": 2.4,
+        "rule2_min_trailing_silence": 1.2,
+        "rule3_min_utterance_length": 0
+      }
+    },
+    {
+      "id": "sherpa-onnx-qwen3-asr-0.6B-int8",
+      "type": "offline",
+      "category": "asr",
+      "engine": "sherpa-onnx",
+      "name": "Qwen3 ASR 多语言",
+      "description": "基于 Qwen3-ASR-0.6B 的多语言语音识别模型，支持31种语言及20种中文方言、歌词/说唱识别",
+      "tags": ["多语言", "方言识别", "歌词识别", "自动标点", "热词库", "流式输出"],
+      "capabilities": {
+        "streaming": false,
+        "hotwords": true,
+        "punctuation": true,
+        "itn": false
+      },
+      "languages": ["zh", "en", "yue", "ja", "ko", "de", "fr", "es", "pt", "ru", "th", "vi", "ar", "id", "it", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs", "fil", "fa", "el", "hu", "mk", "ro"],
+      "architecture": "qwen3_asr",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2",
+      "file_size": 938,
+      "mem_size": 2500,
+      "model_files": {
+        "conv_frontend": "conv_frontend.onnx",
+        "encoder": "encoder.int8.onnx",
+        "decoder": "decoder.int8.onnx",
+        "tokenizer": "tokenizer"
+      },
+      "default_config": {
+        "max_total_len": 512,
+        "max_new_tokens": 128,
+        "temperature": 1e-6,
+        "top_p": 0.8,
+        "seed": 42,
+        "num_threads": 2
       }
     },
     {

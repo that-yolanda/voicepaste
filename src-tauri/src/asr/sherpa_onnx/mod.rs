@@ -1,6 +1,7 @@
 pub mod online;
 pub mod offline;
 pub mod punct;
+pub mod qwen3_asr;
 pub mod sense_voice;
 pub mod funasr_nano;
 pub mod simulated_streaming;
@@ -322,6 +323,20 @@ impl AsrEngine for SherpaOnnxEngine {
                     &model_config,
                     None, // hotwords are injected via model config in the builder
                 )?,
+                "qwen3_asr" => {
+                    let hotwords_str = if entry.capabilities.hotwords && !hotwords.is_empty() {
+                        funasr_nano::build_funasr_hotwords(hotwords)
+                    } else {
+                        None
+                    };
+                    qwen3_asr::build_qwen3_asr_recognizer(
+                        &model_dir,
+                        entry,
+                        asr_num_threads,
+                        &model_config,
+                        hotwords_str.as_deref(),
+                    )?
+                }
                 other => {
                     return Err(format!(
                         "非流式模型 {} 的 architecture '{}' 不支持",
@@ -346,7 +361,7 @@ impl AsrEngine for SherpaOnnxEngine {
             // ── Offline (SenseVoice / FunASR-Nano) ──
             let arch = entry.architecture.as_deref().unwrap_or("");
 
-            let funasr_hotwords = if arch == "funasr_nano"
+            let funasr_hotwords = if (arch == "funasr_nano" || arch == "qwen3_asr")
                 && entry.capabilities.hotwords
                 && !hotwords.is_empty()
             {
@@ -369,6 +384,13 @@ impl AsrEngine for SherpaOnnxEngine {
                     &model_config,
                     funasr_hotwords.as_deref(),
                 )?,
+                "qwen3_asr" => qwen3_asr::build_qwen3_asr_recognizer(
+                    &model_dir,
+                    entry,
+                    asr_num_threads,
+                    &model_config,
+                    funasr_hotwords.as_deref(),
+                )?,
                 other => {
                     return Err(format!(
                         "非流式模型 {} 的 architecture '{}' 不支持",
@@ -377,7 +399,7 @@ impl AsrEngine for SherpaOnnxEngine {
                 }
             };
 
-            // Offline models: hotwords handled in model config (FunASR-Nano)
+            // Offline models: hotwords handled in model config (FunASR-Nano, Qwen3 ASR)
             // or not supported (SenseVoice). Stream-level hotword injection
             // is disabled for both.
             let use_hotwords = false;
