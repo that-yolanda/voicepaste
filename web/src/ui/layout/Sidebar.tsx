@@ -71,11 +71,7 @@ export function Sidebar({
     <aside className="w-50 shrink-0 flex flex-col">
       {/* Header: icon + title + update button */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border-subtle">
-        <img
-          src="./icon.png"
-          alt="VoicePaste"
-          className="w-7 h-7 rounded-md shrink-0"
-        />
+        <img src="./icon.png" alt="VoicePaste" className="w-7 h-7 rounded-md shrink-0" />
         <span className="flex-1 text-sm font-semibold text-text tracking-[-0.01em]">
           VoicePaste
         </span>

@@ -40,9 +40,7 @@ const VAD_ID = "silero-vad";
 type DownloadProgressMap = Record<string, ModelDownloadProgress>;
 
 const modelDownloadProgress: DownloadProgressMap = {};
-const modelDownloadSubscribers = new Set<
-  (progress: DownloadProgressMap) => void
->();
+const modelDownloadSubscribers = new Set<(progress: DownloadProgressMap) => void>();
 let modelDownloadProgressCleanup: (() => void) | null = null;
 
 function getModelDownloadProgressSnapshot(): DownloadProgressMap {
@@ -65,9 +63,7 @@ function clearModelDownloadProgress(modelId: string) {
   });
 }
 
-function subscribeModelDownloadProgress(
-  listener: (progress: DownloadProgressMap) => void,
-) {
+function subscribeModelDownloadProgress(listener: (progress: DownloadProgressMap) => void) {
   modelDownloadSubscribers.add(listener);
   listener(getModelDownloadProgressSnapshot());
   return () => {
@@ -77,9 +73,7 @@ function subscribeModelDownloadProgress(
 
 function ensureModelDownloadProgressListener() {
   if (modelDownloadProgressCleanup) return;
-  modelDownloadProgressCleanup = onModelDownloadProgress(
-    emitModelDownloadProgress,
-  );
+  modelDownloadProgressCleanup = onModelDownloadProgress(emitModelDownloadProgress);
 }
 
 export function AudioModelPage() {
@@ -132,8 +126,7 @@ export function AudioModelPage() {
 
   const need = useCallback(async () => {
     try {
-      const reg = ((await getModelRegistry()) ||
-        []) as unknown as RegistryModel[];
+      const reg = ((await getModelRegistry()) || []) as unknown as RegistryModel[];
       if (mounted.current) setRegistry(Array.isArray(reg) ? reg : []);
     } catch {
       /* ignore */
@@ -152,14 +145,10 @@ export function AudioModelPage() {
 
   useEffect(() => subscribeModelDownloadProgress(setDownloadProgress), []);
 
-  const updateModelDownloadProgress = useCallback(
-    (progress: ModelDownloadProgress) => {
-      emitModelDownloadProgress(progress);
-      if (mounted.current)
-        setDownloadProgress(getModelDownloadProgressSnapshot());
-    },
-    [],
-  );
+  const updateModelDownloadProgress = useCallback((progress: ModelDownloadProgress) => {
+    emitModelDownloadProgress(progress);
+    if (mounted.current) setDownloadProgress(getModelDownloadProgressSnapshot());
+  }, []);
 
   // Model enable toggle
   const selectProvider = useCallback(
@@ -187,9 +176,7 @@ export function AudioModelPage() {
         try {
           await downloadModel(VAD_ID);
           if (mounted.current) {
-            setDownloaded((prev) =>
-              prev.includes(VAD_ID) ? prev : [...prev, VAD_ID],
-            );
+            setDownloaded((prev) => (prev.includes(VAD_ID) ? prev : [...prev, VAD_ID]));
           }
         } catch {
           updateModelDownloadProgress({
@@ -249,10 +236,7 @@ export function AudioModelPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="音频模型"
-        description={`当前：${doubaoFromRegistry?.name || provider}`}
-      />
+      <PageHeader title="音频模型" description={`当前：${doubaoFromRegistry?.name || provider}`} />
 
       {/* Tab switcher */}
       <div className="inline-flex border border-border rounded-lg overflow-hidden">
@@ -351,16 +335,12 @@ export function AudioModelPage() {
                     },
                   ].map((f) => (
                     <div key={f.key} className="flex items-center gap-3">
-                      <span className="text-xs text-text-dim w-[100px] shrink-0">
-                        {f.label}
-                      </span>
+                      <span className="text-xs text-text-dim w-[100px] shrink-0">{f.label}</span>
                       <input
                         type={f.type}
                         className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
                         value={(doubaoCfg[f.key] as string) || ""}
-                        onChange={(e) =>
-                          saveDoubao({ [f.key]: e.target.value })
-                        }
+                        onChange={(e) => saveDoubao({ [f.key]: e.target.value })}
                         placeholder={f.placeholder}
                       />
                     </div>
@@ -372,23 +352,17 @@ export function AudioModelPage() {
                 {/* Settings */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">
-                      Resource ID
-                    </span>
+                    <span className="text-xs text-text-dim w-[100px] shrink-0">Resource ID</span>
                     <input
                       type="text"
                       className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
                       value={(doubaoCfg.resource_id as string) || ""}
-                      onChange={(e) =>
-                        saveDoubao({ resource_id: e.target.value })
-                      }
+                      onChange={(e) => saveDoubao({ resource_id: e.target.value })}
                       placeholder="输入 Resource ID"
                     />
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">
-                      语言
-                    </span>
+                    <span className="text-xs text-text-dim w-[100px] shrink-0">语言</span>
                     <input
                       type="text"
                       className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
@@ -398,16 +372,11 @@ export function AudioModelPage() {
                     />
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">
-                      热词表 ID
-                    </span>
+                    <span className="text-xs text-text-dim w-[100px] shrink-0">热词表 ID</span>
                     <input
                       type="text"
                       className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
-                      value={
-                        (doubaoCfg.corpus as Record<string, string>)
-                          ?.boosting_table_id || ""
-                      }
+                      value={(doubaoCfg.corpus as Record<string, string>)?.boosting_table_id || ""}
                       onChange={(e) =>
                         saveDoubao({
                           corpus: { boosting_table_id: e.target.value },
@@ -423,17 +392,10 @@ export function AudioModelPage() {
                 {/* Toggle grid */}
                 <div className="space-y-3">
                   {doubaoToggles.map((t) => (
-                    <div
-                      key={t.key}
-                      className="flex items-center justify-between"
-                    >
+                    <div key={t.key} className="flex items-center justify-between">
                       <span className="text-sm text-text">{t.label}</span>
                       <Toggle
-                        checked={
-                          doubaoCfg[t.key] !== undefined
-                            ? !!doubaoCfg[t.key]
-                            : t.defaultVal
-                        }
+                        checked={doubaoCfg[t.key] !== undefined ? !!doubaoCfg[t.key] : t.defaultVal}
                         onChange={(v) => saveDoubao({ [t.key]: v })}
                       />
                     </div>
@@ -468,11 +430,9 @@ export function AudioModelPage() {
           {offlineModels.map((model) => {
             const progressState = downloadProgress[model.id];
             const isDownloaded =
-              downloaded.includes(model.id) ||
-              progressState?.status === "completed";
+              downloaded.includes(model.id) || progressState?.status === "completed";
             const isActive = provider === model.id;
-            const isBaseModel =
-              model.category === "vad" || model.category === "punctuation";
+            const isBaseModel = model.category === "vad" || model.category === "punctuation";
             const isDownloading = progressState?.status === "downloading";
             const isDownloadFailed = progressState?.status === "failed";
             const progress =
@@ -485,9 +445,7 @@ export function AudioModelPage() {
               ...(model.default_config || {}),
               ...((audioCfg[model.id] || {}) as Record<string, unknown>),
             };
-            const hasConfig =
-              model.default_config &&
-              Object.keys(model.default_config).length > 0;
+            const hasConfig = model.default_config && Object.keys(model.default_config).length > 0;
 
             return (
               <Section key={model.id}>
@@ -530,10 +488,7 @@ export function AudioModelPage() {
                             disabled={isDownloading}
                           >
                             {isDownloading ? (
-                              <LoaderCircle
-                                size={16}
-                                className="animate-spin"
-                              />
+                              <LoaderCircle size={16} className="animate-spin" />
                             ) : isDownloadFailed ? (
                               <RotateCcw size={16} />
                             ) : (
@@ -557,19 +512,12 @@ export function AudioModelPage() {
                       }).map(([k, label]) => (
                         <div key={k} className="flex gap-1 items-center">
                           {model.capabilities?.[k] ? (
-                            <CircleCheck
-                              size={16}
-                              className="fill-success text-white"
-                            />
+                            <CircleCheck size={16} className="fill-success text-white" />
                           ) : (
                             <CircleX size={16} />
                           )}
                           <span
-                            className={
-                              model.capabilities?.[k]
-                                ? "text-success"
-                                : "text-text-muted"
-                            }
+                            className={model.capabilities?.[k] ? "text-success" : "text-text-muted"}
                           >
                             {label}
                           </span>

@@ -22,12 +22,8 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-6">
-      <h1 className="text-xl font-semibold tracking-[-0.01em] text-text">
-        {title}
-      </h1>
-      {description && (
-        <p className="text-xs text-text-muted mt-1">{description}</p>
-      )}
+      <h1 className="text-xl font-semibold tracking-[-0.01em] text-text">{title}</h1>
+      {description && <p className="text-xs text-text-muted mt-1">{description}</p>}
       {children}
     </div>
   );
@@ -44,13 +40,7 @@ export function PageContent({ children }: { children: ReactNode }) {
    Replaces the old .section-card / Card component.
    ======================================================================== */
 
-export function Section({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function Section({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div
       className={`bg-surface-card border border-border rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] ${className}`}
@@ -77,11 +67,7 @@ export function SectionHeader({
         <h2 className="text-sm font-semibold  text-text">{title}</h2>
         {action && <div className="max-w-1/2">{action}</div>}
       </div>
-      {subtitle && (
-        <p className="min-w-0 flex-1 text-xs text-text-muted mt-0.5 ">
-          {subtitle}
-        </p>
-      )}
+      {subtitle && <p className="min-w-0 flex-1 text-xs text-text-muted mt-0.5 ">{subtitle}</p>}
     </div>
   );
 }
@@ -130,14 +116,10 @@ export function SectionItem({
       {(title || description) && (
         <div className="flex-1 min-w-0">
           {title && (
-            <div className="text-sm font-[450] text-text flex items-center gap-[5px]">
-              {title}
-            </div>
+            <div className="text-sm font-[450] text-text flex items-center gap-[5px]">{title}</div>
           )}
           {description && (
-            <div className="text-xs text-text-muted mt-0.5 leading-[1.4]">
-              {description}
-            </div>
+            <div className="text-xs text-text-muted mt-0.5 leading-[1.4]">{description}</div>
           )}
         </div>
       )}
