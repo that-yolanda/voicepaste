@@ -5,6 +5,7 @@ import {
   downloadModel,
   getDownloadedModels,
   getModelRegistry,
+  type ModelDownloadProgress,
   onModelDownloadProgress,
   saveConfigObject,
 } from "@/bridge/settings";
@@ -28,6 +29,45 @@ import { useSettings } from "@/ui/SettingsProvider";
 
 const VAD_ID = "silero-vad";
 
+type DownloadProgressMap = Record<string, ModelDownloadProgress>;
+
+const modelDownloadProgress: DownloadProgressMap = {};
+const modelDownloadSubscribers = new Set<(progress: DownloadProgressMap) => void>();
+let modelDownloadProgressCleanup: (() => void) | null = null;
+
+function getModelDownloadProgressSnapshot(): DownloadProgressMap {
+  return { ...modelDownloadProgress };
+}
+
+function emitModelDownloadProgress(progress: ModelDownloadProgress) {
+  modelDownloadProgress[progress.model_id] = progress;
+  const snapshot = getModelDownloadProgressSnapshot();
+  modelDownloadSubscribers.forEach((listener) => {
+    listener(snapshot);
+  });
+}
+
+function clearModelDownloadProgress(modelId: string) {
+  delete modelDownloadProgress[modelId];
+  const snapshot = getModelDownloadProgressSnapshot();
+  modelDownloadSubscribers.forEach((listener) => {
+    listener(snapshot);
+  });
+}
+
+function subscribeModelDownloadProgress(listener: (progress: DownloadProgressMap) => void) {
+  modelDownloadSubscribers.add(listener);
+  listener(getModelDownloadProgressSnapshot());
+  return () => {
+    modelDownloadSubscribers.delete(listener);
+  };
+}
+
+function ensureModelDownloadProgressListener() {
+  if (modelDownloadProgressCleanup) return;
+  modelDownloadProgressCleanup = onModelDownloadProgress(emitModelDownloadProgress);
+}
+
 export function AudioModelPage() {
   const { settings, refresh } = useSettings();
   const cfg = settings?.parsedConfig || ({} as Record<string, unknown>);
@@ -37,6 +77,9 @@ export function AudioModelPage() {
   const [tab, setTab] = useState<"online" | "offline">("online");
   const [registry, setRegistry] = useState<RegistryModel[]>([]);
   const [downloaded, setDownloaded] = useState<string[]>([]);
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgressMap>(
+    getModelDownloadProgressSnapshot,
+  );
 
   // Doubao config
   const doubaoCfg = (audio[DOUBAO_MODEL_ID] || {}) as Record<string, unknown>;
@@ -44,7 +87,15 @@ export function AudioModelPage() {
   const [doubaoExpanded, setDoubaoExpanded] = useState(false);
   const [configExpanded, setConfigExpanded] = useState<Set<string>>(new Set());
 
+  const mounted = useRef(false);
   const doubaoValues = useRef<Record<string, unknown>>(clonePlain(doubaoCfg));
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     doubaoValues.current = clonePlain(doubaoCfg || {});
@@ -67,13 +118,13 @@ export function AudioModelPage() {
   const need = useCallback(async () => {
     try {
       const reg = ((await getModelRegistry()) || []) as unknown as RegistryModel[];
-      setRegistry(Array.isArray(reg) ? reg : []);
+      if (mounted.current) setRegistry(Array.isArray(reg) ? reg : []);
     } catch {
       /* ignore */
     }
     try {
       const ids = (await getDownloadedModels()) as string[];
-      setDownloaded(Array.isArray(ids) ? ids : []);
+      if (mounted.current) setDownloaded(Array.isArray(ids) ? ids : []);
     } catch {
       /* ignore */
     }
@@ -82,6 +133,8 @@ export function AudioModelPage() {
   useEffect(() => {
     need();
   }, [need]);
+
+  useEffect(() => subscribeModelDownloadProgress(setDownloadProgress), []);
 
   // Model enable toggle
   const selectProvider = useCallback(
@@ -98,27 +151,35 @@ export function AudioModelPage() {
   // Download with VAD safety net
   const doDownload = useCallback(
     async (modelId: string) => {
+      ensureModelDownloadProgressListener();
+      emitModelDownloadProgress({ model_id: modelId, status: "downloading", progress: 0 });
+
       // VAD safety net
       if (modelId !== VAD_ID && !downloaded.includes(VAD_ID)) {
         try {
           await downloadModel(VAD_ID);
-          setDownloaded((prev) => [...prev, VAD_ID]);
+          if (mounted.current) {
+            setDownloaded((prev) => (prev.includes(VAD_ID) ? prev : [...prev, VAD_ID]));
+          }
         } catch {
+          emitModelDownloadProgress({
+            model_id: modelId,
+            status: "failed",
+            progress: modelDownloadProgress[modelId]?.progress,
+          });
           return;
         }
       }
-      const cleanup = onModelDownloadProgress((p) => {
-        if (p.status === "completed" || p.status === "failed") {
-          need();
-        }
-      });
       try {
         await downloadModel(modelId);
         need();
       } catch {
-        /* ignore */
+        emitModelDownloadProgress({
+          model_id: modelId,
+          status: "failed",
+          progress: modelDownloadProgress[modelId]?.progress,
+        });
       }
-      cleanup();
     },
     [downloaded, need],
   );
@@ -126,6 +187,7 @@ export function AudioModelPage() {
   const doDelete = useCallback(
     async (id: string) => {
       await deleteModel(id);
+      clearModelDownloadProgress(id);
       need();
     },
     [need],
@@ -347,9 +409,17 @@ export function AudioModelPage() {
             <p className="text-sm text-text-muted">暂无可用本地模型</p>
           )}
           {offlineModels.map((model) => {
-            const isDownloaded = downloaded.includes(model.id);
+            const progressState = downloadProgress[model.id];
+            const isDownloaded =
+              downloaded.includes(model.id) || progressState?.status === "completed";
             const isActive = provider === model.id;
             const isBaseModel = model.category === "vad" || model.category === "punctuation";
+            const isDownloading = progressState?.status === "downloading";
+            const isDownloadFailed = progressState?.status === "failed";
+            const progress =
+              typeof progressState?.progress === "number"
+                ? Math.max(0, Math.min(100, Math.round(progressState.progress)))
+                : undefined;
             const memStr = model.mem_size ? `${model.mem_size}MB` : "";
             const audioCfg = (cfg.audio as Record<string, unknown>) || {};
             const modelCfg: Record<string, unknown> = {
@@ -380,13 +450,34 @@ export function AudioModelPage() {
                           </Button>
                         </>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          {model.file_size ? (
-                            <span className="text-xs text-text-muted">{model.file_size}MB</span>
-                          ) : null}
-                          <Button size="sm" variant="accent" onClick={() => doDownload(model.id)}>
-                            下载
-                          </Button>
+                        <div className="flex flex-col items-end gap-1 min-w-[112px]">
+                          <div className="flex items-center gap-2">
+                            {model.file_size && !isDownloading ? (
+                              <span className="text-xs text-text-muted">{model.file_size}MB</span>
+                            ) : null}
+                            <Button
+                              size="sm"
+                              variant={isDownloadFailed ? "danger" : "accent"}
+                              onClick={() => doDownload(model.id)}
+                              disabled={isDownloading}
+                            >
+                              {isDownloading
+                                ? progress !== undefined
+                                  ? `${progress}%`
+                                  : "下载中"
+                                : isDownloadFailed
+                                  ? "重试"
+                                  : "下载"}
+                            </Button>
+                          </div>
+                          {isDownloading && (
+                            <div className="h-1.5 w-full rounded-full bg-fill-track overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-accent transition-[width]"
+                                style={{ width: `${progress ?? 0}%` }}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
