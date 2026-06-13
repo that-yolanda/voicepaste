@@ -15,6 +15,9 @@
       "suspicious": {
         "noAssignInExpressions": "off",
         "noVar": "warn"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "off"
       }
     }
   },
@@ -37,6 +40,9 @@
     }
   },
   "css": {
+    "parser": {
+      "tailwindDirectives": true
+    },
     "formatter": {
       "enabled": true,
       "indentWidth": 2
@@ -46,7 +52,7 @@
     }
   },
   "files": {
-    "includes": ["**", "!**/node_modules", "!**/out", "!**/dist"]
+    "includes": ["**", "!**/node_modules", "!**/out", "!**/dist", "!**/src-tauri/target"]
   },
   "vcs": {
     "enabled": true,

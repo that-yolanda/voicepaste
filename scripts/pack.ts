@@ -8,14 +8,20 @@
 //
 // Platform keys: apple_aarch64, apple_x64, win_x64
 
-const { spawn } = require("node:child_process");
-const fs = require("node:fs");
-const path = require("node:path");
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 // ---------------------------------------------------------------------------
 // Platform definitions
 // ---------------------------------------------------------------------------
-const PLATFORM_MAP = {
+interface PlatformConfig {
+  target: string;
+  bundles: string[];
+  group: string;
+}
+
+const PLATFORM_MAP: Record<string, PlatformConfig> = {
   apple_aarch64: {
     target: "aarch64-apple-darwin",
     bundles: ["app", "dmg"],
@@ -38,11 +44,11 @@ const ALL_PLATFORMS = Object.keys(PLATFORM_MAP);
 // ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
-function parseArgs() {
+function parseArgs(): { sign: boolean; beta: boolean; platforms: string[] } {
   const args = process.argv.slice(2);
   let sign = false;
   let beta = false;
-  let platforms = null;
+  let platforms: string[] | null = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "-s" || args[i] === "--sign") {
@@ -66,7 +72,7 @@ function parseArgs() {
 // ---------------------------------------------------------------------------
 // Tauri CLI binary
 // ---------------------------------------------------------------------------
-function getTauriBin() {
+function getTauriBin(): string {
   return path.join(
     __dirname,
     "..",
@@ -79,7 +85,7 @@ function getTauriBin() {
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
-function validatePlatforms(platforms) {
+function validatePlatforms(platforms: string[]): void {
   for (const p of platforms) {
     if (!PLATFORM_MAP[p]) {
       console.error(
@@ -90,7 +96,7 @@ function validatePlatforms(platforms) {
   }
 }
 
-function validateSigningEnv(platforms) {
+function validateSigningEnv(platforms: string[]): void {
   const hasMac = platforms.some((p) => PLATFORM_MAP[p].group === "mac");
 
   const required = ["APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID"];
@@ -110,17 +116,20 @@ function validateSigningEnv(platforms) {
   }
 
   if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
-    console.error("Error: TAURI_SIGNING_PRIVATE_KEY is required for updater artifact signing.");
-    console.error("Generate with: pnpm tauri signer generate -w ../doc/tauri/voicepaste.key");
+    console.error(
+      "Error: TAURI_SIGNING_PRIVATE_KEY is required for updater artifact signing.",
+    );
+    console.error(
+      "Generate with: pnpm tauri signer generate -w ../doc/tauri/voicepaste.key",
+    );
     process.exit(1);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Build runner — spawns the Tauri CLI binary directly (no shell intermediary)
-// to avoid environment / hdiutil issues on macOS.
+// Build runner
 // ---------------------------------------------------------------------------
-function runTauri(args, env) {
+function runTauri(args: string[], env: NodeJS.ProcessEnv): Promise<void> {
   return new Promise((resolve, reject) => {
     const bin = getTauriBin();
     console.log(`\n> ${bin} ${args.join(" ")}\n`);
@@ -145,29 +154,28 @@ function runTauri(args, env) {
   });
 }
 
-async function buildPlatform(platformKey, includeUpdater) {
+async function buildPlatform(
+  platformKey: string,
+  includeUpdater: boolean,
+): Promise<void> {
   const cfg = PLATFORM_MAP[platformKey];
-  // When updater signing key is not available, skip the "app" bundle target
-  // to avoid the "public key found but no private key" error.
   const bundles = includeUpdater
     ? cfg.bundles
     : cfg.bundles.filter((b) => b !== "app");
   const bundleFlag = bundles.join(",");
 
-  const args = [
-    "build",
-    "--target", cfg.target,
-    "--bundles", bundleFlag,
-  ];
+  const args = ["build", "--target", cfg.target, "--bundles", bundleFlag];
 
-  console.log(`\n=== Building ${platformKey} (${cfg.target}) [${bundles.join("+")}] ===`);
+  console.log(
+    `\n=== Building ${platformKey} (${cfg.target}) [${bundles.join("+")}] ===`,
+  );
   await runTauri(args, { ...process.env });
 }
 
 // ---------------------------------------------------------------------------
 // Artifact collection
 // ---------------------------------------------------------------------------
-function collectArtifacts(platformKey) {
+function collectArtifacts(platformKey: string): string[] {
   const cfg = PLATFORM_MAP[platformKey];
   const rootDir = path.join(__dirname, "..");
   const distDir = path.join(rootDir, "dist");
@@ -185,17 +193,15 @@ function collectArtifacts(platformKey) {
     return [];
   }
 
-  const collected = [];
+  const collected: string[] = [];
 
-  // Walk bundle directory for artifacts
-  function walk(dir) {
+  function walk(dir: string): void {
     if (!fs.existsSync(dir)) return;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(fullPath);
       } else {
-        const ext = path.extname(entry.name).toLowerCase();
         const isArtifact = [
           ".dmg",
           ".exe",
@@ -206,7 +212,7 @@ function collectArtifacts(platformKey) {
           ".json",
         ].some((e) => entry.name.endsWith(e));
 
-        if (isArtifact || ext === ".yml") {
+        if (isArtifact || path.extname(entry.name).toLowerCase() === ".yml") {
           const dest = path.join(distDir, entry.name);
           fs.copyFileSync(fullPath, dest);
           collected.push(entry.name);
@@ -222,44 +228,46 @@ function collectArtifacts(platformKey) {
 // ---------------------------------------------------------------------------
 // Updater metadata generation
 // ---------------------------------------------------------------------------
-const UPDATER_PLATFORMS = {
+interface UpdaterPlatformConfig {
+  id: string;
+  arch: string;
+  ext: string;
+}
+
+const UPDATER_PLATFORMS: Record<string, UpdaterPlatformConfig> = {
   apple_aarch64: { id: "darwin-aarch64", arch: "aarch64", ext: ".app.tar.gz" },
   apple_x64: { id: "darwin-x86_64", arch: "x64", ext: ".app.tar.gz" },
   win_x64: { id: "windows-x86_64", arch: "x64", ext: ".nsis.zip" },
 };
 
-/**
- * After artifact collection, generates updater metadata JSON.
- * Uses Tauri's multi-platform format: a single `latest.json` (or `latest-beta.json`)
- * containing all platforms under a `platforms` map. Supports cross-machine builds:
- * if the JSON already exists, new platform entries are merged in.
- *
- * Also renames updater bundles to include version + arch for uniqueness:
- * - dist/VoicePaste.app.tar.gz → VoicePaste_1.3.1_aarch64.app.tar.gz
- */
-function generateUpdaterArtifacts(platforms, version, beta) {
+function generateUpdaterArtifacts(
+  platforms: string[],
+  version: string,
+  beta: boolean,
+): void {
   const distDir = path.join(__dirname, "..", "dist");
-  const repoUrl = "https://github.com/that-yolanda/voicepaste/releases/download";
+  const repoUrl =
+    "https://github.com/that-yolanda/voicepaste/releases/download";
   const suffix = beta ? "-beta" : "";
   const jsonName = `latest${suffix}.json`;
   const jsonPath = path.join(distDir, jsonName);
 
   console.log("\n=== Generating updater metadata ===");
 
-  // Load existing JSON to support cross-machine merge (e.g. Mac build → Windows build)
-  let existing = { platforms: {} };
+  let existing: { platforms?: Record<string, unknown>; notes?: string } = {
+    platforms: {},
+  };
   if (fs.existsSync(jsonPath)) {
     existing = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
     console.log(`  Merging into existing ${jsonName}`);
   }
 
-  const platformEntries = existing.platforms || {};
+  const platformEntries = (existing.platforms || {}) as Record<string, unknown>;
 
   for (const p of platforms) {
     const cfg = UPDATER_PLATFORMS[p];
     if (!cfg) continue;
 
-    // Find updater bundle in dist (e.g. VoicePaste.app.tar.gz)
     const files = fs.readdirSync(distDir);
     const bundleFile = files.find((f) => f.endsWith(cfg.ext));
     if (!bundleFile) {
@@ -267,30 +275,30 @@ function generateUpdaterArtifacts(platforms, version, beta) {
       continue;
     }
 
-    const sigFile = bundleFile + ".sig";
+    const sigFile = `${bundleFile}.sig`;
     if (!files.includes(sigFile)) {
       console.log(`  Skipping ${p}: no signature file (${sigFile}) found`);
       continue;
     }
 
-    // Rename bundle + sig to include version and arch
     const baseName = `VoicePaste_${version}_${cfg.arch}`;
     const newBundle = `${baseName}${cfg.ext}`;
     const newSig = `${newBundle}.sig`;
 
     if (bundleFile !== newBundle) {
-      fs.renameSync(path.join(distDir, bundleFile), path.join(distDir, newBundle));
+      fs.renameSync(
+        path.join(distDir, bundleFile),
+        path.join(distDir, newBundle),
+      );
     }
     if (sigFile !== newSig) {
       fs.renameSync(path.join(distDir, sigFile), path.join(distDir, newSig));
     }
 
-    // Read signature
     const signature = fs
       .readFileSync(path.join(distDir, newSig), "utf8")
       .trim();
 
-    // Add platform entry
     platformEntries[cfg.id] = {
       url: `${repoUrl}/v${version}/${newBundle}`,
       signature,
@@ -300,7 +308,6 @@ function generateUpdaterArtifacts(platforms, version, beta) {
     console.log(`  Added platform ${cfg.id} to ${jsonName}`);
   }
 
-  // Write unified JSON
   const output = {
     version,
     notes: existing.notes || "",
@@ -308,23 +315,26 @@ function generateUpdaterArtifacts(platforms, version, beta) {
     platforms: platformEntries,
   };
 
-  fs.writeFileSync(jsonPath, JSON.stringify(output, null, 2) + "\n");
-  console.log(`  Generated ${jsonName} (${Object.keys(platformEntries).length} platform(s))`);
+  fs.writeFileSync(jsonPath, `${JSON.stringify(output, null, 2)}\n`);
+  console.log(
+    `  Generated ${jsonName} (${Object.keys(platformEntries).length} platform(s))`,
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-async function main() {
+async function main(): Promise<void> {
   const { sign, beta, platforms } = parseArgs();
   validatePlatforms(platforms);
 
-  // Skip platforms that cannot be built on this host OS.
-  // macOS Tauri CLI only supports dmg/app; Windows CLI only supports nsis/msi.
-  const hostOS = process.platform; // "darwin" | "win32"
+  const hostOS = process.platform;
   const compatible = platforms.filter((p) => {
     const group = PLATFORM_MAP[p].group;
-    if ((hostOS === "darwin" && group !== "mac") || (hostOS === "win32" && group === "mac")) {
+    if (
+      (hostOS === "darwin" && group !== "mac") ||
+      (hostOS === "win32" && group === "mac")
+    ) {
       console.log(`Skipping ${p}: cannot build ${group} target on ${hostOS}`);
       return false;
     }
@@ -339,10 +349,9 @@ async function main() {
   const rootDir = path.join(__dirname, "..");
   const distDir = path.join(rootDir, "dist");
 
-  // Python's xattr shadows macOS /usr/bin/xattr but doesn't support -cr flags.
-  // Remove non-system xattr dirs from PATH so Tauri's bundler finds the real one.
+  // Filter non-system xattr from PATH
   {
-    const dirs = process.env.PATH.split(":");
+    const dirs = (process.env.PATH || "").split(":");
     const filtered = dirs.filter((dir) => {
       const xp = path.join(dir, "xattr");
       if (
@@ -361,8 +370,10 @@ async function main() {
   }
 
   // Sync version from package.json → Cargo.toml
-  // (tauri.conf.json omits "version" so Tauri reads from Cargo.toml at build time)
-  const version = require(path.join(rootDir, "package.json")).version;
+  const pkg = JSON.parse(
+    fs.readFileSync(path.join(rootDir, "package.json"), "utf8"),
+  ) as { version: string };
+  const version = pkg.version;
   const cargoTomlPath = path.join(rootDir, "src-tauri", "Cargo.toml");
   const cargoToml = fs.readFileSync(cargoTomlPath, "utf8");
   const updatedToml = cargoToml.replace(
@@ -379,12 +390,9 @@ async function main() {
     validateSigningEnv(compatible);
     console.log("Building with code signing enabled.");
   } else {
-    // Disable macOS code signing when -s is not passed
     process.env.APPLE_SIGNING_IDENTITY = "-";
     console.log("Building without code signing.");
 
-    // Updater artifacts require signing key from .env;
-    // if unavailable, warn and disable updater artifacts for this build.
     if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
       console.log(
         "Warning: TAURI_SIGNING_PRIVATE_KEY not set. Skipping updater artifacts.",
@@ -395,24 +403,21 @@ async function main() {
     }
   }
 
-  // Ensure dist directory exists
   fs.mkdirSync(distDir, { recursive: true });
 
   const hasSigningKey = !!process.env.TAURI_SIGNING_PRIVATE_KEY;
 
   try {
-    // Build each compatible platform
     for (const p of compatible) {
       await buildPlatform(p, hasSigningKey);
     }
   } catch (error) {
-    console.error(`\nBuild failed: ${error.message}`);
+    console.error(`\nBuild failed: ${(error as Error).message}`);
     process.exit(1);
   }
 
-  // Collect artifacts
   console.log("\n=== Collecting artifacts ===");
-  const allArtifacts = [];
+  const allArtifacts: string[] = [];
   for (const p of compatible) {
     const artifacts = collectArtifacts(p);
     for (const a of artifacts) {
@@ -420,12 +425,11 @@ async function main() {
     }
   }
 
-  // Generate updater metadata (renames bundles + creates latest-*.json)
   if (hasSigningKey) {
     generateUpdaterArtifacts(compatible, version, beta);
   }
 
-  console.log(`\nArtifacts in ./dist/:`);
+  console.log("\nArtifacts in ./dist/:");
   const finalArtifacts = fs.readdirSync(distDir).sort();
   for (const a of finalArtifacts) {
     const stat = fs.statSync(path.join(distDir, a));
@@ -436,7 +440,9 @@ async function main() {
     console.log(`  ${a} (${size})`);
   }
 
-  console.log(`\nDone! ${finalArtifacts.length} artifacts in ${path.relative(rootDir, distDir)}/`);
+  console.log(
+    `\nDone! ${finalArtifacts.length} artifacts in ${path.relative(rootDir, distDir)}/`,
+  );
 }
 
 main();

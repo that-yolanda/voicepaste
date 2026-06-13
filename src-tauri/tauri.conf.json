@@ -3,9 +3,10 @@
   "productName": "VoicePaste",
   "identifier": "com.yolanda.voicepaste",
   "build": {
-    "frontendDist": "../web",
-    "beforeDevCommand": "node scripts/prepare-assets.js && node scripts/validate-json.js",
-    "beforeBuildCommand": "node scripts/prepare-assets.js && node scripts/validate-json.js"
+    "frontendDist": "../web/dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npx tsx scripts/prepare-assets.ts && npx tsx scripts/validate-json.ts && vite",
+    "beforeBuildCommand": "npx tsx scripts/prepare-assets.ts && npx tsx scripts/validate-json.ts && vite build"
   },
   "app": {
     "macOSPrivateApi": true,
