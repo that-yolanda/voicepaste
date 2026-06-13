@@ -17,8 +17,8 @@ pub fn handle_event(app: &AppHandle, event: &serde_json::Value) {
     macos::dispatch(app, event);
 }
 
-/// Feed a microphone level (0..1) to the native waveform. No-op elsewhere.
-#[allow(unused_variables)]
+/// Feed a microphone level (0..1) to the native waveform. macOS only.
+#[cfg(target_os = "macos")]
 pub fn set_audio_level(app: &AppHandle, level: f64) {
     #[cfg(target_os = "macos")]
     macos::set_audio_level(app, level);
