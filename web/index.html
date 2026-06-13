@@ -2,10 +2,6 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';"
-    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Voice Overlay</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -21,7 +17,6 @@
               <circle class="arc" cx="8" cy="8" r="6.5"></circle>
             </svg>
           </span>
-
           <div class="body" id="body">
             <div class="transcript" id="transcript">
               <span class="final-text" id="finalText"></span>
@@ -31,7 +26,6 @@
               <span class="hint-label" id="hintLabel"></span>
             </div>
           </div>
-
           <span class="wave" id="waveformSlot" aria-hidden="true">
             <span class="status-bars" id="statusBars" data-active="false">
               <span class="status-bar"></span>
@@ -44,7 +38,6 @@
       </section>
     </main>
     <div class="measure-text" id="measureText"></div>
-    <script src="./tauri-bridge.js"></script>
-    <script src="./app.js"></script>
+    <script type="module" src="./src/ui/main-overlay.ts"></script>
   </body>
 </html>

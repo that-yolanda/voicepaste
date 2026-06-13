@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #d97757;
+  --color-accent-hover: #e8896a;
+  --color-accent-active: #c46640;
+  --color-accent-soft: rgba(217, 119, 87, 0.1);
+  --color-accent-dim: rgba(217, 119, 87, 0.25);
+  --color-accent-glow: rgba(217, 119, 87, 0.35);
+  --color-text-on-accent: #fff;
+
+  --color-surface: rgba(20, 20, 19, 0.7);
+  --color-surface-main: rgba(28, 28, 26, 0.82);
+  --color-surface-card: rgba(34, 34, 32, 0.86);
+  --color-input-bg: rgba(40, 40, 38, 0.5);
+
+  --color-border: #30302e;
+  --color-border-subtle: #262624;
+  --color-border-hover: #3e3e3c;
+
+  --color-text: #eae9e4;
+  --color-text-dim: #a8a7a1;
+  --color-text-muted: #76756f;
+
+  --color-success: #6cbf6c;
+  --color-warning: #e8a840;
+  --color-error: #e05550;
+  --color-glow-success: rgba(108, 191, 108, 0.3);
+  --color-glow-warning: rgba(232, 168, 64, 0.3);
+  --color-glow-error: rgba(224, 85, 80, 0.3);
+
+  --color-fill-subtle: rgba(255, 255, 255, 0.06);
+  --color-fill-hover: rgba(255, 255, 255, 0.1);
+  --color-fill-interactive: rgba(255, 255, 255, 0.14);
+  --color-fill-track: rgba(255, 255, 255, 0.16);
+
+  --color-scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+
+  --color-heatmap-0: #2a2a28;
+  --color-heatmap-1: rgba(217, 119, 87, 0.15);
+  --color-heatmap-2: rgba(217, 119, 87, 0.3);
+  --color-heatmap-3: rgba(217, 119, 87, 0.5);
+  --color-heatmap-4: #d97757;
+
+  --color-overlay-bg: rgba(0, 0, 0, 0.94);
+  --color-overlay-text: rgba(250, 249, 245, 0.96);
+  --color-overlay-muted: rgba(250, 249, 245, 0.55);
+  --color-overlay-accent: #4cd28e;
+  --color-overlay-accent-soft: rgba(76, 210, 142, 0.5);
+  --color-overlay-err: #ff6b6b;
+
+  --font-family-ui:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", Arial, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: transparent;
+}
+
+body {
+  margin: 0;
+}
+
+/* Dark mode custom variant — matches existing semantic:
+   No data-theme attr (or data-theme missing) = dark, data-theme="light" = light */
+@custom-variant dark (&:is(:not([data-theme="light"]) &));
+
+/* Light theme override */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-accent: #c96442;
+  --color-accent-hover: #b85838;
+  --color-accent-active: #a84d2e;
+  --color-accent-soft: rgba(201, 100, 66, 0.1);
+  --color-accent-dim: rgba(201, 100, 66, 0.2);
+  --color-accent-glow: rgba(201, 100, 66, 0.3);
+
+  --color-surface: rgba(250, 249, 245, 0.62);
+  --color-surface-main: rgba(245, 244, 237, 0.82);
+  --color-surface-card: rgba(255, 255, 255, 0.84);
+  --color-input-bg: rgba(0, 0, 0, 0.06);
+
+  --color-border: #e5e5e5;
+  --color-border-subtle: #ebebeb;
+  --color-border-hover: #ccc;
+
+  --color-text: #1a1a18;
+  --color-text-dim: #5e5d59;
+  --color-text-muted: #8a8984;
+
+  --color-fill-subtle: rgba(0, 0, 0, 0.04);
+  --color-fill-hover: rgba(0, 0, 0, 0.08);
+  --color-fill-interactive: rgba(0, 0, 0, 0.1);
+  --color-fill-track: rgba(0, 0, 0, 0.12);
+
+  --color-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --color-scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
+
+  --color-heatmap-0: #ededeb;
+  --color-heatmap-1: rgba(201, 100, 66, 0.18);
+  --color-heatmap-2: rgba(201, 100, 66, 0.32);
+  --color-heatmap-3: rgba(201, 100, 66, 0.5);
+  --color-heatmap-4: #c96442;
+}
+
+/* ========================================================================
+   Styles that Tailwind cannot express (pseudo-elements, HTML-string output)
+   ======================================================================== */
+
+/* ----- Scrollbar ----- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-scrollbar-thumb-hover);
+}

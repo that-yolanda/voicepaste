@@ -1,5 +1,57 @@
-// --- App state ---
-const state = {
+/**
+ * Overlay entry point — vanilla TypeScript (no React).
+ * Preserves the exact audio pipeline, waveform animation, and state machine
+ * from the original app.js, using typed bridge + lib imports.
+ */
+
+import type { OverlayEvent } from "@/bridge/overlay";
+import {
+  getConfig,
+  notifyAudioStopped,
+  onOverlayEvent,
+  sendAudioChunk,
+  sendAudioWarmupFailed,
+  sendAudioWarmupReady,
+  sendDiagnostic,
+} from "@/bridge/overlay";
+import { downsampleBuffer, floatTo16BitPCM, int16ToBase64 } from "@/lib/audio";
+import "../styles/app.css";
+
+// ---- Types ----
+
+type AppState = "idle" | "connecting" | "recording" | "finishing";
+type HintLevel = "info" | "error" | "warn";
+
+interface OverlayState {
+  finalText: string;
+  partialText: string;
+  hintText: string;
+  hintLevel: HintLevel;
+  hintVariant: string;
+  appState: AppState;
+  audioReady: boolean;
+  mediaStream: MediaStream | null;
+  audioContext: AudioContext | null;
+  sourceNode: MediaStreamAudioSourceNode | null;
+  processorNode: ScriptProcessorNode | null;
+  analyserNode: AnalyserNode | null;
+  pendingSamples: number[];
+  layoutWidth: number;
+  layoutWrap: boolean;
+  renderedWidth: number;
+  waveBarHeights: number[];
+  smoothedLevel: number;
+}
+
+interface AppearanceConfig {
+  platform?: string;
+  overlayStyle?: string;
+  theme?: string;
+}
+
+// ---- State ----
+
+const state: OverlayState = {
   finalText: "",
   partialText: "",
   hintText: "",
@@ -20,71 +72,65 @@ const state = {
   smoothedLevel: 0,
 };
 
+// ---- DOM elements ----
+
+function getEl(id: string): HTMLElement {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`Missing element: #${id}`);
+  return el;
+}
+
 const elements = {
-  stage: document.getElementById("stage"),
-  bubble: document.getElementById("bubble"),
-  finalText: document.getElementById("finalText"),
-  partialText: document.getElementById("partialText"),
-  hint: document.getElementById("hint"),
-  hintLabel: document.getElementById("hintLabel"),
-  transcript: document.getElementById("transcript"),
-  measureText: document.getElementById("measureText"),
-  statusBars: document.getElementById("statusBars"),
+  stage: getEl("stage"),
+  bubble: getEl("bubble"),
+  finalText: getEl("finalText"),
+  partialText: getEl("partialText"),
+  hint: getEl("hint"),
+  hintLabel: getEl("hintLabel"),
+  transcript: getEl("transcript"),
+  measureText: getEl("measureText"),
+  statusBars: getEl("statusBars"),
 };
 
-const statusBarItems = elements.statusBars
-  ? Array.from(elements.statusBars.querySelectorAll(".status-bar"))
-  : [];
+const statusBarItems = Array.from(elements.statusBars.querySelectorAll(".status-bar"));
 
-// Latest appearance, used to decide whether to drive the native macOS glass view.
-const currentAppearance = { platform: "", overlayStyle: "liquid", theme: "system" };
+// ---- Appearance ----
 
-// Resolve the effective light/dark variant from the app-level theme setting:
-//   "light" / "dark" → use directly
-//   "system"         → follow the OS preference via matchMedia
-function resolvedGlassVariant() {
+const currentAppearance: AppearanceConfig = {
+  platform: "",
+  overlayStyle: "liquid",
+  theme: "system",
+};
+
+function resolvedGlassVariant(): "light" | "dark" {
   const t = currentAppearance.theme;
   if (t === "light" || t === "dark") return t;
   return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
 }
 
-// Overlay rendering is split by platform:
-// - macOS: a fully native AppKit pill (NSGlassEffectView) renders the overlay,
-//   driven by the Rust `overlay` module; the web layer is only a hidden audio worker.
-// - Windows: the CSS pill background renders the overlay directly.
-// Either way the web layer no longer drives any native glass.
-
-// Swap the glass treatment without touching any recording/ASR logic.
-// platform: "macos" → macOS (Tauri std::env::consts::OS), anything else → Windows-style Mica.
-// overlayStyle (macOS only): "liquid" (default) | "vibrancy" (backup).
-// theme: "system" (default) | "light" | "dark" — controls both settings UI and overlay light/dark.
-function applyAppearance({ platform, overlayStyle, theme } = {}) {
-  currentAppearance.platform = platform || "";
-  currentAppearance.overlayStyle = overlayStyle || "liquid";
-  currentAppearance.theme = theme || "system";
-  const isMac = platform === "macos";
-  // macOS renders the overlay with a native AppKit pill, so the web UI is hidden
-  // entirely (the WebView only captures audio). Windows keeps the web overlay.
+function applyAppearance(cfg: AppearanceConfig = {}): void {
+  currentAppearance.platform = cfg.platform || "";
+  currentAppearance.overlayStyle = cfg.overlayStyle || "liquid";
+  currentAppearance.theme = cfg.theme || "system";
+  const isMac = cfg.platform === "macos";
   if (elements.stage) {
     elements.stage.style.display = isMac ? "none" : "";
   }
-  const isVibrancy = isMac && overlayStyle === "vibrancy";
+  const isVibrancy = isMac && cfg.overlayStyle === "vibrancy";
   elements.bubble.classList.toggle("platform-mac", isMac);
   elements.bubble.classList.toggle("platform-win", !isMac);
   elements.bubble.classList.toggle("is-vibrancy", isVibrancy);
-  // Liquid Glass switches to its Light variant (dark text + light glass body)
-  // when the resolved glass variant is light, so it stays legible over pale
-  // backgrounds. Vibrancy keeps its classic dark look regardless.
   elements.bubble.classList.toggle(
     "is-light",
     isMac && !isVibrancy && resolvedGlassVariant() === "light",
   );
 }
 
-// --- Waveform animation ---
+// ---- Waveform ----
+
 let waveformRaf = 0;
 
-function startWaveformAnimation() {
+function startWaveformAnimation(): void {
   const analyser = state.analyserNode;
   if (!analyser || statusBarItems.length === 0) return;
 
@@ -93,14 +139,16 @@ function startWaveformAnimation() {
   const centerIndex = (statusBarItems.length - 1) / 2;
   const maxDistance = Math.max(1, centerIndex);
 
-  function tick() {
-    analyser.getFloatTimeDomainData(data);
+  function tick(): void {
+    // analyser is non-null here (checked before starting waveform animation)
+    const a = analyser as AnalyserNode;
+    a.getFloatTimeDomainData(data);
     let sumSquares = 0;
     let peak = 0;
-    for (let i = 0; i < sampleCount; i += 1) {
-      const sample = data[i];
-      sumSquares += sample * sample;
-      peak = Math.max(peak, Math.abs(sample));
+    for (let i = 0; i < sampleCount; i++) {
+      const s = data[i];
+      sumSquares += s * s;
+      peak = Math.max(peak, Math.abs(s));
     }
     const rms = Math.sqrt(sumSquares / sampleCount);
     const boostedLevel = Math.min(1, (rms * 13 + peak * 2.8) ** 0.82);
@@ -114,8 +162,9 @@ function startWaveformAnimation() {
       const currentHeight = state.waveBarHeights[index] ?? targetHeight;
       const height = currentHeight + (targetHeight - currentHeight) * 0.18;
       state.waveBarHeights[index] = height;
-      bar.style.height = `${Math.round(Math.max(3, Math.min(18, height)))}px`;
-      bar.style.transform = "scaleY(1)";
+      const el = bar as HTMLElement;
+      el.style.height = `${Math.round(Math.max(3, Math.min(18, height)))}px`;
+      el.style.transform = "scaleY(1)";
     });
     elements.statusBars.dataset.active = "true";
     waveformRaf = requestAnimationFrame(tick);
@@ -124,7 +173,7 @@ function startWaveformAnimation() {
   waveformRaf = requestAnimationFrame(tick);
 }
 
-function stopWaveformAnimation() {
+function stopWaveformAnimation(): void {
   if (waveformRaf) {
     cancelAnimationFrame(waveformRaf);
     waveformRaf = 0;
@@ -133,41 +182,38 @@ function stopWaveformAnimation() {
     elements.statusBars.dataset.active = "false";
   }
   statusBarItems.forEach((bar) => {
-    bar.style.height = "";
-    bar.style.transform = "";
+    const el = bar as HTMLElement;
+    el.style.height = "";
+    el.style.transform = "";
   });
   state.waveBarHeights = [];
   state.smoothedLevel = 0;
 }
 
+// ---- Hints ----
+
 const isZhLocale = (navigator.language || "").toLowerCase().startsWith("zh");
 
-function getVisibleHintText() {
-  const visualState =
+function getVisibleHintText(): string {
+  const visualState: string =
     state.appState === "recording" && !state.audioReady ? "connecting" : state.appState;
-
-  if (visualState === "connecting") {
-    return isZhLocale ? "准备中…" : "Preparing…";
-  }
-
+  if (visualState === "connecting") return isZhLocale ? "准备中…" : "Preparing…";
   if (visualState === "finishing" && state.hintVariant === "progress") {
     return isZhLocale ? "思考中…" : "Thinking…";
   }
-
   return state.hintText || "";
 }
 
-function shouldShowHint() {
+function shouldShowHint(): boolean {
   return Boolean(getVisibleHintText());
 }
 
+// ---- Layout ----
+
 let resizeRaf = 0;
 
-function scheduleResize() {
-  if (resizeRaf) {
-    cancelAnimationFrame(resizeRaf);
-  }
-
+function scheduleResize(): void {
+  if (resizeRaf) cancelAnimationFrame(resizeRaf);
   resizeRaf = requestAnimationFrame(() => {
     const hasText = Boolean(state.finalText || state.partialText);
     const hintText = getVisibleHintText();
@@ -183,26 +229,18 @@ function scheduleResize() {
 
     let measuredWidth = 0;
     if (hasText && !shouldMeasureHintOnly) {
-      const visibleText = `${state.finalText}${state.partialText}`.trim();
-      elements.measureText.textContent = visibleText;
+      elements.measureText.textContent = `${state.finalText}${state.partialText}`.trim();
       measuredWidth = Math.ceil(elements.measureText.getBoundingClientRect().width);
     }
-
     let hintWidth = 0;
     if (hasHint) {
       elements.measureText.textContent = hintText;
       hintWidth = Math.ceil(elements.measureText.getBoundingClientRect().width);
     }
 
-    // Pill chrome surrounding the text: paddings + border + left indicator
-    // (always reserved) + right waveform (reserved while recording, so the
-    // pill doesn't jump width when the bars fade in/out).
-    const indicatorWidth = 22 + 12; // indicator + gap to body
-    const waveformWidth = state.appState === "recording" ? 18 + 12 : 0; // 4 bars + gap
+    const indicatorWidth = 22 + 12;
+    const waveformWidth = state.appState === "recording" ? 18 + 12 : 0;
     const chrome = 14 + 16 + 2 + indicatorWidth + waveformWidth;
-    // Small slack added to the measured text width: measureText uses a slightly
-    // different font metric than the rendered pill (letter-spacing / family), so
-    // without it a single line that should fit can still trip the ellipsis.
     const textSlack = 10;
     const singleLineLimit = 520;
     const multiLineWidth = 520;
@@ -222,21 +260,14 @@ function scheduleResize() {
       state.layoutWidth = Math.max(state.layoutWidth || 0, nextWidth);
       state.layoutWrap = state.layoutWrap || shouldWrap;
     }
-
     elements.bubble.dataset.wrap = state.layoutWrap ? "multi" : "single";
 
     let width = state.layoutWidth || nextWidth;
-
     if (width !== state.renderedWidth) {
       state.renderedWidth = width;
       elements.bubble.style.width = `${width}px`;
     }
 
-    // Self-correct single-line truncation: measureText can underestimate the
-    // rendered text width (font family / letter-spacing differ from the pill),
-    // which trips the ellipsis and drops the last character(s). Read the real
-    // overflow off the live transcript and grow the pill so every character
-    // stays visible. Only for single-line transcript (not hint, not multi).
     if (!state.layoutWrap && !shouldMeasureHintOnly && elements.transcript) {
       const overflow = elements.transcript.scrollWidth - elements.transcript.clientWidth;
       if (overflow > 0) {
@@ -249,14 +280,16 @@ function scheduleResize() {
   });
 }
 
-function scrollTranscriptToBottom() {
+function scrollTranscriptToBottom(): void {
   requestAnimationFrame(() => {
     elements.transcript.scrollTop = elements.transcript.scrollHeight;
   });
 }
 
-function updateView() {
-  const visualState =
+// ---- View ----
+
+function updateView(): void {
+  const visualState: string =
     state.appState === "recording" && !state.audioReady ? "connecting" : state.appState;
   const hintText = getVisibleHintText();
   const hasHint = Boolean(hintText);
@@ -267,9 +300,7 @@ function updateView() {
   elements.stage.dataset.mode = hasHint ? "hint" : "transcript";
   elements.finalText.textContent = showTranscript ? state.finalText : "";
   elements.partialText.textContent = showTranscript ? state.partialText : "";
-  if (showTranscript) {
-    scrollTranscriptToBottom();
-  }
+  if (showTranscript) scrollTranscriptToBottom();
   elements.hintLabel.textContent = getVisibleHintText();
   elements.hint.dataset.visible = shouldShowHint() ? "true" : "false";
   elements.hint.dataset.level = state.hintLevel;
@@ -287,7 +318,7 @@ function updateView() {
   scheduleResize();
 }
 
-function resetState() {
+function resetState(): void {
   state.finalText = "";
   state.partialText = "";
   state.hintText = "";
@@ -301,60 +332,10 @@ function resetState() {
   updateView();
 }
 
-function floatTo16BitPCM(float32Array) {
-  const buffer = new Int16Array(float32Array.length);
+// ---- Audio pipeline ----
 
-  for (let index = 0; index < float32Array.length; index += 1) {
-    const sample = Math.max(-1, Math.min(1, float32Array[index]));
-    buffer[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-  }
-
-  return buffer;
-}
-
-function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
-  if (outputSampleRate === inputSampleRate) {
-    return buffer;
-  }
-
-  const sampleRateRatio = inputSampleRate / outputSampleRate;
-  const newLength = Math.round(buffer.length / sampleRateRatio);
-  const result = new Float32Array(newLength);
-  let offsetResult = 0;
-  let offsetBuffer = 0;
-
-  while (offsetResult < result.length) {
-    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
-    let accum = 0;
-    let count = 0;
-
-    for (let index = offsetBuffer; index < nextOffsetBuffer && index < buffer.length; index += 1) {
-      accum += buffer[index];
-      count += 1;
-    }
-
-    result[offsetResult] = count > 0 ? accum / count : 0;
-    offsetResult += 1;
-    offsetBuffer = nextOffsetBuffer;
-  }
-
-  return result;
-}
-
-function int16ToBase64(int16Array) {
-  const uint8Array = new Uint8Array(int16Array.buffer);
-  let binary = "";
-
-  for (let index = 0; index < uint8Array.length; index += 1) {
-    binary += String.fromCharCode(uint8Array[index]);
-  }
-
-  return btoa(binary);
-}
-
-function flushPendingAudio(force = false) {
+function flushPendingAudio(force = false): void {
   const targetChunkSize = 1600;
-
   while (
     state.pendingSamples.length >= targetChunkSize ||
     (force && state.pendingSamples.length > 0)
@@ -370,69 +351,49 @@ function flushPendingAudio(force = false) {
       state.audioReady = true;
       updateView();
     }
-
-    window.voiceOverlay.sendAudioChunk(base64Chunk).catch(() => {
+    sendAudioChunk(base64Chunk).catch(() => {
       state.hintText = "音频发送失败";
       state.hintLevel = "error";
       state.hintVariant = "text";
       updateView();
     });
-
-    if (force) {
-      break;
-    }
+    if (force) break;
   }
 }
 
-async function startAudioCapture() {
-  if (state.mediaStream) {
-    return;
-  }
+async function startAudioCapture(): Promise<void> {
+  if (state.mediaStream) return;
 
-  window.voiceOverlay.sendDiagnostic({
-    type: "audio:capture-starting",
-  });
+  sendDiagnostic({ type: "audio:capture-starting" });
 
   const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      channelCount: 1,
-      noiseSuppression: true,
-      echoCancellation: true,
-    },
+    audio: { channelCount: 1, noiseSuppression: true, echoCancellation: true },
     video: false,
   });
 
-  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  const AudioContextCtor =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) throw new Error("AudioContext not available");
   const audioContext = new AudioContextCtor();
-  // WKWebView enforces autoplay policy — AudioContext starts suspended.
-  // Resume it explicitly so onaudioprocess will fire.
-  if (audioContext.state === "suspended") {
-    await audioContext.resume();
-  }
+  if (audioContext.state === "suspended") await audioContext.resume();
+
   const sourceNode = audioContext.createMediaStreamSource(stream);
   const processorNode = audioContext.createScriptProcessor(4096, 1, 1);
   state.pendingSamples = [];
   state.audioReady = false;
 
   processorNode.onaudioprocess = (event) => {
-    if (state.appState !== "recording") {
-      return;
-    }
-
-    const inputData = event.inputBuffer.getChannelData(0);
+    if (state.appState !== "recording") return;
+    const inputData = (event as AudioProcessingEvent).inputBuffer.getChannelData(0);
     const downsampled = downsampleBuffer(inputData, audioContext.sampleRate, 16000);
-
-    for (let index = 0; index < downsampled.length; index += 1) {
-      state.pendingSamples.push(downsampled[index]);
-    }
-
+    for (let i = 0; i < downsampled.length; i++) state.pendingSamples.push(downsampled[i]);
     flushPendingAudio(false);
   };
 
   const analyserNode = audioContext.createAnalyser();
   analyserNode.fftSize = 256;
   analyserNode.smoothingTimeConstant = 0.55;
-
   sourceNode.connect(analyserNode);
   analyserNode.connect(processorNode);
   processorNode.connect(audioContext.destination);
@@ -443,13 +404,10 @@ async function startAudioCapture() {
   state.processorNode = processorNode;
   state.analyserNode = analyserNode;
 
-  window.voiceOverlay.sendDiagnostic({
-    type: "audio:capture-started",
-    sampleRate: audioContext.sampleRate,
-  });
+  sendDiagnostic({ type: "audio:capture-started", sampleRate: audioContext.sampleRate });
 }
 
-async function stopAudioCapture() {
+async function stopAudioCapture(): Promise<void> {
   stopWaveformAnimation();
   flushPendingAudio(true);
 
@@ -457,51 +415,43 @@ async function stopAudioCapture() {
     state.analyserNode.disconnect();
     state.analyserNode = null;
   }
-
   if (state.processorNode) {
     state.processorNode.disconnect();
     state.processorNode.onaudioprocess = null;
     state.processorNode = null;
   }
-
   if (state.sourceNode) {
     state.sourceNode.disconnect();
     state.sourceNode = null;
   }
-
   if (state.mediaStream) {
-    for (const track of state.mediaStream.getTracks()) {
-      track.stop();
-    }
+    for (const track of state.mediaStream.getTracks()) track.stop();
     state.mediaStream = null;
   }
-
   if (state.audioContext) {
     await state.audioContext.close();
     state.audioContext = null;
   }
-
   state.pendingSamples = [];
 }
 
-window.voiceOverlay.onEvent(async ({ type, payload }) => {
+// ---- Event handling ----
+
+onOverlayEvent(async (event: OverlayEvent) => {
+  const { type, payload = {} } = event;
   switch (type) {
     case "reset":
       resetState();
       break;
     case "state":
-      state.appState = payload.state;
-      if (payload.state === "idle" || payload.state === "connecting") {
-        state.audioReady = false;
-      }
-      if (payload.state === "recording") {
-        startWaveformAnimation();
-      }
+      state.appState = (payload as { state: AppState }).state;
+      if (state.appState === "idle" || state.appState === "connecting") state.audioReady = false;
+      if (state.appState === "recording") startWaveformAnimation();
       if (
-        payload.state === "idle" ||
-        payload.state === "connecting" ||
-        payload.state === "recording" ||
-        payload.state === "finishing"
+        state.appState === "idle" ||
+        state.appState === "connecting" ||
+        state.appState === "recording" ||
+        state.appState === "finishing"
       ) {
         if (state.hintLevel === "info") {
           state.hintText = "";
@@ -514,12 +464,11 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       try {
         state.audioReady = false;
         await startAudioCapture();
-        window.voiceOverlay.sendAudioWarmupReady();
+        sendAudioWarmupReady();
       } catch (error) {
-        window.voiceOverlay.sendAudioWarmupFailed({
-          message: error.message || String(error),
-        });
-        state.hintText = error.message || "无法获取麦克风权限";
+        const msg = (error as Error).message || String(error);
+        sendAudioWarmupFailed({ message: msg });
+        state.hintText = msg || "无法获取麦克风权限";
         state.hintLevel = "error";
         state.hintVariant = "text";
         updateView();
@@ -535,11 +484,9 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
         state.hintLevel = "info";
         state.hintVariant = "text";
       } catch (error) {
-        window.voiceOverlay.sendDiagnostic({
-          type: "audio:capture-failed",
-          message: error.message || String(error),
-        });
-        state.hintText = error.message || "无法获取麦克风权限";
+        const msg = (error as Error).message || String(error);
+        sendDiagnostic({ type: "audio:capture-failed", message: msg });
+        state.hintText = msg || "无法获取麦克风权限";
         state.hintLevel = "error";
         state.hintVariant = "text";
       }
@@ -547,25 +494,28 @@ window.voiceOverlay.onEvent(async ({ type, payload }) => {
       break;
     case "recording:stop":
       await stopAudioCapture();
-      window.voiceOverlay.notifyAudioStopped();
+      notifyAudioStopped();
       break;
-    case "transcript":
-      state.finalText = payload.finalText || "";
-      state.partialText = payload.partialText || "";
+    case "transcript": {
+      const p = payload as { finalText?: string; partialText?: string };
+      state.finalText = p.finalText || "";
+      state.partialText = p.partialText || "";
       updateView();
       break;
-    case "hint":
-      state.hintText = payload.text || "";
-      state.hintLevel = payload.level || "info";
-      state.hintVariant = payload.variant || "text";
+    }
+    case "hint": {
+      const p = payload as { text?: string; level?: HintLevel; variant?: string };
+      state.hintText = p.text || "";
+      state.hintLevel = p.level || "info";
+      state.hintVariant = p.variant || "text";
       updateView();
       break;
+    }
     case "paste:done":
+    case "sound:config":
       break;
     case "appearance":
-      applyAppearance(payload || {});
-      break;
-    case "sound:config":
+      applyAppearance((payload || {}) as AppearanceConfig);
       break;
     default:
       break;
@@ -576,7 +526,7 @@ window.addEventListener("beforeunload", () => {
   stopAudioCapture();
 });
 
-window.voiceOverlay.getConfig().then((config) => {
+getConfig().then((config) => {
   applyAppearance(config || {});
   updateView();
 });
