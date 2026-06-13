@@ -21,18 +21,21 @@
                         alt="VoicePaste"
                     />
                     <span class="app-name">VoicePaste</span>
+                    <button
+                        type="button"
+                        class="update-header-btn"
+                        id="updateHeaderBtn"
+                        style="display: none"
+                    >
+                        <span class="nav-icon" data-icon="circle-arrow-up"></span>
+                        <span>更新</span>
+                    </button>
                 </div>
                 <nav class="sidebar-nav">
-                    <div class="nav-group-label">概览</div>
+                    <!-- Top group: feature navigation -->
                     <div class="nav-item active" data-section="home">
                         <span class="nav-icon" data-icon="home"></span>
                         <span>首页</span>
-                    </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-group-label">设置</div>
-                    <div class="nav-item" data-section="hotkey">
-                        <span class="nav-icon" data-icon="keyboard"></span>
-                        <span>快捷键</span>
                     </div>
                     <div class="nav-item" data-section="app">
                         <span class="nav-icon" data-icon="settings-2"></span>
@@ -47,41 +50,42 @@
                             style="display: none"
                         ></span>
                     </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-group-label">模型</div>
+                    <div class="nav-item" data-section="hotkey">
+                        <span class="nav-icon" data-icon="keyboard"></span>
+                        <span>快捷键</span>
+                    </div>
                     <div class="nav-item" data-section="service">
                         <span class="nav-icon" data-icon="mic"></span>
                         <span>音频模型</span>
+                    </div>
+                    <div class="nav-item" data-section="llm">
+                        <span class="nav-icon" data-icon="sparkles"></span>
+                        <span>大语言模型</span>
                     </div>
                     <div class="nav-item" data-section="hotwords">
                         <span class="nav-icon" data-icon="book-open"></span>
                         <span>热词库</span>
                     </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-group-label">处理</div>
-                    <div class="nav-item" data-section="llm">
-                        <span class="nav-icon" data-icon="sparkles"></span>
-                        <span>文本润色</span>
-                    </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-group-label">支持</div>
+
+                    <!-- Spacer pushes bottom group to bottom -->
+                    <div class="nav-spacer"></div>
+
+                    <!-- Bottom group: support -->
                     <a
                         class="nav-item"
                         href="https://github.com/that-yolanda/voicepaste"
                         target="_blank"
                     >
                         <span class="nav-icon" data-icon="book-open"></span>
-                        <span>帮助文档</span>
+                        <span>帮助说明</span>
                     </a>
+                    <div class="nav-item" data-section="feedback">
+                        <span class="nav-icon" data-icon="mail"></span>
+                        <span>问题反馈</span>
+                    </div>
                     <div class="nav-item" data-section="about">
                         <span class="nav-icon" data-icon="info"></span>
                         <span>关于</span>
-                        <span
-                            class="nav-badge"
-                            id="updateBadge"
-                            style="display: none"
-                            >更新</span
-                        >
                     </div>
                 </nav>
                 <div class="sidebar-footer">
@@ -118,74 +122,66 @@
                 <div class="main-inner">
                     <!-- 首页 -->
                     <section class="section" id="section-home">
-                        <div class="welcome-text">
-                            <span id="greetingText">下午好</span>
+                        <div class="page-header">
+                            <div class="page-title">
+                                <span id="greetingText">下午好</span>
+                            </div>
                         </div>
 
-                        <div style="margin-top: 20px">
-                            <div class="achievements-grid">
-                                <div class="achievement-item">
-                                    <div class="achievement-thumb">
-                                        <span data-icon="calendar-days"></span>
+                        <div class="achievements-grid">
+                            <div class="achievement-item">
+                                <div class="achievement-body">
+                                    <div class="achievement-value-row">
+                                        <span class="achievement-value" id="achDaysUsed">0</span>
+                                        <span class="achievement-unit">天</span>
                                     </div>
-                                    <div class="achievement-text">
-                                        <div
-                                            class="achievement-value"
-                                            id="achDaysUsed"
-                                        >
-                                            0
+                                    <div class="achievement-meta">
+                                        <div class="achievement-icon">
+                                            <span data-icon="calendar-days"></span>
                                         </div>
-                                        <div class="achievement-label">
-                                            已使用天数
-                                        </div>
+                                        <div class="achievement-label">已经使用</div>
                                     </div>
                                 </div>
-                                <div class="achievement-item">
-                                    <div class="achievement-thumb">
-                                        <span data-icon="mic"></span>
+                            </div>
+                            <div class="achievement-item">
+                                <div class="achievement-body">
+                                    <div class="achievement-value-row">
+                                        <span class="achievement-value" id="achSessions">0</span>
+                                        <span class="achievement-unit">次</span>
                                     </div>
-                                    <div class="achievement-text">
-                                        <div
-                                            class="achievement-value"
-                                            id="achSessions"
-                                        >
-                                            0
+                                    <div class="achievement-meta">
+                                        <div class="achievement-icon">
+                                            <span data-icon="mic"></span>
                                         </div>
-                                        <div class="achievement-label">
-                                            会话次数
-                                        </div>
+                                        <div class="achievement-label">发起会话</div>
                                     </div>
                                 </div>
-                                <div class="achievement-item">
-                                    <div class="achievement-thumb">
-                                        <span data-icon="keyboard"></span>
+                            </div>
+                            <div class="achievement-item">
+                                <div class="achievement-body">
+                                    <div class="achievement-value-row">
+                                        <span class="achievement-value" id="achCharacters">0</span>
+                                        <span class="achievement-unit">字</span>
                                     </div>
-                                    <div class="achievement-text">
-                                        <div
-                                            class="achievement-value"
-                                            id="achCharacters"
-                                        >
-                                            0
+                                    <div class="achievement-meta">
+                                        <div class="achievement-icon">
+                                            <span data-icon="keyboard"></span>
                                         </div>
-                                        <div class="achievement-label">
-                                            总输入字数
-                                        </div>
+                                        <div class="achievement-label">总输入字数</div>
                                     </div>
                                 </div>
-                                <div class="achievement-item">
-                                    <div class="achievement-thumb">
-                                        <span data-icon="timer"></span>
+                            </div>
+                            <div class="achievement-item">
+                                <div class="achievement-body">
+                                    <div class="achievement-value-row">
+                                        <span class="achievement-value" id="achTimeSaved">0</span>
+                                        <span class="achievement-unit" id="achTimeSavedUnit">秒</span>
                                     </div>
-                                    <div class="achievement-text">
-                                        <div
-                                            class="achievement-value"
-                                            id="achTimeSaved"
-                                        >
-                                            0s
+                                    <div class="achievement-meta">
+                                        <div class="achievement-icon">
+                                            <span data-icon="timer"></span>
                                         </div>
-                                        <div class="achievement-label">
-                                            节省时间
-                                        </div>
+                                        <div class="achievement-label">节省时间</div>
                                     </div>
                                 </div>
                             </div>
@@ -252,16 +248,18 @@
 
                     <!-- 快捷键 -->
                     <section class="section hidden" id="section-hotkey">
-                        <div class="section-header">
+                        <div class="page-header">
                             <div>
-                                <div class="section-title">快捷键</div>
-                                <div class="section-subtitle">
+                                <div class="page-title">快捷键</div>
+                                <div class="page-desc">
                                     设置语音输入的触发方式
                                 </div>
                             </div>
                         </div>
-                        <div class="hotkey-section-title">
-                            默认（无文本润色）
+                        <div class="section-header">
+                         <div class="section-title">
+                             默认（无文本润色）
+                         </div>
                         </div>
                         <div class="section-card">
                             <div class="row">
@@ -349,10 +347,10 @@
 
                     <!-- 应用设置 -->
                     <section class="section hidden" id="section-app">
-                        <div class="section-header">
+                        <div class="page-header">
                             <div>
-                                <div class="section-title">应用设置</div>
-                                <div class="section-subtitle">
+                                <div class="page-title">应用设置</div>
+                                <div class="page-desc">
                                     启动行为与配置文件
                                 </div>
                             </div>
@@ -402,7 +400,6 @@
                                     id="configPath"
                                     style="
                                         word-break: break-all;
-                                        font-size: 12px;
                                         line-height: 1.5;
                                     "
                                     >-</span
@@ -564,10 +561,10 @@
                         </div>
                     </section>
                     <section class="section hidden" id="section-permissions">
-                        <div class="section-header">
+                        <div class="page-header">
                             <div>
-                                <div class="section-title">系统权限</div>
-                                <div class="section-subtitle">
+                                <div class="page-title">系统权限</div>
+                                <div class="page-desc">
                                     VoicePaste 需要以下系统权限才能正常工作
                                 </div>
                             </div>
@@ -622,10 +619,10 @@
 
                     <!-- 音频模型 -->
                     <section class="section hidden" id="section-service">
-                        <div class="section-header">
+                        <div class="page-header">
                             <div>
-                                <div class="section-title">音频模型</div>
-                                <div class="section-subtitle">
+                                <div class="page-title">音频模型</div>
+                                <div class="page-desc">
                                     选择并配置语音识别引擎
                                 </div>
                             </div>
@@ -663,20 +660,6 @@
                                         <div class="model-card-name">
                                             火山引擎 - 豆包流式输出大模型
                                         </div>
-                                        <div class="model-card-tags">
-                                            <span class="model-tag"
-                                                >流式输出</span
-                                            >
-                                            <span class="model-tag"
-                                                >免费可用</span
-                                            >
-                                            <span class="model-tag"
-                                                >热词库</span
-                                            >
-                                            <span class="model-tag"
-                                                >中文,英文,方言</span
-                                            >
-                                        </div>
                                     </div>
                                     <div class="model-card-head-right">
                                         <a
@@ -696,18 +679,23 @@
                                         </label>
                                     </div>
                                 </div>
-                                <div class="model-expand-wrap">
-                                    <button
-                                        type="button"
-                                        class="model-expand-btn"
-                                        id="doubaoExpandBtn"
-                                >
-                                    <span
-                                        class="nav-icon"
-                                        data-icon="chevron-down"
-                                    ></span>
-                                    <span>展开配置</span>
-                                    </button>
+                                <div class="model-card-desc">基于豆包大模型的流式语音识别服务</div>
+                                <div class="model-card-features">
+                                    <span class="feature supported"><span class="feature-icon" data-icon="circle-check"></span>流式输出</span>
+                                    <span class="feature supported"><span class="feature-icon" data-icon="circle-check"></span>热词库</span>
+                                    <span class="feature supported"><span class="feature-icon" data-icon="circle-check"></span>自动标点</span>
+                                    <span class="feature supported"><span class="feature-icon" data-icon="circle-check"></span>数字格式化</span>
+                                    <span class="feature supported"><span class="feature-icon" data-icon="circle-check"></span>zh, en</span>
+                                    <span class="model-features-right">
+                                        <button
+                                            type="button"
+                                            class="model-expand-btn"
+                                            id="doubaoExpandBtn"
+                                        >
+                                            <span class="nav-icon" data-icon="chevron-down"></span>
+                                            <span>参数配置</span>
+                                        </button>
+                                    </span>
                                 </div>
                                 <div
                                     class="model-card-config hidden"
@@ -792,10 +780,10 @@
 
                     <!-- 热词库 -->
                     <section class="section hidden" id="section-hotwords">
-                        <div class="section-header">
+                        <div class="page-header">
                             <div>
-                                <div class="section-title">热词库</div>
-                                <div class="section-subtitle">
+                                <div class="page-title">热词库</div>
+                                <div class="page-desc">
                                     管理热词组，提升专有词汇识别准确率
                                 </div>
                             </div>
@@ -818,10 +806,10 @@
 
                     <!-- 文本润色 -->
                     <section class="section hidden" id="section-llm">
-                        <div class="section-header">
+                        <div class="page-header">
                             <div>
-                                <div class="section-title">文本润色</div>
-                                <div class="section-subtitle">
+                                <div class="page-title">文本润色</div>
+                                <div class="page-desc">
                                     使用 LLM 对识别结果进行自动格式化
                                 </div>
                             </div>
@@ -997,6 +985,14 @@
                         </div>
                     </section>
 
+                    <!-- 问题反馈 -->
+                    <section class="section hidden" id="section-feedback">
+                        <div class="page-header">
+                            <div class="page-title">问题反馈</div>
+                            <div class="page-desc">功能开发中，敬请期待</div>
+                        </div>
+                    </section>
+
                     <!-- 关于 -->
                     <section class="section hidden" id="section-about">
                         <div class="section-header">
@@ -1016,13 +1012,7 @@
                                     alt="VoicePaste"
                                 />
                                 <div class="row-label">
-                                    <div
-                                        class="title"
-                                        style="
-                                            font-size: 15px;
-                                            font-weight: 600;
-                                        "
-                                    >
+                                    <div class="title" style="font-weight: 600">
                                         VoicePaste
                                     </div>
                                     <div class="desc">

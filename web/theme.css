@@ -7,11 +7,10 @@
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", Arial, system-ui, sans-serif;
 
-  --bg: #141413;
-  --surface: #1c1c1a;
-  --surface-hover: #262624;
-  --card: #222220;
-  --input-bg: #1c1c1a;
+  --bg: rgba(20, 20, 19, 0.7);
+  --main: rgba(28, 28, 26, 0.82);
+  --card: rgba(34, 34, 32, 0.86);
+  --input-bg: rgba(28, 28, 26, 0.78);
 
   --border: #30302e;
   --border-subtle: #262624;
@@ -56,8 +55,7 @@
   --tag-hover-bg: rgba(217, 119, 87, 0.14);
   --tag-hover-border: rgba(217, 119, 87, 0.25);
 
-  --sidebar-bg: #1a1a18;
-  --sidebar-active-bg: rgba(217, 119, 87, 0.1);
+  --nav-active-bg: rgba(250, 249, 245, 0.06);
 
   --overlay-bg: rgba(0, 0, 0, 0.94);
   --overlay-card: rgb(0, 0, 0);
@@ -72,6 +70,13 @@
   --heatmap-2: rgba(217, 119, 87, 0.3);
   --heatmap-3: rgba(217, 119, 87, 0.5);
   --heatmap-4: #d97757;
+
+  /* Font size tokens — unified typographic scale */
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-m: 14px;
+  --text-lg: 16px;
+  --text-xl: 24px;
 }
 
 /* ===== Light theme ===== */
@@ -79,15 +84,14 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg: #f5f4ed;
-  --surface: #faf9f5;
-  --surface-hover: #f0eee6;
-  --card: #ffffff;
-  --input-bg: #ffffff;
+  --bg: rgba(250, 249, 245, 0.62);
+  --main: rgba(245, 244, 237, 0.82);
+  --card: rgba(255, 255, 255, 0.84);
+  --input-bg: rgba(250, 250, 250, 0.78);
 
-  --border: #e8e6dc;
-  --border-subtle: #f0eee6;
-  --border-hover: #d1cfc5;
+  --border: #e5e5e5;
+  --border-subtle: #efefef;
+  --border-hover: #d4d4d4;
 
   --accent: #c96442;
   --accent-dim: rgba(201, 100, 66, 0.12);
@@ -97,14 +101,14 @@
   --accent-soft: rgba(201, 100, 66, 0.08);
   --text-on-accent: #faf9f5;
 
-  --toggle-bg: #d1cfc5;
+  --toggle-bg: #d1d1d1;
   --toggle-active: #c96442;
 
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
 
   --text: #1a1a18;
   --text-dim: #5e5d59;
-  --text-muted: #87867f;
+  --text-muted: #8a8984;
 
   --success: #5a8a4a;
   --warning: #b8863a;
@@ -128,12 +132,18 @@
   --tag-hover-bg: rgba(201, 100, 66, 0.1);
   --tag-hover-border: rgba(201, 100, 66, 0.2);
 
-  --sidebar-bg: #ffffff;
-  --sidebar-active-bg: rgba(201, 100, 66, 0.08);
+  --nav-active-bg: rgba(0, 0, 0, 0.05);
 
   --heatmap-0: #ededeb;
   --heatmap-1: rgba(201, 100, 66, 0.18);
   --heatmap-2: rgba(201, 100, 66, 0.38);
   --heatmap-3: rgba(201, 100, 66, 0.58);
   --heatmap-4: #c96442;
+
+  /* Font size tokens — unified typographic scale */
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-m: 14px;
+  --text-lg: 16px;
+  --text-xl: 24px;
 }

@@ -101,6 +101,7 @@ document.body.innerHTML = `
   <div id="hotwordGroups"></div>
   <div id="historyList"></div>
   <div id="promptHotkeyList"></div>
+  <div id="offlineModelList"></div>
   <button id="hotkeyRecordBtn"></button>
   <span id="hotkeyHintRow"></span>
 `;

@@ -35,7 +35,8 @@
         "minWidth": 760,
         "minHeight": 680,
         "visible": true,
-        "decorations": true
+        "decorations": true,
+        "hiddenTitle": true
       }
     ],
     "security": {

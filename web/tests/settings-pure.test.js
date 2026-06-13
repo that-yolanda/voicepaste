@@ -351,3 +351,95 @@ describe("resolveTheme", () => {
     expect(ex.resolveTheme("")).toBe("dark");
   });
 });
+
+describe("renderOfflineModels", () => {
+  const vadModel = {
+    id: "silero-vad",
+    type: "offline",
+    category: "vad",
+    engine: "sherpa-onnx",
+    name: "Silero VAD",
+    description: "语音活动检测模型",
+    capabilities: { streaming: false, hotwords: false, punctuation: false, itn: false },
+    languages: [],
+    file_size: 2,
+    mem_size: 50,
+    default_config: { threshold: 0.2 },
+  };
+  const asrModel = {
+    id: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8",
+    type: "offline",
+    category: "asr",
+    engine: "sherpa-onnx",
+    name: "SenseVoice 多语言",
+    description: "高精度离线模型",
+    capabilities: { streaming: false, hotwords: false, punctuation: false, itn: false },
+    languages: ["zh", "en"],
+    file_size: 158,
+    mem_size: 600,
+    default_config: {},
+  };
+
+  function renderWith(registry, downloaded, activeId) {
+    const list = document.getElementById("offlineModelList");
+    list.innerHTML = "";
+    ex.__setOfflineTestState(registry, downloaded);
+    // Override getAsrProvider through the parsed config by setting it via the
+    // exported helpers: we just call renderOfflineModels which uses the
+    // closure-scoped `parsedConfig`. Reset state first to keep tests
+    // independent.
+    ex.renderOfflineModels();
+    // activeId param is informational here; we assert on structure only.
+    return activeId;
+  }
+
+  it("renders download button for undownloaded VAD model (no toggle)", () => {
+    renderWith([vadModel], [], null);
+    const html = document.getElementById("offlineModelList").innerHTML;
+    expect(html).toContain('class="btn model-download-btn"');
+    expect(html).toContain("下载");
+    expect(html).not.toContain("model-card-size");
+    expect(html).not.toContain("model-card-status");
+    expect(html).not.toContain("model-delete-btn");
+    expect(html).not.toContain("offline-model-toggle");
+  });
+
+  it("renders delete button for downloaded VAD model (still no toggle)", () => {
+    renderWith([vadModel], ["silero-vad"], null);
+    const html = document.getElementById("offlineModelList").innerHTML;
+    expect(html).toContain('class="btn model-delete-btn"');
+    expect(html).toContain("删除");
+    expect(html).not.toContain("model-card-status");
+    expect(html).not.toContain("offline-model-toggle");
+  });
+
+  it("places delete button before enable toggle for downloaded ASR model", () => {
+    renderWith([asrModel], ["sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8"], null);
+    const html = document.getElementById("offlineModelList").innerHTML;
+    const deleteIdx = html.indexOf('class="btn model-delete-btn"');
+    const toggleIdx = html.indexOf("offline-model-toggle");
+    expect(deleteIdx).toBeGreaterThan(-1);
+    expect(toggleIdx).toBeGreaterThan(-1);
+    expect(deleteIdx).toBeLessThan(toggleIdx);
+    expect(html).not.toContain("model-card-status");
+  });
+
+  it("renders download button for undownloaded ASR model (no toggle)", () => {
+    renderWith([asrModel], [], null);
+    const html = document.getElementById("offlineModelList").innerHTML;
+    expect(html).toContain('class="btn model-download-btn"');
+    expect(html).not.toContain("offline-model-toggle");
+    expect(html).not.toContain("model-delete-btn");
+    expect(html).not.toContain("model-card-status");
+  });
+
+  it("does not leak file_size text into the card head", () => {
+    renderWith([vadModel, asrModel], ["silero-vad"], null);
+    const html = document.getElementById("offlineModelList").innerHTML;
+    // File size labels (e.g. 2MB / 158MB) should be gone from the rendered
+    // head row.
+    expect(html).not.toContain("model-card-size");
+    expect(html).not.toMatch(/2MB/);
+    expect(html).not.toMatch(/158MB/);
+  });
+});

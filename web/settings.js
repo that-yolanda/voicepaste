@@ -171,6 +171,7 @@
     aboutUpdateBtn: $("aboutUpdateBtn"),
     aboutUpdateStatus: $("aboutUpdateStatus"),
     updateBadge: $("updateBadge"),
+    updateHeaderBtn: $("updateHeaderBtn"),
     licenseBtn: $("licenseBtn"),
     licenseOverlay: $("licenseOverlay"),
     licenseCloseBtn: $("licenseCloseBtn"),
@@ -855,6 +856,11 @@
       .replace(/"/g, "&quot;");
   }
 
+  function setBtnLabel(btn, text) {
+    const label = btn.querySelector(".btn-label");
+    if (label) label.textContent = text;
+  }
+
   function clonePlain(value) {
     return JSON.parse(JSON.stringify(value || {}));
   }
@@ -1039,6 +1045,7 @@
       _errorTimer = null;
     }
 
+    // About page button
     switch (state) {
       case "checking":
         el.aboutUpdateBtn.textContent = "检查中…";
@@ -1058,7 +1065,6 @@
         el.aboutUpdateBtn.disabled = false;
         el.aboutUpdateBtn.className = "btn btn-sm btn-accent";
         el.aboutUpdateStatus.textContent = `发现新版本`;
-        if (el.updateBadge) el.updateBadge.style.display = "";
         break;
       case "downloading":
       case "progress":
@@ -1095,6 +1101,33 @@
         el.aboutUpdateBtn.disabled = false;
         el.aboutUpdateBtn.className = "btn btn-sm";
         el.aboutUpdateStatus.textContent = "-";
+        break;
+    }
+
+    // Header update button (top-left, beside app name)
+    if (!el.updateHeaderBtn) return;
+    const hdr = el.updateHeaderBtn;
+    const hdrText = hdr.querySelector("span:last-child");
+    switch (state) {
+      case "available":
+        hdr.style.display = "";
+        hdrText.textContent = "更新";
+        break;
+      case "downloading":
+      case "progress":
+        hdr.style.display = "";
+        hdrText.textContent = `${data?.percent ?? 0}%`;
+        break;
+      case "downloaded":
+        hdr.style.display = "";
+        hdrText.textContent = "重启";
+        break;
+      case "installing":
+        hdr.style.display = "";
+        hdrText.textContent = "…";
+        break;
+      default:
+        hdr.style.display = "none";
         break;
     }
   }
@@ -1183,6 +1216,18 @@
     return h < 10 ? `${h.toFixed(1)}h` : `${Math.round(h)}h`;
   }
 
+  function formatDurationParts(totalSeconds) {
+    const s = Math.round(totalSeconds);
+    if (s < 60) return { value: String(s), unit: "秒" };
+    const m = Math.floor(s / 60);
+    if (m < 60) return { value: String(m), unit: "分钟" };
+    const h = s / 3600;
+    return {
+      value: h < 10 ? h.toFixed(1) : String(Math.round(h)),
+      unit: "小时",
+    };
+  }
+
   function renderGreeting() {
     const h = new Date().getHours();
     const g =
@@ -1198,13 +1243,16 @@
     const sessionsEl = $("achSessions");
     const charsEl = $("achCharacters");
     const timeEl = $("achTimeSaved");
+    const timeUnitEl = $("achTimeSavedUnit");
 
     if (daysEl) daysEl.textContent = formatCompact(daysUsed);
     if (sessionsEl) sessionsEl.textContent = formatCompact(stats.totalSessions || 0);
     if (charsEl) charsEl.textContent = formatCompact(stats.totalCharacters || 0);
 
     const secondsSaved = Math.round((stats.totalCharacters || 0) * 0.67);
-    if (timeEl) timeEl.textContent = formatDuration(secondsSaved);
+    const timeSaved = formatDurationParts(secondsSaved);
+    if (timeEl) timeEl.textContent = timeSaved.value;
+    if (timeUnitEl) timeUnitEl.textContent = timeSaved.unit;
   }
 
   function renderHeatmap(dailyCounts) {
@@ -1369,7 +1417,7 @@
           await navigator.clipboard.writeText(item.text);
           const iconSpan = copyBtn.querySelector(".nav-icon");
           const originalHTML = iconSpan.innerHTML;
-          iconSpan.innerHTML = '<span style="font-size:12px;font-weight:bold;">✓</span>';
+          iconSpan.innerHTML = '<span style="font-weight:bold;">✓</span>';
           setTimeout(() => {
             iconSpan.innerHTML = originalHTML;
           }, 1500);
@@ -1628,7 +1676,7 @@ SOFTWARE.`;
       titleInput.className = "input-field";
       titleInput.placeholder = "提示词标题";
       titleInput.value = item.title || "";
-      titleInput.style.cssText = "flex: 1; min-width: 0; font-size: 12.5px";
+      titleInput.style.cssText = "flex: 1; min-width: 0";
       titleInput.addEventListener("input", () => {
         promptsData[index].title = titleInput.value;
         renderPromptHotkeys();
@@ -1639,7 +1687,7 @@ SOFTWARE.`;
       delBtn.type = "button";
       delBtn.className = "seg-btn prompt-item-delete";
       delBtn.textContent = "删除";
-      delBtn.style.cssText = "font-size: 11px; flex-shrink: 0";
+      delBtn.style.cssText = "flex-shrink: 0";
       delBtn.addEventListener("click", async () => {
         promptsData.splice(index, 1);
         renderPrompts();
@@ -1671,12 +1719,14 @@ SOFTWARE.`;
 
     promptsData.forEach((item, index) => {
       const group = document.createElement("div");
-      group.className = "hotkey-section";
+
+      const header = document.createElement("div");
+      header.className = "section-header";
 
       const title = document.createElement("div");
-      title.className = "hotkey-section-title";
+      title.className = "section-title";
       title.textContent = item.title ? `润色模板：${item.title}` : "润色模板：未命名模板";
-      group.appendChild(title);
+      group.appendChild(header).appendChild(title);
 
       const section = document.createElement("div");
       section.className = "section-card";
@@ -1820,6 +1870,7 @@ SOFTWARE.`;
 
   // Update
   el.aboutUpdateBtn.addEventListener("click", handleUpdateClick);
+  if (el.updateHeaderBtn) el.updateHeaderBtn.addEventListener("click", handleUpdateClick);
 
   // License
   el.licenseBtn.addEventListener("click", () => {
@@ -1996,65 +2047,108 @@ SOFTWARE.`;
       .map((model) => {
         const isDownloaded = _downloadedModels.includes(model.id);
         const isActive = currentModelId === model.id;
-        const isVad = model.category === "vad";
         const isBaseModel = model.category === "vad" || model.category === "punctuation";
-        const tags = (model.tags || [])
-          .map((t) => `<span class="model-tag${isVad ? " vad-tag" : ""}">${escapeHtml(t)}</span>`)
+        const memStr = model.mem_size ? `${model.mem_size}MB` : "";
+        const langsStr = model.languages?.length ? model.languages.join(", ") : "";
+
+        // Build feature indicators from capabilities
+        const featMap = {
+          streaming: "流式输出",
+          hotwords: "热词库",
+          punctuation: "自动标点",
+          itn: "数字格式化",
+        };
+        const features = [];
+        if (model.capabilities) {
+          for (const [key, label] of Object.entries(featMap)) {
+            const supported = !!model.capabilities[key];
+            features.push({ label, supported });
+          }
+        }
+        if (langsStr) {
+          features.push({ label: langsStr, supported: true });
+        }
+
+        const featuresHtml = features
+          .map((f) => {
+            const cls = f.supported ? "feature supported" : "feature unsupported";
+            const icon = f.supported ? "circle-check" : "ban";
+            return `<span class="${cls}"><span class="feature-icon" data-icon="${icon}"></span>${escapeHtml(f.label)}</span>`;
+          })
           .join("");
-        const langStr = model.languages?.length
-          ? model.languages.slice(0, 3).join(", ") + (model.languages.length > 3 ? "…" : "")
-          : "";
-        const sizeStr = [
-          model.file_size ? `${model.file_size}MB` : "",
-          model.mem_size ? `${model.mem_size}MB 内存` : "",
-        ]
-          .filter(Boolean)
-          .join(" · ");
+
+        const hasConfig = model.default_config && Object.keys(model.default_config).length > 0;
 
         let body = `<div class="model-card">`;
+
+        // --- Head row: name + actions ---
         body += `<div class="model-card-head">`;
         body += `<div class="model-card-info">`;
         body += `<div class="model-card-name">${escapeHtml(model.name)}</div>`;
-        body += `<div class="model-card-tags">${tags}</div>`;
-        if (langStr || sizeStr) {
-          body += `<div class="model-card-meta">${[langStr, sizeStr].filter(Boolean).join(" · ")}</div>`;
-        }
         body += `</div>`;
-        // ASR models get enable toggle; VAD/punctuation are base models — no toggle
-        if (!isBaseModel) {
-          body += `<label class="toggle model-enable-toggle">`;
-          body += `<input type="checkbox" data-model-id="${model.id}" class="offline-model-toggle" ${isActive ? "checked" : ""} ${!isDownloaded ? "disabled" : ""} />`;
-          body += `<span class="track"></span><span class="thumb"></span>`;
-          body += `</label>`;
+        body += `<div class="model-card-head-right">`;
+        if (isDownloaded) {
+          body += `<button type="button" class="btn model-delete-btn" data-model-id="${model.id}">删除</button>`;
+          if (!isBaseModel) {
+            body += `<label class="toggle model-enable-toggle">`;
+            body += `<input type="checkbox" data-model-id="${model.id}" class="offline-model-toggle" ${isActive ? "checked" : ""} />`;
+            body += `<span class="track"></span><span class="thumb"></span>`;
+            body += `</label>`;
+          }
+        } else {
+          body += `<button type="button" class="btn model-download-btn" data-model-id="${model.id}"><span class="nav-icon" data-icon="cloud-download"></span><span class="btn-label">下载</span></button>`;
         }
+        body += `</div>`; // end model-card-head-right
         body += `</div>`; // end model-card-head
 
-        if (model.default_config && Object.keys(model.default_config).length > 0) {
-          const configValues = getMergedModelConfig(c, model.id);
-          body += `<div class="model-expand-wrap">`;
+        // --- Description row ---
+        const descParts = [];
+        if (model.description) descParts.push(escapeHtml(model.description));
+        if (memStr) descParts.push(`预计内存占用峰值：${memStr}`);
+        if (descParts.length > 0) {
+          body += `<div class="model-card-desc">${descParts.join(" · ")}</div>`;
+        }
+
+        // --- Features row ---
+        if (featuresHtml) {
+          body += `<div class="model-card-features">`;
+          body += featuresHtml;
+          if (hasConfig) {
+            body += `<span class="model-features-right">`;
+            body += `<button type="button" class="model-expand-btn model-config-expand-btn" data-model-id="${escapeHtml(model.id)}">`;
+            body += `<span class="nav-icon" data-icon="chevron-down"></span>`;
+            body += `<span>参数配置</span>`;
+            body += `</button></span>`;
+          }
+          body += `</div>`;
+        } else if (hasConfig) {
+          body += `<div class="model-card-features">`;
+          body += `<span class="model-features-right" style="margin-left:0">`;
           body += `<button type="button" class="model-expand-btn model-config-expand-btn" data-model-id="${escapeHtml(model.id)}">`;
           body += `<span class="nav-icon" data-icon="chevron-down"></span>`;
-          body += `<span>展开配置</span>`;
-          body += `</button></div>`;
+          body += `<span>参数配置</span>`;
+          body += `</button></span>`;
+          body += `</div>`;
+        }
+
+        // --- Config section (expandable) ---
+        if (hasConfig) {
+          const configValues = getMergedModelConfig(c, model.id);
           body += `<div class="model-card-config hidden model-config" data-model-id="${escapeHtml(model.id)}">`;
           body += `<div class="config-group">`;
           body += renderModelConfigRows(model.id, configValues);
           body += `</div></div>`;
         }
-
-        body += `<div class="model-card-status">`;
-        if (isDownloaded) {
-          body += `<span class="model-downloaded">已下载${model.file_size ? ` · ${model.file_size}MB` : ""}</span>`;
-          body += `<button type="button" class="model-delete-btn" data-model-id="${model.id}">删除</button>`;
-        } else {
-          body += `<button type="button" class="model-download-btn" data-model-id="${model.id}">下载${model.file_size ? ` ${model.file_size}MB` : ""}</button>`;
-        }
-        body += `</div>`;
-
         body += `</div>`; // end model-card
         return body;
       })
       .join("");
+
+    // Inject icons into dynamically generated elements
+    el.offlineModelList.querySelectorAll("[data-icon]").forEach((el) => {
+      const svg = icon(el.dataset.icon);
+      if (svg) el.innerHTML = svg;
+    });
 
     // Event listeners for enable toggles (ASR models only)
     el.offlineModelList.querySelectorAll(".offline-model-toggle").forEach((toggle) => {
@@ -2118,13 +2212,13 @@ SOFTWARE.`;
           );
           if (vadBtn) {
             vadBtn.disabled = true;
-            vadBtn.textContent = "下载中 0%";
+            setBtnLabel(vadBtn, "0%");
             const vadUnsub = window.voiceSettings.onModelDownloadProgress((payload) => {
               if (payload.model_id !== VAD_ID) return;
               if (payload.status === "downloading") {
-                vadBtn.textContent = `下载中 ${payload.progress}%`;
+                setBtnLabel(vadBtn, `${payload.progress}%`);
               } else if (payload.status === "completed") {
-                vadBtn.textContent = "下载完成";
+                setBtnLabel(vadBtn, "完成");
               }
             });
             try {
@@ -2133,7 +2227,7 @@ SOFTWARE.`;
               _downloadedModels.push(VAD_ID);
             } catch (_err) {
               vadUnsub();
-              vadBtn.textContent = "下载失败";
+              setBtnLabel(vadBtn, "下载失败");
               vadBtn.disabled = false;
               return;
             }
@@ -2142,13 +2236,13 @@ SOFTWARE.`;
 
         // Step 2: Download the requested model
         btn.disabled = true;
-        btn.textContent = "下载中 0%";
+        setBtnLabel(btn, "0%");
         const unsub = window.voiceSettings.onModelDownloadProgress((payload) => {
           if (payload.model_id !== modelId) return;
           if (payload.status === "downloading") {
-            btn.textContent = `下载中 ${payload.progress}%`;
+            setBtnLabel(btn, `${payload.progress}%`);
           } else if (payload.status === "completed") {
-            btn.textContent = "下载完成";
+            setBtnLabel(btn, "完成");
           }
         });
 
@@ -2158,7 +2252,7 @@ SOFTWARE.`;
           await loadOfflineModels();
         } catch (_err) {
           unsub();
-          btn.textContent = "下载失败";
+          setBtnLabel(btn, "下载失败");
           btn.disabled = false;
         }
       });
@@ -2339,7 +2433,12 @@ SOFTWARE.`;
       readModelParamInput,
       soundFileName,
       renderModelConfigRows,
+      renderOfflineModels,
       resolveTheme,
+      __setOfflineTestState: (registry, downloaded) => {
+        _modelRegistry = registry;
+        _downloadedModels = downloaded;
+      },
     };
   }
 
