@@ -10,7 +10,6 @@ build
 # local configuration
 .env
 config.yaml
-prompts.json
 
 # Tauri build output
 src-tauri/target/
