@@ -1,14 +1,14 @@
 import {
+  AudioLines,
   BookOpen,
+  Bot,
   CircleArrowUp,
-  Cloud,
-  FileCode2,
   Home,
   Info,
   Keyboard,
+  NotebookText,
   Settings2,
   ShieldCheck,
-  SlidersHorizontal,
 } from "lucide-react";
 import { ThemeSelector } from "@/ui/components/ThemeSelector";
 
@@ -28,9 +28,9 @@ const NAV_ITEMS: { id: SectionId; icon: typeof Home; label: string }[] = [
   { id: "app", icon: Settings2, label: "应用设置" },
   { id: "permissions", icon: ShieldCheck, label: "系统权限" },
   { id: "hotkey", icon: Keyboard, label: "快捷键" },
-  { id: "service", icon: Cloud, label: "音频模型" },
-  { id: "llm", icon: SlidersHorizontal, label: "大语言模型" },
-  { id: "hotwords", icon: FileCode2, label: "热词库" },
+  { id: "service", icon: AudioLines, label: "音频模型" },
+  { id: "llm", icon: Bot, label: "大语言模型" },
+  { id: "hotwords", icon: NotebookText, label: "热词库" },
 ];
 
 const BOTTOM_ITEMS: { id: SectionId; icon: typeof Home; label: string }[] = [
@@ -71,7 +71,11 @@ export function Sidebar({
     <aside className="w-50 shrink-0 flex flex-col">
       {/* Header: icon + title + update button */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border-subtle">
-        <img src="./icon.png" alt="VoicePaste" className="w-7 h-7 rounded-md flex-shrink-0" />
+        <img
+          src="./icon.png"
+          alt="VoicePaste"
+          className="w-7 h-7 rounded-md shrink-0"
+        />
         <span className="flex-1 text-sm font-semibold text-text tracking-[-0.01em]">
           VoicePaste
         </span>

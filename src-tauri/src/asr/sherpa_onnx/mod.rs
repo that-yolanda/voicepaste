@@ -1,9 +1,9 @@
-pub mod online;
+pub mod funasr_nano;
 pub mod offline;
+pub mod online;
 pub mod punct;
 pub mod qwen3_asr;
 pub mod sense_voice;
-pub mod funasr_nano;
 pub mod simulated_streaming;
 pub mod vad;
 
@@ -13,9 +13,9 @@ use std::sync::mpsc as std_mpsc;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use super::{AsrEngine, AsrEvent, AsrSession};
 use self::punct::PunctuationProcessor;
 use self::vad::{VadConfig, VadProcessor};
+use super::{AsrEngine, AsrEvent, AsrSession};
 use crate::config::VadParams;
 use crate::model;
 
@@ -199,7 +199,11 @@ impl SherpaOnnxEngine {
 
         match PunctuationProcessor::new(&model_dir, num_threads) {
             Ok(p) => {
-                log_asr!(info, "Punctuation processor created for model '{}'", asr_entry.id);
+                log_asr!(
+                    info,
+                    "Punctuation processor created for model '{}'",
+                    asr_entry.id
+                );
                 Some(Arc::new(p))
             }
             Err(e) => {
@@ -239,8 +243,7 @@ impl AsrEngine for SherpaOnnxEngine {
 
         // Build VAD config (all models use VAD)
         let vad_entry = registry.models.iter().find(|m| m.id == "silero-vad");
-        let vad_base =
-            VadConfig::from_registry(vad_entry.and_then(|e| e.default_config.as_ref()));
+        let vad_base = VadConfig::from_registry(vad_entry.and_then(|e| e.default_config.as_ref()));
         let vad_config = VadConfig::merged(&vad_base, &self.vad_params);
 
         let model_config =
@@ -259,15 +262,10 @@ impl AsrEngine for SherpaOnnxEngine {
 
         if entry.capabilities.streaming {
             // ── Online (streaming transducer, e.g. Zipformer) ──
-            let modeling_unit =
-                json_string(&model_config, "modeling_unit").unwrap_or_default();
+            let modeling_unit = json_string(&model_config, "modeling_unit").unwrap_or_default();
 
-            let hotwords_buf = online::build_online_hotwords_buf(
-                hotwords,
-                &modeling_unit,
-                &model_dir,
-                entry,
-            );
+            let hotwords_buf =
+                online::build_online_hotwords_buf(hotwords, &modeling_unit, &model_dir, entry);
 
             if hotwords_buf.is_some() {
                 log_asr!(

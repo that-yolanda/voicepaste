@@ -109,9 +109,9 @@ fn parse_server_response(buffer: &[u8]) -> Option<Value> {
 
         return match serde_json::from_str::<Value>(&error_text) {
             Ok(mut parsed) => {
-                parsed.as_object_mut().map(|obj| {
+                if let Some(obj) = parsed.as_object_mut() {
                     obj.insert("code".to_string(), json!(error_code));
-                });
+                }
                 Some(parsed)
             }
             Err(_) => Some(json!({
@@ -121,10 +121,8 @@ fn parse_server_response(buffer: &[u8]) -> Option<Value> {
         };
     }
 
-    // Ack message type
-    if message_type == 0x09 {
-        offset += 4;
-    } else if message_flags == 0x01 || message_flags == 0x03 {
+    // Ack message type and message flags both skip 4 bytes
+    if message_type == 0x09 || message_flags == 0x01 || message_flags == 0x03 {
         offset += 4;
     }
 
@@ -522,7 +520,7 @@ impl AsrEngine for DoubaoEngine {
                         let buffer = data.as_ref();
                         if let Some(payload) = parse_server_response(buffer) {
                             // Debug: log non-audio response payloads to diagnose ASR errors
-                            if !payload.get("raw_text").is_some() {
+                            if payload.get("raw_text").is_none() {
                                 log_asr!(
                                     debug,
                                     "Server response: {}",
@@ -608,9 +606,9 @@ impl AsrEngine for DoubaoEngine {
                                 let utterances =
                                     result.get("utterances").and_then(|v| v.as_array());
 
-                                if utterances.map_or(false, |a| !a.is_empty()) {
+                                if utterances.is_some_and(|a| !a.is_empty()) {
                                     // Has utterances
-                                    if let Some(arr) = utterances.clone() {
+                                    if let Some(arr) = utterances {
                                         let completed: String = arr
                                             .iter()
                                             .filter(|u| {
@@ -883,7 +881,7 @@ mod tests {
         let payload = json!({"test": "hello"});
         let frame = encode_full_client_request(&payload);
         assert!(frame.len() > 8); // header(4) + size(4) + gzipped payload
-        // First byte is protocol magic
+                                  // First byte is protocol magic
         assert_eq!(frame[0], 0x11);
         // Bytes 4-7 are the payload size (big-endian)
         let size = u32::from_be_bytes([frame[4], frame[5], frame[6], frame[7]]);

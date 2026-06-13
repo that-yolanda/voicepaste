@@ -4,18 +4,28 @@
 
 ```bash
 pnpm install
-pnpm dev
+pnpm dev                # 运行完整 Tauri 应用
+pnpm dev:web            # 仅运行 Vite 开发服务器（前端热更新）
 ```
 
-## 打包
+## 构建与工具
 
 ```bash
-pnpm build              # 生产构建（tauri build）
+pnpm build:web          # 仅构建前端（Vite → web/dist）
 pnpm pack               # 构建分发安装包
 pnpm pack -s            # 构建 + macOS 签名与公证
 pnpm pack -p apple_aarch64          # 仅 macOS ARM64
 pnpm pack -s -p apple_aarch64,win_x64  # 签名 + 指定平台
 pnpm clean              # 清理构建产物与缓存
+```
+
+## 代码检查与格式化
+
+```bash
+pnpm lint               # 全栈：biome lint + cargo clippy
+pnpm format             # 全栈：biome check --write + cargo fmt
+pnpm check              # 全栈：format + cargo clippy
+pnpm lint:ci            # CI 严格模式（只读）
 ```
 
 打包平台参数：`apple_aarch64`、`apple_x64`、`win_x64`。
@@ -26,7 +36,7 @@ pnpm clean              # 清理构建产物与缓存
 
 ## 说明
 
-- 项目基于 Tauri v2，前端使用原生 JS（无框架、无打包器）。
+- 项目基于 Tauri v2，前端使用 React + TypeScript，Vite 构建，Tailwind CSS 样式。
 - `config.yaml` 已加入忽略，用于本地填写真实凭证。
 - `config.yaml.example` 是打包产物默认携带的模板配置。
 - 当前桌面平台支持 macOS 和 Windows。
@@ -34,21 +44,19 @@ pnpm clean              # 清理构建产物与缓存
 ## 测试
 
 ```bash
-pnpm test             # 运行所有测试（Rust + 前端）
-pnpm test:rust        # 仅运行 Rust 单元测试
+pnpm test             # 运行所有测试（vitest + cargo test）
+pnpm test:watch       # 监听模式运行前端测试
 pnpm test:asr         # 运行 ASR 集成测试（需已下载 sherpa-onnx 模型）
 pnpm test:llm         # 运行 LLM 集成测试（需配置 API Key）
-pnpm test:frontend    # 仅运行前端单元测试
-pnpm test:watch       # 监听模式运行前端测试
 ```
 
 ### 测试策略
 
 | 层级 | 位置 | 运行方式 | 说明 |
 |------|------|---------|------|
-| **Rust 单元测试** | 各 `.rs` 文件底部 `#[cfg(test)] mod tests { ... }` | `pnpm test:rust` | 纯逻辑函数测试（解析、校验、序列化等）。使用 `tempfile` 隔离文件 I/O，不涉及网络/模型/API Key。在 CI 中运行。 |
+| **Rust 单元测试** | 各 `.rs` 文件底部 `#[cfg(test)] mod tests { ... }` | `cargo test` | 纯逻辑函数测试（解析、校验、序列化等）。使用 `tempfile` 隔离文件 I/O，不涉及网络/模型/API Key。在 CI 中运行。 |
 | **Rust 集成测试** | `src-tauri/src/tests/`，通过 Cargo features 控制 | `pnpm test:asr` / `pnpm test:llm` | 需外部资源：sherpa-onnx 模型文件（`asr-integration` feature）或 LLM API Key（`llm-integration` feature）。不在 CI 中运行。 |
-| **前端测试** | `web/tests/`（Vitest + jsdom） | `pnpm test:frontend` | 组件逻辑、纯函数测试。通过 `web/tests/helpers/` 模拟 `window.__TAURI__` 和 Web API。 |
+| **前端测试** | `web/tests/`（Vitest + jsdom） | `npx vitest run` | 组件逻辑、纯函数测试。按模块组织（`bridge/`、`lib/`），mock 与测试文件同目录。 |
 
 ### Rust 单元测试规范
 
@@ -75,7 +83,7 @@ pnpm test:watch       # 监听模式运行前端测试
 |------|------|
 | 核心功能开发 | 所有纯逻辑函数必须有单元测试 |
 | 跨模块功能 | 按需编写集成测试（模型推理、API 调用等） |
-| 代码审查前 | 所有单元测试通过（`pnpm test:rust`、`pnpm test:frontend`） |
+| 代码审查前 | 所有单元测试通过（`cargo test`、`npx vitest run`） |
 | 发布前 | 所有单元测试 + 集成测试通过（`pnpm test`、`pnpm test:asr`、`pnpm test:llm`） |
 
 ## 项目结构
@@ -86,10 +94,11 @@ voicepaste/
 │   ├── icon.png         #   主应用图标（`tauri icon` 的源文件）
 │   ├── sounds/          #   start.mp3、end.mp3
 │   └── trayTemplate.png #   macOS 托盘图标源文件
-├── scripts/             # 构建与工具脚本
-│   ├── pack.js          #   主打包脚本（-s、-p 参数）
-│   ├── clean.js         #   产物清理
-│   └── extract-icons.js #   Lucide 图标提取（beforeBuildCommand）
+├── scripts/             # 构建与工具脚本（TypeScript）
+│   ├── pack.ts          #   主打包脚本（-s、-p 参数）
+│   ├── clean.ts         #   产物清理
+│   ├── prepare-assets.ts #  预构建资源生成（图标、托盘）
+│   └── validate-json.ts #   JSON 配置文件 schema 校验
 ├── src-tauri/           # Rust 后端（Tauri v2）
 │   ├── src/
 │   │   ├── lib.rs       #   应用入口、状态机与快捷键管理
@@ -117,16 +126,20 @@ voicepaste/
 │   ├── capabilities/    #   Tauri 权限配置
 │   ├── Cargo.toml       #   Rust 依赖
 │   └── tauri.conf.json  #   Tauri 配置
-├── web/                 # 前端（WebView）
+├── web/                 # 前端（React + TypeScript + Vite + Tailwind）
 │   ├── index.html       #   浮动覆盖窗口
-│   ├── app.js           #   音频采集与文本显示
 │   ├── settings.html    #   设置页面
-│   ├── settings.js      #   配置编辑器、更新 UI 与逻辑
-│   ├── settings.css     #   样式与主题变量
-│   ├── theme.css        #   亮/暗主题定义
-│   ├── tauri-bridge.js  #   IPC 桥接（替代 Electron preload）
-│   ├── lucide-icons.js  #   SVG 图标定义（自动生成）
-│   └── tests/           #   前端单元测试（Vitest）
+│   ├── styles.css       #   全局样式（Tailwind 指令）
+│   ├── src/
+│   │   ├── bridge/      #     Tauri IPC 桥接（settings, overlay）
+│   │   ├── lib/         #     纯工具函数（audio, format, hotkey, model, sound）
+│   │   ├── types/       #     TypeScript 类型定义
+│   │   ├── styles/      #     共享 CSS
+│   │   └── ui/          #     React 组件
+│   │       ├── components/ #   UI 基础组件（Button, Input, Toggle, Modal 等）
+│   │       ├── layout/  #     PageLayout, Sidebar
+│   │       └── pages/   #     设置页面（AudioModel, Hotkey, LLM 等）
+│   └── tests/           #   前端单元测试（Vitest，按 bridge/ + lib/ 组织）
 ├── docs/                #   文档、截图
 ├── build/               #   中间构建产物（gitignore）
 ├── dist/                #   最终分发产物（gitignore）
@@ -137,12 +150,14 @@ voicepaste/
 
 ## 技术栈
 
-- Tauri v2（Rust 后端 + WebView 前端）
-- 字节跳动豆包 ASR（WebSocket）
-- gzip 压缩二进制帧
-- macOS 使用 AppleScript、Windows 使用 PowerShell 模拟粘贴
-- `keytap` crate 注册全局快捷键
-- `tauri-plugin-updater` 通过 GitHub Releases 实现自动更新
+- **前端**：React 19、TypeScript、Vite、Tailwind CSS 4
+- **后端**：Tauri v2（Rust）
+- **ASR**：字节跳动豆包流式 ASR（WebSocket + gzip 压缩二进制帧），以及 sherpa-onnx 本地模型（SenseVoice、Zipformer、FunASR-Nano、Qwen3-ASR）
+- **代码检查**：Biome（TS/TSX/JSON/CSS）、cargo fmt + clippy（Rust）
+- **测试**：Vitest（前端）、cargo test（Rust）
+- **粘贴**：macOS 使用 AppleScript、Windows 使用 PowerShell
+- **快捷键**：`keytap` crate 注册全局快捷键
+- **自动更新**：`tauri-plugin-updater` 通过 GitHub Releases
 
 ## 工作流程
 

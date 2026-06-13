@@ -7,9 +7,7 @@ use tokio::sync::mpsc;
 
 use super::punct::PunctuationProcessor;
 use super::vad::VadProcessor;
-use super::{
-    append_text, send_transcript, AsrEvent, AsrSession, SAMPLE_RATE, WorkerCommand,
-};
+use super::{append_text, send_transcript, AsrEvent, AsrSession, WorkerCommand, SAMPLE_RATE};
 
 /// Offline ASR session using VAD + OfflineRecognizer.
 pub(crate) struct OfflineSession {
@@ -230,9 +228,19 @@ pub(crate) fn spawn_offline_worker(
     let handle = std::thread::Builder::new()
         .name("sherpa-onnx-asr-offline".to_string())
         .spawn(move || {
-            run_offline_worker(recognizer, vad, use_hotwords, hotwords_str, event_tx, worker_rx);
+            run_offline_worker(
+                recognizer,
+                vad,
+                use_hotwords,
+                hotwords_str,
+                event_tx,
+                worker_rx,
+            );
         })
         .map_err(|e| format!("启动离线识别线程失败: {}", e))?;
 
-    Ok((OfflineSession::new(worker_tx.clone(), handle, punct_processor), worker_tx))
+    Ok((
+        OfflineSession::new(worker_tx.clone(), handle, punct_processor),
+        worker_tx,
+    ))
 }

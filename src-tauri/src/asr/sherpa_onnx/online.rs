@@ -10,14 +10,10 @@ use tokio::sync::mpsc;
 
 use super::punct::PunctuationProcessor;
 use super::vad::VadProcessor;
-use super::{
-    append_text, send_transcript, AsrEvent, AsrSession, SAMPLE_RATE, WorkerCommand,
-};
+use super::{append_text, send_transcript, AsrEvent, AsrSession, WorkerCommand, SAMPLE_RATE};
 use crate::model::ModelEntry;
 
-use super::{
-    json_bool, json_f32, json_string, json_u32,
-};
+use super::{json_bool, json_f32, json_string, json_u32};
 
 // ---------------------------------------------------------------------------
 // Online recognizer builder
@@ -59,20 +55,17 @@ pub(crate) fn build_online_recognizer(
 
     if let Some(buf) = hotwords_buf {
         config.decoding_method = Some("modified_beam_search".to_string());
-        config.max_active_paths =
-            json_u32(model_config, "max_active_paths").unwrap_or(4) as i32;
+        config.max_active_paths = json_u32(model_config, "max_active_paths").unwrap_or(4) as i32;
         config.hotwords_score = json_f32(model_config, "hotwords_score").unwrap_or(2.0);
         config.hotwords_buf = Some(buf);
 
         // Set modeling unit (required for hotwords tokenization)
-        config.model_config.modeling_unit =
-            json_string(model_config, "modeling_unit");
+        config.model_config.modeling_unit = json_string(model_config, "modeling_unit");
 
         // Set bpe_vocab for bpe or cjkchar+bpe models
         let bpe_vocab_path = model_dir.join("bpe.vocab");
         if bpe_vocab_path.exists() {
-            config.model_config.bpe_vocab =
-                bpe_vocab_path.to_str().map(|s| s.to_string());
+            config.model_config.bpe_vocab = bpe_vocab_path.to_str().map(|s| s.to_string());
         }
     } else {
         config.decoding_method = Some("greedy_search".to_string());
@@ -160,10 +153,7 @@ pub(crate) fn build_online_hotwords_buf(
         .iter()
         .map(|hw| {
             let (word, weight) = crate::hotword::parse_hotword_entry(hw);
-            let cleaned: String = word
-                .chars()
-                .filter(|c| !c.is_ascii_punctuation())
-                .collect();
+            let cleaned: String = word.chars().filter(|c| !c.is_ascii_punctuation()).collect();
             let cleaned = if is_bpe {
                 cleaned.to_uppercase()
             } else {
@@ -223,6 +213,7 @@ fn decode_online_ready(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn accept_online_samples(
     recognizer: &OnlineRecognizer,
     stream: &OnlineStream,
@@ -382,7 +373,12 @@ pub(crate) fn spawn_online_worker(
         .map_err(|e| format!("启动在线识别线程失败: {}", e))?;
 
     Ok((
-        OnlineSession::new(worker_tx.clone(), handle, hotwords_for_restore, punct_processor),
+        OnlineSession::new(
+            worker_tx.clone(),
+            handle,
+            hotwords_for_restore,
+            punct_processor,
+        ),
         worker_tx,
     ))
 }
@@ -609,10 +605,7 @@ fn filter_bpe_chars(hotwords: &[String], bpe_chars: &HashSet<char>) -> Vec<Strin
         .iter()
         .filter(|hw| {
             let (word, _weight) = crate::hotword::parse_hotword_entry(hw);
-            let cleaned: String = word
-                .chars()
-                .filter(|c| !c.is_ascii_punctuation())
-                .collect();
+            let cleaned: String = word.chars().filter(|c| !c.is_ascii_punctuation()).collect();
             if cleaned.is_empty() {
                 log_asr!(debug, "Skipping hotword (empty after cleaning): {:?}", hw);
                 return false;
@@ -621,7 +614,11 @@ fn filter_bpe_chars(hotwords: &[String], bpe_chars: &HashSet<char>) -> Vec<Strin
                 !c.is_ascii_graphic() || c.is_ascii_alphabetic() || bpe_chars.contains(&c)
             });
             if !valid {
-                log_asr!(debug, "Skipping hotword (char unsupported by bpe vocab): {:?}", hw);
+                log_asr!(
+                    debug,
+                    "Skipping hotword (char unsupported by bpe vocab): {:?}",
+                    hw
+                );
             }
             valid
         })
@@ -712,7 +709,7 @@ fn restore_hotword_case(text: &str, hotwords: &[String]) -> String {
         return result;
     }
 
-    replacements.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    replacements.sort_by_key(|b| std::cmp::Reverse(b.0.len()));
 
     for (needle, original, use_spaces) in &replacements {
         let needle_chars: Vec<char> = needle.chars().collect();
@@ -819,10 +816,7 @@ mod tests {
 
     #[test]
     fn restore_single_hotword() {
-        let r = restore_hotword_case(
-            "使用 CLAUDE CODE 和 OPENAI",
-            &["Claude Code".to_string()],
-        );
+        let r = restore_hotword_case("使用 CLAUDE CODE 和 OPENAI", &["Claude Code".to_string()]);
         assert_eq!(r, "使用 Claude Code 和 OPENAI");
     }
 

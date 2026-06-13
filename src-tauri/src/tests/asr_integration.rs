@@ -133,7 +133,10 @@ fn funasr_nano_hotwords_affect_recognition() {
         build_funasr_recognizer(&model_dir, None).expect("Failed to create recognizer (no hw)");
     let text_no_hw = decode_full(&rec_no_hw, &samples);
     eprintln!("No hotwords: {text_no_hw}");
-    assert!(!text_no_hw.is_empty(), "Should produce text without hotwords");
+    assert!(
+        !text_no_hw.is_empty(),
+        "Should produce text without hotwords"
+    );
 
     // Decode WITH hotwords
     let hotwords = "Claude Code,Skills,流式输出";
@@ -178,7 +181,10 @@ fn funasr_nano_no_hotwords_no_crash() {
         .expect("Failed to create recognizer (empty hw)");
     let text = decode_full(&rec, &samples);
     eprintln!("Empty hotwords: {text}");
-    assert!(!text.is_empty(), "Should produce normal recognition with empty hotwords");
+    assert!(
+        !text.is_empty(),
+        "Should produce normal recognition with empty hotwords"
+    );
 }
 
 // ── Additional integration tests ──────────────────────────────────────────
@@ -196,8 +202,7 @@ fn funasr_nano_short_audio_basic_recognition() {
     let audio = fixture("test-audio-short.wav");
     let (samples, _) = read_wav(&audio).expect("Failed to read test audio");
 
-    let rec = build_funasr_recognizer(&model_dir, None)
-        .expect("Failed to create recognizer");
+    let rec = build_funasr_recognizer(&model_dir, None).expect("Failed to create recognizer");
     let text = decode_full(&rec, &samples);
     eprintln!("Short audio recognition: {text}");
 
@@ -218,10 +223,12 @@ fn funasr_nano_long_audio_basic_recognition() {
     let audio = fixture("test-audio-long.wav");
     let (samples, _) = read_wav(&audio).expect("Failed to read test audio");
 
-    let rec = build_funasr_recognizer(&model_dir, None)
-        .expect("Failed to create recognizer");
+    let rec = build_funasr_recognizer(&model_dir, None).expect("Failed to create recognizer");
     let text = decode_full(&rec, &samples);
     eprintln!("Long audio recognition: {text}");
 
-    assert!(!text.is_empty(), "Long audio recognition result should not be empty");
+    assert!(
+        !text.is_empty(),
+        "Long audio recognition result should not be empty"
+    );
 }

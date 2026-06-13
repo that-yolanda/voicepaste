@@ -3,9 +3,7 @@ use std::path::Path;
 
 use crate::model::ModelEntry;
 
-use super::{
-    json_bool, json_f32, json_i32, json_string,
-};
+use super::{json_bool, json_f32, json_i32, json_string};
 
 /// Build a comma-separated hotwords string for FunASR-Nano models.
 ///
@@ -52,12 +50,11 @@ pub(crate) fn build_funasr_nano_recognizer(
 
     let encoder_adaptor = p("encoder_adaptor")
         .ok_or_else(|| format!("模型 {} 缺少 encoder_adaptor 文件", entry.id))?;
-    let llm = p("llm")
-        .ok_or_else(|| format!("模型 {} 缺少 llm 文件", entry.id))?;
-    let embedding = p("embedding")
-        .ok_or_else(|| format!("模型 {} 缺少 embedding 文件", entry.id))?;
-    let tokenizer = p("tokenizer")
-        .ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
+    let llm = p("llm").ok_or_else(|| format!("模型 {} 缺少 llm 文件", entry.id))?;
+    let embedding =
+        p("embedding").ok_or_else(|| format!("模型 {} 缺少 embedding 文件", entry.id))?;
+    let tokenizer =
+        p("tokenizer").ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
     config.model_config.funasr_nano = OfflineFunASRNanoModelConfig {
         encoder_adaptor: Some(encoder_adaptor),
         llm: Some(llm),
@@ -70,7 +67,11 @@ pub(crate) fn build_funasr_nano_recognizer(
         top_p: json_f32(model_config, "top_p").unwrap_or(0.8),
         seed: json_i32(model_config, "seed").unwrap_or(42),
         language: json_string(model_config, "language"),
-        itn: if json_bool(model_config, "itn").unwrap_or(true) { 1 } else { 0 },
+        itn: if json_bool(model_config, "itn").unwrap_or(true) {
+            1
+        } else {
+            0
+        },
         hotwords: funasr_hotwords.map(|s| s.to_string()),
     };
     config.model_config.model_type = Some("funasr_nano".to_string());
@@ -131,10 +132,7 @@ mod tests {
 
     #[test]
     fn funasr_hotwords_preserves_original_case() {
-        let hotwords = vec![
-            "AGENTS.md".to_string(),
-            "Claude Code".to_string(),
-        ];
+        let hotwords = vec!["AGENTS.md".to_string(), "Claude Code".to_string()];
         let result = build_funasr_hotwords(&hotwords);
         assert_eq!(result.as_deref(), Some("AGENTS.md,Claude Code"));
     }

@@ -1,4 +1,12 @@
-import { Cog } from "lucide-react";
+import {
+  CircleCheck,
+  CircleX,
+  CloudDownload,
+  Cog,
+  LoaderCircle,
+  RotateCcw,
+  Trash,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteModel,
@@ -32,7 +40,9 @@ const VAD_ID = "silero-vad";
 type DownloadProgressMap = Record<string, ModelDownloadProgress>;
 
 const modelDownloadProgress: DownloadProgressMap = {};
-const modelDownloadSubscribers = new Set<(progress: DownloadProgressMap) => void>();
+const modelDownloadSubscribers = new Set<
+  (progress: DownloadProgressMap) => void
+>();
 let modelDownloadProgressCleanup: (() => void) | null = null;
 
 function getModelDownloadProgressSnapshot(): DownloadProgressMap {
@@ -55,7 +65,9 @@ function clearModelDownloadProgress(modelId: string) {
   });
 }
 
-function subscribeModelDownloadProgress(listener: (progress: DownloadProgressMap) => void) {
+function subscribeModelDownloadProgress(
+  listener: (progress: DownloadProgressMap) => void,
+) {
   modelDownloadSubscribers.add(listener);
   listener(getModelDownloadProgressSnapshot());
   return () => {
@@ -65,7 +77,9 @@ function subscribeModelDownloadProgress(listener: (progress: DownloadProgressMap
 
 function ensureModelDownloadProgressListener() {
   if (modelDownloadProgressCleanup) return;
-  modelDownloadProgressCleanup = onModelDownloadProgress(emitModelDownloadProgress);
+  modelDownloadProgressCleanup = onModelDownloadProgress(
+    emitModelDownloadProgress,
+  );
 }
 
 export function AudioModelPage() {
@@ -92,6 +106,7 @@ export function AudioModelPage() {
 
   useEffect(() => {
     mounted.current = true;
+    ensureModelDownloadProgressListener();
     return () => {
       mounted.current = false;
     };
@@ -117,7 +132,8 @@ export function AudioModelPage() {
 
   const need = useCallback(async () => {
     try {
-      const reg = ((await getModelRegistry()) || []) as unknown as RegistryModel[];
+      const reg = ((await getModelRegistry()) ||
+        []) as unknown as RegistryModel[];
       if (mounted.current) setRegistry(Array.isArray(reg) ? reg : []);
     } catch {
       /* ignore */
@@ -136,6 +152,15 @@ export function AudioModelPage() {
 
   useEffect(() => subscribeModelDownloadProgress(setDownloadProgress), []);
 
+  const updateModelDownloadProgress = useCallback(
+    (progress: ModelDownloadProgress) => {
+      emitModelDownloadProgress(progress);
+      if (mounted.current)
+        setDownloadProgress(getModelDownloadProgressSnapshot());
+    },
+    [],
+  );
+
   // Model enable toggle
   const selectProvider = useCallback(
     async (id: string) => {
@@ -151,18 +176,23 @@ export function AudioModelPage() {
   // Download with VAD safety net
   const doDownload = useCallback(
     async (modelId: string) => {
-      ensureModelDownloadProgressListener();
-      emitModelDownloadProgress({ model_id: modelId, status: "downloading", progress: 0 });
+      updateModelDownloadProgress({
+        model_id: modelId,
+        status: "downloading",
+        progress: 0,
+      });
 
       // VAD safety net
       if (modelId !== VAD_ID && !downloaded.includes(VAD_ID)) {
         try {
           await downloadModel(VAD_ID);
           if (mounted.current) {
-            setDownloaded((prev) => (prev.includes(VAD_ID) ? prev : [...prev, VAD_ID]));
+            setDownloaded((prev) =>
+              prev.includes(VAD_ID) ? prev : [...prev, VAD_ID],
+            );
           }
         } catch {
-          emitModelDownloadProgress({
+          updateModelDownloadProgress({
             model_id: modelId,
             status: "failed",
             progress: modelDownloadProgress[modelId]?.progress,
@@ -174,14 +204,14 @@ export function AudioModelPage() {
         await downloadModel(modelId);
         need();
       } catch {
-        emitModelDownloadProgress({
+        updateModelDownloadProgress({
           model_id: modelId,
           status: "failed",
           progress: modelDownloadProgress[modelId]?.progress,
         });
       }
     },
-    [downloaded, need],
+    [downloaded, need, updateModelDownloadProgress],
   );
 
   const doDelete = useCallback(
@@ -219,7 +249,10 @@ export function AudioModelPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="音频模型" description={`当前：${doubaoFromRegistry?.name || provider}`} />
+      <PageHeader
+        title="音频模型"
+        description={`当前：${doubaoFromRegistry?.name || provider}`}
+      />
 
       {/* Tab switcher */}
       <div className="inline-flex border border-border rounded-lg overflow-hidden">
@@ -318,12 +351,16 @@ export function AudioModelPage() {
                     },
                   ].map((f) => (
                     <div key={f.key} className="flex items-center gap-3">
-                      <span className="text-xs text-text-dim w-[100px] shrink-0">{f.label}</span>
+                      <span className="text-xs text-text-dim w-[100px] shrink-0">
+                        {f.label}
+                      </span>
                       <input
                         type={f.type}
                         className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
                         value={(doubaoCfg[f.key] as string) || ""}
-                        onChange={(e) => saveDoubao({ [f.key]: e.target.value })}
+                        onChange={(e) =>
+                          saveDoubao({ [f.key]: e.target.value })
+                        }
                         placeholder={f.placeholder}
                       />
                     </div>
@@ -335,17 +372,23 @@ export function AudioModelPage() {
                 {/* Settings */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">Resource ID</span>
+                    <span className="text-xs text-text-dim w-[100px] shrink-0">
+                      Resource ID
+                    </span>
                     <input
                       type="text"
                       className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
                       value={(doubaoCfg.resource_id as string) || ""}
-                      onChange={(e) => saveDoubao({ resource_id: e.target.value })}
+                      onChange={(e) =>
+                        saveDoubao({ resource_id: e.target.value })
+                      }
                       placeholder="输入 Resource ID"
                     />
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">语言</span>
+                    <span className="text-xs text-text-dim w-[100px] shrink-0">
+                      语言
+                    </span>
                     <input
                       type="text"
                       className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
@@ -355,13 +398,20 @@ export function AudioModelPage() {
                     />
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">热词表 ID</span>
+                    <span className="text-xs text-text-dim w-[100px] shrink-0">
+                      热词表 ID
+                    </span>
                     <input
                       type="text"
                       className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
-                      value={(doubaoCfg.corpus as Record<string, string>)?.boosting_table_id || ""}
+                      value={
+                        (doubaoCfg.corpus as Record<string, string>)
+                          ?.boosting_table_id || ""
+                      }
                       onChange={(e) =>
-                        saveDoubao({ corpus: { boosting_table_id: e.target.value } })
+                        saveDoubao({
+                          corpus: { boosting_table_id: e.target.value },
+                        })
                       }
                       placeholder="输入热词表 ID"
                     />
@@ -373,10 +423,17 @@ export function AudioModelPage() {
                 {/* Toggle grid */}
                 <div className="space-y-3">
                   {doubaoToggles.map((t) => (
-                    <div key={t.key} className="flex items-center justify-between">
+                    <div
+                      key={t.key}
+                      className="flex items-center justify-between"
+                    >
                       <span className="text-sm text-text">{t.label}</span>
                       <Toggle
-                        checked={doubaoCfg[t.key] !== undefined ? !!doubaoCfg[t.key] : t.defaultVal}
+                        checked={
+                          doubaoCfg[t.key] !== undefined
+                            ? !!doubaoCfg[t.key]
+                            : t.defaultVal
+                        }
                         onChange={(v) => saveDoubao({ [t.key]: v })}
                       />
                     </div>
@@ -411,9 +468,11 @@ export function AudioModelPage() {
           {offlineModels.map((model) => {
             const progressState = downloadProgress[model.id];
             const isDownloaded =
-              downloaded.includes(model.id) || progressState?.status === "completed";
+              downloaded.includes(model.id) ||
+              progressState?.status === "completed";
             const isActive = provider === model.id;
-            const isBaseModel = model.category === "vad" || model.category === "punctuation";
+            const isBaseModel =
+              model.category === "vad" || model.category === "punctuation";
             const isDownloading = progressState?.status === "downloading";
             const isDownloadFailed = progressState?.status === "failed";
             const progress =
@@ -426,7 +485,9 @@ export function AudioModelPage() {
               ...(model.default_config || {}),
               ...((audioCfg[model.id] || {}) as Record<string, unknown>),
             };
-            const hasConfig = model.default_config && Object.keys(model.default_config).length > 0;
+            const hasConfig =
+              model.default_config &&
+              Object.keys(model.default_config).length > 0;
 
             return (
               <Section key={model.id}>
@@ -434,7 +495,15 @@ export function AudioModelPage() {
                   title={model.name}
                   subtitle={`${model.description}${memStr ? ` · 预计内存占用峰值：${memStr}` : ""}`}
                   action={
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 justify-end">
+                      {isDownloading && (
+                        <div className="h-1.5 w-24 rounded-full bg-fill-track overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-accent transition-[width]"
+                            style={{ width: `${progress ?? 0}%` }}
+                          />
+                        </div>
+                      )}
                       {isDownloaded ? (
                         <>
                           {!isBaseModel && (
@@ -445,39 +514,32 @@ export function AudioModelPage() {
                               }}
                             />
                           )}
-                          <Button size="sm" variant="danger" onClick={() => doDelete(model.id)}>
-                            删除
+                          <Button size="sm" onClick={() => doDelete(model.id)}>
+                            <Trash size={16} />
                           </Button>
                         </>
                       ) : (
-                        <div className="flex flex-col items-end gap-1 min-w-[112px]">
-                          <div className="flex items-center gap-2">
-                            {model.file_size && !isDownloading ? (
-                              <span className="text-xs text-text-muted">{model.file_size}MB</span>
-                            ) : null}
-                            <Button
-                              size="sm"
-                              variant={isDownloadFailed ? "danger" : "accent"}
-                              onClick={() => doDownload(model.id)}
-                              disabled={isDownloading}
-                            >
-                              {isDownloading
-                                ? progress !== undefined
-                                  ? `${progress}%`
-                                  : "下载中"
-                                : isDownloadFailed
-                                  ? "重试"
-                                  : "下载"}
-                            </Button>
-                          </div>
-                          {isDownloading && (
-                            <div className="h-1.5 w-full rounded-full bg-fill-track overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-accent transition-[width]"
-                                style={{ width: `${progress ?? 0}%` }}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-text-muted shrink-0">
+                            模型文件 {model.file_size}MB
+                          </span>
+
+                          <Button
+                            size="sm"
+                            onClick={() => doDownload(model.id)}
+                            disabled={isDownloading}
+                          >
+                            {isDownloading ? (
+                              <LoaderCircle
+                                size={16}
+                                className="animate-spin"
                               />
-                            </div>
-                          )}
+                            ) : isDownloadFailed ? (
+                              <RotateCcw size={16} />
+                            ) : (
+                              <CloudDownload size={16} />
+                            )}
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -486,43 +548,48 @@ export function AudioModelPage() {
                 <SectionContent>
                   {/* Features */}
                   {model.capabilities && (
-                    <div className="flex flex-wrap gap-3 text-xs mb-3">
+                    <div className="flex justify-between gap-3 text-sm ">
                       {Object.entries({
                         streaming: "流式输出",
                         hotwords: "热词库",
                         punctuation: "自动标点",
                         itn: "数字格式化",
                       }).map(([k, label]) => (
-                        <span
-                          key={k}
-                          className={model.capabilities?.[k] ? "text-success" : "text-text-muted"}
-                        >
-                          {model.capabilities?.[k] ? "✓" : "✗"} {label}
-                        </span>
-                      ))}
-                      {model.languages?.length ? (
-                        <span className="text-success max-w-[120px] truncate inline-block align-bottom">
-                          ✓ {model.languages.join(", ")}
-                        </span>
-                      ) : null}
-                      {hasConfig && (
-                        <span className="ml-auto">
-                          <button
-                            type="button"
-                            className="text-xs text-text-dim hover:text-text flex items-center gap-1"
-                            onClick={() => {
-                              setConfigExpanded((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(model.id)) next.delete(model.id);
-                                else next.add(model.id);
-                                return next;
-                              });
-                            }}
+                        <div key={k} className="flex gap-1 items-center">
+                          {model.capabilities?.[k] ? (
+                            <CircleCheck
+                              size={16}
+                              className="fill-success text-white"
+                            />
+                          ) : (
+                            <CircleX size={16} />
+                          )}
+                          <span
+                            className={
+                              model.capabilities?.[k]
+                                ? "text-success"
+                                : "text-text-muted"
+                            }
                           >
-                            <Cog size={16} />
-                            参数配置
-                          </button>
-                        </span>
+                            {label}
+                          </span>
+                        </div>
+                      ))}
+                      {hasConfig && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setConfigExpanded((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(model.id)) next.delete(model.id);
+                              else next.add(model.id);
+                              return next;
+                            });
+                          }}
+                        >
+                          <Cog size={16} />
+                          参数配置
+                        </Button>
                       )}
                     </div>
                   )}

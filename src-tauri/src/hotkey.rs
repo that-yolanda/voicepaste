@@ -295,11 +295,11 @@ fn keycode_to_key(kc: u32) -> Option<Key> {
     match kc {
         // Modifiers
         0x001D | 0x009D => Some(Key::ControlLeft), // Left/Right Ctrl → left for legacy compat
-        0x002E => Some(Key::ShiftLeft),             // Left Shift
-        0x0036 => Some(Key::ShiftRight),            // Right Shift
-        0x0038 => Some(Key::AltLeft),               // Left Alt
-        0x0138 => Some(Key::AltRight),              // Right Alt
-        0x0037 | 0x00D7 => Some(Key::MetaLeft),     // Left/Right Meta → left for legacy compat
+        0x002E => Some(Key::ShiftLeft),            // Left Shift
+        0x0036 => Some(Key::ShiftRight),           // Right Shift
+        0x0038 => Some(Key::AltLeft),              // Left Alt
+        0x0138 => Some(Key::AltRight),             // Right Alt
+        0x0037 | 0x00D7 => Some(Key::MetaLeft),    // Left/Right Meta → left for legacy compat
         // Special keys
         0x0020 => Some(Key::Space),
         0x0028 => Some(Key::Enter),
@@ -380,11 +380,18 @@ pub fn start_hotkey_listener(
     let tap = match Tap::new() {
         Ok(tap) => tap,
         Err(keytap::Error::PermissionDenied) => {
-            log_hotkey!(warn, "Accessibility permission not granted — global hotkeys disabled");
+            log_hotkey!(
+                warn,
+                "Accessibility permission not granted — global hotkeys disabled"
+            );
             return Ok(HotkeyManager { _config: config });
         }
         Err(e) => {
-            log_hotkey!(error, "keytap init failed: {:?} — global hotkeys disabled", e);
+            log_hotkey!(
+                error,
+                "keytap init failed: {:?} — global hotkeys disabled",
+                e
+            );
             return Ok(HotkeyManager { _config: config });
         }
     };
@@ -472,14 +479,15 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                     escape_was_pressed = false;
                 }
 
-                if cfg.escape_enabled && matches!(event_kind, EventKind::KeyDown(Key::Escape)) {
-                    if !escape_was_pressed {
-                        escape_was_pressed = true;
-                        let handle = app_handle.clone();
-                        tauri::async_runtime::spawn(async move {
-                            crate::cancel_recording(handle).await;
-                        });
-                    }
+                if cfg.escape_enabled
+                    && matches!(event_kind, EventKind::KeyDown(Key::Escape))
+                    && !escape_was_pressed
+                {
+                    escape_was_pressed = true;
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        crate::cancel_recording(handle).await;
+                    });
                 }
 
                 // Match hotkey bindings
@@ -490,11 +498,7 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                     (Some(new_idx), None) => {
                         active_binding = Some(new_idx);
                         let binding = &cfg.bindings[new_idx];
-                        spawn_hotkey_pressed(
-                            app_handle,
-                            &binding.mode,
-                            binding.prompt_id.clone(),
-                        );
+                        spawn_hotkey_pressed(app_handle, &binding.mode, binding.prompt_id.clone());
                     }
                     // Different binding activated (transition)
                     (Some(new_idx), Some(old_idx)) if new_idx != old_idx => {
@@ -502,11 +506,7 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                         spawn_hotkey_released(app_handle, &old.mode);
                         active_binding = Some(new_idx);
                         let binding = &cfg.bindings[new_idx];
-                        spawn_hotkey_pressed(
-                            app_handle,
-                            &binding.mode,
-                            binding.prompt_id.clone(),
-                        );
+                        spawn_hotkey_pressed(app_handle, &binding.mode, binding.prompt_id.clone());
                     }
                     // Binding deactivated (release)
                     (None, Some(old_idx)) => {
@@ -528,15 +528,13 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
 
 /// Find the first binding whose keys are all currently held.
 fn find_matching_binding(held: &HashSet<Key>, bindings: &[HotkeyBinding]) -> Option<usize> {
-    bindings.iter().position(|b| b.keys.iter().all(|k| held.contains(k)))
+    bindings
+        .iter()
+        .position(|b| b.keys.iter().all(|k| held.contains(k)))
 }
 
 /// Dispatch a hotkey pressed event to the async runtime.
-fn spawn_hotkey_pressed(
-    app_handle: &tauri::AppHandle,
-    mode: &str,
-    prompt_id: Option<String>,
-) {
+fn spawn_hotkey_pressed(app_handle: &tauri::AppHandle, mode: &str, prompt_id: Option<String>) {
     let handle = app_handle.clone();
     let mode = mode.to_string();
     tauri::async_runtime::spawn(async move {
@@ -599,9 +597,13 @@ pub fn reload_bindings(
                 mode: prompt.hotkey_mode.clone(),
                 prompt_id: Some(prompt.id.clone()),
             });
-        } else if !prompt.hotkey.is_sequence() || !prompt.hotkey.as_sequence().unwrap().is_empty()
-        {
-            log_hotkey!(warn, "Prompt '{}' hotkey {:?} uses unsupported keycodes, skipping", prompt.title, prompt.hotkey);
+        } else if !prompt.hotkey.is_sequence() || !prompt.hotkey.as_sequence().unwrap().is_empty() {
+            log_hotkey!(
+                warn,
+                "Prompt '{}' hotkey {:?} uses unsupported keycodes, skipping",
+                prompt.title,
+                prompt.hotkey
+            );
         }
     }
 
@@ -610,7 +612,11 @@ pub fn reload_bindings(
         return; // No change, skip re-registration and logging
     }
 
-    log_hotkey!(debug, "Hotkey bindings changed, loading {} binding(s)", new_bindings.len());
+    log_hotkey!(
+        debug,
+        "Hotkey bindings changed, loading {} binding(s)",
+        new_bindings.len()
+    );
     cfg.bindings = new_bindings;
 }
 
@@ -776,18 +782,9 @@ mod tests {
                 "ControlRight+T",
                 BTreeSet::from([Key::ControlRight, Key::T]),
             ),
-            (
-                "ShiftRight+T",
-                BTreeSet::from([Key::ShiftRight, Key::T]),
-            ),
-            (
-                "AltRight+T",
-                BTreeSet::from([Key::AltRight, Key::T]),
-            ),
-            (
-                "MetaRight+T",
-                BTreeSet::from([Key::MetaRight, Key::T]),
-            ),
+            ("ShiftRight+T", BTreeSet::from([Key::ShiftRight, Key::T])),
+            ("AltRight+T", BTreeSet::from([Key::AltRight, Key::T])),
+            ("MetaRight+T", BTreeSet::from([Key::MetaRight, Key::T])),
         ];
         for (input, expected) in tests {
             assert_eq!(
@@ -1027,7 +1024,9 @@ mod tests {
         let held: HashSet<Key> = [Key::ControlLeft, Key::A].into_iter().collect();
         assert_eq!(find_matching_binding(&held, &bindings), None);
 
-        let held: HashSet<Key> = [Key::ControlLeft, Key::ShiftLeft, Key::A].into_iter().collect();
+        let held: HashSet<Key> = [Key::ControlLeft, Key::ShiftLeft, Key::A]
+            .into_iter()
+            .collect();
         assert_eq!(find_matching_binding(&held, &bindings), Some(0));
     }
 
@@ -1101,10 +1100,7 @@ mod tests {
         let prompt = make_prompt_item("legacy", make_num_seq(&[29, 4]));
         let bindings = build_initial_bindings("", "toggle", &[prompt]);
         assert_eq!(bindings.len(), 1);
-        assert_eq!(
-            bindings[0].keys,
-            BTreeSet::from([Key::ControlLeft, Key::A])
-        );
+        assert_eq!(bindings[0].keys, BTreeSet::from([Key::ControlLeft, Key::A]));
     }
 
     #[test]

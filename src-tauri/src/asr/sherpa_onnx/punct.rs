@@ -23,10 +23,7 @@ impl PunctuationProcessor {
     pub fn new(model_dir: &Path, num_threads: u32) -> Result<Self, String> {
         let model_path = model_dir.join("model.int8.onnx");
         if !model_path.exists() {
-            return Err(format!(
-                "标点模型文件不存在: {}",
-                model_path.display()
-            ));
+            return Err(format!("标点模型文件不存在: {}", model_path.display()));
         }
 
         let config = OfflinePunctuationConfig {
@@ -47,7 +44,9 @@ impl PunctuationProcessor {
     /// Add punctuation to the given text.
     /// Returns the punctuated text, or the original text if punctuation fails.
     pub fn add_punctuation(&self, text: &str) -> String {
-        self.inner.add_punctuation(text).unwrap_or_else(|| text.to_string())
+        self.inner
+            .add_punctuation(text)
+            .unwrap_or_else(|| text.to_string())
     }
 }
 

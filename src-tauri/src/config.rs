@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_norway;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -619,8 +618,7 @@ impl ConfigManager {
     pub fn save_config(&self, config: &serde_norway::Value) -> Result<(), String> {
         let yaml = serde_norway::to_string(config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        fs::write(&self.config_path, yaml)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+        fs::write(&self.config_path, yaml).map_err(|e| format!("Failed to write config: {}", e))?;
         // Re-read from disk to populate cache, avoiding JSON→YAML value round-trip
         // deserialization issues that can cause silent fallback to defaults.
         *self.cached_config.write().unwrap() = Self::read_config_from_disk(&self.config_path);

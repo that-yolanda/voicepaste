@@ -52,7 +52,15 @@
     }
   },
   "files": {
-    "includes": ["**", "!**/node_modules", "!**/out", "!**/dist", "!**/src-tauri/target"]
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/out",
+      "!**/dist",
+      "!**/src-tauri/target",
+      "!**/src-tauri/gen"
+    ],
+    "ignoreUnknown": true
   },
   "vcs": {
     "enabled": true,

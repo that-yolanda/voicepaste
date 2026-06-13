@@ -30,14 +30,12 @@ pub(crate) fn build_qwen3_asr_recognizer(
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
 
-    let conv_frontend = p("conv_frontend")
-        .ok_or_else(|| format!("模型 {} 缺少 conv_frontend 文件", entry.id))?;
-    let encoder = p("encoder")
-        .ok_or_else(|| format!("模型 {} 缺少 encoder 文件", entry.id))?;
-    let decoder = p("decoder")
-        .ok_or_else(|| format!("模型 {} 缺少 decoder 文件", entry.id))?;
-    let tokenizer = p("tokenizer")
-        .ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
+    let conv_frontend =
+        p("conv_frontend").ok_or_else(|| format!("模型 {} 缺少 conv_frontend 文件", entry.id))?;
+    let encoder = p("encoder").ok_or_else(|| format!("模型 {} 缺少 encoder 文件", entry.id))?;
+    let decoder = p("decoder").ok_or_else(|| format!("模型 {} 缺少 decoder 文件", entry.id))?;
+    let tokenizer =
+        p("tokenizer").ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
 
     config.model_config.qwen3_asr = OfflineQwen3ASRModelConfig {
         conv_frontend: Some(conv_frontend),

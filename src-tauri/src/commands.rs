@@ -266,7 +266,7 @@ fn compute_audio_level(samples: &[f32]) -> Option<f64> {
     for &sample in samples {
         let s = sample as f64;
         sum_squares += s * s;
-        peak = peak.max(s.abs() as f64);
+        peak = peak.max(s.abs());
     }
     let rms = (sum_squares / samples.len() as f64).sqrt();
     Some((rms * 13.0 + peak * 2.8).powf(0.82).min(1.0))
@@ -284,8 +284,13 @@ pub async fn send_audio_chunk(
     use std::sync::atomic::{AtomicU64, Ordering};
     static CHUNK_COUNT: AtomicU64 = AtomicU64::new(0);
     let n = CHUNK_COUNT.fetch_add(1, Ordering::Relaxed);
-    if n == 0 || n % 50 == 0 {
-        log_audio!(debug, "Received chunk #{} ({} bytes base64)", n, base64_chunk.len());
+    if n == 0 || n.is_multiple_of(50) {
+        log_audio!(
+            debug,
+            "Received chunk #{} ({} bytes base64)",
+            n,
+            base64_chunk.len()
+        );
     }
 
     let session = state.asr_session.lock().await;
@@ -571,8 +576,7 @@ pub async fn get_model_registry(app: AppHandle) -> Result<serde_json::Value, Str
         .resource_dir()
         .map_err(|e| format!("Failed to resolve resource dir: {}", e))?;
     let registry = model::load_registry(&data_dir, &resource_dir);
-    serde_json::to_value(&registry)
-        .map_err(|e| format!("Failed to serialize registry: {}", e))
+    serde_json::to_value(&registry).map_err(|e| format!("Failed to serialize registry: {}", e))
 }
 
 /// Get list of downloaded model IDs.
@@ -593,10 +597,7 @@ pub async fn get_downloaded_models(app: AppHandle) -> Result<serde_json::Value, 
 
 /// Download a model by ID.
 #[tauri::command]
-pub async fn download_model(
-    app: AppHandle,
-    model_id: String,
-) -> Result<serde_json::Value, String> {
+pub async fn download_model(app: AppHandle, model_id: String) -> Result<serde_json::Value, String> {
     let data_dir = app
         .path()
         .app_data_dir()

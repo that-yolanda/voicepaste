@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 
 use super::punct::PunctuationProcessor;
 use super::vad::VadProcessor;
-use super::{append_text, send_transcript, AsrEvent, AsrSession, SAMPLE_RATE, WorkerCommand};
+use super::{append_text, send_transcript, AsrEvent, AsrSession, WorkerCommand, SAMPLE_RATE};
 
 /// Interval between interim decodes (200ms).
 const INTERIM_INTERVAL_MS: u128 = 200;
@@ -232,12 +232,7 @@ fn run_simulated_streaming_worker(
 
                 // 2. Process completed VAD segments.
                 if !segments.is_empty() {
-                    process_segments(
-                        &recognizer,
-                        segments,
-                        &mut accumulated,
-                        &event_tx,
-                    );
+                    process_segments(&recognizer, segments, &mut accumulated, &event_tx);
 
                     // VAD produced final segments → reset the interim buffer.
                     speech_buffer.clear();
@@ -256,10 +251,8 @@ fn run_simulated_streaming_worker(
                     }
 
                     // Interim decode every ~200 ms.
-                    if last_interim.elapsed().as_millis() >= INTERIM_INTERVAL_MS
-                    {
-                        let partial =
-                            interim_decode(&recognizer, &speech_buffer);
+                    if last_interim.elapsed().as_millis() >= INTERIM_INTERVAL_MS {
+                        let partial = interim_decode(&recognizer, &speech_buffer);
                         if !partial.is_empty() && partial != last_partial {
                             last_partial = partial.clone();
                             let final_prefix = if accumulated.is_empty() {
@@ -267,11 +260,7 @@ fn run_simulated_streaming_worker(
                             } else {
                                 format!("{} ", accumulated)
                             };
-                            send_transcript(
-                                &event_tx,
-                                final_prefix,
-                                partial,
-                            );
+                            send_transcript(&event_tx, final_prefix, partial);
                         }
                         last_interim = Instant::now();
                     }
@@ -284,12 +273,7 @@ fn run_simulated_streaming_worker(
             WorkerCommand::Finish(reply_tx) => {
                 // Flush remaining VAD segments.
                 let remaining = vad.flush();
-                process_segments(
-                    &recognizer,
-                    remaining,
-                    &mut accumulated,
-                    &event_tx,
-                );
+                process_segments(&recognizer, remaining, &mut accumulated, &event_tx);
 
                 // Fallback: if nothing was recognized, decode the raw buffer.
                 if accumulated.is_empty() && !speech_buffer.is_empty() {

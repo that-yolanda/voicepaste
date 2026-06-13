@@ -25,20 +25,18 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "dev:react": "vite",
-    "build:react": "vite build",
+    "dev:web": "vite",
+    "build:web": "vite build",
     "pack": "tsx --env-file=.env scripts/pack.ts",
     "clean": "tsx scripts/clean.ts",
-    "lint": "biome lint ./web",
-    "format": "biome format --write ./web",
-    "check": "biome check --write ./web",
-    "lint:ci": "biome ci ./web",
+    "lint": "biome lint . && cargo clippy --manifest-path src-tauri/Cargo.toml",
+    "lint:ci": "biome ci . && cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "format": "biome check --write . && cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "check": "biome check --write . && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml",
     "test": "npx vitest run && cargo test --manifest-path src-tauri/Cargo.toml",
-    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:watch": "npx vitest",
     "test:asr": "cargo test --manifest-path src-tauri/Cargo.toml --features asr-integration",
-    "test:llm": "cargo test --manifest-path src-tauri/Cargo.toml --features llm-integration",
-    "test:frontend": "npx vitest run",
-    "test:watch": "npx vitest"
+    "test:llm": "cargo test --manifest-path src-tauri/Cargo.toml --features llm-integration"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",

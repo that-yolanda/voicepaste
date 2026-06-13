@@ -6,8 +6,8 @@ mod commands;
 mod config;
 mod hotkey;
 mod hotword;
-mod model;
 mod llm;
+mod model;
 mod overlay;
 mod paste;
 mod stats;
@@ -21,9 +21,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{
-    image::Image,
-    tray::TrayIconBuilder,
-    App, AppHandle, Emitter, Listener, Manager, RunEvent,
+    image::Image, tray::TrayIconBuilder, App, AppHandle, Emitter, Listener, Manager, RunEvent,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -86,8 +84,7 @@ pub fn run() {
             } else {
                 log::LevelFilter::Info
             };
-            log::set_boxed_logger(Box::new(voice_logger))
-                .expect("Failed to set global logger");
+            log::set_boxed_logger(Box::new(voice_logger)).expect("Failed to set global logger");
             log::set_max_level(log_level);
 
             // Read startup config before config_manager is moved into app state.
@@ -102,7 +99,8 @@ pub fn run() {
                 .unwrap_or("system")
                 .to_string();
 
-            let app_state = create_app_state(config_manager, hotword_manager, log_path, stats_service);
+            let app_state =
+                create_app_state(config_manager, hotword_manager, log_path, stats_service);
             app.manage(app_state);
 
             // Recording state toggle (used by global shortcut handler)
@@ -197,12 +195,12 @@ pub fn run() {
                 }
                 set_dock_visible(false);
             }
-            RunEvent::ExitRequested { code, api, .. } => {
+            RunEvent::ExitRequested { code, api, .. }
                 // Keep the app running in the tray for user-initiated window closes,
                 // but allow tray "quit" to call app.exit(0).
-                if code.is_none() {
-                    api.prevent_exit();
-                }
+                if code.is_none() =>
+            {
+                api.prevent_exit();
             }
             _ => {}
         });
@@ -251,9 +249,8 @@ fn position_overlay(app_handle: &AppHandle) {
                 overlay_width,
                 overlay_height,
             )));
-            let _ = overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(
-                x, y,
-            )));
+            let _ =
+                overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
         }
     }
 }
@@ -466,7 +463,10 @@ fn setup_keytap_hotkeys(app: &mut App) -> Result<(), Box<dyn std::error::Error>>
     let app_inner: std::sync::Arc<app_state::AppInner> =
         (*app.state::<std::sync::Arc<app_state::AppInner>>()).clone();
 
-    let config = app_inner.config_manager.load_config().map_err(|e| format!("{}", e))?;
+    let config = app_inner
+        .config_manager
+        .load_config()
+        .map_err(|e| e.to_string())?;
     let hotkey_str = match &config.app.hotkey {
         serde_norway::Value::String(s) => s.clone(),
         _ => String::new(),
@@ -580,10 +580,13 @@ async fn start_recording(app_handle: AppHandle) {
                 let _ = overlay.show();
             }
             set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-            let _ = app_handle.emit("overlay:event", serde_json::json!({
-                "type": "hint",
-                "payload": { "text": e, "level": "error", "variant": "text" }
-            }));
+            let _ = app_handle.emit(
+                "overlay:event",
+                serde_json::json!({
+                    "type": "hint",
+                    "payload": { "text": e, "level": "error", "variant": "text" }
+                }),
+            );
             // Auto-hide overlay after delay so user can read the error
             let delayed_handle = app_handle.clone();
             let delayed_inner: Arc<app_state::AppInner> = Arc::clone(&*app_inner);
@@ -651,7 +654,12 @@ async fn start_recording(app_handle: AppHandle) {
 
     // 3. Create ASR session (engine chosen by model ID → registry engine)
     let hotwords = app_inner.hotword_manager.active_words();
-    log_rec!(debug, "Active hotwords ({}): {:?}", hotwords.len(), hotwords);
+    log_rec!(
+        debug,
+        "Active hotwords ({}): {:?}",
+        hotwords.len(),
+        hotwords
+    );
 
     let resource_dir = app_handle
         .path()
@@ -719,9 +727,7 @@ async fn start_recording(app_handle: AppHandle) {
 
             // For non-streaming engines without simulated streaming,
             // show a "recording" hint since partial results won't appear.
-            if entry.map_or(false, |e| !e.capabilities.streaming)
-                && !config.stream_simulate()
-            {
+            if entry.is_some_and(|e| !e.capabilities.streaming) && !config.stream_simulate() {
                 let _ = app_handle.emit(
                     "overlay:event",
                     serde_json::json!({
@@ -751,8 +757,7 @@ async fn start_recording(app_handle: AppHandle) {
             // Auto-hide the overlay after a short delay so the user can read the
             // error.  Guard: only hide if still idle (not in a new session).
             let delayed_handle = app_handle.clone();
-            let delayed_inner: Arc<app_state::AppInner> =
-                Arc::clone(&*app_inner);
+            let delayed_inner: Arc<app_state::AppInner> = Arc::clone(&*app_inner);
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(Duration::from_secs(3)).await;
                 let still_idle = {
@@ -803,8 +808,16 @@ async fn stop_recording(app_handle: AppHandle) {
 
         let mut trimmed = text.trim().to_string();
         if !trimmed.is_empty() {
-            log_rec!(info, "Final text received ({} chars)", trimmed.chars().count());
-            log_rec!(debug, "Final text preview: {:?}", trimmed.chars().take(60).collect::<String>());
+            log_rec!(
+                info,
+                "Final text received ({} chars)",
+                trimmed.chars().count()
+            );
+            log_rec!(
+                debug,
+                "Final text preview: {:?}",
+                trimmed.chars().take(60).collect::<String>()
+            );
 
             // 5. Load config for LLM / behavior settings
             let config = app_inner.config_manager.load_config().ok();
@@ -859,10 +872,18 @@ async fn stop_recording(app_handle: AppHandle) {
                         }
                     }
 
-                    log_rec!(debug, "Applying LLM structure_text (prompt_id: {:?})", active_prompt_id);
+                    log_rec!(
+                        debug,
+                        "Applying LLM structure_text (prompt_id: {:?})",
+                        active_prompt_id
+                    );
                     match crate::llm::call_llm_api(&config.llm, &trimmed, &system_prompt).await {
                         Ok(result) => {
-                            log_rec!(info, "LLM polishing succeeded ({} chars)", result.chars().count());
+                            log_rec!(
+                                info,
+                                "LLM polishing succeeded ({} chars)",
+                                result.chars().count()
+                            );
                             result
                         }
                         Err(e) => {
@@ -1052,7 +1073,12 @@ async fn forward_asr_events(
                 log_events!(info, "ASR connection opened");
             }
             AsrEvent::Close { code, reason } => {
-                log_events!(info, "ASR connection closed (code={:?}, reason={:?})", code, reason);
+                log_events!(
+                    info,
+                    "ASR connection closed (code={:?}, reason={:?})",
+                    code,
+                    reason
+                );
                 // If connection closed during recording, auto-stop
                 // Extract the flag eagerly to avoid holding MutexGuard across .await
                 let was_recording = app

@@ -32,7 +32,12 @@ interface Schema {
   minItems?: number;
 }
 
-function validate(schema: Schema | boolean | null | undefined, value: unknown, location: string, errors: string[]): void {
+function validate(
+  schema: Schema | boolean | null | undefined,
+  value: unknown,
+  location: string,
+  errors: string[],
+): void {
   if (schema === true || schema == null) return;
   if (schema === false) {
     errors.push(`${location}: value is not allowed`);
@@ -42,9 +47,7 @@ function validate(schema: Schema | boolean | null | undefined, value: unknown, l
   if (schema.type) {
     const expectedTypes = Array.isArray(schema.type) ? schema.type : [schema.type];
     if (!expectedTypes.some((expected) => matchesType(value, expected))) {
-      errors.push(
-        `${location}: expected ${expectedTypes.join(" or ")}, got ${typeOf(value)}`,
-      );
+      errors.push(`${location}: expected ${expectedTypes.join(" or ")}, got ${typeOf(value)}`);
       return;
     }
   }
@@ -53,14 +56,11 @@ function validate(schema: Schema | boolean | null | undefined, value: unknown, l
     errors.push(`${location}: expected one of ${schema.enum.join(", ")}`);
   }
 
-  if (
-    schema.type === "object" ||
-    (schema.properties && typeOf(value) === "object")
-  ) {
+  if (schema.type === "object" || (schema.properties && typeOf(value) === "object")) {
     const required = schema.required || [];
     const obj = value as Record<string, unknown>;
     for (const key of required) {
-      if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+      if (!Object.hasOwn(obj, key)) {
         errors.push(`${location}.${key}: required property is missing`);
       }
     }
@@ -86,9 +86,9 @@ function validate(schema: Schema | boolean | null | undefined, value: unknown, l
       errors.push(`${location}: expected at least ${schema.minItems} item(s)`);
     }
     if (schema.items) {
-      arr.forEach((item, index) =>
-        validate(schema.items as Schema, item, `${location}[${index}]`, errors),
-      );
+      arr.forEach((item, index) => {
+        validate(schema.items as Schema, item, `${location}[${index}]`, errors);
+      });
     }
   }
 }
@@ -106,9 +106,7 @@ for (const [dataPath, schemaPath] of targets) {
   const errors: string[] = [];
 
   if (data && typeof data === "object" && !Array.isArray(data) && "$schema" in data) {
-    errors.push(
-      "$: data files must not include $schema; schemas are mapped by script",
-    );
+    errors.push("$: data files must not include $schema; schemas are mapped by script");
   }
 
   validate(schema, data, "$", errors);

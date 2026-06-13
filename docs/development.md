@@ -4,18 +4,28 @@
 
 ```bash
 pnpm install
-pnpm dev
+pnpm dev                # Run the full Tauri app
+pnpm dev:web            # Run only the Vite dev server (frontend hot-reload)
 ```
 
-## Build
+## Build & Utilities
 
 ```bash
-pnpm build              # Production build (tauri build)
+pnpm build:web          # Build frontend only (Vite → web/dist)
 pnpm pack               # Build distributable packages
 pnpm pack -s            # Build with macOS code signing and notarization
 pnpm pack -p apple_aarch64          # macOS ARM64 only
 pnpm pack -s -p apple_aarch64,win_x64  # Signed, specific platforms
 pnpm clean              # Remove build artifacts and caches
+```
+
+## Lint & Format
+
+```bash
+pnpm lint               # Full-stack: biome lint + cargo clippy
+pnpm format             # Full-stack: biome check --write + cargo fmt
+pnpm check              # Full-stack: format + cargo clippy
+pnpm lint:ci            # CI strict mode (read-only)
 ```
 
 Pack platform keys: `apple_aarch64`, `apple_x64`, `win_x64`.
@@ -26,7 +36,7 @@ Production builds with `-s` require code signing and notarization. Configure App
 
 ## Notes
 
-- The project uses Tauri v2 with a vanilla JS frontend (no framework, no bundler).
+- The project uses Tauri v2 with a React + TypeScript frontend, built by Vite, styled with Tailwind CSS.
 - `config.yaml` is ignored and meant for local credentials.
 - `config.yaml.example` is the shipped default template for packaged builds.
 - Current supported desktop platforms are macOS and Windows.
@@ -34,21 +44,19 @@ Production builds with `-s` require code signing and notarization. Configure App
 ## Testing
 
 ```bash
-pnpm test             # Run all tests (Rust + frontend)
-pnpm test:rust        # Run Rust unit tests only
+pnpm test             # Run all tests (vitest + cargo test)
+pnpm test:watch       # Run frontend tests in watch mode
 pnpm test:asr         # Run ASR integration tests (requires sherpa-onnx models)
 pnpm test:llm         # Run LLM integration tests (requires API keys)
-pnpm test:frontend    # Run frontend unit tests only
-pnpm test:watch       # Run frontend tests in watch mode
 ```
 
 ### Test Strategy
 
 | Layer | Location | Trigger | Scope |
 |-------|----------|---------|-------|
-| **Rust unit tests** | Inline at bottom of each `.rs` file: `#[cfg(test)] mod tests { ... }` | `pnpm test:rust` | Pure logic — parsing, validation, serialization. Uses `tempfile` for file I/O isolation. No network, no models, no API keys. Runs in CI. |
+| **Rust unit tests** | Inline at bottom of each `.rs` file: `#[cfg(test)] mod tests { ... }` | `cargo test` | Pure logic — parsing, validation, serialization. Uses `tempfile` for file I/O isolation. No network, no models, no API keys. Runs in CI. |
 | **Rust integration tests** | `src-tauri/src/tests/` (gated by Cargo features) | `pnpm test:asr` / `pnpm test:llm` | Requires external resources — sherpa-onnx model files (`asr-integration` feature) or LLM API keys (`llm-integration` feature). NOT run in CI. |
-| **Frontend tests** | `web/tests/` (Vitest + jsdom) | `pnpm test:frontend` | Component logic, pure functions. Mocks `window.__TAURI__` and Web APIs via `web/tests/helpers/`. |
+| **Frontend tests** | `web/tests/` (Vitest + jsdom) | `npx vitest run` | Component logic, pure functions. Tests organized by module (`bridge/`, `lib/`) with colocated mocks. |
 
 ### Rust Unit Test Conventions
 
@@ -75,7 +83,7 @@ pnpm test:watch       # Run frontend tests in watch mode
 |-------|-------------|
 | Core feature development | Unit tests for all pure logic functions |
 | Cross-module features | Integration tests as needed (model inference, API calls) |
-| Before code review | All unit tests pass (`pnpm test:rust`, `pnpm test:frontend`) |
+| Before code review | All unit tests pass (`cargo test`, `npx vitest run`) |
 | Before release | All unit + integration tests pass (`pnpm test`, `pnpm test:asr`, `pnpm test:llm`) |
 
 ## Project Structure
@@ -86,10 +94,11 @@ voicepaste/
 │   ├── icon.png         #   Master app icon (source for `tauri icon`)
 │   ├── sounds/          #   start.mp3, end.mp3
 │   └── trayTemplate.png #   macOS tray icon source
-├── scripts/             # Build and utility scripts
-│   ├── pack.js          #   Main packaging script (-s, -p flags)
-│   ├── clean.js         #   Artifact cleanup
-│   └── extract-icons.js #   Lucide icon extraction (beforeBuildCommand)
+├── scripts/             # Build and utility scripts (TypeScript)
+│   ├── pack.ts          #   Main packaging script (-s, -p flags)
+│   ├── clean.ts         #   Artifact cleanup
+│   ├── prepare-assets.ts #  Pre-build asset generation (icons, tray)
+│   └── validate-json.ts #   Schema validation for JSON configs
 ├── src-tauri/           # Rust backend (Tauri v2)
 │   ├── src/
 │   │   ├── lib.rs       #   App entry, state machine & hotkey management
@@ -117,16 +126,20 @@ voicepaste/
 │   ├── capabilities/    #   Tauri permission capabilities
 │   ├── Cargo.toml       #   Rust dependencies
 │   └── tauri.conf.json  #   Tauri configuration
-├── web/                 # Frontend (WebView)
+├── web/                 # Frontend (React + TypeScript + Vite + Tailwind)
 │   ├── index.html       #   Floating overlay window
-│   ├── app.js           #   Audio capture & text display
 │   ├── settings.html    #   Settings page
-│   ├── settings.js      #   Config editor, update UI & logic
-│   ├── settings.css     #   Styles & theme variables
-│   ├── theme.css        #   Light/dark theme definitions
-│   ├── tauri-bridge.js  #   IPC bridge (replaces Electron preload)
-│   ├── lucide-icons.js  #   SVG icon definitions (auto-generated)
-│   └── tests/           #   Frontend unit tests (Vitest)
+│   ├── styles.css       #   Global styles with Tailwind directives
+│   ├── src/
+│   │   ├── bridge/      #     Tauri IPC bridge (settings, overlay)
+│   │   ├── lib/         #     Pure utilities (audio, format, hotkey, model, sound)
+│   │   ├── types/       #     TypeScript type definitions
+│   │   ├── styles/      #     Shared CSS
+│   │   └── ui/          #     React components
+│   │       ├── components/ #   UI primitives (Button, Input, Toggle, Modal, etc.)
+│   │       ├── layout/  #     PageLayout, Sidebar
+│   │       └── pages/   #     Settings pages (AudioModel, Hotkey, LLM, etc.)
+│   └── tests/           #   Frontend unit tests (Vitest, organized as bridge/ + lib/)
 ├── docs/                # Documentation, screenshots
 ├── build/               # Intermediate build artifacts (gitignored)
 ├── dist/                # Final distribution artifacts (gitignored)
@@ -137,12 +150,14 @@ voicepaste/
 
 ## Tech Stack
 
-- Tauri v2 (Rust backend + WebView frontend)
-- ByteDance Doubao ASR over WebSocket
-- gzip-compressed binary framing
-- AppleScript on macOS and PowerShell on Windows for paste simulation
-- `keytap` crate for global hotkey registration
-- `tauri-plugin-updater` for auto-updates via GitHub Releases
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS 4
+- **Backend**: Tauri v2 (Rust)
+- **ASR**: ByteDance Doubao streaming ASR over WebSocket (gzip-compressed binary framing), plus sherpa-onnx local models (SenseVoice, Zipformer, FunASR-Nano, Qwen3-ASR)
+- **Lint & Format**: Biome (TS/TSX/JSON/CSS), cargo fmt + clippy (Rust)
+- **Testing**: Vitest (frontend), cargo test (Rust)
+- **Paste**: AppleScript on macOS, PowerShell on Windows
+- **Hotkey**: `keytap` crate for global hotkey registration
+- **Auto-update**: `tauri-plugin-updater` via GitHub Releases
 
 ## Workflow
 

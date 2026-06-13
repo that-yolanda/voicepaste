@@ -120,7 +120,7 @@ mod macos {
         dot_layer: Retained<AnyObject>, // CALayer for the indicator dot
         ripple_layer: Retained<AnyObject>, // CALayer halo behind the dot (recording ripple)
         fade_mask: Retained<AnyObject>, // CAGradientLayer for the multi-line top fade
-        applied_variant: String, // "" (auto/inherit) | "light" | "dark"
+        applied_variant: String,        // "" (auto/inherit) | "light" | "dark"
     }
 
     thread_local! {
@@ -189,7 +189,10 @@ mod macos {
                     model.wave_heights = [WAVE_MIN_H; WAVE_N];
                 }
                 "state" => {
-                    if let Some(s) = payload.and_then(|p| p.get("state")).and_then(|v| v.as_str()) {
+                    if let Some(s) = payload
+                        .and_then(|p| p.get("state"))
+                        .and_then(|v| v.as_str())
+                    {
                         model.app_state = s.into();
                         // Mirror app.js: entering these states clears info-level hints.
                         if matches!(s, "idle" | "connecting" | "recording" | "finishing")
@@ -241,7 +244,10 @@ mod macos {
                     {
                         model.style = s.into();
                     }
-                    if let Some(t) = payload.and_then(|p| p.get("theme")).and_then(|v| v.as_str()) {
+                    if let Some(t) = payload
+                        .and_then(|p| p.get("theme"))
+                        .and_then(|v| v.as_str())
+                    {
                         model.theme = t.into();
                     }
                 }
@@ -294,10 +300,18 @@ mod macos {
         let visual_state = model.app_state.as_str();
         let zh = true; // app is Chinese-first; matches app.js isZhLocale default.
         if visual_state == "connecting" {
-            return if zh { "准备中…".into() } else { "Preparing…".into() };
+            return if zh {
+                "准备中…".into()
+            } else {
+                "Preparing…".into()
+            };
         }
         if visual_state == "finishing" && model.hint_variant == "progress" {
-            return if zh { "思考中…".into() } else { "Thinking…".into() };
+            return if zh {
+                "思考中…".into()
+            } else {
+                "Thinking…".into()
+            };
         }
         model.hint_text.clone()
     }
@@ -317,7 +331,10 @@ mod macos {
 
         VIEWS.with(|v| {
             let mut slot = v.borrow_mut();
-            let recreate = slot.as_ref().map(|x| x.glass.kind() != want).unwrap_or(true);
+            let recreate = slot
+                .as_ref()
+                .map(|x| x.glass.kind() != want)
+                .unwrap_or(true);
             if !recreate {
                 return;
             }
@@ -633,11 +650,7 @@ mod macos {
         let font = NSFont::systemFontOfSize(FONT_SIZE);
         let full = NSRange::new(0, combined.encode_utf16().count());
         unsafe {
-            attr.addAttribute_value_range(
-                objc2_app_kit::NSFontAttributeName,
-                &font,
-                full,
-            );
+            attr.addAttribute_value_range(objc2_app_kit::NSFontAttributeName, &font, full);
             let final_len = final_s.encode_utf16().count();
             if final_len > 0 {
                 attr.addAttribute_value_range(
@@ -708,7 +721,9 @@ mod macos {
             if has_hint {
                 let s = NSString::from_str(&hint);
                 views.label.setStringValue(&s);
-                views.label.setTextColor(Some(&hint_color(&model.hint_level)));
+                views
+                    .label
+                    .setTextColor(Some(&hint_color(&model.hint_level)));
             } else {
                 let attr = transcript_attr(model);
                 views.label.setAttributedStringValue(&attr);
@@ -719,12 +734,14 @@ mod macos {
             views.label.setUsesSingleLineMode(true);
             views.label.setMaximumNumberOfLines(1);
             views.label.setPreferredMaxLayoutWidth(0.0);
-            views.label.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
+            views
+                .label
+                .setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
             let natural = views.label.intrinsicContentSize();
             let measured_w = natural.width.ceil();
 
-            let lock_layout = !has_hint
-                && matches!(model.app_state.as_str(), "recording" | "finishing");
+            let lock_layout =
+                !has_hint && matches!(model.app_state.as_str(), "recording" | "finishing");
             let want_wrap = !has_hint && (model.layout_wrap || measured_w > SINGLE_LINE_LIMIT);
 
             // Waveform shows on the right while recording, even when a hint
@@ -768,7 +785,9 @@ mod macos {
             let (pill_h, full_h, visible_text_h) = if model.layout_wrap {
                 views.label.setUsesSingleLineMode(false);
                 views.label.setMaximumNumberOfLines(0);
-                views.label.setLineBreakMode(NSLineBreakMode::ByWordWrapping);
+                views
+                    .label
+                    .setLineBreakMode(NSLineBreakMode::ByWordWrapping);
                 views.label.setPreferredMaxLayoutWidth(text_area_w);
                 let full = views.label.intrinsicContentSize().height.ceil();
                 let max_visible = one_line_h * (MAX_LINES as f64) + 4.0;

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 const MAX_DAILY_COUNTS_DAYS: i64 = 182;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Stats {
     #[serde(rename = "firstUsedAt")]
     pub first_used_at: Option<String>,
@@ -16,17 +16,6 @@ pub struct Stats {
     pub total_characters: u64,
     #[serde(rename = "dailyCounts")]
     pub daily_counts: HashMap<String, u64>,
-}
-
-impl Default for Stats {
-    fn default() -> Self {
-        Stats {
-            first_used_at: None,
-            total_sessions: 0,
-            total_characters: 0,
-            daily_counts: HashMap::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -300,7 +289,8 @@ mod tests {
         let _ = fs::create_dir_all(&history_dir);
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         let history_file = history_dir.join(format!("{}.jsonl", today));
-        let entry = serde_json::json!({"ts": "2025-06-01T12:00:00+00:00", "text": "hello", "chars": 5});
+        let entry =
+            serde_json::json!({"ts": "2025-06-01T12:00:00+00:00", "text": "hello", "chars": 5});
         let _ = fs::write(&history_file, format!("{}\n", entry));
 
         let svc = StatsService::new(dir.path());
@@ -332,10 +322,7 @@ mod tests {
         );
 
         let svc_path = dir.path().join("stats.json");
-        let _ = fs::write(
-            &svc_path,
-            serde_json::to_string(&Stats::default()).unwrap(),
-        );
+        let _ = fs::write(&svc_path, serde_json::to_string(&Stats::default()).unwrap());
 
         let mut svc = StatsService::new(dir.path());
         svc.delete_history(&ts);

@@ -29,7 +29,10 @@ pub async fn check_for_update(
     pending: tauri::State<'_, PendingUpdate>,
     inner: tauri::State<'_, AppState>,
 ) -> Result<UpdateInfo, String> {
-    let config = inner.config_manager.load_config().map_err(|e| e.to_string())?;
+    let config = inner
+        .config_manager
+        .load_config()
+        .map_err(|e| e.to_string())?;
     let beta = config.app.beta_updates;
 
     let suffix = if beta { "-beta" } else { "" };
@@ -37,10 +40,15 @@ pub async fn check_for_update(
         "https://github.com/that-yolanda/voicepaste/releases/latest/download/latest{suffix}.json"
     );
 
-    log_update!(info, "Checking for{} updates via {}", if beta { " beta" } else { "" }, endpoint);
+    log_update!(
+        info,
+        "Checking for{} updates via {}",
+        if beta { " beta" } else { "" },
+        endpoint
+    );
 
-    let url = url::Url::parse(&endpoint)
-        .map_err(|e| format!("Invalid update endpoint URL: {}", e))?;
+    let url =
+        url::Url::parse(&endpoint).map_err(|e| format!("Invalid update endpoint URL: {}", e))?;
     let update = app
         .updater_builder()
         .endpoints(vec![url])
@@ -56,7 +64,7 @@ pub async fn check_for_update(
             let info = UpdateInfo {
                 available: true,
                 version: Some(update.version.clone()),
-                date: update.date.clone().map(|d| d.to_string()),
+                date: update.date.map(|d| d.to_string()),
                 notes: update.body.clone(),
             };
             log_update!(info, "Update available: v{}", update.version);

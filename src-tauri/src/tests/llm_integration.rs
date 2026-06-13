@@ -29,8 +29,7 @@ fn test_llm_config_from_env() {
     // It should succeed with or without actual API keys.
     match env::var("LLM_API_KEY") {
         Ok(key) if !key.is_empty() => {
-            let (provider, api_key, _model) =
-                llm_config_from_env().expect("Should parse env vars");
+            let (provider, api_key, _model) = llm_config_from_env().expect("Should parse env vars");
             assert!(!provider.is_empty());
             assert!(!api_key.is_empty());
         }

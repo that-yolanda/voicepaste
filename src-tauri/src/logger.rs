@@ -52,9 +52,8 @@ impl VoiceLogger {
         let gz_path = self.log_path.with_extension("log.gz");
         if let Ok(content) = fs::read(&self.log_path) {
             let mut encoder = GzEncoder::new(
-                File::create(&gz_path).unwrap_or_else(|e| {
-                    panic!("Failed to create {}: {}", gz_path.display(), e)
-                }),
+                File::create(&gz_path)
+                    .unwrap_or_else(|e| panic!("Failed to create {}: {}", gz_path.display(), e)),
                 Compression::fast(),
             );
             let _ = encoder.write_all(&content);
@@ -235,6 +234,9 @@ mod tests {
         let _logger = VoiceLogger::new(log_path.clone());
 
         // No rotation should happen for small files
-        assert!(!gz_path.exists(), "No .gz file should be created for small logs");
+        assert!(
+            !gz_path.exists(),
+            "No .gz file should be created for small logs"
+        );
     }
 }
