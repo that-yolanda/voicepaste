@@ -1,16 +1,11 @@
+import { Trash } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { loadHotwords, saveHotwords } from "@/bridge/settings";
 import type { HotwordData } from "@/types/hotwords";
 import { Button } from "@/ui/components/Button";
-import { Input } from "@/ui/components/Input"
+import { Input } from "@/ui/components/Input";
 import { Toggle } from "@/ui/components/Toggle";
-import {
-  PageHeader,
-  PageLayout,
-  Section,
-  SectionContent,
-} from "@/ui/layout/PageLayout";
-import { Trash } from "lucide-react"
+import { PageHeader, PageLayout, Section, SectionContent } from "@/ui/layout/PageLayout";
 
 export function HotwordsPage() {
   const [data, setData] = useState<HotwordData>({ active_group: null, groups: [] });

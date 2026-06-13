@@ -1,3 +1,4 @@
+import { Trash } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadPrompts, savePrompts } from "@/bridge/settings";
 import { Button } from "@/ui/components/Button";
@@ -8,11 +9,10 @@ import {
   Section,
   SectionContent,
   SectionHeader,
+  SectionItem,
   SectionItemList,
-  SectionItem
 } from "@/ui/layout/PageLayout";
 import { useSettings } from "@/ui/SettingsProvider";
-import { Trash } from "lucide-react"
 
 const LLM_PROVIDERS = [
   {
@@ -169,7 +169,7 @@ export function LLMPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="文本润色" description="用于语音识别后的文本润色与文本结构化"/>
+      <PageHeader title="文本润色" description="用于语音识别后的文本润色与文本结构化" />
       {/* Provider grid */}
       <Section>
         <SectionHeader title="模型厂商" />
@@ -261,7 +261,7 @@ export function LLMPage() {
           }
         />
         <SectionContent>
-          <SectionItemList >
+          <SectionItemList>
             {prompts.map((item, index) => (
               <SectionItem key={item.id} className="flex flex-col">
                 <div className="flex items-center gap-2 w-full">
@@ -285,7 +285,7 @@ export function LLMPage() {
                       await savePromptsNow(updated);
                     }}
                   >
-                    <Trash size={16}/>
+                    <Trash size={16} />
                   </Button>
                 </div>
                 <textarea

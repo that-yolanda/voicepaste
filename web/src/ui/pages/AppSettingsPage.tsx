@@ -28,8 +28,7 @@ export function AppSettingsPage() {
   const [endSound, setEndSound] = useState<string>((sound.end_sound as string) || "");
 
   const setAppBool = (key: string, val: boolean) => scheduleSave({ app: { [key]: val } });
-  const setSound = (upd: Record<string, unknown>) =>
-    scheduleSave({ app: { sound: upd } });
+  const setSound = (upd: Record<string, unknown>) => scheduleSave({ app: { sound: upd } });
 
   return (
     <PageLayout>
@@ -214,9 +213,7 @@ export function AppSettingsPage() {
               action={
                 <Toggle
                   checked={(cfg.audio as Record<string, boolean>)?.stream_simulate !== false}
-                  onChange={(v) =>
-                    scheduleSave({ audio: { stream_simulate: v } })
-                  }
+                  onChange={(v) => scheduleSave({ audio: { stream_simulate: v } })}
                 />
               }
             />

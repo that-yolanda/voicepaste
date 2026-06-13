@@ -1,5 +1,5 @@
 import { Eye, EyeOff } from "lucide-react";
-import { forwardRef, useState, type ComponentPropsWithoutRef } from "react";
+import { type ComponentPropsWithoutRef, forwardRef, useState } from "react";
 
 type InputProps = Omit<ComponentPropsWithoutRef<"input">, "onChange" | "className"> & {
   onChange: (value: string) => void;
@@ -33,5 +33,5 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
       </div>
     );
-  }
+  },
 );
