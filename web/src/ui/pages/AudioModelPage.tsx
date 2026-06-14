@@ -221,6 +221,7 @@ export function AudioModelPage() {
     });
 
   const doubaoFromRegistry = registry.find((m) => m.id === DOUBAO_MODEL_ID);
+  const currentProviderName = registry.find((m) => m.id === provider)?.name || provider;
 
   // Doubao toggle grid
   const doubaoToggles = [
@@ -236,7 +237,7 @@ export function AudioModelPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="音频模型" description={`当前：${doubaoFromRegistry?.name || provider}`} />
+      <PageHeader title="音频模型" description={`当前：${currentProviderName}`} />
 
       {/* Tab switcher */}
       <div className="inline-flex border border-border rounded-lg overflow-hidden">

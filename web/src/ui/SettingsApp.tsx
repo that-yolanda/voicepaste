@@ -38,7 +38,7 @@ export function SettingsApp() {
           updateAvailable={updateAvailable}
           onCheckUpdate={handleCheckUpdate}
         />
-        <main className="flex-1 overflow-y-auto relative rounded-tl-xl border-l border-border bg-surface-main">
+        <main className="flex-1 overflow-y-auto relative rounded-tl-xl border-l border-border bg-surface-main ">
           <div className="max-w-[640px] mx-auto py-7 px-9">
             {section === "home" && <HomePage />}
             {section === "app" && <AppSettingsPage />}

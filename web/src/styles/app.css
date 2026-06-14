@@ -120,6 +120,7 @@ body {
 /* ----- Scrollbar ----- */
 ::-webkit-scrollbar {
   width: 6px;
+  background: transparent;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -130,4 +131,19 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-scrollbar-thumb-hover);
+}
+::-webkit-scrollbar-button {
+  display: none; /* 禁用上下箭头 */
+}
+
+/* 增加标准属性，确保覆盖 */
+* {
+  scrollbar-width: thin; /* Firefox 也是 thin = 6px 左右 */
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+
+main {
+  overflow-y: auto;
+  scrollbar-gutter: stable; /* 保留空间，内容不会左右跳动 */
+  scrollbar-width: thin; /* 标准属性控制宽度 */
 }
