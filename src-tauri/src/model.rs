@@ -13,7 +13,7 @@ pub enum ModelCategory {
 }
 
 /// Engine capabilities.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Capabilities {
     pub streaming: bool,
     #[serde(default)]
@@ -44,6 +44,7 @@ pub struct ModelEntry {
     #[serde(default)]
     pub tags: Vec<String>,
     /// Capabilities.
+    #[serde(default)]
     pub capabilities: Capabilities,
     /// Supported language codes, e.g. ["zh", "en"].
     #[serde(default)]
@@ -84,11 +85,22 @@ pub struct ModelRegistry {
     pub models: Vec<ModelEntry>,
 }
 
+/// Compile-time embedded registry.json — always available as a fallback.
+const EMBEDDED_REGISTRY: &str = include_str!("../../registry.json");
+
+/// Resolve the bundled registry, preferring the filesystem copy and falling back
+/// to the compile-time embedded version, then to the hard-coded minimal registry.
+fn bundled_registry(resource_dir: &Path) -> ModelRegistry {
+    let path = resource_dir.join("registry.json");
+    read_registry_file(&path)
+        .or_else(|| serde_json::from_str(EMBEDDED_REGISTRY).ok())
+        .unwrap_or_else(minimal_registry)
+}
+
 /// Ensure the editable registry exists under app data and is upgraded from bundled defaults.
 pub fn ensure_registry(data_dir: &Path, resource_dir: &Path) {
     let data_path = registry_path(data_dir);
-    let resource_path = resource_registry_path(resource_dir);
-    let bundled = read_registry_file(&resource_path).unwrap_or_else(minimal_registry);
+    let bundled = bundled_registry(resource_dir);
 
     if let Some(current) = read_registry_file(&data_path) {
         if bundled.version > current.version {
@@ -109,17 +121,11 @@ pub fn ensure_registry(data_dir: &Path, resource_dir: &Path) {
 /// Load the editable model registry from app data, falling back to bundled defaults.
 pub fn load_registry(data_dir: &Path, resource_dir: &Path) -> ModelRegistry {
     ensure_registry(data_dir, resource_dir);
-    read_registry_file(&registry_path(data_dir))
-        .or_else(|| read_registry_file(&resource_registry_path(resource_dir)))
-        .unwrap_or_else(minimal_registry)
+    read_registry_file(&registry_path(data_dir)).unwrap_or_else(|| bundled_registry(resource_dir))
 }
 
 fn registry_path(data_dir: &Path) -> PathBuf {
     data_dir.join("registry.json")
-}
-
-fn resource_registry_path(resource_dir: &Path) -> PathBuf {
-    resource_dir.join("registry.json")
 }
 
 fn read_registry_file(path: &Path) -> Option<ModelRegistry> {
@@ -155,7 +161,7 @@ fn merge_registry(mut current: ModelRegistry, bundled: ModelRegistry) -> ModelRe
 
 fn minimal_registry() -> ModelRegistry {
     ModelRegistry {
-        version: 3,
+        version: 1,
         updated_at: String::new(),
         models: vec![ModelEntry {
             id: "doubao-streaming".to_string(),
@@ -478,6 +484,34 @@ mod tests {
             default_config: None,
         };
         assert!(!entry.is_downloadable());
+    }
+
+    #[test]
+    fn embedded_registry_is_version_12() {
+        let registry: ModelRegistry =
+            serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
+        assert_eq!(
+            registry.version, 12,
+            "EMBEDDED_REGISTRY version should be 12, got {}",
+            registry.version
+        );
+        assert!(
+            registry.models.len() > 1,
+            "EMBEDDED_REGISTRY should have more than 1 model, got {}",
+            registry.models.len()
+        );
+    }
+
+    #[test]
+    fn bundled_registry_uses_embedded_fallback() {
+        // When the resource directory has no registry.json, should fall back to embedded
+        let fake_dir = std::path::Path::new("/nonexistent");
+        let registry = bundled_registry(fake_dir);
+        assert_eq!(
+            registry.version, 12,
+            "bundled_registry should return version 12 from embedded, got {}",
+            registry.version
+        );
     }
 
     #[test]
