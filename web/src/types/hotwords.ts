@@ -1,12 +1,13 @@
 /** Hotword data types. */
 
 export interface HotwordGroup {
+  id: string;
   name: string;
-  active: boolean;
   words: string[];
 }
 
 export interface HotwordData {
-  active_group: string | null;
+  /** id of the currently active group (single-select). */
+  active_group: string;
   groups: HotwordGroup[];
 }

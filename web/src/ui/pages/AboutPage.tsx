@@ -7,7 +7,6 @@ import {
 } from "@/bridge/settings";
 import type { UpdateState } from "@/types/update";
 import { Button } from "@/ui/components/Button";
-import { Modal } from "@/ui/components/Modal";
 import { Toggle } from "@/ui/components/Toggle";
 import {
   PageHeader,
@@ -19,28 +18,6 @@ import {
 } from "@/ui/layout/PageLayout";
 import { useSettings } from "@/ui/SettingsProvider";
 
-const LICENSE_TEXT = `MIT License
-
-Copyright (c) 2024-2025 VoicePaste
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.`;
-
 export function AboutPage() {
   const { settings, scheduleSave } = useSettings();
   const cfg = settings?.parsedConfig || ({} as Record<string, unknown>);
@@ -49,7 +26,6 @@ export function AboutPage() {
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateVersion, setUpdateVersion] = useState("");
   const [statusText, setStatusText] = useState("-");
-  const [licenseOpen, setLicenseOpen] = useState(false);
   const [betaUpdates, setBetaUpdates] = useState(!!app.beta_updates);
 
   const version = (settings?.runtime?.version as string) || "2.0.0";
@@ -132,20 +108,60 @@ export function AboutPage() {
       onClick: () => void;
     }
   > = {
-    idle: { label: "检查更新", variant: "accent", disabled: false, onClick: handleCheckUpdate },
-    checking: { label: "正在检查…", variant: "default", disabled: true, onClick: () => {} },
-    "not-available": { label: "已是最新", variant: "default", disabled: true, onClick: () => {} },
+    idle: {
+      label: "检查更新",
+      variant: "accent",
+      disabled: false,
+      onClick: handleCheckUpdate,
+    },
+    checking: {
+      label: "正在检查…",
+      variant: "default",
+      disabled: true,
+      onClick: () => {},
+    },
+    "not-available": {
+      label: "已是最新",
+      variant: "default",
+      disabled: true,
+      onClick: () => {},
+    },
     available: {
       label: `下载 ${updateVersion}`,
       variant: "accent",
       disabled: false,
       onClick: handleDownload,
     },
-    downloading: { label: "下载中…", variant: "default", disabled: true, onClick: () => {} },
-    downloaded: { label: "重启安装", variant: "accent", disabled: false, onClick: handleInstall },
-    error: { label: "重试", variant: "danger", disabled: false, onClick: handleCheckUpdate },
-    installing: { label: "安装中…", variant: "default", disabled: true, onClick: () => {} },
-    disabled: { label: "不可用", variant: "default", disabled: true, onClick: () => {} },
+    downloading: {
+      label: "下载中…",
+      variant: "default",
+      disabled: true,
+      onClick: () => {},
+    },
+    downloaded: {
+      label: "重启安装",
+      variant: "accent",
+      disabled: false,
+      onClick: handleInstall,
+    },
+    error: {
+      label: "重试",
+      variant: "danger",
+      disabled: false,
+      onClick: handleCheckUpdate,
+    },
+    installing: {
+      label: "安装中…",
+      variant: "default",
+      disabled: true,
+      onClick: () => {},
+    },
+    disabled: {
+      label: "不可用",
+      variant: "default",
+      disabled: true,
+      onClick: () => {},
+    },
   };
 
   const btn = updateBtnState[updateState] || updateBtnState.idle;
@@ -153,42 +169,34 @@ export function AboutPage() {
   return (
     <PageLayout>
       <PageHeader title="关于" />
+      {/* App info */}
+      <div className="flex flex-col items-center space-y-2">
+        <img className="w-16 h-16 rounded-lg" src="./icon.png" alt="VoicePaste" />
+
+        <p className="text-sm font-semibold text-text">VoicePaste</p>
+        <p className="text-xs text-text-muted">语音输入工具，将语音实时转为文字并输入到任意应用</p>
+      </div>
 
       <Section>
         <SectionContent>
-          {/* App info */}
-          <div className="flex items-center gap-3 pb-4 mb-1 border-b border-border-subtle">
-            <img className="w-10 h-10 rounded-lg" src="./icon.png" alt="VoicePaste" />
-            <div>
-              <p className="text-sm font-semibold text-text">VoicePaste</p>
-              <p className="text-xs text-text-muted">
-                语音输入工具，将语音实时转为文字并输入到任意应用
-              </p>
-            </div>
-          </div>
-
           <SectionItemList>
             <SectionItem
               title="当前版本"
-              action={<span className="text-sm text-text-muted font-mono">{version}</span>}
+              action={<span className="text-sm text-text-muted">{version}</span>}
             />
             <SectionItem
               title="检查更新"
               description={statusText}
               action={
-                <Button
-                  size="sm"
-                  variant={btn.variant}
-                  onClick={btn.onClick}
-                  disabled={btn.disabled}
-                >
+                <Button variant={btn.variant} onClick={btn.onClick} disabled={btn.disabled}>
                   {btn.label}
                 </Button>
               }
             />
             <SectionItem
-              title="Beta 更新"
-              description="接收测试版本以体验新功能（可能不稳定）"
+              title="体验 Beta 版本"
+              description="接收测试版本以体验新功能"
+              last
               action={
                 <Toggle
                   checked={betaUpdates}
@@ -199,22 +207,9 @@ export function AboutPage() {
                 />
               }
             />
-            <SectionItem
-              title="开源许可"
-              last
-              action={
-                <Button size="sm" variant="ghost" onClick={() => setLicenseOpen(true)}>
-                  查看
-                </Button>
-              }
-            />
           </SectionItemList>
         </SectionContent>
       </Section>
-
-      <Modal open={licenseOpen} onClose={() => setLicenseOpen(false)} title="开源许可">
-        <pre className="text-xs whitespace-pre-wrap font-mono">{LICENSE_TEXT}</pre>
-      </Modal>
     </PageLayout>
   );
 }

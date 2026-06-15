@@ -1,4 +1,3 @@
-import { Mic, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { SettingsEvent } from "@/bridge/settings";
 import {
@@ -15,8 +14,8 @@ import {
   PageLayout,
   Section,
   SectionContent,
-  SectionItemList,
   SectionItem,
+  SectionItemList,
 } from "@/ui/layout/PageLayout";
 import { useSettings } from "@/ui/SettingsProvider";
 
@@ -84,9 +83,7 @@ export function PermissionsPage() {
                     <span className="text-xs text-text-muted">
                       {accStatus === "granted" ? "已授权" : "未授权"}
                     </span>
-                    <Button onClick={openAccessibilitySettings}>
-                      前往授权
-                    </Button>
+                    <Button onClick={openAccessibilitySettings}>前往授权</Button>
                   </div>
                 }
               />

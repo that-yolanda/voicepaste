@@ -1,95 +1,75 @@
 import { describe, expect, it } from "vitest";
 import { clonePlain } from "@/lib/clone";
-import {
-  ensureModelConfig,
-  getAsrProvider,
-  getMergedModelConfig,
-  labelForModelParam,
-  type RegistryModel,
-  readModelParamInput,
-  renderModelConfigRows,
-} from "@/lib/model";
+import { type AsrDefaults, getFieldMeta, getMergedAsrConfig, inferControlType } from "@/lib/model";
 import { soundFileName } from "@/lib/sound";
+import type { RegistryModel } from "@/types/models";
 
-describe("getAsrProvider", () => {
-  it("returns doubao-streaming by default", () => {
-    expect(getAsrProvider({})).toBe("doubao-streaming");
+describe("getMergedAsrConfig", () => {
+  const model: RegistryModel = {
+    id: "test-model",
+    type: "offline",
+    category: "asr",
+    name: "Test",
+    default_config: {
+      use_itn: true,
+      language: "auto",
+      corpus: { boosting_table_id: "" },
+    },
+  };
+
+  it("merges default_config with user overrides (user wins)", () => {
+    const fields = getMergedAsrConfig(model, { language: "zh" });
+    const map = Object.fromEntries(fields.map((f) => [f.key, f.value]));
+    expect(map.use_itn).toBe(true);
+    expect(map.language).toBe("zh");
   });
-  it("returns configured provider", () => {
-    expect(getAsrProvider({ audio: { provider: "sherpa-onnx" } })).toBe("sherpa-onnx");
+
+  it("flattens nested objects one level", () => {
+    const fields = getMergedAsrConfig(model, {});
+    expect(fields.some((f) => f.key === "corpus.boosting_table_id")).toBe(true);
+  });
+
+  it("returns [] for a model without default_config", () => {
+    const fields = getMergedAsrConfig({ id: "x", type: "offline", name: "X" }, undefined);
+    expect(fields).toEqual([]);
   });
 });
 
-describe("ensureModelConfig", () => {
-  it("creates audio section if missing", () => {
-    const config: Record<string, unknown> = {};
-    const result = ensureModelConfig(config, "test-model", null);
-    expect(config.audio).toBeDefined();
-    expect(result).toBeDefined();
+describe("getFieldMeta", () => {
+  it("returns FIELD_META entry for a known key", () => {
+    const meta = getFieldMeta("url", "");
+    expect(meta.label).toBe("WebSocket 地址");
+    expect(meta.type).toBe("text");
   });
-  it("returns existing config without overwriting", () => {
-    const config = { audio: { "test-model": { key: "value" } } };
-    const result = ensureModelConfig(config, "test-model", null);
-    expect(result).toEqual({ key: "value" });
+
+  it("assigns a segment type + options for enum keys", () => {
+    const meta = getFieldMeta("provider", "cpu");
+    expect(meta.type).toBe("segment");
+    expect(meta.options?.length).toBeGreaterThan(0);
   });
-  it("replaces non-object model config with defaults", () => {
-    const config = { audio: { "test-model": "not-an-object" } };
-    const result = ensureModelConfig(config, "test-model", null);
-    expect(typeof result).toBe("object");
+
+  it("falls back to an underscore-replaced label for unknown keys", () => {
+    const meta = getFieldMeta("some_unknown_key", 1);
+    expect(meta.label).toBe("some unknown key");
   });
 });
 
-describe("getMergedModelConfig", () => {
-  it("merges default config with user config", () => {
-    const registry: RegistryModel[] = [
-      {
-        id: "test-model",
-        default_config: { key: "default" },
-        type: "offline",
-        name: "Test",
-        category: "asr",
-      },
-    ];
-    const config = { audio: { "test-model": { key: "user-value" } } };
-    const result = getMergedModelConfig(config, "test-model", registry);
-    expect(result.key).toBe("user-value");
+describe("inferControlType", () => {
+  it("infers toggle from boolean", () => {
+    expect(inferControlType("x", true)).toBe("toggle");
   });
-});
-
-describe("labelForModelParam", () => {
-  it("replaces underscores with spaces as fallback", () => {
-    expect(labelForModelParam("sample_rate")).toBe("sample rate");
+  it("infers number from number", () => {
+    expect(inferControlType("x", 5)).toBe("number");
   });
-});
-
-describe("readModelParamInput", () => {
-  it("reads boolean value", () => {
-    const input = {
-      dataset: { valueType: "boolean" },
-      checked: true,
-    } as unknown as HTMLInputElement;
-    expect(readModelParamInput(input)).toBe(true);
+  it("infers textarea from prompt key", () => {
+    expect(inferControlType("system_prompt", "")).toBe("textarea");
   });
-  it("reads number value", () => {
-    const input = {
-      dataset: { valueType: "number" },
-      value: "3.14",
-    } as unknown as HTMLInputElement;
-    expect(readModelParamInput(input)).toBe(3.14);
+  it("infers password from token/secret keys", () => {
+    expect(inferControlType("access_token", "")).toBe("password");
+    expect(inferControlType("secret_key", "")).toBe("password");
   });
-  it("returns undefined for invalid number", () => {
-    const input = {
-      dataset: { valueType: "number" },
-      value: "abc",
-    } as unknown as HTMLInputElement;
-    expect(readModelParamInput(input)).toBeUndefined();
-  });
-  it("reads string value trimmed", () => {
-    const input = {
-      dataset: { valueType: "string" },
-      value: "  hello  ",
-    } as unknown as HTMLInputElement;
-    expect(readModelParamInput(input)).toBe("hello");
+  it("defaults to text", () => {
+    expect(inferControlType("url", "")).toBe("text");
   });
 });
 
@@ -110,35 +90,6 @@ describe("soundFileName", () => {
   });
 });
 
-describe("renderModelConfigRows", () => {
-  it("renders boolean config as toggle HTML", () => {
-    const html = renderModelConfigRows("model-1", { enable: true });
-    expect(html).toContain("checkbox");
-    expect(html).toContain("checked");
-    expect(html).toContain('data-value-type="boolean"');
-  });
-  it("renders number config as input HTML", () => {
-    const html = renderModelConfigRows("model-1", { threshold: 0.5 });
-    expect(html).toContain('type="number"');
-    expect(html).toContain("0.5");
-    expect(html).toContain('data-value-type="number"');
-  });
-  it("renders string config as text input HTML", () => {
-    const html = renderModelConfigRows("model-1", { prompt: "hello" });
-    expect(html).toContain('type="text"');
-    expect(html).toContain("hello");
-    expect(html).toContain('data-value-type="string"');
-  });
-  it("returns empty string for empty values", () => {
-    expect(renderModelConfigRows("model-1", {})).toBe("");
-  });
-  it("escapes HTML in labels", () => {
-    const html = renderModelConfigRows("model-1", { "<script>alert(1)</script>": "value" });
-    expect(html).not.toContain("<script>");
-    expect(html).toContain("&lt;script&gt;");
-  });
-});
-
 describe("clonePlain", () => {
   it("deep clones a plain object", () => {
     const obj = { a: 1, b: { c: 2 } };
@@ -153,5 +104,28 @@ describe("clonePlain", () => {
   });
   it("handles arrays", () => {
     expect(clonePlain([1, 2, 3])).toEqual([1, 2, 3]);
+  });
+});
+
+// type-only compile check: AsrDefaults shape is stable.
+describe("AsrDefaults", () => {
+  it("satisfies the expected structure", () => {
+    const defaults: AsrDefaults = {
+      rate: 16000,
+      channel: 1,
+      stream_simulate: true,
+      hotword_llm_mode: "auto",
+      hotword_replace: true,
+      num_threads: 2,
+      provider: "cpu",
+      punctuation_mode: "auto",
+      vad: {
+        threshold: 0.2,
+        min_silence_duration: 0.2,
+        min_speech_duration: 0.2,
+        max_speech_duration: 10,
+      },
+    };
+    expect(defaults.vad.threshold).toBe(0.2);
   });
 });

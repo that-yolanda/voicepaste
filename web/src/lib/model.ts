@@ -1,157 +1,288 @@
 /**
- * ASR model config utilities extracted from settings.js.
+ * ASR model config utilities.
+ *
+ * Three orthogonal sources drive the unified model config UI:
+ * - registry.json `default_config` → field VALUES (defaults + presence + order)
+ * - backend `getAudioConfigDefaults()` → shared global defaults (AsrDefaults)
+ * - this module's `FIELD_META` → field RENDERING (label / control / options / group)
+ *
+ * No per-model branching: any model using a key automatically gets correct
+ * rendering via FIELD_META; unknown keys fall back to a sensible default.
  */
 
-/** Deep-clone a plain value via JSON round-trip. Returns {} for falsy input. */
-function clonePlain<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value || {}));
-}
-
-// ---- Model registry types (minimal inline; full types in @/types/models.ts) ----
-
-export interface RegistryModel {
-  id: string;
-  name: string;
-  type: string;
-  category?: string;
-  description?: string;
-  tags?: string[];
-  mem_size?: number;
-  capabilities?: Record<string, boolean>;
-  default_config?: Record<string, unknown>;
-  file_size?: number;
-}
+import type { RegistryModel } from "@/types/models";
 
 export const DOUBAO_MODEL_ID = "doubao-streaming";
 
-export const MODEL_PARAM_LABELS: Record<string, string> = {
-  format: "音频格式",
-  rate: "采样率",
-  bits: "采样位数",
-  channel: "声道数",
-  model_name: "模型名称",
-  model_version: "模型版本",
-  operation: "操作类型",
-  sequence: "请求序号",
-  show_utterances: "显示分句",
-  result_type: "结果类型",
-  enable_accelerate_text: "启用文本加速",
-  accelerate_score: "加速分数",
-  vad_segment_duration: "VAD 分段时长",
-  end_window_size: "结束窗口",
-  force_to_speech_time: "强制语音时间",
+/* ---------- Control types & field metadata ---------- */
+
+export type ControlType = "text" | "password" | "number" | "toggle" | "segment" | "textarea";
+
+/** Visual grouping for rendered config fields. */
+export type FieldGroup = "credentials" | "basic" | "shared" | "advanced";
+
+export interface SegmentOption {
+  value: string;
+  label: string;
+}
+
+export interface FieldMeta {
+  /** Display label (Chinese; structured for future i18n migration). */
+  label: string;
+  /** Control type. Omit to infer from the field value. */
+  type?: ControlType;
+  /** Options for `segment` controls. */
+  options?: SegmentOption[];
+  placeholder?: string;
+  /** Step for `number` controls. Defaults to integer/float heuristic. */
+  step?: number;
+  group?: FieldGroup;
+}
+
+/** Enum option lists shared across models. */
+export const HOTWORD_MODE_OPTS: SegmentOption[] = [
+  { value: "auto", label: "自动" },
+  { value: "disabled", label: "关闭" },
+  { value: "force", label: "开启" },
+];
+
+export const PROVIDER_OPTS: SegmentOption[] = [
+  { value: "cpu", label: "CPU" },
+  { value: "cuda", label: "CUDA" },
+  { value: "coreml", label: "CoreML" },
+];
+
+export const PUNCT_OPTS: SegmentOption[] = [
+  { value: "auto", label: "自适应" },
+  { value: "disabled", label: "禁用" },
+  { value: "force", label: "强制启用" },
+];
+
+/**
+ * Key → rendering metadata. Covers every key appearing in registry.json
+ * `default_config` plus the shared asr_defaults fields. Keys absent here
+ * fall back via `getFieldMeta` (label = key with underscores → spaces,
+ * control type inferred from value).
+ */
+export const FIELD_META: Record<string, FieldMeta> = {
+  /* Doubao credentials */
+  url: { label: "WebSocket 地址", type: "text", placeholder: "wss://...", group: "credentials" },
+  app_id: { label: "App ID", group: "credentials", placeholder: "输入 App ID" },
+  access_token: {
+    label: "Access Token",
+    type: "password",
+    group: "credentials",
+    placeholder: "输入 Access Token",
+  },
+  secret_key: {
+    label: "Secret Key",
+    type: "password",
+    group: "credentials",
+    placeholder: "输入 Secret Key",
+  },
+  resource_id: { label: "Resource ID", group: "credentials", placeholder: "输入 Resource ID" },
+
+  /* Doubao basic settings & feature toggles */
+  language: { label: "语言", type: "text", placeholder: "留空则自动检测", group: "basic" },
+  rate: { label: "音频采样", type: "number", group: "basic" },
+  channel: { label: "声道", type: "number", group: "basic" },
+  enable_ddc: { label: "语义顺滑", type: "toggle", group: "basic" },
+  enable_itn: { label: "数字格式化", type: "toggle", group: "basic" },
+  enable_nonstream: { label: "二遍识别", type: "toggle", group: "basic" },
+  enable_punc: { label: "自动标点", type: "toggle", group: "basic" },
+  "corpus.boosting_table_id": { label: "热词表 ID", group: "basic", placeholder: "输入热词表 ID" },
+
+  /* Shared asr_defaults params */
+  stream_simulate: { label: "模拟流式输出", type: "toggle", group: "shared" },
+  hotword_llm_mode: {
+    label: "热词强化",
+    type: "segment",
+    options: HOTWORD_MODE_OPTS,
+    group: "shared",
+  },
+  hotword_replace: { label: "热词替换", type: "toggle", group: "shared" },
+  num_threads: { label: "线程数", type: "number", group: "shared" },
+  provider: { label: "推理后端", type: "segment", options: PROVIDER_OPTS, group: "shared" },
+  punctuation_mode: { label: "标点符号", type: "segment", options: PUNCT_OPTS, group: "shared" },
+
+  /* VAD params */
+  threshold: { label: "VAD 阈值", type: "number", step: 0.1, group: "shared" },
+  min_silence_duration: { label: "VAD 最小静音时长", type: "number", step: 0.1, group: "shared" },
+  min_speech_duration: { label: "VAD 最小说话时长", type: "number", step: 0.1, group: "shared" },
+  max_speech_duration: { label: "VAD 最大说话时长", type: "number", step: 0.1, group: "shared" },
+
+  /* Offline model params */
+  use_itn: { label: "数字格式化 (ITN)", type: "toggle", group: "basic" },
+  itn: { label: "ITN", type: "toggle", group: "basic" },
+  system_prompt: { label: "系统提示词", type: "textarea", group: "basic" },
+  user_prompt: { label: "用户提示词", type: "textarea", group: "basic" },
+  max_new_tokens: { label: "最大生成 Token", type: "number", group: "basic" },
+  temperature: { label: "采样温度", type: "number", step: 0.1, group: "basic" },
+  top_p: { label: "Top-P", type: "number", step: 0.1, group: "basic" },
+  seed: { label: "随机种子", type: "number", group: "basic" },
+  max_active_paths: { label: "最大活跃路径", type: "number", group: "basic" },
+  modeling_unit: { label: "建模单元", type: "text", group: "basic" },
+  max_total_len: { label: "最大总长度", type: "number", group: "basic" },
+  enable_endpoint: { label: "端点检测", type: "toggle", group: "basic" },
+  rule1_min_trailing_silence: {
+    label: "规则1最小尾静音",
+    type: "number",
+    step: 0.1,
+    group: "basic",
+  },
+  rule2_min_trailing_silence: {
+    label: "规则2最小尾静音",
+    type: "number",
+    step: 0.1,
+    group: "basic",
+  },
+  rule3_min_utterance_length: { label: "规则3最短话语长度", type: "number", group: "basic" },
+
+  /* Doubao advanced / internal params */
+  format: { label: "音频格式", group: "advanced" },
+  bits: { label: "采样位数", type: "number", group: "advanced" },
+  model_name: { label: "模型名称", group: "advanced" },
+  model_version: { label: "模型版本", group: "advanced" },
+  operation: { label: "操作类型", group: "advanced" },
+  sequence: { label: "请求序号", type: "number", group: "advanced" },
+  show_utterances: { label: "显示分句", type: "toggle", group: "advanced" },
+  result_type: { label: "结果类型", group: "advanced" },
+  enable_accelerate_text: { label: "启用文本加速", type: "toggle", group: "advanced" },
+  accelerate_score: { label: "加速分数", type: "number", group: "advanced" },
 };
 
-// Visible params for the Doubao streaming model
-export const DOUBAO_VISIBLE_PARAMS = new Set([
-  "url",
-  "app_id",
-  "access_token",
-  "secret_key",
-  "resource_id",
-  "language",
-  "enable_ddc",
-  "enable_itn",
-  "enable_nonstream",
-  "enable_punc",
-  "corpus",
-]);
-
-/** Get the currently active ASR provider from config. */
-export function getAsrProvider(config?: { audio?: { provider?: string } }): string {
-  return config?.audio?.provider || DOUBAO_MODEL_ID;
+/** Infer a control type from the value when FIELD_META omits `type`. */
+export function inferControlType(key: string, value: unknown): ControlType {
+  if (typeof value === "boolean") return "toggle";
+  if (typeof value === "number") return "number";
+  if (key.includes("prompt")) return "textarea";
+  if (/(token|secret|password)/i.test(key)) return "password";
+  return "text";
 }
 
-/** Look up a model in the registry by id. */
-export function getRegistryModel(
-  modelId: string,
-  registry: RegistryModel[] | null,
-): RegistryModel | null {
-  if (!Array.isArray(registry)) return null;
-  return registry.find((entry) => entry.id === modelId) ?? null;
+/** Resolve rendering metadata for a key, falling back for unknown keys. */
+export function getFieldMeta(key: string, value: unknown): FieldMeta {
+  // Try the full key first, then the last segment after a dot
+  // (e.g. "vad.threshold" → "threshold") so nested asr_defaults keys resolve.
+  const meta = FIELD_META[key] ?? FIELD_META[key.split(".").pop() ?? ""];
+  if (meta) return meta;
+  return { label: key.replace(/_/g, " "), type: inferControlType(key, value), group: "basic" };
 }
 
-/** Return the default config for a model (deep clone). */
-export function defaultModelConfig(
-  modelId: string,
-  registry: RegistryModel[] | null,
-): Record<string, unknown> {
-  return clonePlain(getRegistryModel(modelId, registry)?.default_config || {});
+/* ---------- Config merging (mirrors backend base + override semantics) ---------- */
+
+export interface AsrDefaults {
+  rate: number;
+  channel: number;
+  stream_simulate: boolean;
+  hotword_llm_mode: string;
+  hotword_replace: boolean;
+  num_threads: number;
+  provider: string;
+  punctuation_mode: string;
+  vad: {
+    threshold: number;
+    min_silence_duration: number;
+    min_speech_duration: number;
+    max_speech_duration: number;
+  };
 }
 
-/** Ensure a config has the model's section and return it. */
-export function ensureModelConfig<T extends { audio?: Record<string, unknown> }>(
-  config: T,
-  modelId: string,
-  registry: RegistryModel[] | null,
-): Record<string, unknown> {
-  config.audio = config.audio || {};
-  if (!config.audio[modelId] || typeof config.audio[modelId] !== "object") {
-    config.audio[modelId] = defaultModelConfig(modelId, registry);
-  }
-  return config.audio[modelId] as Record<string, unknown>;
-}
-
-/** Merge default + user config for a model. */
-export function getMergedModelConfig(
-  config: { audio?: Record<string, unknown> },
-  modelId: string,
-  registry: RegistryModel[] | null,
-): Record<string, unknown> {
+/** Merge asr_defaults: backend defaults (`AsrDefaults::default()`) as base,
+ *  with user-saved values from `audio.asr_defaults` overriding per field.
+ *  This is what the CustomConfigModal should display — NOT the raw backend
+ *  defaults, otherwise saved edits never reflect back in the UI. */
+export function mergeAsrDefaults(base: AsrDefaults, saved: unknown): AsrDefaults {
+  const s =
+    saved && typeof saved === "object" && !Array.isArray(saved)
+      ? (saved as Record<string, unknown>)
+      : {};
+  const sv =
+    s.vad && typeof s.vad === "object" && !Array.isArray(s.vad)
+      ? (s.vad as Record<string, unknown>)
+      : {};
+  const num = (v: unknown, fb: number): number =>
+    typeof v === "number" && Number.isFinite(v) ? v : fb;
+  const str = (v: unknown, fb: string): string => (typeof v === "string" && v.trim() ? v : fb);
+  const bool = (v: unknown, fb: boolean): boolean => (typeof v === "boolean" ? v : fb);
   return {
-    ...defaultModelConfig(modelId, registry),
-    ...(config.audio?.[modelId] || {}),
-  } as Record<string, unknown>;
+    rate: num(s.rate, base.rate),
+    channel: num(s.channel, base.channel),
+    stream_simulate: bool(s.stream_simulate, base.stream_simulate),
+    hotword_llm_mode: str(s.hotword_llm_mode, base.hotword_llm_mode),
+    hotword_replace: bool(s.hotword_replace, base.hotword_replace),
+    num_threads: num(s.num_threads, base.num_threads),
+    provider: str(s.provider, base.provider),
+    punctuation_mode: str(s.punctuation_mode, base.punctuation_mode),
+    vad: {
+      threshold: num(sv.threshold, base.vad.threshold),
+      min_silence_duration: num(sv.min_silence_duration, base.vad.min_silence_duration),
+      min_speech_duration: num(sv.min_speech_duration, base.vad.min_speech_duration),
+      max_speech_duration: num(sv.max_speech_duration, base.vad.max_speech_duration),
+    },
+  };
 }
 
-/** Human-readable label for a model config key. */
-export function labelForModelParam(key: string): string {
-  return MODEL_PARAM_LABELS[key] || key.replace(/_/g, " ");
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
-/** Read a model config value from a form input element. */
-export function readModelParamInput(
-  input: HTMLInputElement,
-): boolean | number | string | undefined {
-  if (input.dataset.valueType === "boolean") return input.checked;
-  if (input.dataset.valueType === "number") {
-    const val = parseFloat(input.value);
-    return Number.isNaN(val) ? undefined : val;
-  }
-  return input.value.trim();
+/** A flattened config field (nested objects expanded to `parent.child` keys). */
+export interface MergedField {
+  key: string;
+  value: unknown;
 }
 
 /**
- * Render model config rows as HTML strings.
- * (Will be replaced by React components in Phase 5; kept as a pure function
- * for now so existing code can use it.)
+ * Compute a model's effective flattened config fields:
+ * registry default_config → (audio params from asr_defaults) → user overrides.
+ * Most shared asr_defaults fields (num_threads/provider/hotword/vad/...) are
+ * managed globally via the CustomConfigModal, NOT per-model. Audio capture
+ * params (rate/channel) are the exception: they reuse asr_defaults so the
+ * per-model panel stays in sync with the "音频采样" section.
  */
-export function renderModelConfigRows(modelId: string, values: Record<string, unknown>): string {
-  return Object.entries(values || {})
-    .map(([key, value]) => {
-      const label = escapeFn(labelForModelParam(key));
-      const escapedKey = escapeFn(key);
-      const escapedId = escapeFn(modelId);
-      const row = "flex items-center gap-3 py-[5px]";
-      const labelCls = "text-xs text-text-dim shrink-0 min-w-[100px]";
-      const inputCls =
-        "flex-1 min-w-0 h-[34px] px-3 border border-border rounded-[6px] bg-input-bg text-text text-sm outline-none";
-      if (typeof value === "boolean") {
-        return `<div class="${row}"><span class="${labelCls}">${label}</span><label class="relative w-[38px] h-[22px] shrink-0 cursor-pointer inline-flex"><input type="checkbox" class="peer hidden model-param" data-model-id="${escapedId}" data-param="${escapedKey}" data-value-type="boolean" ${value ? "checked" : ""} /><span class="absolute inset-0 bg-fill-track rounded-[20px] peer-checked:bg-accent transition-colors duration-200"></span><span class="absolute top-[2px] left-[2px] w-[18px] h-[18px] bg-white rounded-full peer-checked:translate-x-[16px] transition-transform duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.15)]"></span></label></div>`;
-      }
-      if (typeof value === "number") {
-        return `<div class="${row}"><span class="${labelCls}">${label}</span><input type="number" class="${inputCls} model-param" data-model-id="${escapedId}" data-param="${escapedKey}" data-value-type="number" value="${escapeFn(String(value))}" step="0.1" /></div>`;
-      }
-      return `<div class="${row}"><span class="${labelCls}">${label}</span><input type="text" class="${inputCls} model-param" data-model-id="${escapedId}" data-param="${escapedKey}" data-value-type="string" value="${escapeFn(String(value ?? ""))}" /></div>`;
-    })
-    .join("");
-}
+export function getMergedAsrConfig(
+  model: RegistryModel,
+  userConfig: Record<string, unknown> | undefined,
+  asrDefaults?: AsrDefaults | null,
+): MergedField[] {
+  const base = asRecord(model.default_config);
+  const user = asRecord(userConfig);
 
-// Local copy to avoid circular imports from format.ts
-function escapeFn(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  // Merge: base keeps its natural order; user overrides last.
+  const merged: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(base)) merged[k] = v;
+  if (asrDefaults) {
+    if ("rate" in merged) merged.rate = asrDefaults.rate;
+    if ("channel" in merged) merged.channel = asrDefaults.channel;
+  }
+  for (const [k, v] of Object.entries(user)) merged[k] = v;
+
+  // Flatten one level of nested objects (e.g. corpus → corpus.boosting_table_id).
+  const fields: MergedField[] = [];
+  for (const [k, v] of Object.entries(merged)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      for (const [child, childVal] of Object.entries(v as Record<string, unknown>)) {
+        fields.push({ key: `${k}.${child}`, value: childVal });
+      }
+    } else {
+      fields.push({ key: k, value: v });
+    }
+  }
+
+  // Order by FIELD_META definition order (frontend-controlled, stable) so display
+  // order doesn't depend on backend serialization of config.yaml / registry.
+  // Keys absent from FIELD_META sort last, preserving their relative order.
+  const fieldOrder = Object.keys(FIELD_META);
+  fields.sort((a, b) => {
+    const ia = fieldOrder.indexOf(a.key);
+    const ib = fieldOrder.indexOf(b.key);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  return fields;
 }

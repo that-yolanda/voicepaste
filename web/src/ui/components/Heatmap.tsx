@@ -68,8 +68,7 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
 
   let total = 0;
 
-  const cells: { key: string; count: number; date: Date; future: boolean }[] =
-    [];
+  const cells: { key: string; count: number; date: Date; future: boolean }[] = [];
   for (let w = 0; w < WEEKS; w++) {
     for (let d = 0; d < 7; d++) {
       const dt = new Date(start);
@@ -101,7 +100,7 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
         {/* Grid area */}
         <div className="flex-1 min-w-0">
           {/* Month labels */}
-          <div className="relative h-[14px] ml-[22px] mb-1">
+          <div className="relative h-3.5 ml-5.5 mb-1">
             {Object.entries(mPos).map(([m, w]) => (
               <span
                 key={m}
@@ -117,14 +116,11 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
           <div className="flex gap-2">
             {/* Day-of-week labels */}
             <div
-              className="grid gap-[3px] text-[10px] text-text-muted w-[14px] shrink-0"
+              className="grid gap-0.75 text-[10px] text-text-muted w-3.5 shrink-0"
               style={{ gridTemplateRows: "repeat(7, 11px)" }}
             >
               {DAY_LABELS.map((day) => (
-                <span
-                  key={day.key}
-                  className="h-[11px] flex items-center justify-end leading-none"
-                >
+                <span key={day.key} className="h-2.75 flex items-center justify-end leading-none">
                   {day.label}
                 </span>
               ))}
@@ -132,7 +128,7 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
 
             {/* The 7×26 grid */}
             <div
-              className="grid gap-[3px]"
+              className="grid gap-0.75"
               style={{
                 gridTemplateRows: "repeat(7, 11px)",
                 gridAutoFlow: "column",
@@ -142,11 +138,9 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
               {cells.map((c) => (
                 <div
                   key={c.key}
-                  className={`w-[11px] h-[11px] rounded-[2px] ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
+                  className={`w-2.75 h-2.75 rounded-xs ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
                   title={
-                    c.future
-                      ? ""
-                      : `${c.date.getMonth() + 1}月${c.date.getDate()}日: ${c.count} 字`
+                    c.future ? "" : `${c.date.getMonth() + 1}月${c.date.getDate()}日: ${c.count} 字`
                   }
                 />
               ))}
@@ -156,8 +150,8 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
 
         {/* Stats */}
         <div className="flex flex-col items-end gap-0.5 pb-0.5 shrink-0 whitespace-nowrap">
-          <span className="text-[10px] text-text-muted">过去 26 周</span>
-          <span className="text-xs text-text-dim">
+          <span className="text-sm text-text-muted">过去 26 周</span>
+          <span className="text-sm text-text-dim">
             共输入 <strong>{total.toLocaleString()}</strong> 字
           </span>
         </div>

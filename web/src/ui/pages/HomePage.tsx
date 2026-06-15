@@ -2,6 +2,7 @@ import { Copy, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { deleteHistory, getHistory, getStats } from "@/bridge/settings";
 import { formatCompact } from "@/lib/format";
+import { Button } from "@/ui/components/Button";
 import { Heatmap } from "@/ui/components/Heatmap";
 import {
   PageHeader,
@@ -11,7 +12,6 @@ import {
   SectionHeader,
   SectionItemList,
 } from "@/ui/layout/PageLayout";
-import { Button } from "@/ui/components/Button";
 
 /* ---------- pure helpers ---------- */
 
@@ -119,9 +119,7 @@ export function HomePage() {
                 <span className="text-xl font-bold leading-[1.05] text-text tracking-normal whitespace-nowrap">
                   {c.v}
                 </span>
-                <span className="text-sm font-medium text-text whitespace-nowrap">
-                  {c.u}
-                </span>
+                <span className="text-sm font-medium text-text whitespace-nowrap">{c.u}</span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-text whitespace-nowrap leading-none">
@@ -140,7 +138,7 @@ export function HomePage() {
       <Section>
         <SectionHeader title="输入记录" />
         <SectionContent className="p-0!">
-          <SectionItemList>
+          <SectionItemList className="space-y-0">
             {history.length === 0 ? (
               <div className="flex justify-center items-center gap-3 p-4 min-h-10 text-xs text-text-muted">
                 暂无输入记录
@@ -156,25 +154,19 @@ export function HomePage() {
                     last = dk;
                     const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
                     return (
-                      <div key={item.ts} className="text-xs">
+                      <div key={item.ts} className="text-sm">
                         {show && (
                           <div className="flex items-center gap-2 p-2">
                             <div className="flex-1 h-px bg-border-subtle" />
-                            <span className="text-text-muted">
-                              {dateLabel(dk, tKey, yKey)}
-                            </span>
+                            <span className="text-text-muted">{dateLabel(dk, tKey, yKey)}</span>
                             <div className="flex-1 h-px bg-border-subtle" />
                           </div>
                         )}
-                        <div className="group min-h-10 transition-colors hover:bg-fill-hover relative">
-                          <div className="px-4 flex items-center gap-2 min-h-10 ">
-                            <span className="text-xs text-text-muted shrink-0">
-                              {time}
-                            </span>
+                        <div className="group min-h-8 transition-colors hover:bg-fill-hover relative">
+                          <div className="px-4 flex items-center gap-2 min-h-8 ">
+                            <span className="text-xs text-text-muted shrink-0">{time}</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-text-dim truncate leading-[1.4]">
-                                {item.text}
-                              </p>
+                              <p className="text-text-dim truncate leading-[1.4]">{item.text}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute top-1/2 right-2 -translate-y-1/2 h-full">
@@ -183,9 +175,7 @@ export function HomePage() {
                               variant="accent"
                               onClick={async () => {
                                 try {
-                                  await navigator.clipboard.writeText(
-                                    item.text,
-                                  );
+                                  await navigator.clipboard.writeText(item.text);
                                 } catch {
                                   /* */
                                 }
@@ -199,9 +189,7 @@ export function HomePage() {
                               onClick={async () => {
                                 try {
                                   await deleteHistory(item.ts);
-                                  setHistory((p) =>
-                                    p.filter((h) => h.ts !== item.ts),
-                                  );
+                                  setHistory((p) => p.filter((h) => h.ts !== item.ts));
                                 } catch {
                                   /* */
                                 }

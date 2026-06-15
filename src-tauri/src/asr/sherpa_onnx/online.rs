@@ -56,8 +56,8 @@ pub(crate) fn build_online_recognizer(
 
     if let Some(buf) = hotwords_buf {
         config.decoding_method = Some("modified_beam_search".to_string());
-        config.max_active_paths = json_u32(model_config, "max_active_paths").unwrap_or(4) as i32;
-        config.hotwords_score = json_f32(model_config, "hotwords_score").unwrap_or(2.0);
+        config.max_active_paths = json_u32(model_config, "max_active_paths").unwrap_or(14) as i32;
+        config.hotwords_score = json_f32(model_config, "hotwords_score").unwrap_or(4.0);
         config.hotwords_buf = Some(buf);
 
         // Set modeling unit (required for hotwords tokenization)

@@ -86,14 +86,11 @@ export function LLMPage() {
   const llm = (cfg.llm || {}) as Record<string, unknown>;
 
   const providerKey = (llm.provider as string) || "deepseek";
-  const currentP =
-    LLM_PROVIDERS.find((p) => p.key === providerKey) || LLM_PROVIDERS[0];
+  const currentP = LLM_PROVIDERS.find((p) => p.key === providerKey) || LLM_PROVIDERS[0];
   const savedProviderCfg = (llm[providerKey] || {}) as Record<string, string>;
 
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
-  const promptsSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
+  const promptsSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Load prompts
   const loadP = useCallback(async () => {
@@ -157,10 +154,7 @@ export function LLMPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="文本润色"
-        description="用于语音识别后的文本润色与文本结构化"
-      />
+      <PageHeader title="文本润色" description="用于语音识别后的文本润色与文本结构化" />
       {/* API Config */}
       <Section>
         <SectionHeader title="API 配置" />
@@ -253,7 +247,7 @@ export function LLMPage() {
               <SectionItem
                 key={item.id}
                 title="模板名称"
-                last={index == prompts.length - 1}
+                last={index === prompts.length - 1}
                 action={
                   <div className="flex gap-2">
                     <Input

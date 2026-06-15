@@ -10,7 +10,6 @@ import {
   PageLayout,
   Section,
   SectionContent,
-  SectionHeader,
   SectionItem,
   SectionItemList,
 } from "@/ui/layout/PageLayout";
@@ -99,11 +98,7 @@ export function HotkeyPage() {
                       <KeyCap key={k} label={normalizeHotkeyLabel(k)} />
                     ))}
                   </div>
-                  <Button
-                    variant="accent"
-                    onClick={startRecord}
-                    disabled={recording}
-                  >
+                  <Button variant="accent" onClick={startRecord} disabled={recording}>
                     {recording ? "请按键…" : "录制"}
                   </Button>
                   <SegmentedControl
@@ -123,17 +118,14 @@ export function HotkeyPage() {
               <SectionItem
                 key={item.id}
                 title={`快捷键 - ${item.title || "未命名模板"}`}
-                last={idx == prompts.length - 1}
+                last={idx === prompts.length - 1}
                 action={
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 flex-wrap border border-border px-2 py-1 rounded-md h-full">
-                      {item._displayString ||
-                      formatPromptHotkey(item.hotkey) ? (
+                      {item._displayString || formatPromptHotkey(item.hotkey) ? (
                         (item._displayString || formatPromptHotkey(item.hotkey))
                           .split("+")
-                          .map((k) => (
-                            <KeyCap key={k} label={normalizeHotkeyLabel(k)} />
-                          ))
+                          .map((k) => <KeyCap key={k} label={normalizeHotkeyLabel(k)} />)
                       ) : (
                         <span className="text-xs text-text-muted">未绑定</span>
                       )}

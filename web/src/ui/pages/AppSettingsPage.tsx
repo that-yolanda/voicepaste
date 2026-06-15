@@ -24,17 +24,11 @@ export function AppSettingsPage() {
   const configPath = settings?.configPath || "-";
   const isMac = platform === "macos";
 
-  const [startSound, setStartSound] = useState<string>(
-    (sound.start_sound as string) || "",
-  );
-  const [endSound, setEndSound] = useState<string>(
-    (sound.end_sound as string) || "",
-  );
+  const [startSound, setStartSound] = useState<string>((sound.start_sound as string) || "");
+  const [endSound, setEndSound] = useState<string>((sound.end_sound as string) || "");
 
-  const setAppBool = (key: string, val: boolean) =>
-    scheduleSave({ app: { [key]: val } });
-  const setSound = (upd: Record<string, unknown>) =>
-    scheduleSave({ app: { sound: upd } });
+  const setAppBool = (key: string, val: boolean) => scheduleSave({ app: { [key]: val } });
+  const setSound = (upd: Record<string, unknown>) => scheduleSave({ app: { sound: upd } });
 
   return (
     <PageLayout>
@@ -47,10 +41,7 @@ export function AppSettingsPage() {
               title="开机自动启动"
               description="登录时自动在后台运行 VoicePaste"
               action={
-                <Toggle
-                  checked={!!app.autoLaunch}
-                  onChange={(v) => setAppBool("autoLaunch", v)}
-                />
+                <Toggle checked={!!app.autoLaunch} onChange={(v) => setAppBool("autoLaunch", v)} />
               }
             />
 
@@ -66,11 +57,10 @@ export function AppSettingsPage() {
                       { value: "vibrancy", label: "跟随主题" },
                     ]}
                     value={(app.overlay_style as string) || "liquid"}
-                    onChange={(v) =>
-                      scheduleSave({ app: { overlay_style: v } })
-                    }
+                    onChange={(v) => scheduleSave({ app: { overlay_style: v } })}
                   />
                 }
+                className="shrink-0"
               />
             )}
 
@@ -100,7 +90,7 @@ export function AppSettingsPage() {
                   description="按下快捷键开始录音时播放"
                   action={
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-text-muted max-w-[160px] truncate">
+                      <span className="text-xs text-text-muted max-w-40 truncate">
                         {soundFileName(startSound)}
                       </span>
                       <Button
@@ -135,7 +125,7 @@ export function AppSettingsPage() {
                   last
                   action={
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-text-muted max-w-[160px] truncate">
+                      <span className="text-xs text-text-muted max-w-40 truncate">
                         {soundFileName(endSound)}
                       </span>
                       <Button
