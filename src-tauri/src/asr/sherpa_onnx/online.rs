@@ -45,6 +45,7 @@ pub(crate) fn build_online_recognizer(
     config.model_config.tokens = p("tokens");
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
+    config.model_config.provider = json_string(model_config, "provider");
     config.enable_endpoint = json_bool(model_config, "enable_endpoint").unwrap_or(true);
     config.rule1_min_trailing_silence =
         json_f32(model_config, "rule1_min_trailing_silence").unwrap_or(0.0);
@@ -359,7 +360,6 @@ pub(crate) fn spawn_online_worker(
     stream: OnlineStream,
     vad: VadProcessor,
     chunk_size: usize,
-    hotwords_for_restore: Vec<String>,
     event_tx: mpsc::UnboundedSender<AsrEvent>,
     punct_processor: Option<Arc<PunctuationProcessor>>,
 ) -> Result<(OnlineSession, std_mpsc::SyncSender<WorkerCommand>), String> {
@@ -373,12 +373,7 @@ pub(crate) fn spawn_online_worker(
         .map_err(|e| format!("启动在线识别线程失败: {}", e))?;
 
     Ok((
-        OnlineSession::new(
-            worker_tx.clone(),
-            handle,
-            hotwords_for_restore,
-            punct_processor,
-        ),
+        OnlineSession::new(worker_tx.clone(), handle, punct_processor),
         worker_tx,
     ))
 }
@@ -393,7 +388,6 @@ pub(crate) struct OnlineSession {
     is_committed: Arc<AtomicBool>,
     worker_tx: Mutex<Option<std_mpsc::SyncSender<WorkerCommand>>>,
     worker_handle: Mutex<Option<JoinHandle<()>>>,
-    hotwords_for_restore: Vec<String>,
     punct_processor: Option<Arc<PunctuationProcessor>>,
 }
 
@@ -401,7 +395,6 @@ impl OnlineSession {
     fn new(
         worker_tx: std_mpsc::SyncSender<WorkerCommand>,
         worker_handle: JoinHandle<()>,
-        hotwords_for_restore: Vec<String>,
         punct_processor: Option<Arc<PunctuationProcessor>>,
     ) -> Self {
         Self {
@@ -409,7 +402,6 @@ impl OnlineSession {
             is_committed: Arc::new(AtomicBool::new(false)),
             worker_tx: Mutex::new(Some(worker_tx)),
             worker_handle: Mutex::new(Some(worker_handle)),
-            hotwords_for_restore,
             punct_processor,
         }
     }
@@ -478,8 +470,6 @@ impl AsrSession for OnlineSession {
             .map_err(|_| "ASR worker 状态异常".to_string())?
             .take();
 
-        let hotwords = self.hotwords_for_restore.clone();
-
         let result = tokio::task::spawn_blocking(move || {
             let (reply_tx, reply_rx) = std_mpsc::channel();
             tx.send(WorkerCommand::Finish(reply_tx))
@@ -495,18 +485,12 @@ impl AsrSession for OnlineSession {
         .await
         .unwrap_or_else(|e| Err(format!("识别失败: {}", e)))?;
 
-        // Post-process: apply punctuation first, then restore hotword case
-        // (punctuation changes text structure which affects hotword matching)
+        // Post-process punctuation here. Hotword text restoration is applied
+        // once in the app finalization path so every ASR backend behaves the same.
         let result = if let Some(ref punct) = self.punct_processor {
             punct.add_punctuation(&result)
         } else {
             result
-        };
-
-        let result = if hotwords.is_empty() {
-            result
-        } else {
-            restore_hotword_case(&result, &hotwords)
         };
 
         self.is_ready.store(false, Ordering::SeqCst);
@@ -637,7 +621,7 @@ fn filter_bpe_chars(hotwords: &[String], bpe_chars: &HashSet<char>) -> Vec<Strin
 ///      the model preserves spaces, so we normalize with spaces.
 ///   2. Alphanumeric-only: for hotwords with punctuation like "AGENTS.md" →
 ///      the model strips punctuation, so we match purely on alphanumerics.
-fn restore_hotword_case(text: &str, hotwords: &[String]) -> String {
+pub(crate) fn restore_hotword_case(text: &str, hotwords: &[String]) -> String {
     // Strategy A: normalize keeping single spaces (↵ replaced by space, collapsed).
     fn normalize_spaces(s: &str) -> (String, Vec<usize>) {
         let mut norm = String::new();

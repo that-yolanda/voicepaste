@@ -47,6 +47,7 @@ pub(crate) fn build_funasr_nano_recognizer(
     let mut config = OfflineRecognizerConfig::default();
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
+    config.model_config.provider = json_string(model_config, "provider");
 
     let encoder_adaptor = p("encoder_adaptor")
         .ok_or_else(|| format!("模型 {} 缺少 encoder_adaptor 文件", entry.id))?;

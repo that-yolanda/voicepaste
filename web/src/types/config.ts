@@ -13,6 +13,22 @@ export interface AppConfig {
 
 export interface AudioConfig {
   provider?: string;
+  asr_defaults?: {
+    rate?: number;
+    channel?: number;
+    stream_simulate?: boolean;
+    hotword_llm_mode?: "auto" | "disabled" | "force";
+    hotword_replace?: boolean;
+    num_threads?: number;
+    provider?: "cpu" | "cuda" | "coreml";
+    punctuation_mode?: "auto" | "disabled" | "force";
+    vad?: {
+      threshold?: number;
+      min_silence_duration?: number;
+      min_speech_duration?: number;
+      max_speech_duration?: number;
+    };
+  };
   [modelId: string]: unknown; // per-model config blocks
 }
 

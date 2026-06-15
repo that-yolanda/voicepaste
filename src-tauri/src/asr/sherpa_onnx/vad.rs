@@ -15,6 +15,8 @@ pub struct VadConfig {
     pub max_speech_duration: f32,
     #[serde(default = "default_num_threads")]
     pub num_threads: u32,
+    #[serde(default = "default_provider")]
+    pub provider: String,
 }
 
 fn default_vad_threshold() -> f32 {
@@ -32,6 +34,9 @@ fn default_vad_max_speech() -> f32 {
 fn default_num_threads() -> u32 {
     2
 }
+fn default_provider() -> String {
+    "cpu".to_string()
+}
 
 impl Default for VadConfig {
     fn default() -> Self {
@@ -41,6 +46,7 @@ impl Default for VadConfig {
             min_speech_duration: default_vad_min_speech(),
             max_speech_duration: default_vad_max_speech(),
             num_threads: default_num_threads(),
+            provider: default_provider(),
         }
     }
 }
@@ -64,6 +70,10 @@ impl VadConfig {
             min_speech_duration: user.min_speech_duration.unwrap_or(base.min_speech_duration),
             max_speech_duration: user.max_speech_duration.unwrap_or(base.max_speech_duration),
             num_threads: user.num_threads.unwrap_or(base.num_threads),
+            provider: user
+                .provider
+                .clone()
+                .unwrap_or_else(|| base.provider.clone()),
         }
     }
 }
@@ -97,6 +107,7 @@ impl VadProcessor {
             silero_vad: silero_config,
             sample_rate: 16000,
             num_threads: config.num_threads as i32,
+            provider: Some(config.provider.clone()),
             ..Default::default()
         };
 

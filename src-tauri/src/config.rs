@@ -6,6 +6,7 @@ use std::sync::RwLock;
 
 pub const DOUBAO_STREAMING_ID: &str = "doubao-streaming";
 pub const SILERO_VAD_ID: &str = "silero-vad";
+pub const ASR_DEFAULTS_ID: &str = "asr_defaults";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -25,6 +26,41 @@ pub struct VadParams {
     pub min_speech_duration: Option<f32>,
     pub max_speech_duration: Option<f32>,
     pub num_threads: Option<u32>,
+    pub provider: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsrDefaults {
+    #[serde(default = "default_rate")]
+    pub rate: u32,
+    #[serde(default = "default_channel")]
+    pub channel: u32,
+    #[serde(default = "default_true")]
+    pub stream_simulate: bool,
+    #[serde(default = "default_hotword_llm_mode")]
+    pub hotword_llm_mode: String,
+    #[serde(default = "default_true")]
+    pub hotword_replace: bool,
+    #[serde(default = "default_num_threads")]
+    pub num_threads: u32,
+    #[serde(default = "default_asr_provider")]
+    pub provider: String,
+    #[serde(default = "default_punctuation_mode")]
+    pub punctuation_mode: String,
+    #[serde(default)]
+    pub vad: AsrVadDefaults,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsrVadDefaults {
+    #[serde(default = "default_vad_threshold")]
+    pub threshold: f32,
+    #[serde(default = "default_vad_min_silence")]
+    pub min_silence_duration: f32,
+    #[serde(default = "default_vad_min_speech")]
+    pub min_speech_duration: f32,
+    #[serde(default = "default_vad_max_speech")]
+    pub max_speech_duration: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -271,6 +307,30 @@ fn default_bits() -> u32 {
 fn default_channel() -> u32 {
     1
 }
+fn default_num_threads() -> u32 {
+    2
+}
+fn default_asr_provider() -> String {
+    "cpu".to_string()
+}
+fn default_hotword_llm_mode() -> String {
+    "auto".to_string()
+}
+fn default_punctuation_mode() -> String {
+    "auto".to_string()
+}
+fn default_vad_threshold() -> f32 {
+    0.2
+}
+fn default_vad_min_silence() -> f32 {
+    0.2
+}
+fn default_vad_min_speech() -> f32 {
+    0.2
+}
+fn default_vad_max_speech() -> f32 {
+    10.0
+}
 fn default_model_name() -> String {
     "bigmodel".to_string()
 }
@@ -286,6 +346,68 @@ fn default_llm_provider() -> String {
 
 fn profile_to_json(value: &serde_norway::Value) -> Option<serde_json::Value> {
     serde_json::to_value(value).ok()
+}
+
+fn profile_has_key(value: Option<&serde_norway::Value>, key: &str) -> bool {
+    value.and_then(|v| v.get(key)).is_some()
+}
+
+fn normalize_choice(value: &str, allowed: &[&str], fallback: &str) -> String {
+    let normalized = value.trim().to_ascii_lowercase();
+    if allowed.iter().any(|choice| *choice == normalized) {
+        normalized
+    } else {
+        fallback.to_string()
+    }
+}
+
+impl Default for AsrVadDefaults {
+    fn default() -> Self {
+        Self {
+            threshold: default_vad_threshold(),
+            min_silence_duration: default_vad_min_silence(),
+            min_speech_duration: default_vad_min_speech(),
+            max_speech_duration: default_vad_max_speech(),
+        }
+    }
+}
+
+impl Default for AsrDefaults {
+    fn default() -> Self {
+        Self {
+            rate: default_rate(),
+            channel: default_channel(),
+            stream_simulate: true,
+            hotword_llm_mode: default_hotword_llm_mode(),
+            hotword_replace: true,
+            num_threads: default_num_threads(),
+            provider: default_asr_provider(),
+            punctuation_mode: default_punctuation_mode(),
+            vad: AsrVadDefaults::default(),
+        }
+    }
+}
+
+impl AsrDefaults {
+    pub fn provider(&self) -> String {
+        normalize_choice(&self.provider, &["cpu", "cuda", "coreml"], "cpu")
+    }
+
+    pub fn hotword_llm_mode(&self) -> String {
+        normalize_choice(
+            &self.hotword_llm_mode,
+            &["auto", "disabled", "force"],
+            "auto",
+        )
+    }
+
+    pub fn punctuation_mode(&self) -> String {
+        normalize_choice(
+            &self.punctuation_mode,
+            &["auto", "disabled", "force"],
+            "auto",
+        )
+    }
 }
 
 impl DoubaoStreamingConfig {
@@ -344,33 +466,139 @@ impl AppConfig {
     }
 
     pub fn doubao_streaming_config(&self) -> DoubaoStreamingConfig {
-        self.audio
-            .get(DOUBAO_STREAMING_ID)
+        let mut merged = self.asr_defaults_json();
+        if let (Some(target), Some(source)) = (
+            merged.as_object_mut(),
+            self.audio
+                .get(DOUBAO_STREAMING_ID)
+                .and_then(profile_to_json)
+                .and_then(|v| v.as_object().cloned()),
+        ) {
+            for (key, value) in source {
+                target.insert(key, value);
+            }
+        }
+        serde_json::from_value(merged).unwrap_or_default()
+    }
+
+    pub fn asr_defaults(&self) -> AsrDefaults {
+        let raw = self.audio.get(ASR_DEFAULTS_ID);
+        let mut defaults: AsrDefaults = raw
             .cloned()
             .and_then(|value| serde_norway::from_value(value).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        if !profile_has_key(raw, "stream_simulate") {
+            if let Some(value) = self.audio.get("stream_simulate").and_then(|v| v.as_bool()) {
+                defaults.stream_simulate = value;
+            }
+        }
+
+        defaults.provider = defaults.provider();
+        defaults.hotword_llm_mode = defaults.hotword_llm_mode();
+        defaults.punctuation_mode = defaults.punctuation_mode();
+        defaults
+    }
+
+    pub fn asr_defaults_json(&self) -> serde_json::Value {
+        serde_json::to_value(self.asr_defaults()).unwrap_or_else(|_| serde_json::json!({}))
     }
 
     pub fn vad_params(&self) -> VadParams {
-        self.audio
+        let defaults = self.asr_defaults();
+        let mut params = VadParams {
+            threshold: Some(defaults.vad.threshold),
+            min_silence_duration: Some(defaults.vad.min_silence_duration),
+            min_speech_duration: Some(defaults.vad.min_speech_duration),
+            max_speech_duration: Some(defaults.vad.max_speech_duration),
+            num_threads: Some(defaults.num_threads),
+            provider: Some(defaults.provider()),
+        };
+
+        if let Some(user) = self
+            .audio
             .get(SILERO_VAD_ID)
             .cloned()
             .and_then(|value| serde_norway::from_value(value).ok())
-            .unwrap_or_default()
+        {
+            let user: VadParams = user;
+            if user.threshold.is_some() {
+                params.threshold = user.threshold;
+            }
+            if user.min_silence_duration.is_some() {
+                params.min_silence_duration = user.min_silence_duration;
+            }
+            if user.min_speech_duration.is_some() {
+                params.min_speech_duration = user.min_speech_duration;
+            }
+            if user.max_speech_duration.is_some() {
+                params.max_speech_duration = user.max_speech_duration;
+            }
+            if user.num_threads.is_some() {
+                params.num_threads = user.num_threads;
+            }
+            if user.provider.as_ref().is_some_and(|v| !v.trim().is_empty()) {
+                params.provider = user
+                    .provider
+                    .map(|v| normalize_choice(&v, &["cpu", "cuda", "coreml"], "cpu"));
+            }
+        }
+
+        params
     }
 
     pub fn model_config_json(&self, model_id: &str) -> Option<serde_json::Value> {
         self.audio.get(model_id).and_then(profile_to_json)
     }
 
+    fn model_bool(&self, model_id: &str, key: &str, fallback: bool) -> bool {
+        self.model_config_json(model_id)
+            .and_then(|config| config.get(key).and_then(|v| v.as_bool()))
+            .unwrap_or(fallback)
+    }
+
+    fn model_string(&self, model_id: &str, key: &str, fallback: String) -> String {
+        self.model_config_json(model_id)
+            .and_then(|config| {
+                config
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .map(ToString::to_string)
+            })
+            .unwrap_or(fallback)
+    }
+
     /// Whether to enable simulated streaming for non-streaming models.
     /// When enabled, offline ASR models use VAD + interim decoding to produce
     /// partial results during recording, mimicking streaming behavior.
-    pub fn stream_simulate(&self) -> bool {
-        self.audio
-            .get("stream_simulate")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true)
+    pub fn stream_simulate(&self, model_id: &str) -> bool {
+        self.model_bool(
+            model_id,
+            "stream_simulate",
+            self.asr_defaults().stream_simulate,
+        )
+    }
+
+    pub fn hotword_replace(&self, model_id: &str) -> bool {
+        self.model_bool(
+            model_id,
+            "hotword_replace",
+            self.asr_defaults().hotword_replace,
+        )
+    }
+
+    pub fn hotword_llm_mode(&self, model_id: &str) -> String {
+        normalize_choice(
+            &self.model_string(
+                model_id,
+                "hotword_llm_mode",
+                self.asr_defaults().hotword_llm_mode(),
+            ),
+            &["auto", "disabled", "force"],
+            "auto",
+        )
     }
 }
 

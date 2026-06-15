@@ -83,6 +83,22 @@ pub(crate) fn json_string(config: &serde_json::Value, key: &str) -> Option<Strin
         .map(ToString::to_string)
 }
 
+pub(crate) fn json_choice(
+    config: &serde_json::Value,
+    key: &str,
+    allowed: &[&str],
+    fallback: &str,
+) -> String {
+    let value = json_string(config, key)
+        .map(|v| v.to_ascii_lowercase())
+        .unwrap_or_else(|| fallback.to_string());
+    if allowed.iter().any(|choice| *choice == value) {
+        value
+    } else {
+        fallback.to_string()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Shared worker types & helpers
 // ---------------------------------------------------------------------------
@@ -128,26 +144,34 @@ pub struct SherpaOnnxEngine {
     resource_dir: PathBuf,
     active_model_id: String,
     vad_params: VadParams,
+    global_config: serde_json::Value,
     model_config: Option<serde_json::Value>,
+    punctuation_config: Option<serde_json::Value>,
     stream_simulate: bool,
 }
 
+pub struct SherpaOnnxEngineOptions {
+    pub data_dir: PathBuf,
+    pub resource_dir: PathBuf,
+    pub active_model_id: String,
+    pub vad_params: VadParams,
+    pub global_config: serde_json::Value,
+    pub model_config: Option<serde_json::Value>,
+    pub punctuation_config: Option<serde_json::Value>,
+    pub stream_simulate: bool,
+}
+
 impl SherpaOnnxEngine {
-    pub fn new(
-        data_dir: PathBuf,
-        resource_dir: PathBuf,
-        active_model_id: String,
-        vad_params: VadParams,
-        model_config: Option<serde_json::Value>,
-        stream_simulate: bool,
-    ) -> Self {
+    pub fn new(options: SherpaOnnxEngineOptions) -> Self {
         Self {
-            data_dir,
-            resource_dir,
-            active_model_id,
-            vad_params,
-            model_config,
-            stream_simulate,
+            data_dir: options.data_dir,
+            resource_dir: options.resource_dir,
+            active_model_id: options.active_model_id,
+            vad_params: options.vad_params,
+            global_config: options.global_config,
+            model_config: options.model_config,
+            punctuation_config: options.punctuation_config,
+            stream_simulate: options.stream_simulate,
         }
     }
 
@@ -158,9 +182,20 @@ impl SherpaOnnxEngine {
         &self,
         registry: &model::ModelRegistry,
         asr_entry: &model::ModelEntry,
+        asr_model_config: &serde_json::Value,
     ) -> Option<Arc<PunctuationProcessor>> {
-        // Skip if the ASR model already has built-in punctuation
-        if asr_entry.capabilities.punctuation {
+        let punctuation_mode = json_choice(
+            asr_model_config,
+            "punctuation_mode",
+            &["auto", "disabled", "force"],
+            "auto",
+        );
+        if punctuation_mode == "disabled" {
+            log_asr!(info, "External punctuation disabled for '{}'", asr_entry.id);
+            return None;
+        }
+
+        if punctuation_mode == "auto" && asr_entry.capabilities.punctuation {
             log_asr!(
                 info,
                 "ASR model '{}' has built-in punctuation, skipping external model",
@@ -191,13 +226,17 @@ impl SherpaOnnxEngine {
             return None;
         }
 
-        let num_threads = punct_entry
-            .default_config
-            .as_ref()
-            .and_then(|c| json_u32(c, "num_threads"))
-            .unwrap_or(2);
+        let punct_config = merged_model_config(
+            Some(&merged_model_config(
+                punct_entry.default_config.as_ref(),
+                Some(&self.global_config),
+            )),
+            self.punctuation_config.as_ref(),
+        );
+        let num_threads = json_u32(&punct_config, "num_threads").unwrap_or(2);
+        let provider = json_choice(&punct_config, "provider", &["cpu", "cuda", "coreml"], "cpu");
 
-        match PunctuationProcessor::new(&model_dir, num_threads) {
+        match PunctuationProcessor::new(&model_dir, num_threads, &provider) {
             Ok(p) => {
                 log_asr!(
                     info,
@@ -246,8 +285,13 @@ impl AsrEngine for SherpaOnnxEngine {
         let vad_base = VadConfig::from_registry(vad_entry.and_then(|e| e.default_config.as_ref()));
         let vad_config = VadConfig::merged(&vad_base, &self.vad_params);
 
-        let model_config =
-            merged_model_config(entry.default_config.as_ref(), self.model_config.as_ref());
+        let model_config = merged_model_config(
+            Some(&merged_model_config(
+                entry.default_config.as_ref(),
+                Some(&self.global_config),
+            )),
+            self.model_config.as_ref(),
+        );
         let asr_num_threads =
             json_u32(&model_config, "num_threads").unwrap_or(vad_config.num_threads);
         let streaming_chunk_size = json_usize(&model_config, "chunk_size")
@@ -258,7 +302,7 @@ impl AsrEngine for SherpaOnnxEngine {
         let _ = event_tx.send(AsrEvent::Open);
 
         // Create punctuation processor for ASR models without built-in punctuation
-        let punct_processor = self.create_punctuation_processor(&registry, entry);
+        let punct_processor = self.create_punctuation_processor(&registry, entry, &model_config);
 
         if entry.capabilities.streaming {
             // ── Online (streaming transducer, e.g. Zipformer) ──
@@ -291,13 +335,11 @@ impl AsrEngine for SherpaOnnxEngine {
             let vad_dir = model::model_path(&self.data_dir, "silero-vad");
             let vad = VadProcessor::new(&vad_dir, &vad_config)?;
 
-            let hotwords_for_restore = hotwords.to_vec();
             let (session, _worker_tx) = online::spawn_online_worker(
                 recognizer,
                 stream,
                 vad,
                 streaming_chunk_size,
-                hotwords_for_restore,
                 event_tx,
                 punct_processor,
             )?;

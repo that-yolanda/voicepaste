@@ -17,7 +17,13 @@
         "itn": true
       },
       "languages": ["zh", "en"],
-      "requires_config": ["url", "app_id", "access_token", "secret_key", "resource_id"],
+      "requires_config": [
+        "url",
+        "app_id",
+        "access_token",
+        "secret_key",
+        "resource_id"
+      ],
       "default_config": {
         "url": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
         "app_id": "",
@@ -54,12 +60,6 @@
       "name": "Silero VAD",
       "description": "语音活动检测模型，语音分段的基础依赖",
       "tags": ["基础模型"],
-      "capabilities": {
-        "streaming": false,
-        "hotwords": false,
-        "punctuation": false,
-        "itn": false
-      },
       "languages": [],
       "architecture": "vad",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
@@ -110,7 +110,14 @@
       "engine": "sherpa-onnx",
       "name": "FunASR-Nano 中英日三语",
       "description": "基于 FunASR-Nano-2512 的高精度离线模型，支持中英日三语、多种方言及歌词识别",
-      "tags": ["中英日三语", "方言识别", "歌词识别", "自动标点", "热词库", "ITN 口语转书面"],
+      "tags": [
+        "中英日三语",
+        "方言识别",
+        "歌词识别",
+        "自动标点",
+        "热词库",
+        "ITN 口语转书面"
+      ],
       "capabilities": {
         "streaming": false,
         "hotwords": true,
@@ -217,7 +224,14 @@
       "engine": "sherpa-onnx",
       "name": "Qwen3 ASR 多语言",
       "description": "基于 Qwen3-ASR-0.6B 的多语言语音识别模型，支持31种语言及20种中文方言、歌词/说唱识别",
-      "tags": ["多语言", "方言识别", "歌词识别", "自动标点", "热词库", "流式输出"],
+      "tags": [
+        "多语言",
+        "方言识别",
+        "歌词识别",
+        "自动标点",
+        "热词库",
+        "流式输出"
+      ],
       "capabilities": {
         "streaming": false,
         "hotwords": true,
@@ -283,12 +297,6 @@
       "name": "CT-Transformer 标点恢复",
       "description": "中英双语标点恢复模型，为不支持自动标点的 ASR 模型添加标点符号，下载后自动生效",
       "tags": ["基础模型"],
-      "capabilities": {
-        "streaming": false,
-        "hotwords": false,
-        "punctuation": true,
-        "itn": false
-      },
       "languages": ["zh", "en"],
       "architecture": "punct_ct_transformer",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",

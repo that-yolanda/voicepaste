@@ -24,6 +24,7 @@ pub(crate) fn build_sense_voice_recognizer(
     let mut config = OfflineRecognizerConfig::default();
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
+    config.model_config.provider = json_string(model_config, "provider");
 
     let model = p("model").ok_or_else(|| format!("模型 {} 缺少 model 文件", entry.id))?;
     config.model_config.sense_voice = OfflineSenseVoiceModelConfig {

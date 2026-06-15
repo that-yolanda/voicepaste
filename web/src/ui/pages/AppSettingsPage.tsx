@@ -192,28 +192,11 @@ export function AppSettingsPage() {
                 </>
               }
               description="输入完成后恢复原剪贴板内容"
+              last
               action={
                 <Toggle
                   checked={app.keep_clipboard !== false}
                   onChange={(v) => setAppBool("keep_clipboard", v)}
-                />
-              }
-            />
-            <SectionItem
-              title={
-                <>
-                  模拟流式输出{" "}
-                  <span className="text-[10px] font-mono text-text-muted bg-accent-soft px-[5px] py-px rounded-[3px] cursor-help opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    audio.stream_simulate
-                  </span>
-                </>
-              }
-              description="针对不支持流式输出的模型，模拟流式输出的效果"
-              last
-              action={
-                <Toggle
-                  checked={(cfg.audio as Record<string, boolean>)?.stream_simulate !== false}
-                  onChange={(v) => scheduleSave({ audio: { stream_simulate: v } })}
                 />
               }
             />
