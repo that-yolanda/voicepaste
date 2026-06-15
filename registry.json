@@ -178,7 +178,7 @@
         "tokens": "tokens.txt"
       },
       "default_config": {
-        "max_active_paths": 4,
+        "max_active_paths": 16,
         "modeling_unit": "cjkchar",
         "enable_endpoint": true,
         "rule1_min_trailing_silence": 2.4,

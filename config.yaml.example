@@ -26,7 +26,7 @@ audio:
     # auto=模型无内置标点时使用标点模型，disabled=禁用，force=强制使用标点模型
     punctuation_mode: auto
     vad:
-      threshold: 0.2
+      threshold: 0.5
       min_silence_duration: 0.2
       min_speech_duration: 0.2
       max_speech_duration: 10.0
@@ -57,8 +57,8 @@ audio:
 
   sherpa-onnx-streaming-zipformer-zh-en:
     chunk_size: 3200
-    max_active_paths: 4
-    hotwords_score: 2.0
+    max_active_paths: 16
+    hotwords_score: 4.0
     enable_endpoint: true
     rule1_min_trailing_silence: 2.4
     rule2_min_trailing_silence: 0.8
