@@ -1,6 +1,7 @@
 import { Trash } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { loadHotwords, saveHotwords } from "@/bridge/settings";
+import { mergeHotwords, parseHotwordInput } from "@/lib/hotwords";
 import type { HotwordData, HotwordGroup } from "@/types/hotwords";
 import { Badge } from "@/ui/components/Badge";
 import { Button } from "@/ui/components/Button";
@@ -138,14 +139,14 @@ function HotwordGroupItem({
               className="w-full"
               value={wordDraft}
               onChange={setWordDraft}
-              placeholder="支持「热词|权重」，不加权重默认为 4，例如：流式输出|5"
+              placeholder="逗号分隔批量添加，例如：Claude, Anthropic|8（默认权重 4）"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  const val = wordDraft.trim();
-                  if (val) {
-                    onUpdate({ words: [...group.words, val] });
-                    setWordDraft("");
+                  const entries = parseHotwordInput(wordDraft);
+                  if (entries.length > 0) {
+                    onUpdate({ words: mergeHotwords(group.words, entries) });
                   }
+                  setWordDraft("");
                 }
               }}
             />
