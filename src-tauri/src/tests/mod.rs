@@ -8,5 +8,8 @@
 #[cfg(feature = "asr-integration")]
 mod asr_integration;
 
+#[cfg(feature = "asr-integration")]
+mod asr_zipformer_zh_en;
+
 #[cfg(feature = "llm-integration")]
 mod llm_integration;

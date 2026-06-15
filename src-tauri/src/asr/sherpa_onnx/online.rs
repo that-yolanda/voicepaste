@@ -56,7 +56,7 @@ pub(crate) fn build_online_recognizer(
 
     if let Some(buf) = hotwords_buf {
         config.decoding_method = Some("modified_beam_search".to_string());
-        config.max_active_paths = json_u32(model_config, "max_active_paths").unwrap_or(14) as i32;
+        config.max_active_paths = json_u32(model_config, "max_active_paths").unwrap_or(16) as i32;
         config.hotwords_score = json_f32(model_config, "hotwords_score").unwrap_or(4.0);
         config.hotwords_buf = Some(buf);
 
@@ -83,12 +83,15 @@ pub(crate) fn build_online_recognizer(
 /// Build an in-memory hotwords buffer for sherpa-onnx OnlineRecognizer.
 ///
 /// Parses `word|weight` entries, validates against model vocabulary, cleans
-/// punctuation, uppercases for bpe models, and produces the format:
+/// punctuation, and produces one line per hotword as `TOKENS :score`.
 ///
-/// ```text
-/// CLEANED_WORD :score
-/// ANOTHER :score
-/// ```
+/// Token shaping depends on the modeling unit:
+/// - `cjkchar` / `cjkchar+bpe`: each CJK character becomes its own
+///   space-separated token (`流式输出` → `流 式 输 出`), because the cjkchar
+///   tokenizer only knows single characters and sherpa-onnx will not auto-split
+///   a whole-word CJK piece. Latin runs stay whole (re-encoded by BPE).
+/// - `bpe`: the cleaned word is uppercased whole (`Claude Code` → `CLAUDE CODE`),
+///   since sherpa-onnx re-encodes BPE whole-words.
 ///
 /// Returns `None` when no valid hotwords remain after filtering.
 pub(crate) fn build_online_hotwords_buf(
@@ -149,18 +152,22 @@ pub(crate) fn build_online_hotwords_buf(
         return None;
     }
 
-    // Step 4: Build the hotwords buffer content
+    // Step 4: Build the hotwords buffer content.
+    //
+    // `cjkchar`-unit tokenizers (plain `cjkchar` and the CJK half of
+    // `cjkchar+bpe`) only know single CJK characters as tokens, so each CJK
+    // char in a hotword must become its own space-separated entry; a whole-word
+    // CJK piece like `流式输出` is out-of-vocabulary and silently dropped by
+    // sherpa-onnx (which does NOT auto-split CJK the way it re-encodes BPE
+    // whole-words). Latin runs stay whole because the BPE tokenizer re-encodes
+    // them.
+    let needs_cjk_split = modeling_unit.contains("cjkchar");
     let lines: Vec<String> = filtered
         .iter()
         .map(|hw| {
             let (word, weight) = crate::hotword::parse_hotword_entry(hw);
             let cleaned: String = word.chars().filter(|c| !c.is_ascii_punctuation()).collect();
-            let cleaned = if is_bpe {
-                cleaned.to_uppercase()
-            } else {
-                cleaned
-            };
-            format!("{} :{weight}", cleaned)
+            format_hotword_line(&cleaned, weight, needs_cjk_split, is_bpe)
         })
         .collect();
 
@@ -171,6 +178,73 @@ pub(crate) fn build_online_hotwords_buf(
     );
 
     Some(lines.join("\n").into_bytes())
+}
+
+// ---------------------------------------------------------------------------
+// Hotword line formatting (cjkchar-aware)
+// ---------------------------------------------------------------------------
+
+/// Format one hotword as a transducer `hotwords_buf` line (`TOKENS :score`).
+///
+/// When `needs_cjk_split` is true (any `cjkchar`-unit model), each CJK character
+/// is emitted as its own space-separated token and Latin runs are kept whole —
+/// see [`split_cjk_hotword`]. When `uppercase` is true (BPE models) the whole
+/// token text is uppercased to match the BPE vocab casing (a no-op for CJK).
+fn format_hotword_line(word: &str, weight: f32, needs_cjk_split: bool, uppercase: bool) -> String {
+    let token_text = if needs_cjk_split {
+        split_cjk_hotword(word)
+    } else {
+        word.to_string()
+    };
+    let token_text = if uppercase {
+        token_text.to_uppercase()
+    } else {
+        token_text
+    };
+    format!("{token_text} :{weight}")
+}
+
+/// Split a hotword into space-separated pieces for a `cjkchar`-unit tokenizer.
+///
+/// Each CJK character becomes its own piece; consecutive non-CJK characters
+/// (Latin letters, digits) are grouped into one piece so the BPE tokenizer can
+/// re-encode them. Whitespace acts as a piece boundary and is collapsed.
+///
+/// Examples: `流式输出` → `流 式 输 出`, `Claude Code` → `Claude Code`,
+/// `流式AI` → `流 式 AI`.
+fn split_cjk_hotword(word: &str) -> String {
+    let mut pieces: Vec<String> = Vec::new();
+    let mut latin = String::new();
+    for c in word.chars() {
+        if c.is_whitespace() {
+            if !latin.is_empty() {
+                pieces.push(std::mem::take(&mut latin));
+            }
+        } else if is_cjk_char(c) {
+            if !latin.is_empty() {
+                pieces.push(std::mem::take(&mut latin));
+            }
+            pieces.push(c.to_string());
+        } else {
+            latin.push(c);
+        }
+    }
+    if !latin.is_empty() {
+        pieces.push(latin);
+    }
+    pieces.join(" ")
+}
+
+/// Whether a character is a CJK ideograph or Japanese kana — i.e. a standalone
+/// token unit for `cjkchar`-based models (each such character has its own entry
+/// in `tokens.txt`).
+fn is_cjk_char(c: char) -> bool {
+    matches!(c,
+        '\u{3400}'..='\u{4DBF}'   // CJK Unified Ideographs Extension A
+        | '\u{4E00}'..='\u{9FFF}' // CJK Unified Ideographs
+        | '\u{F900}'..='\u{FAFF}' // CJK Compatibility Ideographs
+        | '\u{3040}'..='\u{30FF}' // Hiragana + Katakana
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -837,6 +911,75 @@ mod tests {
         assert_eq!(
             filter_valid_hotwords(&hotwords, Some(&vocab)),
             vec!["语音输入"]
+        );
+    }
+
+    // ── cjkchar hotword line formatting tests ───────────────────────────────
+
+    #[test]
+    fn split_cjk_into_single_chars() {
+        assert_eq!(split_cjk_hotword("流式输出"), "流 式 输 出");
+        assert_eq!(split_cjk_hotword("北京"), "北 京");
+    }
+
+    #[test]
+    fn split_keeps_latin_runs_whole() {
+        assert_eq!(split_cjk_hotword("Claude Code"), "Claude Code");
+        assert_eq!(split_cjk_hotword("OpenAI"), "OpenAI");
+    }
+
+    #[test]
+    fn split_handles_mixed_cjk_and_latin() {
+        assert_eq!(split_cjk_hotword("流式AI"), "流 式 AI");
+        assert_eq!(split_cjk_hotword("GPT流式"), "GPT 流 式");
+    }
+
+    #[test]
+    fn split_collapses_whitespace() {
+        assert_eq!(split_cjk_hotword(" 流 式 "), "流 式");
+        assert_eq!(split_cjk_hotword("A  B"), "A B");
+    }
+
+    #[test]
+    fn format_line_cjk_only_model() {
+        // Plain cjkchar: split, no uppercasing.
+        assert_eq!(
+            format_hotword_line("流式输出", 4.0, true, false),
+            "流 式 输 出 :4"
+        );
+    }
+
+    #[test]
+    fn format_line_cjkchar_bpe_model() {
+        // cjkchar+bpe: split CJK, uppercase (no-op for CJK).
+        assert_eq!(
+            format_hotword_line("流式输出", 4.0, true, true),
+            "流 式 输 出 :4"
+        );
+        assert_eq!(
+            format_hotword_line("流式输出", 8.0, true, true),
+            "流 式 输 出 :8"
+        );
+    }
+
+    #[test]
+    fn format_line_bpe_english_uppercased() {
+        // Pure bpe: keep whole, uppercase Latin.
+        assert_eq!(
+            format_hotword_line("Claude Code", 4.0, false, true),
+            "CLAUDE CODE :4"
+        );
+        assert_eq!(
+            format_hotword_line("Claude Code", 10.0, false, true),
+            "CLAUDE CODE :10"
+        );
+    }
+
+    #[test]
+    fn format_line_mixed_cjkchar_bpe() {
+        assert_eq!(
+            format_hotword_line("流式AI", 4.0, true, true),
+            "流 式 AI :4"
         );
     }
 }
