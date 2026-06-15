@@ -517,7 +517,9 @@ mod tests {
     #[test]
     fn minimal_registry_contains_doubao() {
         let registry = minimal_registry();
-        assert_eq!(registry.version, 3);
+        // version stays at 1 so any real bundled registry (version >= 12) always
+        // upgrades it via merge_registry's version-gated merge.
+        assert_eq!(registry.version, 1);
         assert!(registry.models.iter().any(|m| m.id == "doubao-streaming"));
     }
 
