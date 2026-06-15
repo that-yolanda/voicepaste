@@ -4,7 +4,7 @@ interface ButtonProps {
   children: ReactNode;
   onClick?: () => void;
   variant?: "default" | "accent" | "danger" | "ghost";
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "icon";
   className?: string;
   disabled?: boolean;
   type?: "button" | "submit";
@@ -20,10 +20,16 @@ export function Button({
   type = "button",
 }: ButtonProps) {
   const base =
-    "inline-flex items-center gap-1.5 font-medium rounded-md transition-colors focus:outline-none";
-  const sizes = size === "sm" ? "px-2 py-1 text-xs" : "px-4 py-[7px] text-sm";
+    "inline-flex items-center gap-1 font-medium rounded-md transition-colors focus:outline-none justify-center";
+  const sizes =
+    size === "icon"
+      ? "p-2"
+      : size === "sm"
+        ? "px-2 py-1 text-xs"
+        : "px-3 py-1.5 text-sm";
   const variants: Record<string, string> = {
-    default: "bg-transparent text-text border border-border hover:border-accent hover:text-accent",
+    default:
+      "bg-transparent text-text border border-border hover:border-accent hover:text-accent",
     accent: "bg-accent text-text-on-accent hover:bg-accent-hover",
     danger: "bg-error/20 text-error hover:bg-error/30",
     ghost: "text-text-dim hover:text-text hover:bg-fill-hover",

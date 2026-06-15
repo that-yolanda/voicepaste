@@ -68,7 +68,8 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
 
   let total = 0;
 
-  const cells: { key: string; count: number; date: Date; future: boolean }[] = [];
+  const cells: { key: string; count: number; date: Date; future: boolean }[] =
+    [];
   for (let w = 0; w < WEEKS; w++) {
     for (let d = 0; d < 7; d++) {
       const dt = new Date(start);
@@ -96,7 +97,7 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
   return (
     <Section>
       <SectionHeader title="使用统计" />
-      <SectionContent className="p-4 flex gap-4 items-end">
+      <SectionContent className="px-4 flex gap-4 items-end">
         {/* Grid area */}
         <div className="flex-1 min-w-0">
           {/* Month labels */}
@@ -120,7 +121,10 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
               style={{ gridTemplateRows: "repeat(7, 11px)" }}
             >
               {DAY_LABELS.map((day) => (
-                <span key={day.key} className="h-[11px] flex items-center justify-end leading-none">
+                <span
+                  key={day.key}
+                  className="h-[11px] flex items-center justify-end leading-none"
+                >
                   {day.label}
                 </span>
               ))}
@@ -140,7 +144,9 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
                   key={c.key}
                   className={`w-[11px] h-[11px] rounded-[2px] ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
                   title={
-                    c.future ? "" : `${c.date.getMonth() + 1}月${c.date.getDate()}日: ${c.count} 字`
+                    c.future
+                      ? ""
+                      : `${c.date.getMonth() + 1}月${c.date.getDate()}日: ${c.count} 字`
                   }
                 />
               ))}

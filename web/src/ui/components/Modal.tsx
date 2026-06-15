@@ -32,18 +32,12 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
             <h2 className="text-lg font-semibold text-text">{title}</h2>
-            <button
-              type="button"
-              className="text-text-muted hover:text-text p-1"
-              onClick={onClose}
-            >
+            <button type="button" className="text-text-muted hover:text-text p-1" onClick={onClose}>
               <X size={18} />
             </button>
           </div>
         )}
-        <div className="p-5 text-sm text-text-dim  max-h-[80vh] overflow-auto">
-          {children}
-        </div>
+        <div className="p-5 text-sm text-text-dim  max-h-[80vh] overflow-auto">{children}</div>
       </div>
     </div>
   );

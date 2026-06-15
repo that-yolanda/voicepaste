@@ -71,6 +71,10 @@ export async function saveConfigObject(config: ConfigPayload): Promise<void> {
   return invoke("save_config_object", { configObject: config });
 }
 
+export async function getAudioConfigDefaults(): Promise<Record<string, unknown>> {
+  return invoke("get_audio_config_defaults");
+}
+
 // ---- Permission methods ----
 
 export async function getMicrophoneStatus(): Promise<{ status: string }> {

@@ -2,13 +2,25 @@ import { Trash } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { loadHotwords, saveHotwords } from "@/bridge/settings";
 import type { HotwordData } from "@/types/hotwords";
+import { Badge } from "@/ui/components/Badge";
 import { Button } from "@/ui/components/Button";
 import { Input } from "@/ui/components/Input";
 import { Toggle } from "@/ui/components/Toggle";
-import { PageHeader, PageLayout, Section, SectionContent } from "@/ui/layout/PageLayout";
+import {
+  PageHeader,
+  PageLayout,
+  Section,
+  SectionContent,
+  SectionHeader,
+  SectionItem,
+  SectionItemList,
+} from "@/ui/layout/PageLayout";
 
 export function HotwordsPage() {
-  const [data, setData] = useState<HotwordData>({ active_group: null, groups: [] });
+  const [data, setData] = useState<HotwordData>({
+    active_group: null,
+    groups: [],
+  });
   const [newWord, setNewWord] = useState("");
 
   const load = useCallback(async () => {
@@ -31,13 +43,19 @@ export function HotwordsPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="热词库" />
+      <PageHeader
+        title="热词库"
+        description="热词库用于提高特定词汇的识别准确率。ASR模型支持热词则自动传入模型识别，若模型不支持可追加到 LLM 的文本润色中，或同时开启以强化热词准确率，配置前往 音频模型 > 自定义配置 > 识别强化。"
+      />
       <Button
         variant="accent"
         onClick={() => {
           const updated = {
             ...data,
-            groups: [...data.groups, { name: "新热词组", active: true, words: [] }],
+            groups: [
+              ...data.groups,
+              { name: "新热词组", active: true, words: [] },
+            ],
           };
           save(updated);
         }}
@@ -46,87 +64,102 @@ export function HotwordsPage() {
       </Button>
       {data.groups.map((group, gi) => (
         <Section key={group.name}>
-          <SectionContent className="space-y-2 py-4">
-            <div className="flex items-center gap-2">
-              <Input
-                value={group.name}
-                className="flex-1"
-                onChange={(v) => {
-                  const updated = { ...data };
-                  updated.groups = [...updated.groups];
-                  updated.groups[gi] = { ...group, name: v };
-                  setData(updated);
-                }}
-                onBlur={() => saveHotwords(data)}
-              />
-              <Toggle
-                checked={group.active}
-                onChange={(v) => {
-                  const updated = { ...data };
-                  updated.groups = [...updated.groups];
-                  updated.groups[gi] = { ...group, active: v };
-                  save(updated);
-                }}
-              />
-              <Button
-                size="sm"
-                onClick={() => {
-                  const updated = { ...data };
-                  updated.groups = data.groups.filter((_, i) => i !== gi);
-                  save(updated);
-                }}
-              >
-                <Trash size={16} />
-              </Button>
-            </div>
-
-            <Input
-              value={newWord}
-              onChange={(v) => setNewWord(v)}
-              className="w-full"
-              inputClassName="h-6 px-2 rounded-full text-xs"
-              placeholder="添加热词, 支持 热词+权重，|符号分割，不加权重默认为4，例如: 流式输出|5"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const val = newWord.trim();
-                  if (val) {
-                    const updated = { ...data };
-                    updated.groups = [...updated.groups];
-                    updated.groups[gi] = { ...group, words: [...group.words, val] };
-                    setNewWord("");
-                    save(updated);
-                  }
-                }
-              }}
-            />
-            <div className="flex flex-wrap gap-1.5">
-              {group.words.map((word) => (
-                <button
-                  type="button"
-                  key={word}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-soft text-accent text-xs hover:bg-error/20 hover:text-error transition-colors border-0 cursor-pointer"
-                  title="点击移除"
+          <SectionHeader
+            title={group.name || "未命名热词组"}
+            action={
+              <div className="flex items-center gap-2">
+                <Button
+                  size="icon"
                   onClick={() => {
                     const updated = { ...data };
-                    updated.groups = [...updated.groups];
-                    updated.groups[gi] = {
-                      ...group,
-                      words: group.words.filter((w) => w !== word),
-                    };
+                    updated.groups = data.groups.filter((_, i) => i !== gi);
                     save(updated);
                   }}
                 >
-                  {word}
-                  <span className="text-[10px]">×</span>
-                </button>
-              ))}
-            </div>
+                  <Trash size={16} />
+                </Button>
+                <Toggle
+                  checked={group.active}
+                  onChange={(v) => {
+                    const updated = { ...data };
+                    updated.groups = [...updated.groups];
+                    updated.groups[gi] = { ...group, active: v };
+                    save(updated);
+                  }}
+                />
+              </div>
+            }
+          />
+          <SectionContent>
+            <SectionItemList>
+              <SectionItem
+                title="热词组名称"
+                action={
+                  <Input
+                    value={group.name}
+                    className="w-full"
+                    onChange={(v) => {
+                      const updated = { ...data };
+                      updated.groups = [...updated.groups];
+                      updated.groups[gi] = { ...group, name: v };
+                      setData(updated);
+                    }}
+                    onBlur={() => saveHotwords(data)}
+                  />
+                }
+              />
+
+              <SectionItem title="添加热词">
+                <Input
+                  value={newWord}
+                  onChange={(v) => setNewWord(v)}
+                  className="w-full"
+                  placeholder="支持「热词|权重」，不加权重默认为 4，例如：流式输出|5"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = newWord.trim();
+                      if (val) {
+                        const updated = { ...data };
+                        updated.groups = [...updated.groups];
+                        updated.groups[gi] = {
+                          ...group,
+                          words: [...group.words, val],
+                        };
+                        setNewWord("");
+                        save(updated);
+                      }
+                    }
+                  }}
+                />
+              </SectionItem>
+
+              <SectionItem title="热词列表" last>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.words.map((word) => (
+                    <Badge
+                      key={word}
+                      variant="accent"
+                      title="点击移除"
+                      onClick={() => {
+                        const updated = { ...data };
+                        updated.groups = [...updated.groups];
+                        updated.groups[gi] = {
+                          ...group,
+                          words: group.words.filter((w) => w !== word),
+                        };
+                        save(updated);
+                      }}
+                    >
+                      {word}
+                      <span className="text-[10px]">×</span>
+                    </Badge>
+                  ))}
+                </div>
+              </SectionItem>
+            </SectionItemList>
           </SectionContent>
         </Section>
       ))}
-      <p className="text-xs text-text-muted">
-        热词库用于提高特定词汇的识别准确率。每个词组可以包含多个热词，激活后生效。
-      </p>
     </PageLayout>
   );
 }

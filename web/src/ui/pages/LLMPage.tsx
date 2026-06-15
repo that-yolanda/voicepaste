@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { loadPrompts, savePrompts } from "@/bridge/settings";
 import { Button } from "@/ui/components/Button";
 import { Input } from "@/ui/components/Input";
+import { Textarea } from "@/ui/components/Textarea";
 import {
   PageHeader,
   PageLayout,
@@ -20,64 +21,48 @@ const LLM_PROVIDERS = [
     label: "DeepSeek",
     url: "https://api.deepseek.com",
     model: "deepseek-chat",
-    baseUrlPlaceholder: "DeepSeek 无需配置，默认即可使用",
-    modelHint: "如 deepseek-chat",
   },
   {
     key: "openai",
     label: "OpenAI",
     url: "https://api.openai.com/v1",
     model: "gpt-4o",
-    baseUrlPlaceholder: "OpenAI 无需配置，默认即可使用",
-    modelHint: "如 gpt-4o-mini, gpt-4o",
   },
   {
     key: "openrouter",
     label: "OpenRouter",
     url: "https://openrouter.ai/api/v1",
     model: "openai/gpt-4o",
-    baseUrlPlaceholder: "OpenRouter 无需配置，默认即可使用",
-    modelHint: "如 openai/gpt-4o",
   },
   {
     key: "siliconflow",
     label: "硅基流动",
     url: "https://api.siliconflow.cn/v1",
     model: "Qwen/Qwen2.5-7B-Instruct",
-    baseUrlPlaceholder: "硅基流动无需配置，默认即可使用",
-    modelHint: "如 Qwen/Qwen2.5-7B-Instruct",
   },
   {
     key: "gemini",
     label: "Gemini",
     url: "https://generativelanguage.googleapis.com/v1beta",
     model: "gemini-pro",
-    baseUrlPlaceholder: "Gemini 无需配置，默认即可使用",
-    modelHint: "如 gemini-pro",
   },
   {
     key: "anthropic",
     label: "Anthropic",
     url: "https://api.anthropic.com/v1",
     model: "claude-3-5-sonnet-20241022",
-    baseUrlPlaceholder: "Anthropic 无需配置，默认即可使用",
-    modelHint: "如 claude-3-5-sonnet-20241022",
   },
   {
     key: "ollama",
     label: "Ollama 本地",
     url: "http://localhost:11434",
     model: "llama3.2",
-    baseUrlPlaceholder: "请填写 Ollama 地址",
-    modelHint: "如 llama3.2, qwen2.5",
   },
   {
     key: "openai_compatible",
     label: "自定义",
     url: "",
     model: "",
-    baseUrlPlaceholder: "请填写自定义 API 地址",
-    modelHint: "填写模型名称",
   },
 ];
 
@@ -101,11 +86,14 @@ export function LLMPage() {
   const llm = (cfg.llm || {}) as Record<string, unknown>;
 
   const providerKey = (llm.provider as string) || "deepseek";
-  const currentP = LLM_PROVIDERS.find((p) => p.key === providerKey) || LLM_PROVIDERS[0];
+  const currentP =
+    LLM_PROVIDERS.find((p) => p.key === providerKey) || LLM_PROVIDERS[0];
   const savedProviderCfg = (llm[providerKey] || {}) as Record<string, string>;
 
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
-  const promptsSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const promptsSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
   // Load prompts
   const loadP = useCallback(async () => {
@@ -169,66 +157,66 @@ export function LLMPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="文本润色" description="用于语音识别后的文本润色与文本结构化" />
-      {/* Provider grid */}
-      <Section>
-        <SectionHeader title="模型厂商" />
-        <SectionContent>
-          <div className="flex flex-wrap gap-2">
-            {LLM_PROVIDERS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => switchProvider(p.key)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  providerKey === p.key
-                    ? "bg-accent text-text-on-accent"
-                    : "bg-fill-interactive text-text-dim hover:bg-fill-hover"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </SectionContent>
-      </Section>
-
+      <PageHeader
+        title="文本润色"
+        description="用于语音识别后的文本润色与文本结构化"
+      />
       {/* API Config */}
       <Section>
         <SectionHeader title="API 配置" />
         <SectionContent>
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-text-dim mb-1.5">API 地址</p>
-              <p className="text-xs text-text-muted mb-2">{currentP.baseUrlPlaceholder}</p>
-              <Input
-                className="w-full"
-                placeholder="https://api.example.com/v1"
-                value={savedProviderCfg.url || ""}
-                onChange={(v) => setLlmField("url", v)}
-              />
-            </div>
-            <div>
-              <p className="text-sm text-text-dim mb-1.5">API Key</p>
-              <Input
-                className="w-full"
-                type="password"
-                placeholder="sk-..."
-                value={savedProviderCfg.api_key || ""}
-                onChange={(v) => setLlmField("api_key", v)}
-              />
-            </div>
-            <div>
-              <p className="text-sm text-text-dim mb-1.5">模型名称</p>
-              <p className="text-xs text-text-muted mb-2">{currentP.modelHint}</p>
-              <Input
-                className="w-full"
-                placeholder={currentP.model}
-                value={savedProviderCfg.model || ""}
-                onChange={(v) => setLlmField("model", v)}
-              />
-            </div>
-          </div>
+          <SectionItemList>
+            <SectionItem title="模型">
+              <div className="grid grid-cols-4 gap-2">
+                {LLM_PROVIDERS.map((p) => (
+                  <Button
+                    key={p.key}
+                    onClick={() => switchProvider(p.key)}
+                    variant={providerKey === p.key ? "accent" : "ghost"}
+                  >
+                    {p.label}
+                  </Button>
+                ))}
+              </div>
+            </SectionItem>
+
+            <SectionItem
+              title="URL"
+              action={
+                <Input
+                  className="w-full"
+                  placeholder="留空使用默认地址"
+                  value={savedProviderCfg.url || ""}
+                  onChange={(v) => setLlmField("url", v)}
+                />
+              }
+            />
+
+            <SectionItem
+              title="API Key"
+              action={
+                <Input
+                  className="w-full"
+                  type="password"
+                  placeholder="sk-..."
+                  value={savedProviderCfg.api_key || ""}
+                  onChange={(v) => setLlmField("api_key", v)}
+                />
+              }
+            />
+            <SectionItem
+              title="模型ID"
+              action={
+                <Input
+                  className="w-full"
+                  placeholder={currentP.model}
+                  value={savedProviderCfg.model || ""}
+                  onChange={(v) => setLlmField("model", v)}
+                />
+              }
+              last
+            />
+          </SectionItemList>
         </SectionContent>
       </Section>
 
@@ -239,7 +227,6 @@ export function LLMPage() {
           subtitle="编辑文本润色模板内容；模板快捷键在「快捷键」页面配置"
           action={
             <Button
-              size="sm"
               variant="accent"
               onClick={async () => {
                 const updated = [
@@ -263,40 +250,45 @@ export function LLMPage() {
         <SectionContent>
           <SectionItemList>
             {prompts.map((item, index) => (
-              <SectionItem key={item.id} className="flex flex-col">
-                <div className="flex items-center gap-2 w-full">
-                  <input
-                    type="text"
-                    value={item.title || ""}
-                    onChange={(e) => {
-                      const updated = [...prompts];
-                      updated[index] = { ...updated[index], title: e.target.value };
-                      setPrompts(updated);
-                      scheduleSavePrompts(updated);
-                    }}
-                    className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
-                    placeholder="模板名称"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={async () => {
-                      const updated = prompts.filter((_, j) => j !== index);
-                      setPrompts(updated);
-                      await savePromptsNow(updated);
-                    }}
-                  >
-                    <Trash size={16} />
-                  </Button>
-                </div>
-                <textarea
+              <SectionItem
+                key={item.id}
+                title="模板名称"
+                last={index == prompts.length - 1}
+                action={
+                  <div className="flex gap-2">
+                    <Input
+                      value={item.title || ""}
+                      onChange={(value) => {
+                        const updated = [...prompts];
+                        updated[index] = { ...updated[index], title: value };
+                        setPrompts(updated);
+                        scheduleSavePrompts(updated);
+                      }}
+                      className="w-full"
+                      placeholder="模板名称"
+                    />
+                    <Button
+                      size="icon"
+                      onClick={async () => {
+                        const updated = prompts.filter((_, j) => j !== index);
+                        setPrompts(updated);
+                        await savePromptsNow(updated);
+                      }}
+                    >
+                      <Trash size={16} />
+                    </Button>
+                  </div>
+                }
+              >
+                <Textarea
                   value={item.prompt || ""}
-                  onChange={(e) => {
+                  onChange={(value) => {
                     const updated = [...prompts];
-                    updated[index] = { ...updated[index], prompt: e.target.value };
+                    updated[index] = { ...updated[index], prompt: value };
                     setPrompts(updated);
                     scheduleSavePrompts(updated);
                   }}
-                  className="w-full h-32 px-3 py-2 rounded-lg bg-input-bg border border-border text-text text-sm resize-none focus:outline-none focus:ring-1 focus:ring-accent-dim"
+                  textareaClassName="h-32 resize-none"
                   placeholder="输入系统提示词…"
                 />
               </SectionItem>

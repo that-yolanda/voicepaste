@@ -1,11 +1,11 @@
 import {
   CircleCheck,
-  CircleX,
   CloudDownload,
   Cog,
   LoaderCircle,
   RotateCcw,
   Trash,
+  ChartNoAxesCombined,
 } from "lucide-react";
 import {
   type ReactNode,
@@ -17,6 +17,7 @@ import {
 import {
   deleteModel,
   downloadModel,
+  getAudioConfigDefaults,
   getDownloadedModels,
   getModelRegistry,
   type ModelDownloadProgress,
@@ -29,9 +30,12 @@ import {
   DOUBAO_VISIBLE_PARAMS,
   type RegistryModel,
 } from "@/lib/model";
+import { Badge } from "@/ui/components/Badge";
 import { Button } from "@/ui/components/Button";
+import { Input } from "@/ui/components/Input";
 import { Modal } from "@/ui/components/Modal";
 import { SegmentedControl } from "@/ui/components/SegmentedControl";
+import { Textarea } from "@/ui/components/Textarea";
 import { Toggle } from "@/ui/components/Toggle";
 import {
   PageHeader,
@@ -39,10 +43,11 @@ import {
   Section,
   SectionContent,
   SectionHeader,
+  SectionItem,
+  SectionItemList,
 } from "@/ui/layout/PageLayout";
 import { useSettings } from "@/ui/SettingsProvider";
 
-const VAD_ID = "silero-vad";
 const ASR_DEFAULTS_ID = "asr_defaults";
 
 const DEFAULT_ASR_CONFIG = {
@@ -114,47 +119,44 @@ function normalizeMode(value: unknown, fallback: string): string {
     : fallback;
 }
 
-function getAsrDefaults(audio: Record<string, unknown>) {
+function getAsrDefaults(
+  audio: Record<string, unknown>,
+  defaults = DEFAULT_ASR_CONFIG,
+) {
   const saved = isRecord(audio[ASR_DEFAULTS_ID]) ? audio[ASR_DEFAULTS_ID] : {};
   const savedVad = isRecord(saved.vad) ? saved.vad : {};
   return {
-    rate: numberValue(saved.rate, DEFAULT_ASR_CONFIG.rate),
-    channel: numberValue(saved.channel, DEFAULT_ASR_CONFIG.channel),
+    rate: numberValue(saved.rate, defaults.rate),
+    channel: numberValue(saved.channel, defaults.channel),
     stream_simulate: boolValue(
       saved.stream_simulate,
-      boolValue(audio.stream_simulate, DEFAULT_ASR_CONFIG.stream_simulate),
+      boolValue(audio.stream_simulate, defaults.stream_simulate),
     ),
     hotword_llm_mode: normalizeMode(
       saved.hotword_llm_mode,
-      DEFAULT_ASR_CONFIG.hotword_llm_mode,
+      defaults.hotword_llm_mode,
     ),
-    hotword_replace: boolValue(
-      saved.hotword_replace,
-      DEFAULT_ASR_CONFIG.hotword_replace,
-    ),
-    num_threads: numberValue(saved.num_threads, DEFAULT_ASR_CONFIG.num_threads),
+    hotword_replace: boolValue(saved.hotword_replace, defaults.hotword_replace),
+    num_threads: numberValue(saved.num_threads, defaults.num_threads),
     provider: normalizeProvider(saved.provider),
     punctuation_mode: normalizeMode(
       saved.punctuation_mode,
-      DEFAULT_ASR_CONFIG.punctuation_mode,
+      defaults.punctuation_mode,
     ),
     vad: {
       max_speech_duration: numberValue(
         savedVad.max_speech_duration,
-        DEFAULT_ASR_CONFIG.vad.max_speech_duration,
+        defaults.vad.max_speech_duration,
       ),
       min_speech_duration: numberValue(
         savedVad.min_speech_duration,
-        DEFAULT_ASR_CONFIG.vad.min_speech_duration,
+        defaults.vad.min_speech_duration,
       ),
       min_silence_duration: numberValue(
         savedVad.min_silence_duration,
-        DEFAULT_ASR_CONFIG.vad.min_silence_duration,
+        defaults.vad.min_silence_duration,
       ),
-      threshold: numberValue(
-        savedVad.threshold,
-        DEFAULT_ASR_CONFIG.vad.threshold,
-      ),
+      threshold: numberValue(savedVad.threshold, defaults.vad.threshold),
     },
   };
 }
@@ -179,35 +181,12 @@ function labelForParam(key: string): string {
 
 function ConfigRow({
   label,
-  inherited,
-  isOverride,
-  onReset,
   children,
 }: {
   label: string;
-  inherited?: string;
-  isOverride?: boolean;
-  onReset?: () => void;
   children: ReactNode;
 }) {
-  return (
-    <div className="flex items-center gap-3 py-[5px]">
-      <div className="min-w-[120px] shrink-0">
-        <div className="text-xs text-text-dim">{label}</div>
-        {inherited && (
-          <div className="text-[10px] text-text-muted mt-0.5">{inherited}</div>
-        )}
-      </div>
-      <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
-        {children}
-        {isOverride && onReset && (
-          <Button size="sm" variant="ghost" onClick={onReset}>
-            继承
-          </Button>
-        )}
-      </div>
-    </div>
-  );
+  return <SectionItem title={label} action={children} />;
 }
 
 function NumberConfigRow({
@@ -215,32 +194,21 @@ function NumberConfigRow({
   value,
   onChange,
   step = 1,
-  inherited,
-  isOverride,
-  onReset,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   step?: number;
-  inherited?: string;
-  isOverride?: boolean;
-  onReset?: () => void;
 }) {
   return (
-    <ConfigRow
-      label={label}
-      inherited={inherited}
-      isOverride={isOverride}
-      onReset={onReset}
-    >
-      <input
+    <ConfigRow label={label}>
+      <Input
         type="number"
         step={step}
-        className="w-32 h-[34px] px-3 border border-border rounded-[6px] bg-input-bg text-text text-sm outline-none"
+        className="w-36"
         value={value}
-        onChange={(e) => {
-          const next = Number(e.target.value);
+        onChange={(nextValue) => {
+          const next = Number(nextValue);
           if (Number.isFinite(next)) onChange(next);
         }}
       />
@@ -252,24 +220,13 @@ function ToggleConfigRow({
   label,
   value,
   onChange,
-  inherited,
-  isOverride,
-  onReset,
 }: {
   label: string;
   value: boolean;
   onChange: (value: boolean) => void;
-  inherited?: string;
-  isOverride?: boolean;
-  onReset?: () => void;
 }) {
   return (
-    <ConfigRow
-      label={label}
-      inherited={inherited}
-      isOverride={isOverride}
-      onReset={onReset}
-    >
+    <ConfigRow label={label}>
       <Toggle checked={value} onChange={onChange} />
     </ConfigRow>
   );
@@ -280,25 +237,14 @@ function SegmentConfigRow({
   value,
   options,
   onChange,
-  inherited,
-  isOverride,
-  onReset,
 }: {
   label: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
-  inherited?: string;
-  isOverride?: boolean;
-  onReset?: () => void;
 }) {
   return (
-    <ConfigRow
-      label={label}
-      inherited={inherited}
-      isOverride={isOverride}
-      onReset={onReset}
-    >
+    <ConfigRow label={label}>
       <SegmentedControl options={options} value={value} onChange={onChange} />
     </ConfigRow>
   );
@@ -314,10 +260,8 @@ function GenericConfigRows({
   onChange: (key: string, value: unknown) => void;
 }) {
   return (
-    <div className="space-y-1">
+    <SectionItemList>
       {Object.entries(values).map(([key, value]) => {
-        const isOverride = hasOwn(overrides, key);
-        const reset = () => onChange(key, undefined);
         if (typeof value === "boolean") {
           return (
             <ToggleConfigRow
@@ -325,8 +269,6 @@ function GenericConfigRows({
               label={labelForParam(key)}
               value={boolValue(overrides[key], value)}
               onChange={(next) => onChange(key, next)}
-              isOverride={isOverride}
-              onReset={reset}
             />
           );
         }
@@ -338,133 +280,32 @@ function GenericConfigRows({
               value={numberValue(overrides[key], value)}
               step={Number.isInteger(value) ? 1 : 0.1}
               onChange={(next) => onChange(key, next)}
-              isOverride={isOverride}
-              onReset={reset}
             />
           );
         }
+        if (key.includes("prompt")) {
+          return (
+            <SectionItem key={key} title={labelForParam(key)}>
+              <Textarea
+                value={String(overrides[key] ?? value ?? "")}
+                onChange={(next) => onChange(key, next)}
+                textareaClassName="min-h-20"
+              />
+            </SectionItem>
+          );
+        }
         return (
-          <ConfigRow
-            key={key}
-            label={labelForParam(key)}
-            isOverride={isOverride}
-            onReset={reset}
-          >
-            <input
+          <ConfigRow key={key} label={labelForParam(key)}>
+            <Input
               type="text"
-              className="flex-1 min-w-0 h-[34px] px-3 border border-border rounded-[6px] bg-input-bg text-text text-sm outline-none"
+              className="w-56"
               value={String(overrides[key] ?? value ?? "")}
-              onChange={(e) => onChange(key, e.target.value)}
+              onChange={(next) => onChange(key, next)}
             />
           </ConfigRow>
         );
       })}
-    </div>
-  );
-}
-
-function CommonModelConfigRows({
-  values,
-  overrides,
-  onChange,
-}: {
-  values: Record<string, unknown>;
-  overrides: Record<string, unknown>;
-  onChange: (key: string, value: unknown) => void;
-}) {
-  return (
-    <div className="space-y-1">
-      {Object.entries(values).map(([key, inheritedValue]) => {
-        const isOverride = hasOwn(overrides, key);
-        const effective = isOverride ? overrides[key] : inheritedValue;
-        const inherited = `继承：${String(inheritedValue)}`;
-        const reset = () => onChange(key, undefined);
-
-        if (key === "provider") {
-          return (
-            <SegmentConfigRow
-              key={key}
-              label={labelForParam(key)}
-              value={normalizeProvider(effective)}
-              inherited={inherited.toUpperCase()}
-              isOverride={isOverride}
-              onReset={reset}
-              options={[
-                { value: "cpu", label: "CPU" },
-                { value: "cuda", label: "CUDA" },
-                { value: "coreml", label: "COREML" },
-              ]}
-              onChange={(value) => onChange(key, value)}
-            />
-          );
-        }
-
-        if (key === "hotword_llm_mode") {
-          return (
-            <SegmentConfigRow
-              key={key}
-              label={labelForParam(key)}
-              value={normalizeMode(effective, "auto")}
-              inherited={inherited}
-              isOverride={isOverride}
-              onReset={reset}
-              options={[
-                { value: "auto", label: "自动" },
-                { value: "disabled", label: "关闭" },
-                { value: "force", label: "开启" },
-              ]}
-              onChange={(value) => onChange(key, value)}
-            />
-          );
-        }
-
-        if (key === "punctuation_mode") {
-          return (
-            <SegmentConfigRow
-              key={key}
-              label={labelForParam(key)}
-              value={normalizeMode(effective, "auto")}
-              inherited={inherited}
-              isOverride={isOverride}
-              onReset={reset}
-              options={[
-                { value: "auto", label: "自适应" },
-                { value: "disabled", label: "禁用" },
-                { value: "force", label: "强制启用" },
-              ]}
-              onChange={(value) => onChange(key, value)}
-            />
-          );
-        }
-
-        if (typeof inheritedValue === "boolean") {
-          return (
-            <ToggleConfigRow
-              key={key}
-              label={labelForParam(key)}
-              value={boolValue(effective, inheritedValue)}
-              inherited={`继承：${inheritedValue ? "开启" : "关闭"}`}
-              isOverride={isOverride}
-              onReset={reset}
-              onChange={(value) => onChange(key, value)}
-            />
-          );
-        }
-
-        return (
-          <NumberConfigRow
-            key={key}
-            label={labelForParam(key)}
-            value={numberValue(effective, numberValue(inheritedValue, 0))}
-            step={Number.isInteger(inheritedValue) ? 1 : 0.1}
-            inherited={inherited}
-            isOverride={isOverride}
-            onReset={reset}
-            onChange={(value) => onChange(key, value)}
-          />
-        );
-      })}
-    </div>
+    </SectionItemList>
   );
 }
 
@@ -518,7 +359,8 @@ export function AudioModelPage() {
   const cfg = settings?.parsedConfig || ({} as Record<string, unknown>);
   const audio = (cfg.audio || {}) as Record<string, unknown>;
   const provider = (audio.provider as string) || DOUBAO_MODEL_ID;
-  const asrDefaults = getAsrDefaults(audio);
+  const [runtimeDefaults, setRuntimeDefaults] = useState(DEFAULT_ASR_CONFIG);
+  const asrDefaults = getAsrDefaults(audio, runtimeDefaults);
 
   const [tab, setTab] = useState<"online" | "offline">("online");
   const [customConfigOpen, setCustomConfigOpen] = useState(false);
@@ -535,34 +377,23 @@ export function AudioModelPage() {
   const [configExpanded, setConfigExpanded] = useState<Set<string>>(new Set());
 
   const mounted = useRef(false);
-  const doubaoValues = useRef<Record<string, unknown>>(clonePlain(doubaoCfg));
 
   useEffect(() => {
     mounted.current = true;
     ensureModelDownloadProgressListener();
+    getAudioConfigDefaults()
+      .then((defaults) => {
+        if (mounted.current && isRecord(defaults)) {
+          setRuntimeDefaults(getAsrDefaults({ [ASR_DEFAULTS_ID]: defaults }));
+        }
+      })
+      .catch(() => {});
     return () => {
       mounted.current = false;
     };
   }, []);
 
-  useEffect(() => {
-    doubaoValues.current = clonePlain(doubaoCfg || {});
-  }, [doubaoCfg]);
-
   // Save helpers
-  const saveDoubao = useCallback(
-    async (updates: Record<string, unknown>) => {
-      const merged = { ...clonePlain(doubaoCfg || {}), ...updates };
-      doubaoValues.current = merged;
-      await saveConfigObject({
-        ...clonePlain(cfg),
-        audio: { ...audio, [DOUBAO_MODEL_ID]: merged },
-      });
-      refresh();
-    },
-    [audio, cfg, doubaoCfg, refresh],
-  );
-
   const saveAsrDefaults = useCallback(
     async (updates: Record<string, unknown>) => {
       const current = isRecord(audio[ASR_DEFAULTS_ID])
@@ -605,6 +436,16 @@ export function AudioModelPage() {
       const nextAudio = { ...audio };
       if (Object.keys(next).length > 0) nextAudio[modelId] = next;
       else delete nextAudio[modelId];
+      await saveConfigObject({ ...clonePlain(cfg), audio: nextAudio });
+      refresh();
+    },
+    [audio, cfg, refresh],
+  );
+
+  const resetModelConfig = useCallback(
+    async (modelId: string) => {
+      const nextAudio = { ...audio };
+      delete nextAudio[modelId];
       await saveConfigObject({ ...clonePlain(cfg), audio: nextAudio });
       refresh();
     },
@@ -654,7 +495,7 @@ export function AudioModelPage() {
     [cfg, refresh],
   );
 
-  // Download with VAD safety net
+  // Backend downloads required sherpa-onnx base models before ASR models.
   const doDownload = useCallback(
     async (modelId: string) => {
       updateModelDownloadProgress({
@@ -662,25 +503,6 @@ export function AudioModelPage() {
         status: "downloading",
         progress: 0,
       });
-
-      // VAD safety net
-      if (modelId !== VAD_ID && !downloaded.includes(VAD_ID)) {
-        try {
-          await downloadModel(VAD_ID);
-          if (mounted.current) {
-            setDownloaded((prev) =>
-              prev.includes(VAD_ID) ? prev : [...prev, VAD_ID],
-            );
-          }
-        } catch {
-          updateModelDownloadProgress({
-            model_id: modelId,
-            status: "failed",
-            progress: modelDownloadProgress[modelId]?.progress,
-          });
-          return;
-        }
-      }
       try {
         await downloadModel(modelId);
         need();
@@ -692,7 +514,7 @@ export function AudioModelPage() {
         });
       }
     },
-    [downloaded, need, updateModelDownloadProgress],
+    [need, updateModelDownloadProgress],
   );
 
   const doDelete = useCallback(
@@ -704,15 +526,14 @@ export function AudioModelPage() {
     [need],
   );
 
-  const offlineModels = registry
-    .filter((m) => m.type === "offline")
-    .sort((a, b) => {
-      if (a.category !== b.category) {
-        if (a.category === "vad") return -1;
-        if (b.category === "vad") return 1;
-      }
-      return 0;
-    });
+  const offlineModels = registry.filter(
+    (m) => m.type === "offline" && m.category === "asr",
+  );
+  const baseModels = registry.filter(
+    (m) =>
+      m.type === "offline" &&
+      (m.category === "vad" || m.category === "punctuation"),
+  );
 
   const doubaoFromRegistry = registry.find((m) => m.id === DOUBAO_MODEL_ID);
   const currentProviderName =
@@ -741,135 +562,31 @@ export function AudioModelPage() {
       />
 
       <div className="flex items-center justify-between gap-3">
-        <div className="inline-flex border border-border rounded-lg overflow-hidden">
-          <button
-            type="button"
-            className={`px-4 py-[6px] text-sm font-medium transition-colors ${tab === "online" ? "bg-accent-soft text-accent" : "text-text-dim hover:bg-fill-hover"}`}
-            onClick={() => setTab("online")}
-          >
-            在线模型
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-[6px] text-sm font-medium transition-colors ${tab === "offline" ? "bg-accent-soft text-accent" : "text-text-dim hover:bg-fill-hover"}`}
-            onClick={() => {
-              setTab("offline");
-              need();
-            }}
-          >
-            本地模型
-          </button>
-        </div>
+        <SegmentedControl
+          options={[
+            { value: "online", label: "在线模型" },
+            { value: "offline", label: "本地模型" },
+          ]}
+          value={tab}
+          onChange={(value) => {
+            const next = value === "offline" ? "offline" : "online";
+            setTab(next);
+            if (next === "offline") need();
+          }}
+        />
         <Button variant="ghost" onClick={() => setCustomConfigOpen(true)}>
           <Cog size={16} />
           自定义配置
         </Button>
       </div>
 
-      <Modal
+      <CustomConfigModal
         open={customConfigOpen}
         onClose={() => setCustomConfigOpen(false)}
-        title="自定义配置"
-      >
-        <div className="space-y-5">
-          <div>
-            <h3 className="text-sm font-semibold text-text mb-2">音频采样</h3>
-            <NumberConfigRow
-              label="音频采样"
-              value={asrDefaults.rate}
-              onChange={(value) => saveAsrDefaults({ rate: value })}
-            />
-            <NumberConfigRow
-              label="声道"
-              value={asrDefaults.channel}
-              onChange={(value) => saveAsrDefaults({ channel: value })}
-            />
-          </div>
-
-          <div className="border-t border-border-subtle pt-4">
-            <h3 className="text-sm font-semibold text-text mb-2">识别强化</h3>
-            <ToggleConfigRow
-              label="模拟流式输出"
-              value={asrDefaults.stream_simulate}
-              onChange={(value) => saveAsrDefaults({ stream_simulate: value })}
-            />
-            <SegmentConfigRow
-              label="热词强化"
-              value={asrDefaults.hotword_llm_mode}
-              options={[
-                { value: "auto", label: "自动" },
-                { value: "disabled", label: "关闭" },
-                { value: "force", label: "开启" },
-              ]}
-              onChange={(value) => saveAsrDefaults({ hotword_llm_mode: value })}
-            />
-            <ToggleConfigRow
-              label="热词替换"
-              value={asrDefaults.hotword_replace}
-              onChange={(value) => saveAsrDefaults({ hotword_replace: value })}
-            />
-          </div>
-
-          <div className="border-t border-border-subtle pt-4">
-            <h3 className="text-sm font-semibold text-text mb-2">离线模型</h3>
-            <NumberConfigRow
-              label="线程数"
-              value={asrDefaults.num_threads}
-              onChange={(value) => saveAsrDefaults({ num_threads: value })}
-            />
-            <SegmentConfigRow
-              label="推理后端"
-              value={asrDefaults.provider}
-              options={[
-                { value: "cpu", label: "CPU" },
-                { value: "cuda", label: "CUDA" },
-                { value: "coreml", label: "COREML" },
-              ]}
-              onChange={(value) => saveAsrDefaults({ provider: value })}
-            />
-            <SegmentConfigRow
-              label="标点符号"
-              value={asrDefaults.punctuation_mode}
-              options={[
-                { value: "auto", label: "自适应" },
-                { value: "disabled", label: "禁用" },
-                { value: "force", label: "强制启用" },
-              ]}
-              onChange={(value) => saveAsrDefaults({ punctuation_mode: value })}
-            />
-            <NumberConfigRow
-              label="VAD 最大说话时长"
-              value={asrDefaults.vad.max_speech_duration}
-              step={0.1}
-              onChange={(value) =>
-                saveAsrVadDefaults({ max_speech_duration: value })
-              }
-            />
-            <NumberConfigRow
-              label="VAD 最小说话时长"
-              value={asrDefaults.vad.min_speech_duration}
-              step={0.1}
-              onChange={(value) =>
-                saveAsrVadDefaults({ min_speech_duration: value })
-              }
-            />
-            <NumberConfigRow
-              label="VAD 最小静音时长"
-              value={asrDefaults.vad.min_silence_duration}
-              step={0.1}
-              onChange={(value) =>
-                saveAsrVadDefaults({ min_silence_duration: value })
-              }
-            />
-            <NumberConfigRow
-              label="VAD 阈值"
-              value={asrDefaults.vad.threshold}
-              step={0.1}
-              onChange={(value) => saveAsrVadDefaults({ threshold: value })}
-            />
-          </div>
-        </div>
-      </Modal>
+        asrDefaults={asrDefaults}
+        saveAsrDefaults={saveAsrDefaults}
+        saveAsrVadDefaults={saveAsrVadDefaults}
+      />
 
       {tab === "online" && (
         <Section>
@@ -897,21 +614,39 @@ export function AudioModelPage() {
           />
           <SectionContent>
             {/* Features */}
-            <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
-              <span className="text-success">✓ 流式输出</span>
-              <span className="text-success">✓ 热词库</span>
-              <span className="text-success">✓ 自动标点</span>
-              <span className="text-success">✓ 数字格式化</span>
-              <span className="text-success">✓ zh, en</span>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              {doubaoFromRegistry?.tags?.map((tag) => (
+                <Badge key={tag} variant="accent">
+                  {tag}
+                </Badge>
+              ))}
+              {doubaoFromRegistry?.capabilities &&
+                Object.entries({
+                  streaming: "流式输出",
+                  hotwords: "热词库",
+                  punctuation: "自动标点",
+                  itn: "数字格式化",
+                }).map(([key, label]) => (
+                  <Badge
+                    key={key}
+                    variant={
+                      doubaoFromRegistry.capabilities?.[key]
+                        ? "success"
+                        : "muted"
+                    }
+                  >
+                    <CircleCheck size={14} />
+                    {label}
+                  </Badge>
+                ))}
               <span className="ml-auto">
-                <button
-                  type="button"
-                  className="text-xs text-text-dim hover:text-text flex items-center gap-1"
+                <Button
+                  variant="ghost"
                   onClick={() => setDoubaoExpanded(!doubaoExpanded)}
                 >
                   <Cog size={16} />
                   参数配置
-                </button>
+                </Button>
               </span>
             </div>
 
@@ -919,7 +654,7 @@ export function AudioModelPage() {
             {doubaoExpanded && (
               <div className="border-t border-border-subtle pt-4 space-y-4">
                 {/* Credentials */}
-                <div className="space-y-3">
+                <SectionItemList>
                   {[
                     {
                       label: "WebSocket 地址",
@@ -946,106 +681,102 @@ export function AudioModelPage() {
                       type: "password" as const,
                     },
                   ].map((f) => (
-                    <div key={f.key} className="flex items-center gap-3">
-                      <span className="text-xs text-text-dim w-[100px] shrink-0">
-                        {f.label}
-                      </span>
-                      <input
-                        type={f.type}
-                        className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
-                        value={(doubaoCfg[f.key] as string) || ""}
-                        onChange={(e) =>
-                          saveDoubao({ [f.key]: e.target.value })
-                        }
-                        placeholder={f.placeholder}
-                      />
-                    </div>
+                    <SectionItem
+                      key={f.key}
+                      title={f.label}
+                      action={
+                        <Input
+                          type={f.type}
+                          className="w-full"
+                          value={(doubaoCfg[f.key] as string) || ""}
+                          onChange={(value) =>
+                            saveModelConfig(DOUBAO_MODEL_ID, { [f.key]: value })
+                          }
+                          placeholder={f.placeholder}
+                        />
+                      }
+                    />
                   ))}
-                </div>
-
-                <div className="border-t border-border-subtle" />
+                </SectionItemList>
 
                 {/* Settings */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">
-                      Resource ID
-                    </span>
-                    <input
-                      type="text"
-                      className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
-                      value={(doubaoCfg.resource_id as string) || ""}
-                      onChange={(e) =>
-                        saveDoubao({ resource_id: e.target.value })
-                      }
-                      placeholder="输入 Resource ID"
-                    />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">
-                      语言
-                    </span>
-                    <input
-                      type="text"
-                      className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
-                      value={(doubaoCfg.language as string) || ""}
-                      onChange={(e) => saveDoubao({ language: e.target.value })}
-                      placeholder="留空则自动检测"
-                    />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-text-dim w-[100px] shrink-0">
-                      热词表 ID
-                    </span>
-                    <input
-                      type="text"
-                      className="flex-1 h-[34px] px-3 rounded-lg bg-input-bg border border-border text-text text-sm focus:outline-none focus:ring-1 focus:ring-accent-dim"
-                      value={
-                        (doubaoCfg.corpus as Record<string, string>)
-                          ?.boosting_table_id || ""
-                      }
-                      onChange={(e) =>
-                        saveDoubao({
-                          corpus: { boosting_table_id: e.target.value },
-                        })
-                      }
-                      placeholder="输入热词表 ID"
-                    />
-                  </div>
-                </div>
-
-                <div className="border-t border-border-subtle" />
+                <SectionItemList>
+                  <SectionItem
+                    title="Resource ID"
+                    action={
+                      <Input
+                        className="w-full"
+                        value={(doubaoCfg.resource_id as string) || ""}
+                        onChange={(value) =>
+                          saveModelConfig(DOUBAO_MODEL_ID, {
+                            resource_id: value,
+                          })
+                        }
+                        placeholder="输入 Resource ID"
+                      />
+                    }
+                  />
+                  <SectionItem
+                    title="语言"
+                    action={
+                      <Input
+                        className="w-full"
+                        value={(doubaoCfg.language as string) || ""}
+                        onChange={(value) =>
+                          saveModelConfig(DOUBAO_MODEL_ID, { language: value })
+                        }
+                        placeholder="留空则自动检测"
+                      />
+                    }
+                  />
+                  <SectionItem
+                    title="热词表 ID"
+                    last
+                    action={
+                      <Input
+                        className="w-full"
+                        value={
+                          (doubaoCfg.corpus as Record<string, string>)
+                            ?.boosting_table_id || ""
+                        }
+                        onChange={(value) =>
+                          saveModelConfig(DOUBAO_MODEL_ID, {
+                            corpus: { boosting_table_id: value },
+                          })
+                        }
+                        placeholder="输入热词表 ID"
+                      />
+                    }
+                  />
+                </SectionItemList>
 
                 {/* Toggle grid */}
-                <div className="space-y-3">
+                <SectionItemList>
                   {doubaoToggles.map((t) => (
-                    <div
+                    <SectionItem
                       key={t.key}
-                      className="flex items-center justify-between"
-                    >
-                      <span className="text-sm text-text">{t.label}</span>
-                      <Toggle
-                        checked={
-                          doubaoCfg[t.key] !== undefined
-                            ? !!doubaoCfg[t.key]
-                            : t.defaultVal
-                        }
-                        onChange={(v) => saveDoubao({ [t.key]: v })}
-                      />
-                    </div>
+                      title={t.label}
+                      action={
+                        <Toggle
+                          checked={
+                            doubaoCfg[t.key] !== undefined
+                              ? !!doubaoCfg[t.key]
+                              : t.defaultVal
+                          }
+                          onChange={(v) =>
+                            saveModelConfig(DOUBAO_MODEL_ID, { [t.key]: v })
+                          }
+                        />
+                      }
+                    ></SectionItem>
                   ))}
-                </div>
+                </SectionItemList>
 
                 <div className="border-t border-border-subtle" />
                 <div className="space-y-1">
                   <NumberConfigRow
                     label="音频采样"
                     value={numberValue(doubaoCfg.rate, asrDefaults.rate)}
-                    inherited={`继承：${asrDefaults.rate}`}
-                    isOverride={hasOwn(doubaoCfg, "rate")}
-                    onReset={() =>
-                      saveModelConfig(DOUBAO_MODEL_ID, { rate: undefined })
-                    }
                     onChange={(value) =>
                       saveModelConfig(DOUBAO_MODEL_ID, { rate: value })
                     }
@@ -1053,11 +784,6 @@ export function AudioModelPage() {
                   <NumberConfigRow
                     label="声道"
                     value={numberValue(doubaoCfg.channel, asrDefaults.channel)}
-                    inherited={`继承：${asrDefaults.channel}`}
-                    isOverride={hasOwn(doubaoCfg, "channel")}
-                    onReset={() =>
-                      saveModelConfig(DOUBAO_MODEL_ID, { channel: undefined })
-                    }
                     onChange={(value) =>
                       saveModelConfig(DOUBAO_MODEL_ID, { channel: value })
                     }
@@ -1068,13 +794,6 @@ export function AudioModelPage() {
                       doubaoCfg.hotword_llm_mode,
                       asrDefaults.hotword_llm_mode,
                     )}
-                    inherited={`继承：${asrDefaults.hotword_llm_mode}`}
-                    isOverride={hasOwn(doubaoCfg, "hotword_llm_mode")}
-                    onReset={() =>
-                      saveModelConfig(DOUBAO_MODEL_ID, {
-                        hotword_llm_mode: undefined,
-                      })
-                    }
                     options={[
                       { value: "auto", label: "自动" },
                       { value: "disabled", label: "关闭" },
@@ -1092,13 +811,6 @@ export function AudioModelPage() {
                       doubaoCfg.hotword_replace,
                       asrDefaults.hotword_replace,
                     )}
-                    inherited={`继承：${asrDefaults.hotword_replace ? "开启" : "关闭"}`}
-                    isOverride={hasOwn(doubaoCfg, "hotword_replace")}
-                    onReset={() =>
-                      saveModelConfig(DOUBAO_MODEL_ID, {
-                        hotword_replace: undefined,
-                      })
-                    }
                     onChange={(value) =>
                       saveModelConfig(DOUBAO_MODEL_ID, {
                         hotword_replace: value,
@@ -1120,6 +832,12 @@ export function AudioModelPage() {
                     />
                   </>
                 )}
+                <div className="pt-1">
+                  <Button onClick={() => resetModelConfig(DOUBAO_MODEL_ID)}>
+                    <RotateCcw size={16} />
+                    恢复默认
+                  </Button>
+                </div>
               </div>
             )}
           </SectionContent>
@@ -1146,6 +864,7 @@ export function AudioModelPage() {
                 ? Math.max(0, Math.min(100, Math.round(progressState.progress)))
                 : undefined;
             const memStr = model.mem_size ? `${model.mem_size}MB` : "";
+            const fileStr = model.file_size ? `${model.file_size}MB` : "";
             const audioCfg = (cfg.audio as Record<string, unknown>) || {};
             const modelOverrides = isRecord(audioCfg[model.id])
               ? (audioCfg[model.id] as Record<string, unknown>)
@@ -1183,13 +902,13 @@ export function AudioModelPage() {
                 ([key]) => !COMMON_MODEL_KEYS.has(key),
               ),
             );
-            const hasConfig = Object.keys(modelCfg).length > 0;
+            const hasConfig = !isBaseModel && Object.keys(modelCfg).length > 0;
 
             return (
               <Section key={model.id}>
                 <SectionHeader
                   title={model.name}
-                  subtitle={`${model.description}${memStr ? ` · 预计内存占用峰值：${memStr}` : ""}`}
+                  subtitle={model.description}
                   action={
                     <div className="flex items-center gap-2 justify-end">
                       {isDownloading && (
@@ -1202,6 +921,13 @@ export function AudioModelPage() {
                       )}
                       {isDownloaded ? (
                         <>
+                          <Button
+                            size="icon"
+                            onClick={() => doDelete(model.id)}
+                          >
+                            <Trash size={16} />
+                          </Button>
+
                           {!isBaseModel && (
                             <Toggle
                               checked={isActive}
@@ -1210,18 +936,16 @@ export function AudioModelPage() {
                               }}
                             />
                           )}
-                          <Button size="sm" onClick={() => doDelete(model.id)}>
-                            <Trash size={16} />
-                          </Button>
                         </>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-text-muted shrink-0">
-                            模型文件 {model.file_size}MB
-                          </span>
-
+                          {fileStr && (
+                            <span className="text-xs text-text-muted">
+                              模型文件 {fileStr}
+                            </span>
+                          )}
                           <Button
-                            size="sm"
+                            size="icon"
                             onClick={() => doDownload(model.id)}
                             disabled={isDownloading}
                           >
@@ -1242,34 +966,38 @@ export function AudioModelPage() {
                   }
                 />
                 <SectionContent>
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    {model.tags?.map((tag) => (
+                      <Badge key={tag} variant="accent">
+                        {tag}
+                      </Badge>
+                    ))}
+
+                    {memStr && (
+                      <div className="flex gap-1 text-text-muted">
+                        <ChartNoAxesCombined size={16} />
+                        <span className="text-xs ">内存峰值 {memStr}</span>
+                      </div>
+                    )}
+                  </div>
                   {/* Features */}
                   {model.capabilities && (
-                    <div className="flex justify-between gap-3 text-sm ">
+                    <div className="flex items-center gap-2 flex-wrap text-sm">
                       {Object.entries({
                         streaming: "流式输出",
                         hotwords: "热词库",
                         punctuation: "自动标点",
                         itn: "数字格式化",
                       }).map(([k, label]) => (
-                        <div key={k} className="flex gap-1 items-center">
-                          {model.capabilities?.[k] ? (
-                            <CircleCheck
-                              size={16}
-                              className="fill-success text-white"
-                            />
-                          ) : (
-                            <CircleX size={16} />
-                          )}
-                          <span
-                            className={
-                              model.capabilities?.[k]
-                                ? "text-success"
-                                : "text-text-muted"
-                            }
-                          >
-                            {label}
-                          </span>
-                        </div>
+                        <Badge
+                          key={k}
+                          variant={
+                            model.capabilities?.[k] ? "success" : "muted"
+                          }
+                        >
+                          <CircleCheck size={14} />
+                          <span>{label}</span>
+                        </Badge>
                       ))}
                       {hasConfig && (
                         <Button
@@ -1293,13 +1021,6 @@ export function AudioModelPage() {
                   {/* Expandable config */}
                   {configExpanded.has(model.id) && hasConfig && (
                     <div className="border-t border-border-subtle pt-3 space-y-3">
-                      <CommonModelConfigRows
-                        values={commonConfig}
-                        overrides={modelOverrides}
-                        onChange={(key, value) =>
-                          saveModelConfig(model.id, { [key]: value })
-                        }
-                      />
                       {Object.keys(advancedCfg).length > 0 && (
                         <>
                           <div className="border-t border-border-subtle" />
@@ -1312,14 +1033,243 @@ export function AudioModelPage() {
                           />
                         </>
                       )}
+                      <div className="pt-1">
+                        <Button onClick={() => resetModelConfig(model.id)}>
+                          <RotateCcw size={16} />
+                          恢复默认
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </SectionContent>
               </Section>
             );
           })}
+          {baseModels.length > 0 && (
+            <div className="pt-2">
+              <h2 className="text-sm font-semibold text-text mb-3">基础模型</h2>
+              <div className="space-y-5">
+                {baseModels.map((model) => {
+                  const progressState = downloadProgress[model.id];
+                  const isDownloaded =
+                    downloaded.includes(model.id) ||
+                    progressState?.status === "completed";
+                  const isDownloading = progressState?.status === "downloading";
+                  const isDownloadFailed = progressState?.status === "failed";
+                  const progress =
+                    typeof progressState?.progress === "number"
+                      ? Math.max(
+                          0,
+                          Math.min(100, Math.round(progressState.progress)),
+                        )
+                      : undefined;
+
+                  const fileStr = model.file_size ? `${model.file_size}MB` : "";
+
+                  return (
+                    <Section key={model.id}>
+                      <SectionHeader
+                        title={model.name}
+                        subtitle={model.description}
+                        action={
+                          <div className="flex items-center gap-2 justify-end">
+                            {isDownloading && (
+                              <div className="h-1.5 w-24 rounded-full bg-fill-track overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-accent transition-[width]"
+                                  style={{ width: `${progress ?? 0}%` }}
+                                />
+                              </div>
+                            )}
+                            {isDownloaded ? (
+                              <Button
+                                size="icon"
+                                onClick={() => doDelete(model.id)}
+                              >
+                                <Trash size={16} />
+                              </Button>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                {fileStr && (
+                                  <span className="text-xs text-text-muted">
+                                    模型文件 {fileStr}
+                                  </span>
+                                )}
+                                <Button
+                                  size="icon"
+                                  onClick={() => doDownload(model.id)}
+                                  disabled={isDownloading}
+                                >
+                                  {isDownloading ? (
+                                    <LoaderCircle
+                                      size={16}
+                                      className="animate-spin"
+                                    />
+                                  ) : isDownloadFailed ? (
+                                    <RotateCcw size={16} />
+                                  ) : (
+                                    <CloudDownload size={16} />
+                                  )}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        }
+                      />
+                      <SectionContent>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {model.tags?.map((tag) => (
+                            <Badge key={tag} variant="accent">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </SectionContent>
+                    </Section>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
     </PageLayout>
   );
 }
+
+const CustomConfigModal = ({
+  open,
+  onClose,
+  asrDefaults,
+  saveAsrDefaults,
+  saveAsrVadDefaults,
+}: {
+  open: boolean;
+  onClose: () => void;
+  asrDefaults: ReturnType<typeof getAsrDefaults>;
+  saveAsrDefaults: (updates: Record<string, unknown>) => Promise<void>;
+  saveAsrVadDefaults: (updates: Record<string, unknown>) => Promise<void>;
+}) => {
+  return (
+    <Modal open={open} onClose={onClose} title="自定义配置">
+      <div className="space-y-5">
+        <Section>
+          <SectionHeader title="音频采样" />
+          <SectionContent>
+            <SectionItemList>
+              <NumberConfigRow
+                label="音频采样"
+                value={asrDefaults.rate}
+                onChange={(value) => saveAsrDefaults({ rate: value })}
+              />
+              <NumberConfigRow
+                label="声道"
+                value={asrDefaults.channel}
+                onChange={(value) => saveAsrDefaults({ channel: value })}
+              />
+            </SectionItemList>
+          </SectionContent>
+        </Section>
+
+        <Section>
+          <SectionHeader title="识别强化" />
+          <SectionContent>
+            <SectionItemList>
+              <ToggleConfigRow
+                label="模拟流式输出"
+                value={asrDefaults.stream_simulate}
+                onChange={(value) =>
+                  saveAsrDefaults({ stream_simulate: value })
+                }
+              />
+              <SegmentConfigRow
+                label="热词强化"
+                value={asrDefaults.hotword_llm_mode}
+                options={[
+                  { value: "auto", label: "自动" },
+                  { value: "disabled", label: "关闭" },
+                  { value: "force", label: "开启" },
+                ]}
+                onChange={(value) =>
+                  saveAsrDefaults({ hotword_llm_mode: value })
+                }
+              />
+              <ToggleConfigRow
+                label="热词替换"
+                value={asrDefaults.hotword_replace}
+                onChange={(value) =>
+                  saveAsrDefaults({ hotword_replace: value })
+                }
+              />
+            </SectionItemList>
+          </SectionContent>
+        </Section>
+
+        <Section>
+          <SectionHeader title="离线模型" />
+          <SectionContent>
+            <SectionItemList>
+              <NumberConfigRow
+                label="线程数"
+                value={asrDefaults.num_threads}
+                onChange={(value) => saveAsrDefaults({ num_threads: value })}
+              />
+              <SegmentConfigRow
+                label="推理后端"
+                value={asrDefaults.provider}
+                options={[
+                  { value: "cpu", label: "CPU" },
+                  { value: "cuda", label: "CUDA" },
+                  { value: "coreml", label: "COREML" },
+                ]}
+                onChange={(value) => saveAsrDefaults({ provider: value })}
+              />
+              <SegmentConfigRow
+                label="标点符号"
+                value={asrDefaults.punctuation_mode}
+                options={[
+                  { value: "auto", label: "自适应" },
+                  { value: "disabled", label: "禁用" },
+                  { value: "force", label: "强制启用" },
+                ]}
+                onChange={(value) =>
+                  saveAsrDefaults({ punctuation_mode: value })
+                }
+              />
+              <NumberConfigRow
+                label="VAD 最大说话时长"
+                value={asrDefaults.vad.max_speech_duration}
+                step={0.1}
+                onChange={(value) =>
+                  saveAsrVadDefaults({ max_speech_duration: value })
+                }
+              />
+              <NumberConfigRow
+                label="VAD 最小说话时长"
+                value={asrDefaults.vad.min_speech_duration}
+                step={0.1}
+                onChange={(value) =>
+                  saveAsrVadDefaults({ min_speech_duration: value })
+                }
+              />
+              <NumberConfigRow
+                label="VAD 最小静音时长"
+                value={asrDefaults.vad.min_silence_duration}
+                step={0.1}
+                onChange={(value) =>
+                  saveAsrVadDefaults({ min_silence_duration: value })
+                }
+              />
+              <NumberConfigRow
+                label="VAD 阈值"
+                value={asrDefaults.vad.threshold}
+                step={0.1}
+                onChange={(value) => saveAsrVadDefaults({ threshold: value })}
+              />
+            </SectionItemList>
+          </SectionContent>
+        </Section>
+      </div>
+    </Modal>
+  );
+};

@@ -1,5 +1,5 @@
 use crate::app_state::AppHandle as AppState;
-use crate::config::PromptItem;
+use crate::config::{AsrDefaults, PromptItem};
 use crate::hotword::HotwordData;
 use crate::model;
 use crate::paste;
@@ -95,6 +95,13 @@ pub async fn get_app_config(state: State<'_, AppState>) -> Result<serde_json::Va
             "end_sound": config.app.sound.as_ref().map(|s| s.end_sound.clone()).unwrap_or_default(),
         },
     }))
+}
+
+/// Get audio config defaults used as runtime fallback.
+#[tauri::command]
+pub async fn get_audio_config_defaults() -> Result<serde_json::Value, String> {
+    serde_json::to_value(AsrDefaults::default())
+        .map_err(|e| format!("Failed to serialize audio defaults: {}", e))
 }
 
 /// Get settings data for the settings window.

@@ -15,8 +15,8 @@ export interface RegistryModel {
   type: string;
   category?: string;
   description?: string;
+  tags?: string[];
   mem_size?: number;
-  languages?: string[];
   capabilities?: Record<string, boolean>;
   default_config?: Record<string, unknown>;
   file_size?: number;

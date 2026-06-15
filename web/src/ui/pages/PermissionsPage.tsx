@@ -10,7 +10,14 @@ import {
   requestMicrophoneAccess,
 } from "@/bridge/settings";
 import { Button } from "@/ui/components/Button";
-import { PageHeader, PageLayout, Section, SectionContent } from "@/ui/layout/PageLayout";
+import {
+  PageHeader,
+  PageLayout,
+  Section,
+  SectionContent,
+  SectionItemList,
+  SectionItem,
+} from "@/ui/layout/PageLayout";
 import { useSettings } from "@/ui/SettingsProvider";
 
 export function PermissionsPage() {
@@ -63,71 +70,68 @@ export function PermissionsPage() {
     <PageLayout>
       <PageHeader title="系统权限" />
       <Section>
-        <SectionContent className="!py-0">
-          <div className="flex items-center justify-between py-4 border-b border-border-subtle">
-            <div className="flex items-center gap-3">
-              <Mic size={20} className="text-text-dim" />
-              <div>
-                <p className="text-sm font-medium text-text">麦克风</p>
-                <p className="text-xs text-text-muted">用于录制语音输入</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  micStatus === "granted"
-                    ? "bg-success"
-                    : micStatus === "denied"
-                      ? "bg-error"
-                      : "bg-warning"
-                }`}
+        <SectionContent>
+          <SectionItemList>
+            {isMac && (
+              <SectionItem
+                title="辅助功能"
+                description="用于将文字输入到其他应用"
+                action={
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full ${accStatus === "granted" ? "bg-success" : "bg-error"}`}
+                    />
+                    <span className="text-xs text-text-muted">
+                      {accStatus === "granted" ? "已授权" : "未授权"}
+                    </span>
+                    <Button onClick={openAccessibilitySettings}>
+                      前往授权
+                    </Button>
+                  </div>
+                }
               />
-              <span className="text-xs text-text-muted">
-                {micStatus === "granted" ? "已授权" : micStatus === "denied" ? "已拒绝" : "未授权"}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  await requestMicrophoneAccess();
-                  check();
-                }}
-              >
-                检测
-              </Button>
-            </div>
-          </div>
-
-          {isMac && (
-            <div className="flex items-center justify-between py-4 border-b border-border-subtle">
-              <div className="flex items-center gap-3">
-                <ShieldCheck size={20} className="text-text-dim" />
-                <div>
-                  <p className="text-sm font-medium text-text">辅助功能</p>
-                  <p className="text-xs text-text-muted">用于将文字输入到其他应用</p>
+            )}
+            <SectionItem
+              title="麦克风"
+              description="用于录制语音输入"
+              last
+              action={
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      micStatus === "granted"
+                        ? "bg-success"
+                        : micStatus === "denied"
+                          ? "bg-error"
+                          : "bg-warning"
+                    }`}
+                  />
+                  <span className="text-xs text-text-muted">
+                    {micStatus === "granted"
+                      ? "已授权"
+                      : micStatus === "denied"
+                        ? "已拒绝"
+                        : "未授权"}
+                  </span>
+                  <Button
+                    onClick={async () => {
+                      await requestMicrophoneAccess();
+                      check();
+                    }}
+                  >
+                    检测
+                  </Button>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`w-2 h-2 rounded-full ${accStatus === "granted" ? "bg-success" : "bg-error"}`}
-                />
-                <span className="text-xs text-text-muted">
-                  {accStatus === "granted" ? "已授权" : "未授权"}
-                </span>
-                <Button size="sm" onClick={openAccessibilitySettings}>
-                  前往授权
-                </Button>
-              </div>
-            </div>
-          )}
+              }
+            />
+          </SectionItemList>
         </SectionContent>
       </Section>
 
-      <div className="text-xs text-text-muted">
-        {isMac
-          ? "macOS 需要麦克风权限和辅助功能权限，可前往：系统设置 > 隐私与安全 > 麦克风 / 辅助功能"
-          : "当前系统无需额外权限配置。"}
-      </div>
+      <p className="text-xs text-text-muted">
+        {isMac &&
+          "macOS 需要麦克风权限和辅助功能权限，可前往：系统设置 > 隐私与安全 > 麦克风 / 辅助功能"}
+      </p>
     </PageLayout>
   );
 }

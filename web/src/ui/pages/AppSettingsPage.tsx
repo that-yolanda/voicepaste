@@ -24,11 +24,17 @@ export function AppSettingsPage() {
   const configPath = settings?.configPath || "-";
   const isMac = platform === "macos";
 
-  const [startSound, setStartSound] = useState<string>((sound.start_sound as string) || "");
-  const [endSound, setEndSound] = useState<string>((sound.end_sound as string) || "");
+  const [startSound, setStartSound] = useState<string>(
+    (sound.start_sound as string) || "",
+  );
+  const [endSound, setEndSound] = useState<string>(
+    (sound.end_sound as string) || "",
+  );
 
-  const setAppBool = (key: string, val: boolean) => scheduleSave({ app: { [key]: val } });
-  const setSound = (upd: Record<string, unknown>) => scheduleSave({ app: { sound: upd } });
+  const setAppBool = (key: string, val: boolean) =>
+    scheduleSave({ app: { [key]: val } });
+  const setSound = (upd: Record<string, unknown>) =>
+    scheduleSave({ app: { sound: upd } });
 
   return (
     <PageLayout>
@@ -41,7 +47,10 @@ export function AppSettingsPage() {
               title="开机自动启动"
               description="登录时自动在后台运行 VoicePaste"
               action={
-                <Toggle checked={!!app.autoLaunch} onChange={(v) => setAppBool("autoLaunch", v)} />
+                <Toggle
+                  checked={!!app.autoLaunch}
+                  onChange={(v) => setAppBool("autoLaunch", v)}
+                />
               }
             />
 
@@ -57,7 +66,9 @@ export function AppSettingsPage() {
                       { value: "vibrancy", label: "跟随主题" },
                     ]}
                     value={(app.overlay_style as string) || "liquid"}
-                    onChange={(v) => scheduleSave({ app: { overlay_style: v } })}
+                    onChange={(v) =>
+                      scheduleSave({ app: { overlay_style: v } })
+                    }
                   />
                 }
               />
@@ -93,7 +104,6 @@ export function AppSettingsPage() {
                         {soundFileName(startSound)}
                       </span>
                       <Button
-                        size="sm"
                         onClick={async () => {
                           const path = await selectSoundFile();
                           if (path) {
@@ -106,7 +116,6 @@ export function AppSettingsPage() {
                       </Button>
                       {startSound && (
                         <Button
-                          size="sm"
                           variant="ghost"
                           onClick={() => {
                             setStartSound("");
@@ -130,7 +139,6 @@ export function AppSettingsPage() {
                         {soundFileName(endSound)}
                       </span>
                       <Button
-                        size="sm"
                         onClick={async () => {
                           const path = await selectSoundFile();
                           if (path) {
@@ -143,7 +151,6 @@ export function AppSettingsPage() {
                       </Button>
                       {endSound && (
                         <Button
-                          size="sm"
                           variant="ghost"
                           onClick={() => {
                             setEndSound("");
@@ -166,14 +173,7 @@ export function AppSettingsPage() {
         <SectionContent>
           <SectionItemList>
             <SectionItem
-              title={
-                <>
-                  移除末尾句号{" "}
-                  <span className="text-[10px] font-mono text-text-muted bg-accent-soft px-[5px] py-px rounded-[3px] cursor-help opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    app.remove_trailing_period
-                  </span>
-                </>
-              }
+              title="移除末尾句号"
               description="粘贴前自动移除识别结果末尾的句号"
               action={
                 <Toggle
@@ -183,14 +183,7 @@ export function AppSettingsPage() {
               }
             />
             <SectionItem
-              title={
-                <>
-                  保留剪贴板{" "}
-                  <span className="text-[10px] font-mono text-text-muted bg-accent-soft px-[5px] py-px rounded-[3px] cursor-help opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    app.keep_clipboard
-                  </span>
-                </>
-              }
+              title="保留剪贴板"
               description="输入完成后恢复原剪贴板内容"
               last
               action={

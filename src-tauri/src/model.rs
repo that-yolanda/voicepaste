@@ -241,23 +241,62 @@ pub async fn download_model(
         .models
         .iter()
         .find(|m| m.id == model_id)
-        .ok_or_else(|| format!("模型 {} 未在注册表中找到", model_id))?;
+        .ok_or_else(|| format!("模型 {} 未在注册表中找到", model_id))?
+        .clone();
 
+    if entry.engine == "sherpa-onnx" && entry.category == ModelCategory::Asr {
+        let base_models: Vec<ModelEntry> = registry
+            .models
+            .iter()
+            .filter(|m| {
+                m.engine == "sherpa-onnx"
+                    && (m.category == ModelCategory::Vad
+                        || m.category == ModelCategory::Punctuation)
+                    && m.is_downloadable()
+            })
+            .cloned()
+            .collect();
+
+        for base_model in base_models {
+            download_model_entry(app, data_dir, &base_model).await?;
+        }
+    }
+
+    download_model_entry(app, data_dir, &entry).await
+}
+
+async fn download_model_entry(
+    app: &AppHandle,
+    data_dir: &Path,
+    entry: &ModelEntry,
+) -> Result<(), String> {
     let url = entry
         .download_url
         .as_ref()
-        .ok_or_else(|| format!("模型 {} 没有下载地址（在线模型无需下载）", model_id))?;
+        .ok_or_else(|| format!("模型 {} 没有下载地址（在线模型无需下载）", entry.id))?;
 
     let dir = models_dir(data_dir);
-    let model_dir = dir.join(model_id);
+    if is_model_downloaded(&dir, entry) {
+        let _ = app.emit(
+            "model:download:progress",
+            serde_json::json!({
+                "model_id": entry.id.as_str(),
+                "status": "completed",
+                "progress": 100,
+            }),
+        );
+        return Ok(());
+    }
+
+    let model_dir = dir.join(&entry.id);
     fs::create_dir_all(&model_dir).map_err(|e| format!("创建模型目录失败: {}", e))?;
 
-    log_app!(info, "Downloading model {} from {}", model_id, url);
+    log_app!(info, "Downloading model {} from {}", entry.id, url);
 
     let _ = app.emit(
         "model:download:progress",
         serde_json::json!({
-            "model_id": model_id,
+            "model_id": entry.id.as_str(),
             "status": "downloading",
             "progress": 0,
         }),
@@ -289,7 +328,7 @@ pub async fn download_model(
             let _ = app.emit(
                 "model:download:progress",
                 serde_json::json!({
-                    "model_id": model_id,
+                    "model_id": entry.id.as_str(),
                     "status": "downloading",
                     "progress": progress,
                 }),
@@ -328,19 +367,19 @@ pub async fn download_model(
     }
 
     if !is_model_downloaded(&dir, entry) {
-        return Err(format!("模型 {} 下载完成但文件校验失败，请重试", model_id));
+        return Err(format!("模型 {} 下载完成但文件校验失败，请重试", entry.id));
     }
 
     let _ = app.emit(
         "model:download:progress",
         serde_json::json!({
-            "model_id": model_id,
+            "model_id": entry.id.as_str(),
             "status": "completed",
             "progress": 100,
         }),
     );
 
-    log_app!(info, "Model {} downloaded successfully", model_id);
+    log_app!(info, "Model {} downloaded successfully", entry.id);
     Ok(())
 }
 

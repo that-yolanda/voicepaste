@@ -5,10 +5,11 @@ export interface RegistryModel {
   name: string;
   type: "online" | "offline";
   category?: "vad" | "asr" | "punctuation";
+  engine?: string;
   description?: string;
+  tags?: string[];
   mem_size?: number;
   file_size?: number;
-  languages?: string[];
   capabilities?: Record<string, boolean>;
   default_config?: Record<string, unknown>;
   architecture?: string;

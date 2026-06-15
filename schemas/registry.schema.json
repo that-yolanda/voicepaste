@@ -12,17 +12,7 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": [
-          "id",
-          "type",
-          "category",
-          "engine",
-          "name",
-          "description",
-          "tags",
-          "capabilities",
-          "languages"
-        ],
+        "required": ["id", "type", "category", "engine", "name", "description", "tags"],
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string" },
@@ -45,14 +35,6 @@
               "punctuation": { "type": "boolean" },
               "itn": { "type": "boolean" }
             }
-          },
-          "languages": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "requires_config": {
-            "type": "array",
-            "items": { "type": "string" }
           },
           "architecture": { "type": "string" },
           "download_url": { "type": "string" },

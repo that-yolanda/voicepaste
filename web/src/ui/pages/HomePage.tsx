@@ -11,6 +11,7 @@ import {
   SectionHeader,
   SectionItemList,
 } from "@/ui/layout/PageLayout";
+import { Button } from "@/ui/components/Button";
 
 /* ---------- pure helpers ---------- */
 
@@ -84,7 +85,11 @@ export function HomePage() {
   const charTotal = stats?.totalCharacters || 0;
   const saved = formatDurationParts(Math.round(charTotal * 0.67));
   const cards = [
-    { v: formatCompact(Object.keys(stats?.dailyCounts || {}).length), u: "天", label: "已经使用" },
+    {
+      v: formatCompact(Object.keys(stats?.dailyCounts || {}).length),
+      u: "天",
+      label: "已经使用",
+    },
     { v: formatCompact(stats?.totalSessions || 0), u: "次", label: "发起会话" },
     { v: formatCompact(charTotal), u: "字", label: "总输入字数" },
     { v: saved.value, u: saved.unit, label: "节省时间" },
@@ -103,18 +108,20 @@ export function HomePage() {
       <PageHeader title={greeting()} />
 
       {/* Achievements */}
-      <div className="grid grid-cols-4 gap-[14px]">
+      <div className="grid grid-cols-4 gap-4">
         {cards.map((c) => (
           <div
             key={c.label}
-            className="flex min-h-[156px] py-[18px] px-4 pb-5 bg-surface-card border border-border rounded-xl"
+            className="flex min-h-40 py-4 px-4 pb-5 bg-surface-card border border-border rounded-xl"
           >
             <div className="flex flex-1 flex-col justify-between min-w-0">
               <div className="flex items-baseline gap-1 min-w-0">
                 <span className="text-xl font-bold leading-[1.05] text-text tracking-normal whitespace-nowrap">
                   {c.v}
                 </span>
-                <span className="text-sm font-medium text-text whitespace-nowrap">{c.u}</span>
+                <span className="text-sm font-medium text-text whitespace-nowrap">
+                  {c.u}
+                </span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-text whitespace-nowrap leading-none">
@@ -135,7 +142,7 @@ export function HomePage() {
         <SectionContent className="p-0!">
           <SectionItemList>
             {history.length === 0 ? (
-              <div className="flex items-center gap-3 p-4 min-h-10 text-xs text-text-muted">
+              <div className="flex justify-center items-center gap-3 p-4 min-h-10 text-xs text-text-muted">
                 暂无输入记录
               </div>
             ) : (
@@ -149,55 +156,59 @@ export function HomePage() {
                     last = dk;
                     const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
                     return (
-                      <div key={item.ts}>
+                      <div key={item.ts} className="text-xs">
                         {show && (
-                          <div className="flex items-center gap-2 px-2 mt-[-1px] first:mt-0">
+                          <div className="flex items-center gap-2 p-2">
                             <div className="flex-1 h-px bg-border-subtle" />
-                            <span className="text-[10px] text-text-muted font-medium whitespace-nowrap py-[10px] pb-[6px]">
+                            <span className="text-text-muted">
                               {dateLabel(dk, tKey, yKey)}
                             </span>
                             <div className="flex-1 h-px bg-border-subtle" />
                           </div>
                         )}
-                        <div className="group flex items-center gap-3 px-4 min-h-10 transition-colors hover:bg-fill-hover">
-                          <span className="text-xs text-text-muted font-mono shrink-0 w-[38px]">
-                            {time}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-text-dim truncate leading-[1.4]">
-                              {item.text}
-                            </p>
+                        <div className="group min-h-10 transition-colors hover:bg-fill-hover relative">
+                          <div className="px-4 flex items-center gap-2 min-h-10 ">
+                            <span className="text-xs text-text-muted shrink-0">
+                              {time}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-text-dim truncate leading-[1.4]">
+                                {item.text}
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            <button
-                              type="button"
-                              className="w-[26px] h-[26px] flex items-center justify-center bg-transparent border-0 rounded-md text-text-muted hover:bg-fill-subtle hover:text-text cursor-pointer transition-colors"
-                              title="复制"
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute top-1/2 right-2 -translate-y-1/2 h-full">
+                            <Button
+                              size="icon"
+                              variant="accent"
                               onClick={async () => {
                                 try {
-                                  await navigator.clipboard.writeText(item.text);
+                                  await navigator.clipboard.writeText(
+                                    item.text,
+                                  );
                                 } catch {
                                   /* */
                                 }
                               }}
                             >
                               <Copy size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="w-[26px] h-[26px] flex items-center justify-center bg-transparent border-0 rounded-md text-text-muted hover:text-error cursor-pointer transition-colors"
-                              title="删除"
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="accent"
                               onClick={async () => {
                                 try {
                                   await deleteHistory(item.ts);
-                                  setHistory((p) => p.filter((h) => h.ts !== item.ts));
+                                  setHistory((p) =>
+                                    p.filter((h) => h.ts !== item.ts),
+                                  );
                                 } catch {
                                   /* */
                                 }
                               }}
                             >
                               <Trash2 size={14} />
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       </div>

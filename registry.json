@@ -9,21 +9,13 @@
       "engine": "volcengine",
       "name": "火山引擎 - 豆包流式输出大模型",
       "description": "基于豆包大模型的流式语音识别服务",
-      "tags": ["流式输出", "免费可用", "热词库", "中文,英文,方言"],
+      "tags": ["流式输出", "免费可用", "热词库", "中英文,方言"],
       "capabilities": {
         "streaming": true,
         "hotwords": true,
         "punctuation": true,
         "itn": true
       },
-      "languages": ["zh", "en"],
-      "requires_config": [
-        "url",
-        "app_id",
-        "access_token",
-        "secret_key",
-        "resource_id"
-      ],
       "default_config": {
         "url": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
         "app_id": "",
@@ -60,19 +52,11 @@
       "name": "Silero VAD",
       "description": "语音活动检测模型，语音分段的基础依赖",
       "tags": ["基础模型"],
-      "languages": [],
       "architecture": "vad",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
       "file_size": 2,
       "mem_size": 50,
-      "model_files": { "model": "silero_vad.onnx" },
-      "default_config": {
-        "threshold": 0.2,
-        "min_silence_duration": 0.2,
-        "min_speech_duration": 0.2,
-        "max_speech_duration": 10.0,
-        "num_threads": 2
-      }
+      "model_files": { "model": "silero_vad.onnx" }
     },
     {
       "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8",
@@ -88,7 +72,6 @@
         "punctuation": false,
         "itn": false
       },
-      "languages": ["zh", "en", "ja", "ko", "yue"],
       "architecture": "sense_voice",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2",
       "file_size": 158,
@@ -99,8 +82,7 @@
       },
       "default_config": {
         "use_itn": true,
-        "language": "auto",
-        "num_threads": 2
+        "language": "auto"
       }
     },
     {
@@ -110,21 +92,13 @@
       "engine": "sherpa-onnx",
       "name": "FunASR-Nano 中英日三语",
       "description": "基于 FunASR-Nano-2512 的高精度离线模型，支持中英日三语、多种方言及歌词识别",
-      "tags": [
-        "中英日三语",
-        "方言识别",
-        "歌词识别",
-        "自动标点",
-        "热词库",
-        "ITN 口语转书面"
-      ],
+      "tags": ["中英日, 方言", "歌词识别", "中文识别高"],
       "capabilities": {
         "streaming": false,
         "hotwords": true,
         "punctuation": true,
         "itn": true
       },
-      "languages": ["zh", "en", "ja"],
       "architecture": "funasr_nano",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2",
       "file_size": 948,
@@ -143,8 +117,7 @@
         "top_p": 0.8,
         "seed": 42,
         "language": "auto",
-        "itn": true,
-        "num_threads": 2
+        "itn": true
       }
     },
     {
@@ -154,14 +127,13 @@
       "engine": "sherpa-onnx",
       "name": "Zipformer 流式中英双语",
       "description": "实时流式本地模型，支持中英双语低延迟识别",
-      "tags": ["中英混说", "流式输出", "热词库", "低延时", "低内存占用"],
+      "tags": ["中英混说", "低延时", "低内存占用"],
       "capabilities": {
         "streaming": true,
         "hotwords": true,
         "punctuation": false,
         "itn": false
       },
-      "languages": ["zh", "en"],
       "architecture": "transducer",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2",
       "file_size": 150,
@@ -173,7 +145,6 @@
         "tokens": "tokens.txt"
       },
       "default_config": {
-        "num_threads": 2,
         "max_active_paths": 16,
         "modeling_unit": "cjkchar+bpe",
         "enable_endpoint": true,
@@ -189,14 +160,13 @@
       "engine": "sherpa-onnx",
       "name": "Zipformer 流式中文",
       "description": "实时流式本地模型，中文高精度低延迟识别",
-      "tags": ["中文识别率高", "流式输出", "热词库", "低延时", "低内存占用"],
+      "tags": ["低延时", "低内存占用"],
       "capabilities": {
         "streaming": true,
         "hotwords": true,
         "punctuation": false,
         "itn": false
       },
-      "languages": ["zh"],
       "architecture": "transducer",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
       "file_size": 160,
@@ -208,7 +178,6 @@
         "tokens": "tokens.txt"
       },
       "default_config": {
-        "num_threads": 2,
         "max_active_paths": 4,
         "modeling_unit": "cjkchar",
         "enable_endpoint": true,
@@ -224,52 +193,13 @@
       "engine": "sherpa-onnx",
       "name": "Qwen3 ASR 多语言",
       "description": "基于 Qwen3-ASR-0.6B 的多语言语音识别模型，支持31种语言及20种中文方言、歌词/说唱识别",
-      "tags": [
-        "多语言",
-        "方言识别",
-        "歌词识别",
-        "自动标点",
-        "热词库",
-        "流式输出"
-      ],
+      "tags": ["多语言", "中英混说", "中文识别率高"],
       "capabilities": {
         "streaming": false,
         "hotwords": true,
         "punctuation": true,
         "itn": false
       },
-      "languages": [
-        "zh",
-        "en",
-        "yue",
-        "ja",
-        "ko",
-        "de",
-        "fr",
-        "es",
-        "pt",
-        "ru",
-        "th",
-        "vi",
-        "ar",
-        "id",
-        "it",
-        "tr",
-        "hi",
-        "ms",
-        "nl",
-        "sv",
-        "da",
-        "fi",
-        "pl",
-        "cs",
-        "fil",
-        "fa",
-        "el",
-        "hu",
-        "mk",
-        "ro"
-      ],
       "architecture": "qwen3_asr",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2",
       "file_size": 938,
@@ -285,8 +215,7 @@
         "max_new_tokens": 128,
         "temperature": 1e-6,
         "top_p": 0.8,
-        "seed": 42,
-        "num_threads": 2
+        "seed": 42
       }
     },
     {
@@ -297,16 +226,12 @@
       "name": "CT-Transformer 标点恢复",
       "description": "中英双语标点恢复模型，为不支持自动标点的 ASR 模型添加标点符号，下载后自动生效",
       "tags": ["基础模型"],
-      "languages": ["zh", "en"],
       "architecture": "punct_ct_transformer",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
       "file_size": 20,
       "mem_size": 200,
       "model_files": {
         "model": "model.int8.onnx"
-      },
-      "default_config": {
-        "num_threads": 2
       }
     }
   ]
