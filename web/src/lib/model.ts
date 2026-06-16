@@ -138,7 +138,7 @@ export const FIELD_META: Record<string, FieldMeta> = {
   /* Doubao basic settings & feature toggles & advanced / internal params */
   enable_nonstream: { label: "二遍识别", type: "toggle", group: "advanced" },
   enable_accelerate_text: {
-    label: "启用文本加速",
+    label: "首字加速",
     type: "toggle",
     group: "advanced",
   },
@@ -149,6 +149,11 @@ export const FIELD_META: Record<string, FieldMeta> = {
     label: "热词表 ID",
     group: "advanced",
     placeholder: "输入热词表 ID",
+  },
+  "corpus.correct_table_id": {
+    label: "替换词表 ID",
+    group: "advanced",
+    placeholder: "输入替换词表 ID",
   },
   language: {
     label: "语言",
@@ -165,8 +170,43 @@ export const FIELD_META: Record<string, FieldMeta> = {
   operation: { label: "操作类型", group: "advanced" },
   sequence: { label: "请求序号", type: "number", group: "advanced" },
   show_utterances: { label: "显示分句", type: "toggle", group: "advanced" },
-  result_type: { label: "结果类型", group: "advanced" },
-  accelerate_score: { label: "加速分数", type: "number", group: "advanced" },
+  result_type: {
+    label: "结果返回方式",
+    type: "segment",
+    options: [
+      { value: "full", label: "全量" },
+      { value: "single", label: "增量" },
+    ],
+    group: "advanced",
+  },
+  accelerate_score: { label: "首字加速率", type: "number", group: "advanced" },
+  ssd_version: {
+    label: "SSD 大模型版本",
+    type: "segment",
+    options: [
+      { value: "200", label: "200（大模型 SSD）" },
+      { value: "100", label: "100（标准）" },
+    ],
+    group: "advanced",
+  },
+  output_zh_variant: {
+    label: "繁体输出",
+    type: "segment",
+    options: [
+      { value: "off", label: "不转换" },
+      { value: "traditional", label: "繁体（大陆）" },
+      { value: "tw", label: "台湾正体" },
+      { value: "hk", label: "香港繁体" },
+    ],
+    group: "advanced",
+  },
+  end_window_size: { label: "强制判停时长 (ms)", type: "number", group: "advanced" },
+  force_to_speech_time: { label: "最短强制判停 (ms)", type: "number", group: "advanced" },
+  vad_segment_duration: {
+    label: "语义切句静音阈值 (ms)",
+    type: "number",
+    group: "advanced",
+  },
 
   /* Offline model params */
   use_itn: { label: "数字格式化 (ITN)", type: "toggle", group: "basic" },

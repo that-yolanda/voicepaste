@@ -59,8 +59,14 @@
         "result_type": "full",
         "enable_accelerate_text": true,
         "accelerate_score": 10,
+        "ssd_version": "200",
+        "output_zh_variant": "off",
+        "end_window_size": 800,
+        "force_to_speech_time": 1000,
+        "vad_segment_duration": 3000,
         "corpus": {
-          "boosting_table_id": ""
+          "boosting_table_id": "",
+          "correct_table_id": ""
         }
       }
     },

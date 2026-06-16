@@ -282,6 +282,23 @@ pub(crate) fn build_api_request_body(
     if let Some(v) = request_config.enable_accelerate_text {
         request.insert("enable_accelerate_text".to_string(), json!(v));
     }
+    if let Some(v) = request_config
+        .ssd_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        request.insert("ssd_version".to_string(), json!(v));
+    }
+    // "off" means no conversion → omit the field so the server keeps simplified output.
+    if let Some(v) = request_config
+        .output_zh_variant
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "off")
+    {
+        request.insert("output_zh_variant".to_string(), json!(v));
+    }
     let mut context_hotwords: Vec<Value> = hotwords
         .iter()
         .map(|word| word.trim())

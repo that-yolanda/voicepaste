@@ -117,6 +117,10 @@ pub struct DoubaoStreamingConfig {
     pub vad_segment_duration: Option<u32>,
     #[serde(default = "default_true_opt")]
     pub enable_accelerate_text: Option<bool>,
+    #[serde(default = "default_ssd_version")]
+    pub ssd_version: String,
+    #[serde(default = "default_zh_variant")]
+    pub output_zh_variant: String,
     #[serde(default = "default_empty_corpus")]
     pub corpus: Option<serde_norway::Value>,
 }
@@ -212,6 +216,10 @@ pub struct RequestConfig {
     pub enable_nonstream: Option<bool>,
     #[serde(default)]
     pub enable_accelerate_text: Option<bool>,
+    #[serde(default)]
+    pub ssd_version: Option<String>,
+    #[serde(default)]
+    pub output_zh_variant: Option<String>,
     #[serde(default)]
     pub corpus: Option<serde_norway::Value>,
 }
@@ -360,6 +368,12 @@ fn default_accelerate_score() -> Option<u32> {
 fn default_true_opt() -> Option<bool> {
     Some(true)
 }
+fn default_ssd_version() -> String {
+    "200".to_string()
+}
+fn default_zh_variant() -> String {
+    "off".to_string()
+}
 fn default_empty_corpus() -> Option<serde_norway::Value> {
     Some(serde_norway::Value::Mapping(serde_norway::Mapping::new()))
 }
@@ -472,6 +486,22 @@ impl DoubaoStreamingConfig {
             vad_segment_duration: self.vad_segment_duration,
             enable_nonstream: Some(self.enable_nonstream),
             enable_accelerate_text: self.enable_accelerate_text,
+            ssd_version: {
+                let v = self.ssd_version.trim();
+                if v.is_empty() {
+                    None
+                } else {
+                    Some(self.ssd_version.clone())
+                }
+            },
+            output_zh_variant: {
+                let v = self.output_zh_variant.trim();
+                if v.is_empty() {
+                    None
+                } else {
+                    Some(self.output_zh_variant.clone())
+                }
+            },
             corpus: self.corpus.clone(),
         }
     }
@@ -755,6 +785,8 @@ impl Default for DoubaoStreamingConfig {
             accelerate_score: Some(10),
             vad_segment_duration: None,
             enable_accelerate_text: Some(true),
+            ssd_version: "200".to_string(),
+            output_zh_variant: "off".to_string(),
             corpus: Some(serde_norway::Value::Mapping(serde_norway::Mapping::new())),
         }
     }
@@ -1056,24 +1088,30 @@ mod tests {
 
     #[test]
     fn to_request_config_empty_language_becomes_none() {
-        let mut cfg = DoubaoStreamingConfig::default();
-        cfg.language = "".to_string();
+        let cfg = DoubaoStreamingConfig {
+            language: String::new(),
+            ..Default::default()
+        };
         let req = cfg.to_request_config();
         assert_eq!(req.language, None);
     }
 
     #[test]
     fn to_request_config_language_preserved() {
-        let mut cfg = DoubaoStreamingConfig::default();
-        cfg.language = "zh".to_string();
+        let cfg = DoubaoStreamingConfig {
+            language: "zh".to_string(),
+            ..Default::default()
+        };
         let req = cfg.to_request_config();
         assert_eq!(req.language, Some("zh".to_string()));
     }
 
     #[test]
     fn to_request_config_language_whitespace_becomes_none() {
-        let mut cfg = DoubaoStreamingConfig::default();
-        cfg.language = "   ".to_string();
+        let cfg = DoubaoStreamingConfig {
+            language: "   ".to_string(),
+            ..Default::default()
+        };
         let req = cfg.to_request_config();
         assert_eq!(req.language, None);
     }

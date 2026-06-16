@@ -675,8 +675,51 @@ fn make_request_config() -> RequestConfig {
         vad_segment_duration: None,
         enable_nonstream: Some(false),
         enable_accelerate_text: Some(true),
+        ssd_version: None,
+        output_zh_variant: None,
         corpus: None,
     }
+}
+
+#[test]
+fn request_ssd_version_emitted_when_set() {
+    let mut cfg = make_request_config();
+    cfg.ssd_version = Some("200".into());
+    let body = crate::asr::doubao::build_api_request_body(&make_audio_config(), &cfg, &[]);
+    let req = body.get("request").unwrap();
+    assert_eq!(req.get("ssd_version").and_then(|v| v.as_str()), Some("200"));
+}
+
+#[test]
+fn request_ssd_version_omitted_when_unset() {
+    let body = crate::asr::doubao::build_api_request_body(
+        &make_audio_config(),
+        &make_request_config(),
+        &[],
+    );
+    let req = body.get("request").unwrap();
+    assert!(req.get("ssd_version").is_none());
+}
+
+#[test]
+fn request_output_zh_variant_off_is_omitted() {
+    let mut cfg = make_request_config();
+    cfg.output_zh_variant = Some("off".into());
+    let body = crate::asr::doubao::build_api_request_body(&make_audio_config(), &cfg, &[]);
+    let req = body.get("request").unwrap();
+    assert!(req.get("output_zh_variant").is_none());
+}
+
+#[test]
+fn request_output_zh_variant_traditional_emitted() {
+    let mut cfg = make_request_config();
+    cfg.output_zh_variant = Some("traditional".into());
+    let body = crate::asr::doubao::build_api_request_body(&make_audio_config(), &cfg, &[]);
+    let req = body.get("request").unwrap();
+    assert_eq!(
+        req.get("output_zh_variant").and_then(|v| v.as_str()),
+        Some("traditional")
+    );
 }
 
 #[test]
