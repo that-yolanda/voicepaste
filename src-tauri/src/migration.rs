@@ -706,8 +706,8 @@ llm:
         );
         // llm copied, `enabled` dropped
         let llm = v.get("llm").unwrap().as_mapping().unwrap();
-        assert!(llm.get(&kv("enabled")).is_none());
-        assert_eq!(llm.get(&kv("provider")).unwrap().as_str(), Some("deepseek"));
+        assert!(llm.get(kv("enabled")).is_none());
+        assert_eq!(llm.get(kv("provider")).unwrap().as_str(), Some("deepseek"));
     }
 
     #[test]
@@ -891,9 +891,9 @@ llm:
             .and_then(|a| a.get("doubao-streaming"))
             .and_then(Value::as_mapping)
             .map(|m| {
-                m.contains_key(&kv("app_id"))
-                    && m.contains_key(&kv("access_token"))
-                    && m.contains_key(&kv("secret_key"))
+                m.contains_key(kv("app_id"))
+                    && m.contains_key(kv("access_token"))
+                    && m.contains_key(kv("secret_key"))
             })
             .unwrap_or(false);
 

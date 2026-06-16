@@ -89,7 +89,7 @@ describe("settings bridge — data methods", () => {
 
   it("getHistory invokes get_history with default daysBack", async () => {
     await getHistory();
-    expect(invoke).toHaveBeenCalledWith("get_history", { daysBack: 3 });
+    expect(invoke).toHaveBeenCalledWith("get_history", { daysBack: 1 });
   });
 
   it("getHistory invokes get_history with custom daysBack", async () => {
