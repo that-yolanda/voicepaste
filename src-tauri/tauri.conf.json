@@ -78,7 +78,10 @@
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "timestampUrl": "",
+      "nsis": {
+        "installerIcon": "icons/icon.ico"
+      }
     }
   },
   "plugins": {

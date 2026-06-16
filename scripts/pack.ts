@@ -126,7 +126,8 @@ function runTauri(args: string[], env: NodeJS.ProcessEnv): Promise<void> {
     const bin = getTauriBin();
     console.log(`\n> ${bin} ${args.join(" ")}\n`);
 
-    const child = spawn(bin, args, { stdio: "inherit", env });
+    // Windows cannot directly spawn a `.cmd` shim (EINVAL); route through cmd.exe.
+    const child = spawn(bin, args, { stdio: "inherit", env, shell: process.platform === "win32" });
 
     child.on("exit", (code, signal) => {
       if (signal) {

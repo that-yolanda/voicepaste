@@ -1,0 +1,16 @@
+{
+  // Node-side build/utility scripts (pack.ts, clean.ts, ...).
+  // Separate from the root tsconfig.json, which is Vite/frontend-only and
+  // whitelists `types: ["vitest/globals"]` — that excludes @types/node and
+  // leaves these scripts without Node globals (process, __dirname, node:*).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}
