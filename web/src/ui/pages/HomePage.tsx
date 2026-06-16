@@ -58,7 +58,7 @@ interface HistoryItem {
 export function HomePage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [days, setDays] = useState(3);
+  const [days, setDays] = useState(1);
 
   const load = useCallback(async () => {
     try {
@@ -78,7 +78,7 @@ export function HomePage() {
 
   useEffect(() => {
     load();
-    loadHist(3);
+    loadHist(1);
   }, [load, loadHist]);
 
   /* —— achievements —— */

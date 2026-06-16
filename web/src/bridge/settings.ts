@@ -328,7 +328,7 @@ export async function getStats(): Promise<Record<string, unknown>> {
   return invoke("get_stats");
 }
 
-export async function getHistory(daysBack = 3): Promise<unknown[]> {
+export async function getHistory(daysBack = 1): Promise<unknown[]> {
   return invoke("get_history", { daysBack });
 }
 

@@ -88,14 +88,27 @@ impl StatsService {
     }
 
     pub fn get_history(&self, days_back: u32) -> Vec<HistoryEntry> {
-        let days = days_back.min(365);
+        // History is sparse — only days with real usage have a file on disk. A
+        // user who hasn't typed recently still has older entries, so we enumerate
+        // the dates that actually have files and keep the most recent N, instead
+        // of probing a contiguous window of calendar days (which would report
+        // "no records" whenever the window falls inside a usage gap).
+        let mut keys: Vec<String> = fs::read_dir(&self.history_dir)
+            .map(|rd| {
+                rd.flatten()
+                    .filter_map(|entry| {
+                        let stem = entry.path().file_stem()?.to_str()?.to_string();
+                        is_date_key(&stem).then_some(stem)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        keys.sort_unstable_by(|a, b| b.cmp(a));
+
+        let limit = days_back.min(365) as usize;
         let mut all_items = Vec::new();
-
-        for i in 0..days {
-            let d = Local::now() - chrono::Duration::days(i as i64);
-            let key = d.format("%Y-%m-%d").to_string();
+        for key in keys.into_iter().take(limit) {
             let file_path = self.history_dir.join(format!("{}.jsonl", key));
-
             if let Ok(content) = fs::read_to_string(&file_path) {
                 for line in content.lines() {
                     if let Ok(entry) = serde_json::from_str::<HistoryEntry>(line) {
@@ -174,6 +187,11 @@ impl StatsService {
             }
         }
     }
+}
+
+/// Whether a string is a `YYYY-MM-DD` history file date key.
+fn is_date_key(s: &str) -> bool {
+    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok()
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +321,31 @@ mod tests {
 
         let history = svc.get_history(365);
         assert!(!history.is_empty());
+    }
+
+    #[test]
+    fn get_history_skips_usage_gaps() {
+        // A user who hasn't typed in the last few days still has older entries.
+        // Asking for the most recent 3 days of *records* should surface the lone
+        // older entry instead of reporting empty because the last 3 calendar
+        // days have no files.
+        let dir = tempdir().unwrap();
+        let history_dir = dir.path().join("history");
+        let _ = fs::create_dir_all(&history_dir);
+
+        let past = chrono::Local::now() - chrono::Duration::days(10);
+        let past_key = past.format("%Y-%m-%d").to_string();
+        let entry = serde_json::json!({"ts": past.to_rfc3339(), "text": "old", "chars": 3});
+        let file = history_dir.join(format!("{}.jsonl", past_key));
+        let _ = fs::write(&file, format!("{}\n", entry));
+
+        let svc_path = dir.path().join("stats.json");
+        let _ = fs::write(&svc_path, serde_json::to_string(&Stats::default()).unwrap());
+
+        let svc = StatsService::new(dir.path());
+        let history = svc.get_history(3);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].text, "old");
     }
 
     #[test]
