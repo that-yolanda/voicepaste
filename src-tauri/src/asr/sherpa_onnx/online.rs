@@ -63,11 +63,10 @@ pub(crate) fn build_online_recognizer(
         // Set modeling unit (required for hotwords tokenization)
         config.model_config.modeling_unit = json_string(model_config, "modeling_unit");
 
-        // Set bpe_vocab for bpe or cjkchar+bpe models
-        let bpe_vocab_path = model_dir.join("bpe.vocab");
-        if bpe_vocab_path.exists() {
-            config.model_config.bpe_vocab = bpe_vocab_path.to_str().map(|s| s.to_string());
-        }
+        // Set bpe_vocab for bpe or cjkchar+bpe models. Only cjkchar+bpe models
+        // declare "bpe_vocab" in model_files; for plain cjkchar models p() returns
+        // None and hotwords fall back to CJK-only handling.
+        config.model_config.bpe_vocab = p("bpe_vocab");
     } else {
         config.decoding_method = Some("greedy_search".to_string());
     }
@@ -132,8 +131,12 @@ pub(crate) fn build_online_hotwords_buf(
 
     // Step 3: BPE character set filtering
     if is_bpe {
-        let bpe_vocab_path = model_dir.join("bpe.vocab");
-        let bpe_chars = bpe_char_set(&bpe_vocab_path);
+        let bpe_chars = entry
+            .model_files
+            .get("bpe_vocab")
+            .map(|f| model_dir.join(f))
+            .map(|p| bpe_char_set(&p))
+            .unwrap_or_default();
         if !bpe_chars.is_empty() {
             let before = filtered.len();
             filtered = filter_bpe_chars(&filtered, &bpe_chars);

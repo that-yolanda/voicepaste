@@ -2,6 +2,8 @@ use sherpa_onnx::{OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuati
 use std::fmt;
 use std::path::Path;
 
+use crate::model::ModelEntry;
+
 /// Wrapper around sherpa-onnx OfflinePunctuation for punctuation restoration.
 ///
 /// Uses the CT-Transformer model (Chinese + English bilingual) to add punctuation
@@ -17,11 +19,20 @@ impl fmt::Debug for PunctuationProcessor {
 }
 
 impl PunctuationProcessor {
-    /// Create a new punctuation processor.
+    /// Create a new punctuation processor from a registry entry.
     ///
-    /// `model_dir` should contain `model.int8.onnx` (the CT-Transformer model).
-    pub fn new(model_dir: &Path, num_threads: u32, provider: &str) -> Result<Self, String> {
-        let model_path = model_dir.join("model.int8.onnx");
+    /// `entry.model_files["model"]` names the CT-Transformer ONNX file inside `model_dir`.
+    pub fn new(
+        entry: &ModelEntry,
+        model_dir: &Path,
+        num_threads: u32,
+        provider: &str,
+    ) -> Result<Self, String> {
+        let model_path = entry
+            .model_files
+            .get("model")
+            .map(|filename| model_dir.join(filename))
+            .ok_or_else(|| format!("标点模型 {} 缺少 model 文件定义", entry.id))?;
         if !model_path.exists() {
             return Err(format!("标点模型文件不存在: {}", model_path.display()));
         }
@@ -54,10 +65,34 @@ impl PunctuationProcessor {
 mod tests {
     use super::*;
 
+    /// Build a minimal punctuation ModelEntry with the given `model_files` map.
+    fn entry_with_model_files(files: serde_json::Value) -> ModelEntry {
+        serde_json::from_value(serde_json::json!({
+            "id": "punct-test",
+            "type": "offline",
+            "category": "punctuation",
+            "engine": "sherpa-onnx",
+            "name": "T",
+            "description": "T",
+            "model_files": files,
+        }))
+        .expect("entry should parse")
+    }
+
     #[test]
-    fn test_new_missing_model_dir() {
-        let result = PunctuationProcessor::new(Path::new("/nonexistent/path"), 1, "cpu");
+    fn test_new_missing_model_file() {
+        let entry = entry_with_model_files(serde_json::json!({"model": "model.int8.onnx"}));
+        let result = PunctuationProcessor::new(&entry, Path::new("/nonexistent/path"), 1, "cpu");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("标点模型文件不存在"));
+    }
+
+    #[test]
+    fn test_new_missing_model_files_definition() {
+        // No "model" key in model_files → should report a missing-definition error.
+        let entry = entry_with_model_files(serde_json::json!({}));
+        let result = PunctuationProcessor::new(&entry, Path::new("/nonexistent/path"), 1, "cpu");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("缺少 model 文件定义"));
     }
 }

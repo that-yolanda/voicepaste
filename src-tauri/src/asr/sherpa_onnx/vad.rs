@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 use std::path::Path;
 
+use crate::model::ModelEntry;
+
 /// VAD configuration loaded from registry.json's silero-vad model entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VadConfig {
@@ -87,9 +89,15 @@ pub struct VadProcessor {
 }
 
 impl VadProcessor {
-    /// Create a new VAD processor. `vad_model_dir` should contain `silero_vad.onnx`.
-    pub fn new(vad_model_dir: &Path, config: &VadConfig) -> Result<Self, String> {
-        let model_path = vad_model_dir.join("silero_vad.onnx");
+    /// Create a new VAD processor from a registry entry.
+    ///
+    /// `entry.model_files["model"]` names the Silero VAD ONNX file inside `model_dir`.
+    pub fn new(entry: &ModelEntry, model_dir: &Path, config: &VadConfig) -> Result<Self, String> {
+        let model_path = entry
+            .model_files
+            .get("model")
+            .map(|filename| model_dir.join(filename))
+            .ok_or_else(|| format!("VAD 模型 {} 缺少 model 文件定义", entry.id))?;
         if !model_path.exists() {
             return Err(format!("VAD 模型文件不存在: {}", model_path.display()));
         }
@@ -203,5 +211,27 @@ mod tests {
     fn test_vad_config_from_registry_none() {
         let config = super::VadConfig::from_registry(None);
         assert!((config.threshold - 0.2).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_new_missing_model_files_definition() {
+        // No "model" key in model_files → should report a missing-definition error.
+        let entry: crate::model::ModelEntry = serde_json::from_value(serde_json::json!({
+            "id": "vad-test",
+            "type": "offline",
+            "category": "vad",
+            "engine": "sherpa-onnx",
+            "name": "T",
+            "description": "T",
+            "model_files": {}
+        }))
+        .unwrap();
+        let result = super::VadProcessor::new(
+            &entry,
+            std::path::Path::new("/nonexistent"),
+            &super::VadConfig::default(),
+        );
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("缺少 model 文件定义"));
     }
 }

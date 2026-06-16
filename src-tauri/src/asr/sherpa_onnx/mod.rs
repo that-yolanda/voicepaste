@@ -236,7 +236,7 @@ impl SherpaOnnxEngine {
         let num_threads = json_u32(&punct_config, "num_threads").unwrap_or(2);
         let provider = json_choice(&punct_config, "provider", &["cpu", "cuda", "coreml"], "cpu");
 
-        match PunctuationProcessor::new(&model_dir, num_threads, &provider) {
+        match PunctuationProcessor::new(punct_entry, &model_dir, num_threads, &provider) {
             Ok(p) => {
                 log_asr!(
                     info,
@@ -281,8 +281,12 @@ impl AsrEngine for SherpaOnnxEngine {
             })?;
 
         // Build VAD config (all models use VAD)
-        let vad_entry = registry.models.iter().find(|m| m.id == "silero-vad");
-        let vad_base = VadConfig::from_registry(vad_entry.and_then(|e| e.default_config.as_ref()));
+        let vad_entry = registry
+            .models
+            .iter()
+            .find(|m| m.id == "silero-vad")
+            .ok_or_else(|| "registry 中缺少 silero-vad 模型定义".to_string())?;
+        let vad_base = VadConfig::from_registry(vad_entry.default_config.as_ref());
         let vad_config = VadConfig::merged(&vad_base, &self.vad_params);
 
         let model_config = merged_model_config(
@@ -332,8 +336,8 @@ impl AsrEngine for SherpaOnnxEngine {
             let stream = recognizer.create_stream();
 
             // Create VAD for online model (filters silence/noise)
-            let vad_dir = model::model_path(&self.data_dir, "silero-vad");
-            let vad = VadProcessor::new(&vad_dir, &vad_config)?;
+            let vad_dir = model::model_path(&self.data_dir, &vad_entry.id);
+            let vad = VadProcessor::new(vad_entry, &vad_dir, &vad_config)?;
 
             let (session, _worker_tx) = online::spawn_online_worker(
                 recognizer,
@@ -386,8 +390,8 @@ impl AsrEngine for SherpaOnnxEngine {
             };
 
             // Create VAD for simulated streaming
-            let vad_dir = model::model_path(&self.data_dir, "silero-vad");
-            let vad = VadProcessor::new(&vad_dir, &vad_config)?;
+            let vad_dir = model::model_path(&self.data_dir, &vad_entry.id);
+            let vad = VadProcessor::new(vad_entry, &vad_dir, &vad_config)?;
 
             let (session, _worker_tx) = simulated_streaming::spawn_simulated_streaming_worker(
                 recognizer,
@@ -446,8 +450,8 @@ impl AsrEngine for SherpaOnnxEngine {
             let hotwords_str = String::new();
 
             // Create VAD for offline model (segments speech)
-            let vad_dir = model::model_path(&self.data_dir, "silero-vad");
-            let vad = VadProcessor::new(&vad_dir, &vad_config)?;
+            let vad_dir = model::model_path(&self.data_dir, &vad_entry.id);
+            let vad = VadProcessor::new(vad_entry, &vad_dir, &vad_config)?;
 
             let (session, _worker_tx) = offline::spawn_offline_worker(
                 recognizer,

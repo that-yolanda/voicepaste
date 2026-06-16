@@ -509,8 +509,8 @@ mod tests {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 13,
-            "EMBEDDED_REGISTRY version should be 13, got {}",
+            registry.version, 14,
+            "EMBEDDED_REGISTRY version should be 14, got {}",
             registry.version
         );
         assert!(
@@ -530,8 +530,8 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 13,
-            "bundled_registry should return version 13 from embedded, got {}",
+            registry.version, 14,
+            "bundled_registry should return version 14 from embedded, got {}",
             registry.version
         );
     }

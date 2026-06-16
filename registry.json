@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "updated_at": "2026-06-16",
   "defaults": {
     "asr": {
@@ -168,7 +168,8 @@
         "encoder": "encoder-epoch-99-avg-1.int8.onnx",
         "decoder": "decoder-epoch-99-avg-1.onnx",
         "joiner": "joiner-epoch-99-avg-1.int8.onnx",
-        "tokens": "tokens.txt"
+        "tokens": "tokens.txt",
+        "bpe_vocab": "bpe.vocab"
       },
       "default_config": {
         "max_active_paths": 16,
