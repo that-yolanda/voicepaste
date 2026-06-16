@@ -1,10 +1,16 @@
+# VoicePaste 配置文件
+#
+# 所有参数的默认值见 registry.json。
+# 本文件仅记录你修改过的参数，未列出的参数自动从 registry.json 读取默认值。
+# 通过设置 UI 修改任意参数后，对应字段会自动写入此文件。
+
 app:
-  hotkey: ControlLeft+Space
+  hotkey: F13
   hotkey_mode: toggle             # toggle=按一次开始再按一次结束，hold=按住说话松开结束
-  remove_trailing_period: true   # 自动删除识别结果末尾的句号（。或 .）
-  keep_clipboard: true           # 保留识别结果在剪贴板，便于失败后手动再次粘贴
-  theme: system                  # 外观主题：dark / light / system（跟随系统），同时控制悬浮窗明暗
-  overlay_style: liquid          # macOS 悬浮窗外观：liquid=液态玻璃·通透(默认) / liquid-standard=液态玻璃·标准 / vibrancy=普通毛玻璃(备用)，仅 macOS 生效；明暗跟随 app.theme
+  remove_trailing_period: true    # 自动删除识别结果末尾的句号
+  keep_clipboard: true            # 保留识别结果在剪贴板
+  theme: system                   # dark / light / system
+  overlay_style: liquid           # macOS 悬浮窗外观（仅 macOS 生效）
   sound:
     enabled: true
     start_sound: ""
@@ -12,93 +18,13 @@ app:
   beta_updates: false
 
 audio:
-  provider: doubao-streaming
-  asr_defaults:
-    rate: 16000
-    channel: 1
-    # 针对不支持流式输出的模型，通过 VAD + 间歇解码模拟实时效果（默认开启）
-    stream_simulate: true
-    # auto=模型不支持热词时追加到 LLM 润色提示，disabled=关闭，force=始终追加
-    hotword_llm_mode: auto
-    hotword_replace: true
-    num_threads: 2
-    provider: cpu
-    # auto=模型无内置标点时使用标点模型，disabled=禁用，force=强制使用标点模型
-    punctuation_mode: auto
-    vad:
-      threshold: 0.5
-      min_silence_duration: 0.2
-      min_speech_duration: 0.2
-      max_speech_duration: 10.0
-
-  doubao-streaming:
-    url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
-    app_id: ""
-    access_token: ""
-    secret_key: ""
-    resource_id: "volc.seedasr.sauc.duration"
-    format: pcm
-    bits: 16
-    model_name: bigmodel
-    model_version: "400"
-    operation: submit
-    sequence: 0
-    language: ""
-    enable_ddc: true
-    enable_itn: true
-    enable_nonstream: false
-    enable_punc: true
-    show_utterances: true
-    result_type: full
-    enable_accelerate_text: true
-    accelerate_score: 10
-    corpus:
-      boosting_table_id: ""
-
-  sherpa-onnx-streaming-zipformer-zh-en:
-    chunk_size: 3200
-    max_active_paths: 16
-    hotwords_score: 4.0
-    enable_endpoint: true
-    rule1_min_trailing_silence: 2.4
-    rule2_min_trailing_silence: 0.8
-    rule3_min_utterance_length: 20
-
-  sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8:
-    use_itn: true
-    language: auto
+  provider: doubao-streaming      # 默认 ASR 引擎，切换模型后自动更新
+  # 如需使用豆包流式 ASR，在设置 UI 中填写凭据。
+  # 如需使用本地 sherpa-onnx 模型，在设置 UI 中切换并下载模型。
+  # 修改任何参数后，对应模型配置段会自动追加到此文件。
 
 llm:
   provider: deepseek
   deepseek:
-    url: ""
     api_key: ""
     model: deepseek-v4-flash
-  openai:
-    url: ""
-    api_key: ""
-    model: gpt-4.1-mini
-  anthropic:
-    url: ""
-    api_key: ""
-    model: claude-3-5-haiku-latest
-  gemini:
-    url: ""
-    api_key: ""
-    model: gemini-2.5-flash-lite
-  openrouter:
-    url: https://openrouter.ai/api/v1
-    api_key: ""
-    model: openai/gpt-4o-mini
-  siliconflow:
-    url: https://api.siliconflow.cn/v1
-    api_key: ""
-    model: deepseek-ai/DeepSeek-V3
-  ollama:
-    url: http://localhost:11434/api
-    api_key: ""
-    model: llama3.1
-  openai_compatible:
-    url: ""
-    api_key: ""
-    model: ""

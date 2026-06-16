@@ -76,12 +76,26 @@ pub struct ModelEntry {
     pub default_config: Option<serde_json::Value>,
 }
 
+/// Shared defaults that apply across all models.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RegistryDefaults {
+    /// Default ASR parameters (rate, channel, num_threads, provider, etc.).
+    #[serde(default)]
+    pub asr: serde_json::Value,
+    /// Default VAD parameters (threshold, min_silence_duration, etc.).
+    #[serde(default)]
+    pub vad: serde_json::Value,
+}
+
 /// Top-level registry structure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelRegistry {
     pub version: u32,
     #[serde(default)]
     pub updated_at: String,
+    /// Shared defaults applied before model-specific defaults.
+    #[serde(default)]
+    pub defaults: Option<RegistryDefaults>,
     pub models: Vec<ModelEntry>,
 }
 
@@ -103,7 +117,9 @@ pub fn ensure_registry(data_dir: &Path, resource_dir: &Path) {
     let bundled = bundled_registry(resource_dir);
 
     if let Some(current) = read_registry_file(&data_path) {
-        if bundled.version > current.version {
+        let needs_upgrade = bundled.version > current.version
+            || (current.defaults.is_none() && bundled.defaults.is_some());
+        if needs_upgrade {
             let merged = merge_registry(current, bundled);
             let _ = write_registry_file(&data_path, &merged);
         }
@@ -156,6 +172,7 @@ fn merge_registry(mut current: ModelRegistry, bundled: ModelRegistry) -> ModelRe
     }
     current.version = bundled.version;
     current.updated_at = bundled.updated_at;
+    current.defaults = bundled.defaults;
     current
 }
 
@@ -163,6 +180,7 @@ fn minimal_registry() -> ModelRegistry {
     ModelRegistry {
         version: 1,
         updated_at: String::new(),
+        defaults: None,
         models: vec![ModelEntry {
             id: "doubao-streaming".to_string(),
             model_type: "online".to_string(),
@@ -487,18 +505,22 @@ mod tests {
     }
 
     #[test]
-    fn embedded_registry_is_version_12() {
+    fn embedded_registry_is_version_13() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 12,
-            "EMBEDDED_REGISTRY version should be 12, got {}",
+            registry.version, 13,
+            "EMBEDDED_REGISTRY version should be 13, got {}",
             registry.version
         );
         assert!(
             registry.models.len() > 1,
             "EMBEDDED_REGISTRY should have more than 1 model, got {}",
             registry.models.len()
+        );
+        assert!(
+            registry.defaults.is_some(),
+            "EMBEDDED_REGISTRY should have defaults"
         );
     }
 
@@ -508,8 +530,8 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 12,
-            "bundled_registry should return version 12 from embedded, got {}",
+            registry.version, 13,
+            "bundled_registry should return version 13 from embedded, got {}",
             registry.version
         );
     }

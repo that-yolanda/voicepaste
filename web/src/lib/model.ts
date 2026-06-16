@@ -65,8 +65,57 @@ export const PUNCT_OPTS: SegmentOption[] = [
  * control type inferred from value).
  */
 export const FIELD_META: Record<string, FieldMeta> = {
+  /* Shared asr_defaults params */
+  stream_simulate: { label: "模拟流式输出", type: "toggle", group: "shared" },
+  hotword_llm_mode: {
+    label: "热词强化",
+    type: "segment",
+    options: HOTWORD_MODE_OPTS,
+    group: "shared",
+  },
+  hotword_replace: { label: "热词替换", type: "toggle", group: "shared" },
+  num_threads: { label: "线程数", type: "number", group: "shared" },
+  provider: {
+    label: "推理后端",
+    type: "segment",
+    options: PROVIDER_OPTS,
+    group: "shared",
+  },
+  punctuation_mode: {
+    label: "标点符号",
+    type: "segment",
+    options: PUNCT_OPTS,
+    group: "shared",
+  },
+
+  /* VAD params */
+  threshold: { label: "VAD 阈值", type: "number", step: 0.1, group: "shared" },
+  min_silence_duration: {
+    label: "VAD 最小静音时长",
+    type: "number",
+    step: 0.1,
+    group: "shared",
+  },
+  min_speech_duration: {
+    label: "VAD 最小说话时长",
+    type: "number",
+    step: 0.1,
+    group: "shared",
+  },
+  max_speech_duration: {
+    label: "VAD 最大说话时长",
+    type: "number",
+    step: 0.1,
+    group: "shared",
+  },
+
   /* Doubao credentials */
-  url: { label: "WebSocket 地址", type: "text", placeholder: "wss://...", group: "credentials" },
+  url: {
+    label: "WebSocket 地址",
+    type: "text",
+    placeholder: "wss://...",
+    group: "credentials",
+  },
   app_id: { label: "App ID", group: "credentials", placeholder: "输入 App ID" },
   access_token: {
     label: "Access Token",
@@ -80,36 +129,44 @@ export const FIELD_META: Record<string, FieldMeta> = {
     group: "credentials",
     placeholder: "输入 Secret Key",
   },
-  resource_id: { label: "Resource ID", group: "credentials", placeholder: "输入 Resource ID" },
-
-  /* Doubao basic settings & feature toggles */
-  language: { label: "语言", type: "text", placeholder: "留空则自动检测", group: "basic" },
-  rate: { label: "音频采样", type: "number", group: "basic" },
-  channel: { label: "声道", type: "number", group: "basic" },
-  enable_ddc: { label: "语义顺滑", type: "toggle", group: "basic" },
-  enable_itn: { label: "数字格式化", type: "toggle", group: "basic" },
-  enable_nonstream: { label: "二遍识别", type: "toggle", group: "basic" },
-  enable_punc: { label: "自动标点", type: "toggle", group: "basic" },
-  "corpus.boosting_table_id": { label: "热词表 ID", group: "basic", placeholder: "输入热词表 ID" },
-
-  /* Shared asr_defaults params */
-  stream_simulate: { label: "模拟流式输出", type: "toggle", group: "shared" },
-  hotword_llm_mode: {
-    label: "热词强化",
-    type: "segment",
-    options: HOTWORD_MODE_OPTS,
-    group: "shared",
+  resource_id: {
+    label: "Resource ID",
+    group: "credentials",
+    placeholder: "输入 Resource ID",
   },
-  hotword_replace: { label: "热词替换", type: "toggle", group: "shared" },
-  num_threads: { label: "线程数", type: "number", group: "shared" },
-  provider: { label: "推理后端", type: "segment", options: PROVIDER_OPTS, group: "shared" },
-  punctuation_mode: { label: "标点符号", type: "segment", options: PUNCT_OPTS, group: "shared" },
 
-  /* VAD params */
-  threshold: { label: "VAD 阈值", type: "number", step: 0.1, group: "shared" },
-  min_silence_duration: { label: "VAD 最小静音时长", type: "number", step: 0.1, group: "shared" },
-  min_speech_duration: { label: "VAD 最小说话时长", type: "number", step: 0.1, group: "shared" },
-  max_speech_duration: { label: "VAD 最大说话时长", type: "number", step: 0.1, group: "shared" },
+  /* Doubao basic settings & feature toggles & advanced / internal params */
+  enable_nonstream: { label: "二遍识别", type: "toggle", group: "advanced" },
+  enable_accelerate_text: {
+    label: "启用文本加速",
+    type: "toggle",
+    group: "advanced",
+  },
+  enable_ddc: { label: "语义顺滑", type: "toggle", group: "advanced" },
+  enable_itn: { label: "数字格式化", type: "toggle", group: "advanced" },
+  enable_punc: { label: "自动标点", type: "toggle", group: "advanced" },
+  "corpus.boosting_table_id": {
+    label: "热词表 ID",
+    group: "advanced",
+    placeholder: "输入热词表 ID",
+  },
+  language: {
+    label: "语言",
+    type: "text",
+    placeholder: "留空则自动检测",
+    group: "advanced",
+  },
+  rate: { label: "音频采样", type: "number", group: "advanced" },
+  channel: { label: "声道", type: "number", group: "advanced" },
+  format: { label: "音频格式", group: "advanced" },
+  bits: { label: "采样位数", type: "number", group: "advanced" },
+  model_name: { label: "模型名称", group: "advanced" },
+  model_version: { label: "模型版本", group: "advanced" },
+  operation: { label: "操作类型", group: "advanced" },
+  sequence: { label: "请求序号", type: "number", group: "advanced" },
+  show_utterances: { label: "显示分句", type: "toggle", group: "advanced" },
+  result_type: { label: "结果类型", group: "advanced" },
+  accelerate_score: { label: "加速分数", type: "number", group: "advanced" },
 
   /* Offline model params */
   use_itn: { label: "数字格式化 (ITN)", type: "toggle", group: "basic" },
@@ -136,19 +193,11 @@ export const FIELD_META: Record<string, FieldMeta> = {
     step: 0.1,
     group: "basic",
   },
-  rule3_min_utterance_length: { label: "规则3最短话语长度", type: "number", group: "basic" },
-
-  /* Doubao advanced / internal params */
-  format: { label: "音频格式", group: "advanced" },
-  bits: { label: "采样位数", type: "number", group: "advanced" },
-  model_name: { label: "模型名称", group: "advanced" },
-  model_version: { label: "模型版本", group: "advanced" },
-  operation: { label: "操作类型", group: "advanced" },
-  sequence: { label: "请求序号", type: "number", group: "advanced" },
-  show_utterances: { label: "显示分句", type: "toggle", group: "advanced" },
-  result_type: { label: "结果类型", group: "advanced" },
-  enable_accelerate_text: { label: "启用文本加速", type: "toggle", group: "advanced" },
-  accelerate_score: { label: "加速分数", type: "number", group: "advanced" },
+  rule3_min_utterance_length: {
+    label: "规则3最短话语长度",
+    type: "number",
+    group: "basic",
+  },
 };
 
 /** Infer a control type from the value when FIELD_META omits `type`. */
@@ -166,7 +215,11 @@ export function getFieldMeta(key: string, value: unknown): FieldMeta {
   // (e.g. "vad.threshold" → "threshold") so nested asr_defaults keys resolve.
   const meta = FIELD_META[key] ?? FIELD_META[key.split(".").pop() ?? ""];
   if (meta) return meta;
-  return { label: key.replace(/_/g, " "), type: inferControlType(key, value), group: "basic" };
+  return {
+    label: key.replace(/_/g, " "),
+    type: inferControlType(key, value),
+    group: "basic",
+  };
 }
 
 /* ---------- Config merging (mirrors backend base + override semantics) ---------- */

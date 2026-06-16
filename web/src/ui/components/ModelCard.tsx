@@ -10,6 +10,7 @@
 
 import {
   ChartNoAxesCombined,
+  ChevronsUp,
   CircleCheck,
   CloudDownload,
   Cog,
@@ -292,24 +293,32 @@ export function ModelCard({
 
             {advancedFields.length > 0 && (
               <div className="space-y-2">
-                <button
-                  type="button"
-                  className="text-xs text-text-muted hover:text-text"
-                  onClick={() => setAdvancedExpanded((v) => !v)}
-                >
-                  {advancedExpanded ? "收起" : "展开"}高级参数（
-                  {advancedFields.length}）
-                </button>
                 {advancedExpanded && (
                   <SectionItemList>{advancedFields.map(renderField)}</SectionItemList>
                 )}
               </div>
             )}
 
-            <Button variant="ghost" onClick={() => onResetConfig(model.id)}>
-              <RotateCcw size={16} />
-              恢复默认
-            </Button>
+            <div className="flex justify-between">
+              <Button variant="ghost" onClick={() => onResetConfig(model.id)}>
+                <RotateCcw size={16} />
+                恢复默认
+              </Button>
+
+              {advancedFields.length > 0 && (
+                <Button
+                  className="ml-auto"
+                  variant="ghost"
+                  onClick={() => setAdvancedExpanded((v) => !v)}
+                >
+                  <ChevronsUp
+                    size={16}
+                    className={`transition-transform duration-300 ${advancedExpanded ? "rotate-0" : "rotate-180"}`}
+                  />
+                  更多参数
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </SectionContent>

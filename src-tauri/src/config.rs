@@ -4,6 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
+use crate::model::ModelRegistry;
+
 pub const DOUBAO_STREAMING_ID: &str = "doubao-streaming";
 pub const SILERO_VAD_ID: &str = "silero-vad";
 pub const ASR_DEFAULTS_ID: &str = "asr_defaults";
@@ -65,7 +67,7 @@ pub struct AsrVadDefaults {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoubaoStreamingConfig {
-    #[serde(default)]
+    #[serde(default = "default_doubao_url")]
     pub url: String,
     #[serde(default)]
     pub app_id: String,
@@ -73,7 +75,7 @@ pub struct DoubaoStreamingConfig {
     pub access_token: String,
     #[serde(default)]
     pub secret_key: String,
-    #[serde(default)]
+    #[serde(default = "default_doubao_resource_id")]
     pub resource_id: String,
     #[serde(default = "default_format")]
     pub format: String,
@@ -85,7 +87,7 @@ pub struct DoubaoStreamingConfig {
     pub channel: u32,
     #[serde(default = "default_model_name")]
     pub model_name: String,
-    #[serde(default)]
+    #[serde(default = "default_doubao_model_version")]
     pub model_version: String,
     #[serde(default = "default_operation")]
     pub operation: String,
@@ -101,7 +103,7 @@ pub struct DoubaoStreamingConfig {
     pub enable_nonstream: bool,
     #[serde(default = "default_true")]
     pub enable_punc: bool,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub show_utterances: bool,
     #[serde(default = "default_result_type")]
     pub result_type: String,
@@ -109,13 +111,13 @@ pub struct DoubaoStreamingConfig {
     pub end_window_size: Option<u32>,
     #[serde(default)]
     pub force_to_speech_time: Option<u32>,
-    #[serde(default)]
+    #[serde(default = "default_accelerate_score")]
     pub accelerate_score: Option<u32>,
     #[serde(default)]
     pub vad_segment_duration: Option<u32>,
-    #[serde(default)]
+    #[serde(default = "default_true_opt")]
     pub enable_accelerate_text: Option<bool>,
-    #[serde(default)]
+    #[serde(default = "default_empty_corpus")]
     pub corpus: Option<serde_norway::Value>,
 }
 
@@ -343,6 +345,24 @@ fn default_result_type() -> String {
 fn default_llm_provider() -> String {
     "deepseek".to_string()
 }
+fn default_doubao_url() -> String {
+    "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".to_string()
+}
+fn default_doubao_resource_id() -> String {
+    "volc.seedasr.sauc.duration".to_string()
+}
+fn default_doubao_model_version() -> String {
+    "400".to_string()
+}
+fn default_accelerate_score() -> Option<u32> {
+    Some(10)
+}
+fn default_true_opt() -> Option<bool> {
+    Some(true)
+}
+fn default_empty_corpus() -> Option<serde_norway::Value> {
+    Some(serde_norway::Value::Mapping(serde_norway::Mapping::new()))
+}
 
 fn profile_to_json(value: &serde_norway::Value) -> Option<serde_json::Value> {
     serde_json::to_value(value).ok()
@@ -465,32 +485,109 @@ impl AppConfig {
             .unwrap_or(DOUBAO_STREAMING_ID)
     }
 
-    pub fn doubao_streaming_config(&self) -> DoubaoStreamingConfig {
-        let mut merged = self.asr_defaults_json();
-        if let (Some(target), Some(source)) = (
-            merged.as_object_mut(),
-            self.audio
-                .get(DOUBAO_STREAMING_ID)
-                .and_then(profile_to_json)
-                .and_then(|v| v.as_object().cloned()),
-        ) {
-            for (key, value) in source {
-                target.insert(key, value);
+    /// Resolve effective config for any engine by merging three layers:
+    ///   1. registry.json → defaults.asr  (shared defaults)
+    ///   2. registry.json → <model>.default_config  (model-specific defaults)
+    ///   3. config.yaml → audio.<model_id>  (user overrides)
+    ///
+    /// This is the single config resolution path for ALL engine types
+    /// (doubao, sherpa-onnx, VAD, punctuation).
+    pub fn resolve_model_config(
+        registry: &ModelRegistry,
+        model_id: &str,
+        user_audio: &BTreeMap<String, serde_norway::Value>,
+    ) -> serde_json::Value {
+        // Layer 1: shared defaults from registry
+        let mut merged = registry
+            .defaults
+            .as_ref()
+            .map(|d| d.asr.clone())
+            .unwrap_or_else(|| serde_json::json!({}));
+
+        // Layer 2: model-specific defaults from registry
+        if let Some(entry) = registry.models.iter().find(|m| m.id == model_id) {
+            if let Some(ref dc) = entry.default_config {
+                if let Some(obj) = dc.as_object() {
+                    if let Some(target) = merged.as_object_mut() {
+                        for (k, v) in obj {
+                            target.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
             }
         }
+
+        // Layer 3: user overrides from config.yaml audio.<model_id>
+        if let Some(user_config) = user_audio
+            .get(model_id)
+            .and_then(profile_to_json)
+            .and_then(|v| v.as_object().cloned())
+        {
+            if let Some(target) = merged.as_object_mut() {
+                for (k, v) in user_config {
+                    target.insert(k, v);
+                }
+            }
+        }
+
+        merged
+    }
+
+    pub fn doubao_streaming_config(&self, registry: &ModelRegistry) -> DoubaoStreamingConfig {
+        let merged = Self::resolve_model_config(registry, DOUBAO_STREAMING_ID, &self.audio);
         serde_json::from_value(merged).unwrap_or_default()
     }
 
-    pub fn asr_defaults(&self) -> AsrDefaults {
-        let raw = self.audio.get(ASR_DEFAULTS_ID);
-        let mut defaults: AsrDefaults = raw
-            .cloned()
-            .and_then(|value| serde_norway::from_value(value).ok())
+    pub fn asr_defaults(&self, registry: &ModelRegistry) -> AsrDefaults {
+        // Start from registry shared defaults
+        let mut defaults: AsrDefaults = registry
+            .defaults
+            .as_ref()
+            .and_then(|d| serde_json::from_value(d.asr.clone()).ok())
             .unwrap_or_default();
 
-        if !profile_has_key(raw, "stream_simulate") {
-            if let Some(value) = self.audio.get("stream_simulate").and_then(|v| v.as_bool()) {
-                defaults.stream_simulate = value;
+        // Overlay user config from audio.asr_defaults (only fields the user changed)
+        if let Some(raw) = self.audio.get(ASR_DEFAULTS_ID) {
+            if let Ok(user) = serde_norway::from_value::<AsrDefaults>(raw.clone()) {
+                // Only override if the user explicitly set the field
+                if let Some(v) = self.audio.get("stream_simulate").and_then(|v| v.as_bool()) {
+                    defaults.stream_simulate = v;
+                }
+                // Merge user's asr_defaults over registry
+                if profile_has_key(Some(raw), "rate") {
+                    defaults.rate = user.rate;
+                }
+                if profile_has_key(Some(raw), "channel") {
+                    defaults.channel = user.channel;
+                }
+                if profile_has_key(Some(raw), "stream_simulate") {
+                    defaults.stream_simulate = user.stream_simulate;
+                }
+                if profile_has_key(Some(raw), "hotword_llm_mode") {
+                    defaults.hotword_llm_mode = user.hotword_llm_mode;
+                }
+                if profile_has_key(Some(raw), "hotword_replace") {
+                    defaults.hotword_replace = user.hotword_replace;
+                }
+                if profile_has_key(Some(raw), "num_threads") {
+                    defaults.num_threads = user.num_threads;
+                }
+                if profile_has_key(Some(raw), "provider") {
+                    defaults.provider = user.provider;
+                }
+                if profile_has_key(Some(raw), "punctuation_mode") {
+                    defaults.punctuation_mode = user.punctuation_mode;
+                }
+                if profile_has_key(Some(raw), "vad") {
+                    defaults.vad = user.vad;
+                }
+            }
+        } else {
+            // Legacy compat: audio.stream_simulate at top level
+            if !profile_has_key(self.audio.get(ASR_DEFAULTS_ID), "stream_simulate") {
+                if let Some(value) = self.audio.get("stream_simulate").and_then(|v| v.as_bool()) {
+                    defaults.stream_simulate = value;
+                }
             }
         }
 
@@ -500,48 +597,61 @@ impl AppConfig {
         defaults
     }
 
-    pub fn asr_defaults_json(&self) -> serde_json::Value {
-        serde_json::to_value(self.asr_defaults()).unwrap_or_else(|_| serde_json::json!({}))
+    pub fn asr_defaults_json(&self, registry: &ModelRegistry) -> serde_json::Value {
+        serde_json::to_value(self.asr_defaults(registry)).unwrap_or_else(|_| serde_json::json!({}))
     }
 
-    pub fn vad_params(&self) -> VadParams {
-        let defaults = self.asr_defaults();
-        let mut params = VadParams {
-            threshold: Some(defaults.vad.threshold),
-            min_silence_duration: Some(defaults.vad.min_silence_duration),
-            min_speech_duration: Some(defaults.vad.min_speech_duration),
-            max_speech_duration: Some(defaults.vad.max_speech_duration),
-            num_threads: Some(defaults.num_threads),
-            provider: Some(defaults.provider()),
-        };
+    pub fn vad_params(&self, registry: &ModelRegistry) -> VadParams {
+        // Layer 1: registry shared VAD defaults
+        let registry_vad: Option<VadParams> = registry
+            .defaults
+            .as_ref()
+            .and_then(|d| serde_json::from_value(d.vad.clone()).ok());
 
-        if let Some(user) = self
-            .audio
-            .get(SILERO_VAD_ID)
-            .cloned()
-            .and_then(|value| serde_norway::from_value(value).ok())
-        {
-            let user: VadParams = user;
-            if user.threshold.is_some() {
-                params.threshold = user.threshold;
+        // Layer 2: registry silero-vad model defaults
+        let silero_defaults: Option<VadParams> = registry
+            .models
+            .iter()
+            .find(|m| m.id == SILERO_VAD_ID)
+            .and_then(|m| m.default_config.as_ref())
+            .and_then(|dc| serde_json::from_value(dc.clone()).ok());
+
+        // Merge layers 1+2
+        let mut params = merge_vad_params(registry_vad, silero_defaults).unwrap_or_default();
+
+        // Merge shared asr_defaults num_threads/provider from registry
+        if let Some(ref d) = registry.defaults {
+            if let Ok(shared) = serde_json::from_value::<serde_json::Value>(d.asr.clone()) {
+                if params.num_threads.is_none() {
+                    params.num_threads = shared
+                        .get("num_threads")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32);
+                }
+                if params.provider.is_none() {
+                    params.provider = shared
+                        .get("provider")
+                        .and_then(|v| v.as_str())
+                        .map(|s| normalize_choice(s, &["cpu", "cuda", "coreml"], "cpu"));
+                }
             }
-            if user.min_silence_duration.is_some() {
-                params.min_silence_duration = user.min_silence_duration;
-            }
-            if user.min_speech_duration.is_some() {
-                params.min_speech_duration = user.min_speech_duration;
-            }
-            if user.max_speech_duration.is_some() {
-                params.max_speech_duration = user.max_speech_duration;
-            }
-            if user.num_threads.is_some() {
-                params.num_threads = user.num_threads;
-            }
-            if user.provider.as_ref().is_some_and(|v| !v.trim().is_empty()) {
-                params.provider = user
-                    .provider
-                    .map(|v| normalize_choice(&v, &["cpu", "cuda", "coreml"], "cpu"));
-            }
+        }
+
+        // Layer 3: user overrides from audio.asr_defaults.vad
+        let defaults = self.asr_defaults(registry);
+        params.threshold = Some(defaults.vad.threshold);
+        params.min_silence_duration = Some(defaults.vad.min_silence_duration);
+        params.min_speech_duration = Some(defaults.vad.min_speech_duration);
+        params.max_speech_duration = Some(defaults.vad.max_speech_duration);
+        if let Some(nt) = params.num_threads {
+            params.num_threads = Some(nt);
+        }
+        // num_threads and provider from asr_defaults override registry VAD
+        if params.num_threads.is_none() {
+            params.num_threads = Some(defaults.num_threads);
+        }
+        if params.provider.is_none() {
+            params.provider = Some(defaults.provider());
         }
 
         params
@@ -571,34 +681,49 @@ impl AppConfig {
     }
 
     /// Whether to enable simulated streaming for non-streaming models.
-    /// When enabled, offline ASR models use VAD + interim decoding to produce
-    /// partial results during recording, mimicking streaming behavior.
-    pub fn stream_simulate(&self, model_id: &str) -> bool {
+    pub fn stream_simulate(&self, model_id: &str, registry: &ModelRegistry) -> bool {
         self.model_bool(
             model_id,
             "stream_simulate",
-            self.asr_defaults().stream_simulate,
+            self.asr_defaults(registry).stream_simulate,
         )
     }
 
-    pub fn hotword_replace(&self, model_id: &str) -> bool {
+    pub fn hotword_replace(&self, model_id: &str, registry: &ModelRegistry) -> bool {
         self.model_bool(
             model_id,
             "hotword_replace",
-            self.asr_defaults().hotword_replace,
+            self.asr_defaults(registry).hotword_replace,
         )
     }
 
-    pub fn hotword_llm_mode(&self, model_id: &str) -> String {
+    pub fn hotword_llm_mode(&self, model_id: &str, registry: &ModelRegistry) -> String {
         normalize_choice(
             &self.model_string(
                 model_id,
                 "hotword_llm_mode",
-                self.asr_defaults().hotword_llm_mode(),
+                self.asr_defaults(registry).hotword_llm_mode(),
             ),
             &["auto", "disabled", "force"],
             "auto",
         )
+    }
+}
+
+/// Merge two VadParams, with `override_` taking priority for non-None fields.
+fn merge_vad_params(base: Option<VadParams>, override_: Option<VadParams>) -> Option<VadParams> {
+    match (base, override_) {
+        (None, None) => None,
+        (Some(b), None) => Some(b),
+        (None, Some(o)) => Some(o),
+        (Some(b), Some(o)) => Some(VadParams {
+            threshold: o.threshold.or(b.threshold),
+            min_silence_duration: o.min_silence_duration.or(b.min_silence_duration),
+            min_speech_duration: o.min_speech_duration.or(b.min_speech_duration),
+            max_speech_duration: o.max_speech_duration.or(b.max_speech_duration),
+            num_threads: o.num_threads.or(b.num_threads),
+            provider: o.provider.or(b.provider),
+        }),
     }
 }
 

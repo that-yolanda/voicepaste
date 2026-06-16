@@ -59,6 +59,7 @@ pub fn run() {
             // Ensure data directory exists
             std::fs::create_dir_all(&data_dir).ok();
             model::ensure_registry(&data_dir, &resource_dir);
+            let registry = crate::model::load_registry(&data_dir, &resource_dir);
 
             // Initialize services
             let config_manager = config::ConfigManager::new(&data_dir, &resource_dir);
@@ -68,7 +69,7 @@ pub fn run() {
 
             // Import configured Doubao hotwords into hotwords.json (one-time bootstrap)
             if let Ok(cfg) = config_manager.load_config() {
-                if let Some(corpus) = &cfg.doubao_streaming_config().corpus {
+                if let Some(corpus) = &cfg.doubao_streaming_config(&registry).corpus {
                     if let Some(hw) = corpus.get("context_hotwords").and_then(|v| v.as_str()) {
                         if !hw.is_empty() {
                             let _ = hotword_manager.import_from_legacy(hw);
@@ -688,18 +689,18 @@ async fn start_recording(app_handle: AppHandle) {
                     data_dir,
                     resource_dir,
                     active_model_id: engine_model_id.to_string(),
-                    vad_params: config.vad_params(),
-                    global_config: config.asr_defaults_json(),
+                    vad_params: config.vad_params(&registry),
+                    global_config: config.asr_defaults_json(&registry),
                     model_config: config.model_config_json(engine_model_id),
                     punctuation_config,
-                    stream_simulate: config.stream_simulate(engine_model_id),
+                    stream_simulate: config.stream_simulate(engine_model_id, &registry),
                 },
             );
             engine.create_session(&hotwords).await
         }
         _ => {
             // Default / volcengine: Doubao online engine
-            let doubao_config = config.doubao_streaming_config();
+            let doubao_config = config.doubao_streaming_config(&registry);
             let engine = crate::asr::doubao::DoubaoEngine::new(
                 doubao_config.to_connection_config(),
                 doubao_config.to_audio_config(),
@@ -738,7 +739,7 @@ async fn start_recording(app_handle: AppHandle) {
             // For non-streaming engines without simulated streaming,
             // show a "recording" hint since partial results won't appear.
             if entry.is_some_and(|e| !e.capabilities.streaming)
-                && !config.stream_simulate(engine_model_id)
+                && !config.stream_simulate(engine_model_id, &registry)
             {
                 let _ = app_handle.emit(
                     "overlay:event",
@@ -833,10 +834,19 @@ async fn stop_recording(app_handle: AppHandle) {
 
             // 5. Load config for LLM / behavior settings
             let config = app_inner.config_manager.load_config().ok();
+            let data_dir = app_handle
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let resource_dir = app_handle
+                .path()
+                .resource_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let registry = crate::model::load_registry(&data_dir, &resource_dir);
 
             if let Some(ref config) = config {
                 let model_id = config.audio_provider();
-                if config.hotword_replace(model_id) {
+                if config.hotword_replace(model_id, &registry) {
                     let hotwords = app_inner.hotword_manager.active_words();
                     if !hotwords.is_empty() {
                         trimmed = crate::asr::sherpa_onnx::online::restore_hotword_case(
@@ -876,7 +886,7 @@ async fn stop_recording(app_handle: AppHandle) {
                         .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
 
                     let model_id = config.audio_provider();
-                    let hotword_mode = config.hotword_llm_mode(model_id);
+                    let hotword_mode = config.hotword_llm_mode(model_id, &registry);
                     let append_hotwords = match hotword_mode.as_str() {
                         "disabled" => false,
                         "force" => true,

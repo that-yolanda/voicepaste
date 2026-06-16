@@ -5,6 +5,10 @@
 //   cargo test --features asr-integration  (needs sherpa-onnx models)
 //   cargo test --features llm-integration  (needs LLM API keys)
 
+/// Pure unit tests for Doubao ASR binary protocol and utterance/definite
+/// splitting logic — no network or API keys required.
+mod asr_doubao;
+
 #[cfg(feature = "asr-integration")]
 mod asr_integration;
 

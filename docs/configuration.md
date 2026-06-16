@@ -40,6 +40,74 @@
 - `get_editable_config()` bypasses the cache, reading fresh from disk for the settings UI
 - Hot-reload: saving config emits `overlay:event` (appearance) + `settings:event` (theme-changed)
 
+## Default Value Resolution
+
+All ASR parameters are resolved through a **3-layer merge chain**, with `registry.json` as the single source of truth for defaults.
+
+### Merge Order
+
+For every engine (doubao, sherpa-onnx, VAD), the effective configuration is determined by shallow-merging three layers:
+
+```
+Layer 1: registry.json → defaults.asr           ← shared defaults (rate, channel, vad, …)
+    ↓
+Layer 2: registry.json → <model>.default_config  ← model-specific defaults (url, model_name, …)
+    ↓
+Layer 3: config.yaml → audio.<model_id>          ← user overrides (only what user changed)
+    ↓
+Effective Config
+```
+
+Layer 3 wins over Layer 2, which wins over Layer 1. Keys not present in a higher layer fall through to the layer below.
+
+### `config.yaml` Role
+
+`config.yaml` now serves as a **user override file** — it records only parameters the user has explicitly changed from defaults via the settings UI:
+
+- If a model section (`audio.doubao-streaming`, `audio.sherpa-onnx-*`, etc.) does not exist in `config.yaml`, all parameters use registry defaults.
+- If a model section exists but only contains certain keys (e.g., just `app_id` + `access_token`), those keys override the registry defaults; all other keys still fall through to registry.
+- The `audio.asr_defaults` section can override shared defaults for all models (e.g., VAD thresholds, num_threads).
+
+### Registry Structure
+
+```json
+{
+  "version": 13,
+  "defaults": {
+    "asr": { "rate": 16000, "channel": 1, … },    // shared across all ASR models
+    "vad": { "threshold": 0.5, … }                 // VAD-specific shared defaults
+  },
+  "models": [
+    {
+      "id": "doubao-streaming",
+      "default_config": { "url": "wss://…", "show_utterances": true, … }
+    },
+    {
+      "id": "silero-vad",
+      "default_config": { "threshold": 0.5, … }
+    }
+  ]
+}
+```
+
+### Fallback When Registry Is Missing
+
+If `registry.json` is corrupted or missing, the `ModelRegistry` falls back to the compile-time embedded version (`EMBEDDED_REGISTRY`). As a last resort, `DoubaoStreamingConfig` and `AsrDefaults` have Rust-level serde defaults that match the registry values.
+
+### Adding a New Parameter
+
+To add a new config parameter (e.g., `enable_new_feature`):
+
+1. **`registry.json`**: Add the default value to `defaults.asr` (if shared across models) or to the specific model's `default_config` (if model-specific).
+2. **`web/src/lib/model.ts`**: Add an entry to `FIELD_META` with the field label, control type, and options.
+3. **`web/src/types/models.ts`**: Update TypeScript types if needed.
+4. **Rust consumer** (if the parameter is used by the backend): Read the value from the merged config JSON:
+   - For doubao: add the field to `RequestConfig` / `DoubaoStreamingConfig`.
+   - For sherpa-onnx: add a `json_*()` call in the model-specific builder (e.g., `online.rs`, `sense_voice.rs`).
+5. **`docs/configuration.md`**: Update this document.
+
+No need to update `config.yaml.example` — it only shows the file structure, not individual parameter defaults.
+
 ## config.yaml Structure
 
 Three top-level sections:
@@ -48,7 +116,7 @@ Three top-level sections:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `hotkey` | string/array | `"ControlLeft+Space"` | Global hotkey binding |
+| `hotkey` | string/array | `"F13"` | Global hotkey binding |
 | `hotkey_mode` | string | `"toggle"` | `"toggle"` or `"hold"` |
 | `remove_trailing_period` | bool | `true` | Strip trailing period from ASR output |
 | `keep_clipboard` | bool | `true` | Keep text in clipboard after paste |
@@ -61,20 +129,16 @@ Three top-level sections:
 
 ### audio — ASR Configuration
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `provider` | string | `"doubao-streaming"` | Active ASR model ID |
-| `asr_defaults` | object | — | Shared defaults for all sherpa-onnx models |
-| `asr_defaults.stream_simulate` | bool | `true` | Simulate streaming for offline models |
-| `asr_defaults.hotword_llm_mode` | string | `"auto"` | Hotword injection into LLM prompt |
-| `asr_defaults.punctuation_mode` | string | `"auto"` | External punctuation: auto/force/disabled |
-| `asr_defaults.num_threads` | u32 | `2` | ONNX runtime threads |
-| `asr_defaults.provider` | string | `"cpu"` | ONNX execution provider |
-| `asr_defaults.vad` | object | — | Default VAD parameters |
-| `doubao-streaming` | object | — | Doubao WebSocket credentials and params |
-| `<model-id>` | object | — | Per-model overrides (e.g. `sherpa-onnx-streaming-zipformer-zh-en`) |
+`config.yaml` only records user overrides — all default values come from `registry.json`. See [Default Value Resolution](#default-value-resolution) above.
 
-Per-model configs are keyed by model ID (matching `registry.json`). Each model can override `num_threads`, `provider`, and model-specific parameters like `chunk_size`, `hotwords_score`, `language`, etc.
+| Field | Type | Default Source | Description |
+|-------|------|----------------|-------------|
+| `provider` | string | — | Active ASR model ID (e.g. `doubao-streaming`, `sherpa-onnx-streaming-zipformer-zh-en`) |
+| `asr_defaults` | object | `registry.json → defaults.asr` | User overrides for shared defaults (rate, channel, num_threads, vad, provider, etc.) |
+| `doubao-streaming` | object | `registry.json → doubao-streaming.default_config` | Doubao credentials + parameter overrides (url, app_id, show_utterances, etc.) |
+| `<model-id>` | object | `registry.json → <model>.default_config` | Per-model overrides for any registered model |
+
+Per-model configs are keyed by model ID (matching `registry.json`). Each model can override any field from its `default_config`.
 
 ### llm — LLM Configuration
 

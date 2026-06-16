@@ -7,6 +7,22 @@
   "properties": {
     "version": { "type": "integer" },
     "updated_at": { "type": "string" },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "asr": {
+          "type": "object",
+          "description": "Shared ASR defaults applied before model-specific defaults.",
+          "additionalProperties": true
+        },
+        "vad": {
+          "type": "object",
+          "description": "Shared VAD defaults applied before silero-vad defaults.",
+          "additionalProperties": true
+        }
+      }
+    },
     "models": {
       "type": "array",
       "minItems": 1,
@@ -25,6 +41,10 @@
             "type": "array",
             "items": { "type": "string" }
           },
+          "languages": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
           "capabilities": {
             "type": "object",
             "required": ["streaming", "hotwords", "punctuation", "itn"],
@@ -36,6 +56,11 @@
               "itn": { "type": "boolean" }
             }
           },
+          "requires_config": {
+            "type": "array",
+            "description": "Online models only: config keys the user must fill.",
+            "items": { "type": "string" }
+          },
           "architecture": { "type": "string" },
           "download_url": { "type": "string" },
           "file_size": { "type": "integer" },
@@ -46,6 +71,7 @@
           },
           "default_config": {
             "type": "object",
+            "description": "Model-specific default config. Merged on top of defaults.asr.",
             "additionalProperties": true
           }
         }

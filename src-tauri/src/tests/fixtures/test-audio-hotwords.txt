@@ -1,0 +1,1 @@
+接下来让我测试一下它的语音识别的准确率，特别是一些 AI 公司的专有名词，以及它们的 Agent就比如我现在在测试的 OpenAI 的 ChatGPT智谱的 GLM，还有 Anthropic 的 cloud Code这些我不知道它现在的识别率能够识别这些热词吗？

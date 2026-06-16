@@ -66,7 +66,7 @@ fn encode_audio_only_request(audio: &[u8], is_last: bool) -> Vec<u8> {
 }
 
 /// Parse a binary server response frame.
-fn parse_server_response(buffer: &[u8]) -> Option<Value> {
+pub(crate) fn parse_server_response(buffer: &[u8]) -> Option<Value> {
     if buffer.len() < 12 {
         return None;
     }
@@ -228,7 +228,7 @@ fn parse_context_hotwords(value: &serde_norway::Value) -> Vec<Value> {
     }
 }
 
-fn build_api_request_body(
+pub(crate) fn build_api_request_body(
     audio_config: &AudioConfig,
     request_config: &RequestConfig,
     hotwords: &[String],
@@ -484,6 +484,11 @@ impl AsrEngine for DoubaoEngine {
         // Send initial request
         let request_body =
             build_api_request_body(&self.audio_config, &self.request_config, hotwords);
+        log_asr!(
+            debug,
+            "ASR init request: {}",
+            serde_json::to_string_pretty(&request_body).unwrap_or_default()
+        );
         let init_frame = encode_full_client_request(&request_body);
         let mut sink = sink;
         sink.send(Message::Binary(init_frame.into()))
@@ -513,6 +518,7 @@ impl AsrEngine for DoubaoEngine {
 
         // Spawn message handler task
         let event_tx_clone = event_tx.clone();
+        let sink_for_handler = sink.clone();
         tokio::spawn(async move {
             while let Some(msg) = stream.next().await {
                 match msg {
@@ -725,6 +731,8 @@ impl AsrEngine for DoubaoEngine {
                     }
                     Ok(Message::Close(frame)) => {
                         is_ready.store(false, Ordering::SeqCst);
+                        // Prevent lingering audio sends after connection closes
+                        *sink_for_handler.lock().await = None;
                         let code: Option<u16> = frame.as_ref().map(|f| f.code.into());
                         let reason = frame
                             .as_ref()
@@ -746,6 +754,7 @@ impl AsrEngine for DoubaoEngine {
                     }
                     Err(e) => {
                         is_ready.store(false, Ordering::SeqCst);
+                        *sink_for_handler.lock().await = None;
                         let msg = normalize_error_message(&e.to_string());
                         let _ = event_tx_clone.send(AsrEvent::Error(msg));
                         break;
@@ -794,7 +803,9 @@ impl AsrSession for DoubaoSession {
         let sender = self.sender.clone();
         tokio::spawn(async move {
             if let Some(ref mut sink) = *sender.lock().await {
-                let _ = sink.send(Message::Binary(frame.into())).await;
+                if let Err(e) = sink.send(Message::Binary(frame.into())).await {
+                    log_asr!(debug, "Audio send skipped (connection closing): {}", e);
+                }
             }
         });
     }
@@ -835,7 +846,8 @@ impl AsrSession for DoubaoSession {
         self.is_ready.store(false, Ordering::SeqCst);
         let sender = self.sender.clone();
         tokio::spawn(async move {
-            if let Some(ref mut sink) = *sender.lock().await {
+            let mut guard = sender.lock().await;
+            if let Some(ref mut sink) = guard.take() {
                 let _ = sink.send(Message::Close(None)).await;
             }
         });
