@@ -7,6 +7,7 @@ mod config;
 mod hotkey;
 mod hotword;
 mod llm;
+mod migration;
 mod model;
 mod overlay;
 mod paste;
@@ -58,27 +59,10 @@ pub fn run() {
 
             // Ensure data directory exists
             std::fs::create_dir_all(&data_dir).ok();
-            model::ensure_registry(&data_dir, &resource_dir);
-            let registry = crate::model::load_registry(&data_dir, &resource_dir);
 
-            // Initialize services
-            let config_manager = config::ConfigManager::new(&data_dir, &resource_dir);
+            // Initialize the global logger first so every later step (registry
+            // bootstrap, 1.x migration, config load) emits visible logs.
             let log_path = data_dir.join("voicepaste.log");
-            let stats_service = stats::StatsService::new(&data_dir);
-            let hotword_manager = hotword::HotwordManager::new(&data_dir, &resource_dir);
-
-            // Import configured Doubao hotwords into hotwords.json (one-time bootstrap)
-            if let Ok(cfg) = config_manager.load_config() {
-                if let Some(corpus) = &cfg.doubao_streaming_config(&registry).corpus {
-                    if let Some(hw) = corpus.get("context_hotwords").and_then(|v| v.as_str()) {
-                        if !hw.is_empty() {
-                            let _ = hotword_manager.import_from_legacy(hw);
-                        }
-                    }
-                }
-            }
-
-            // Initialize global logger (must be before any log_*! calls)
             let voice_logger = logger::VoiceLogger::new(log_path.clone());
             let log_level = if cfg!(debug_assertions) {
                 log::LevelFilter::Debug
@@ -87,6 +71,21 @@ pub fn run() {
             };
             log::set_boxed_logger(Box::new(voice_logger)).expect("Failed to set global logger");
             log::set_max_level(log_level);
+
+            model::ensure_registry(&data_dir, &resource_dir);
+
+            // One-time migration from 1.x (Electron). Must run before
+            // ConfigManager::new, which would otherwise overwrite the migrated
+            // config.yaml with the empty example template. Best-effort: a
+            // failure falls back to defaults and never blocks startup.
+            if let Err(e) = migration::run(&data_dir, &resource_dir) {
+                log_app!(warn, "config migration failed (app will use defaults): {e}");
+            }
+
+            // Initialize services
+            let config_manager = config::ConfigManager::new(&data_dir, &resource_dir);
+            let stats_service = stats::StatsService::new(&data_dir);
+            let hotword_manager = hotword::HotwordManager::new(&data_dir, &resource_dir);
 
             // Read startup config before config_manager is moved into app state.
             let startup_config = config_manager.load_config().ok();

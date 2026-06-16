@@ -146,6 +146,10 @@ macro_rules! log_tray {
 macro_rules! log_update {
     ($l:ident, $($t:tt)*) => { log::$l!(target: "Update", $($t)*) };
 }
+#[macro_export]
+macro_rules! log_migration {
+    ($l:ident, $($t:tt)*) => { log::$l!(target: "Migration", $($t)*) };
+}
 
 // ---------------------------------------------------------------------------
 // Tests
