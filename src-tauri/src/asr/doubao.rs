@@ -1106,6 +1106,23 @@ mod tests {
         assert_eq!(msg, original);
     }
 
+    // ── is_fatal_asr_code ───────────────────────────────────────────────
+
+    #[test]
+    fn fatal_param_invalid_codes_are_fatal() {
+        // Parameter-invalid codes cannot recover by reconnecting.
+        assert!(is_fatal_asr_code(45000001));
+        assert!(is_fatal_asr_code(45000002));
+    }
+
+    #[test]
+    fn transient_codes_are_not_fatal() {
+        // Server-side timeout / busy and unknown codes are reconnectable.
+        assert!(!is_fatal_asr_code(45000081));
+        assert!(!is_fatal_asr_code(0));
+        assert!(!is_fatal_asr_code(99999999));
+    }
+
     // ── is_empty_yaml_value ──────────────────────────────────────────────
 
     #[test]
