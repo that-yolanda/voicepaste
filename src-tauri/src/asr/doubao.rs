@@ -411,11 +411,29 @@ fn normalize_error_message(error: &str) -> String {
     error.to_string()
 }
 
+/// Classify a Doubao ASR error code as fatal (unrecoverable by reconnect) or
+/// transient. Parameter-invalid errors won't recover by reconnecting; server-side
+/// timeouts / busy errors and network drops are transient.
+fn is_fatal_asr_code(code: u64) -> bool {
+    matches!(code, 45000001 | 45000002)
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket sink type alias
 // ---------------------------------------------------------------------------
 
 type WsSink = futures_util::stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
+
+/// A frame to write to the WebSocket, serialized through a single writer task.
+enum WsWrite {
+    /// A non-last audio frame.
+    Audio(Vec<u8>),
+    /// The last-packet (commit) frame. The writer drops any audio enqueued after
+    /// it, so the server never sees a packet past the final one.
+    Last(Vec<u8>),
+    /// Close the connection.
+    Close,
+}
 
 // ---------------------------------------------------------------------------
 // DoubaoEngine — AsrEngine implementation
@@ -491,10 +509,16 @@ impl AsrEngine for DoubaoEngine {
         );
         headers.insert("X-Api-Connect-Id", connect_id.parse().unwrap());
 
-        // Connect
-        let (ws_stream, _) = connect_async(request)
-            .await
-            .map_err(|e| format!("ASR WebSocket connection failed: {}", e))?;
+        // Connect with a bounded timeout. Without it a stalled handshake relies on
+        // the OS-level TCP timeout (tens of seconds); the caller retries instead.
+        let (ws_stream, _) =
+            match tokio::time::timeout(std::time::Duration::from_secs(5), connect_async(request))
+                .await
+            {
+                Ok(Ok(pair)) => pair,
+                Ok(Err(e)) => return Err(format!("ASR WebSocket connection failed: {}", e)),
+                Err(_) => return Err("ASR WebSocket 连接超时".to_string()),
+            };
 
         let (sink, mut stream) = ws_stream.split();
 
@@ -518,9 +542,40 @@ impl AsrEngine for DoubaoEngine {
         let final_text: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
         let partial_text: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
         let latest_result_text: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
-        let sink = Arc::new(Mutex::new(Some(sink)));
         let commit_tx: Arc<Mutex<Option<tokio::sync::oneshot::Sender<String>>>> =
             Arc::new(Mutex::new(None));
+
+        // Dedicated writer task: a single FIFO consumer of the sink. Keeps frames
+        // ordered and drops any audio enqueued after the last packet, so the server
+        // never sees a packet past the final one (which it rejects).
+        let (writer_tx, mut writer_rx) = mpsc::unbounded_channel::<WsWrite>();
+        tokio::spawn(async move {
+            let mut sink: WsSink = sink;
+            let mut last_sent = false;
+            while let Some(msg) = writer_rx.recv().await {
+                match msg {
+                    WsWrite::Audio(bytes) => {
+                        if last_sent {
+                            continue;
+                        }
+                        if sink.send(Message::Binary(bytes.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    WsWrite::Last(bytes) => {
+                        if last_sent {
+                            continue;
+                        }
+                        last_sent = true;
+                        let _ = sink.send(Message::Binary(bytes.into())).await;
+                    }
+                    WsWrite::Close => {
+                        let _ = sink.send(Message::Close(None)).await;
+                        break;
+                    }
+                }
+            }
+        });
 
         let (event_tx, event_rx) = mpsc::unbounded_channel();
 
@@ -529,13 +584,12 @@ impl AsrEngine for DoubaoEngine {
             is_committed: is_committed.clone(),
             final_text: final_text.clone(),
             latest_result_text: latest_result_text.clone(),
-            sender: sink.clone(),
+            writer_tx,
             commit_tx: commit_tx.clone(),
         };
 
         // Spawn message handler task
         let event_tx_clone = event_tx.clone();
-        let sink_for_handler = sink.clone();
         tokio::spawn(async move {
             while let Some(msg) = stream.next().await {
                 match msg {
@@ -604,8 +658,24 @@ impl AsrEngine for DoubaoEngine {
                                         .and_then(|v| v.as_str())
                                         .map(|m| format!("ASR error {}: {}", code, m))
                                         .unwrap_or_else(|| format!("ASR error code {}", code));
-                                    let _ =
-                                        event_tx_clone.send(AsrEvent::Error(message.to_string()));
+                                    let _ = event_tx_clone.send(AsrEvent::Error {
+                                        message: message.to_string(),
+                                        fatal: is_fatal_asr_code(code),
+                                    });
+                                    // If a commit is waiting, resolve it now with the
+                                    // best text we have instead of blocking until the
+                                    // 5s timeout (the socket is about to be reset).
+                                    if is_committed.load(Ordering::SeqCst) {
+                                        if let Some(tx) = commit_tx.lock().await.take() {
+                                            let latest = latest_result_text.lock().await.clone();
+                                            let ft = final_text.lock().await.clone();
+                                            let _ = tx.send(if latest.is_empty() {
+                                                ft
+                                            } else {
+                                                latest
+                                            });
+                                        }
+                                    }
                                     continue;
                                 }
                             }
@@ -742,14 +812,19 @@ impl AsrEngine for DoubaoEngine {
                                     .or_else(|| payload.get("error").and_then(|e| e.get("message")))
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("ASR 服务异常");
-                                let _ = event_tx_clone.send(AsrEvent::Error(message.to_string()));
+                                // Unknown text-protocol error: attempt reconnect before giving up.
+                                let _ = event_tx_clone.send(AsrEvent::Error {
+                                    message: message.to_string(),
+                                    fatal: false,
+                                });
                             }
                         }
                     }
                     Ok(Message::Close(frame)) => {
                         is_ready.store(false, Ordering::SeqCst);
-                        // Prevent lingering audio sends after connection closes
-                        *sink_for_handler.lock().await = None;
+                        // Lingering audio sends are already prevented: is_ready=false
+                        // gates append_audio, and the FIFO writer task drops frames
+                        // after the last packet / exits when its send fails.
                         let code: Option<u16> = frame.as_ref().map(|f| f.code.into());
                         let reason = frame
                             .as_ref()
@@ -771,9 +846,21 @@ impl AsrEngine for DoubaoEngine {
                     }
                     Err(e) => {
                         is_ready.store(false, Ordering::SeqCst);
-                        *sink_for_handler.lock().await = None;
                         let msg = normalize_error_message(&e.to_string());
-                        let _ = event_tx_clone.send(AsrEvent::Error(msg));
+                        // Connection reset without a clean Close: resolve any pending
+                        // commit so the caller doesn't wait the full 5s timeout.
+                        if is_committed.load(Ordering::SeqCst) {
+                            if let Some(tx) = commit_tx.lock().await.take() {
+                                let latest = latest_result_text.lock().await.clone();
+                                let ft = final_text.lock().await.clone();
+                                let _ = tx.send(if latest.is_empty() { ft } else { latest });
+                            }
+                        }
+                        // Transport-level failure (network drop): recoverable by reconnect.
+                        let _ = event_tx_clone.send(AsrEvent::Error {
+                            message: msg,
+                            fatal: false,
+                        });
                         break;
                     }
                     _ => {}
@@ -796,7 +883,9 @@ struct DoubaoSession {
     is_committed: Arc<AtomicBool>,
     final_text: Arc<Mutex<String>>,
     latest_result_text: Arc<Mutex<String>>,
-    sender: Arc<Mutex<Option<WsSink>>>,
+    /// Sends frames to the dedicated writer task. A single FIFO consumer keeps
+    /// frames ordered and guarantees the last packet is written after all audio.
+    writer_tx: mpsc::UnboundedSender<WsWrite>,
     commit_tx: Arc<Mutex<Option<tokio::sync::oneshot::Sender<String>>>>,
 }
 
@@ -817,14 +906,9 @@ impl AsrSession for DoubaoSession {
             .flat_map(|s| s.to_le_bytes())
             .collect();
         let frame = encode_audio_only_request(&audio, false);
-        let sender = self.sender.clone();
-        tokio::spawn(async move {
-            if let Some(ref mut sink) = *sender.lock().await {
-                if let Err(e) = sink.send(Message::Binary(frame.into())).await {
-                    log_asr!(debug, "Audio send skipped (connection closing): {}", e);
-                }
-            }
-        });
+        // Hand the frame to the writer task; FIFO order is preserved and the
+        // writer drops anything enqueued after the last packet.
+        let _ = self.writer_tx.send(WsWrite::Audio(frame));
     }
 
     async fn commit_and_await_final(&self) -> Result<String, String> {
@@ -834,15 +918,13 @@ impl AsrSession for DoubaoSession {
         if self.is_committed.load(Ordering::SeqCst) {
             return Err("录音已结束".to_string());
         }
+        // Mark committed (stops further appends) and enqueue the last packet.
+        // Because all prior audio was enqueued before this call (the renderer
+        // flushes and acks before stop proceeds) and the writer is FIFO, the
+        // last packet is guaranteed to be written after every audio frame.
         self.is_committed.store(true, Ordering::SeqCst);
-
-        // Send last-audio frame
         let frame = encode_audio_only_request(&[], true);
-        {
-            if let Some(ref mut sink) = *self.sender.lock().await {
-                let _ = sink.send(Message::Binary(frame.into())).await;
-            }
-        }
+        let _ = self.writer_tx.send(WsWrite::Last(frame));
 
         // Wait for final result with timeout
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -861,13 +943,7 @@ impl AsrSession for DoubaoSession {
 
     fn close(&self) {
         self.is_ready.store(false, Ordering::SeqCst);
-        let sender = self.sender.clone();
-        tokio::spawn(async move {
-            let mut guard = sender.lock().await;
-            if let Some(ref mut sink) = guard.take() {
-                let _ = sink.send(Message::Close(None)).await;
-            }
-        });
+        let _ = self.writer_tx.send(WsWrite::Close);
     }
 }
 

@@ -12,7 +12,13 @@ pub enum AsrEvent {
         final_text: String,
         partial_text: String,
     },
-    Error(String),
+    Error {
+        message: String,
+        /// Whether the error is unrecoverable (reconnecting cannot help). Fatal
+        /// errors finalize the recording with whatever text was already
+        /// recognized; non-fatal errors trigger an auto-reconnect attempt.
+        fatal: bool,
+    },
     Close {
         code: Option<u16>,
         reason: String,

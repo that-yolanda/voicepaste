@@ -25,6 +25,11 @@ use tauri::{
     image::Image, tray::TrayIconBuilder, App, AppHandle, Emitter, Listener, Manager, RunEvent,
 };
 
+/// Delay after the mic stream is ready, before entering Recording / playing the
+/// start cue. Gives the browser AEC/AGC time to converge so the first words are
+/// not attenuated. Trade-off: added latency between key press and "go".
+const AUDIO_SETTLE_MS: u64 = 350;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -288,10 +293,6 @@ async fn set_app_state(
     *app_inner.state.lock().await = next_state.clone();
     sync_escape_shortcut(app, &next_state);
 
-    if next_state == app_state::AppState::Recording {
-        play_configured_sound(app, app_inner, "start");
-    }
-
     let _ = app.emit(
         "overlay:event",
         serde_json::json!({
@@ -317,18 +318,24 @@ fn resolve_default_sound_path(app: &AppHandle, filename: &str) -> PathBuf {
         .join(filename)
 }
 
-fn play_configured_sound(app: &AppHandle, app_inner: &Arc<app_state::AppInner>, name: &str) {
+/// Resolve the configured sound file path for `name` ("start" / "end").
+/// Returns `None` when sounds are disabled or the config cannot be loaded.
+fn resolve_configured_sound_path(
+    app: &AppHandle,
+    app_inner: &Arc<app_state::AppInner>,
+    name: &str,
+) -> Option<String> {
     let config = match app_inner.config_manager.load_config() {
         Ok(config) => config,
         Err(error) => {
             log_app!(warn, "Sound config load failed: {}", error);
-            return;
+            return None;
         }
     };
 
     let sound_config = config.app.sound.as_ref();
     if sound_config.map(|sound| !sound.enabled).unwrap_or(false) {
-        return;
+        return None;
     }
 
     let custom_path = match name {
@@ -353,7 +360,44 @@ fn play_configured_sound(app: &AppHandle, app_inner: &Arc<app_state::AppInner>, 
         custom_path.to_string()
     };
 
-    crate::paste::play_sound(&file_path);
+    Some(file_path)
+}
+
+/// Play a cue (`name` = "start" / "end") through the renderer's AudioContext
+/// instead of spawning `afplay`. A freshly spawned `afplay` process competes with
+/// the audio output device that is still settling, which attenuated the cue (low
+/// volume) or cut it short (partial playback). The renderer plays it through a
+/// dedicated, kept-warm AudioContext, so the cue is full-volume and never
+/// truncated. Falls back to `afplay` only if the file cannot be read.
+fn emit_cue(app: &AppHandle, app_inner: &Arc<app_state::AppInner>, name: &str) {
+    use base64::Engine as _;
+
+    let Some(file_path) = resolve_configured_sound_path(app, app_inner, name) else {
+        return;
+    };
+
+    match std::fs::read(&file_path) {
+        Ok(bytes) => {
+            let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+            let _ = app.emit(
+                "overlay:event",
+                serde_json::json!({
+                    "type": "cue:play",
+                    "payload": { "kind": name, "data": data }
+                }),
+            );
+        }
+        Err(error) => {
+            log_app!(
+                warn,
+                "Cue '{}' read failed ({}), falling back to afplay: {}",
+                name,
+                file_path,
+                error
+            );
+            crate::paste::play_sound(&file_path);
+        }
+    }
 }
 
 async fn stop_renderer_audio(
@@ -653,7 +697,27 @@ async fn start_recording(app_handle: AppHandle) {
         return;
     }
 
-    // 3. Create ASR session (engine chosen by model ID → registry engine)
+    // Settle delay before the cue: getUserMedia resolving only means the stream
+    // exists, not that its AEC/AGC have converged. The mic is live and DSP converges
+    // on real input during this wait (capture stays gated off until Recording), while
+    // the renderer's cue keep-alive (set up during warmup) holds the output device
+    // warm so the cue still plays smoothly afterwards. The cue is the user's "go"
+    // signal, so it must land AFTER this delay — never before, or the user would
+    // speak into the unconverged window and lose the first words.
+    tokio::time::sleep(std::time::Duration::from_millis(AUDIO_SETTLE_MS)).await;
+
+    // Re-check cancellation: the user may have released during the settle delay.
+    if !*recording_state.0.lock().unwrap() {
+        log_rec!(warn, "Cancelled during settle, aborting start");
+        stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+        set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+        if let Some(overlay) = app_handle.get_webview_window("overlay") {
+            let _ = overlay.hide();
+        }
+        return;
+    }
+
+    // 3. Active hotwords for this session (also reused on reconnect).
     let hotwords = app_inner.hotword_manager.active_words();
     log_rec!(
         debug,
@@ -662,6 +726,63 @@ async fn start_recording(app_handle: AppHandle) {
         hotwords
     );
 
+    // 4. Play the start cue and enter Recording back-to-back: the cue tells the user
+    //    they may speak, so streaming must begin the instant it plays — no gap. DSP
+    //    has already converged during the settle delay above. The ASR session
+    //    connects in the background so the user can speak as soon as the (local,
+    //    fast) mic is ready instead of waiting on the (remote, variable) network
+    //    handshake; audio captured before the session is ready is buffered and
+    //    flushed once it connects.
+    let my_epoch = app_inner
+        .session_epoch
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        + 1;
+    app_inner.pending_audio.lock().await.clear();
+    *app_inner.asr_session.lock().await = None;
+    *app_inner.accumulated_text.lock().await = String::new();
+
+    let (connect_tx, connect_rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
+    *app_inner.connect_rx.lock().await = Some(connect_rx);
+
+    emit_cue(&app_handle, &app_inner, "start");
+    set_app_state(&app_handle, &app_inner, app_state::AppState::Recording).await;
+    let _ = app_handle.emit(
+        "overlay:event",
+        serde_json::json!({ "type": "recording:start" }),
+    );
+
+    // 5. Connect the ASR session in the background; attach it once ready.
+    let connect_handle = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        connect_and_attach(connect_handle, config, hotwords, my_epoch, connect_tx).await;
+    });
+}
+
+/// True while `my_epoch` is still the current recording session. A background
+/// connect task uses this to detect that a cancel/restart has superseded it.
+fn is_current_epoch(app_inner: &app_state::AppInner, my_epoch: u64) -> bool {
+    app_inner
+        .session_epoch
+        .load(std::sync::atomic::Ordering::SeqCst)
+        == my_epoch
+}
+
+/// Resolve the configured ASR engine and open a new session. Shared by the
+/// initial background connect and the reconnect path. Returns the session, its
+/// event receiver, and whether the overlay should show a static "recording" hint
+/// (non-streaming engines produce no partial results).
+async fn create_active_session(
+    app_handle: &AppHandle,
+    config: &crate::config::AppConfig,
+    hotwords: &[String],
+) -> Result<
+    (
+        Box<dyn crate::asr::AsrSession>,
+        tokio::sync::mpsc::UnboundedReceiver<crate::asr::AsrEvent>,
+        bool,
+    ),
+    String,
+> {
     let resource_dir = app_handle
         .path()
         .resource_dir()
@@ -676,7 +797,7 @@ async fn start_recording(app_handle: AppHandle) {
     let engine_model_id = config.audio_provider();
     let entry = registry.models.iter().find(|m| m.id == engine_model_id);
 
-    let result = match entry {
+    let (result, show_recording_hint) = match entry {
         Some(entry) if entry.engine == "sherpa-onnx" => {
             let punctuation_config = registry
                 .models
@@ -695,7 +816,10 @@ async fn start_recording(app_handle: AppHandle) {
                     stream_simulate: config.stream_simulate(engine_model_id, &registry),
                 },
             );
-            engine.create_session(&hotwords).await
+            // Non-streaming engines without simulated streaming produce no partials.
+            let show_hint = !entry.capabilities.streaming
+                && !config.stream_simulate(engine_model_id, &registry);
+            (engine.create_session(hotwords).await, show_hint)
         }
         _ => {
             // Default / volcengine: Doubao online engine
@@ -705,41 +829,75 @@ async fn start_recording(app_handle: AppHandle) {
                 doubao_config.to_audio_config(),
                 doubao_config.to_request_config(),
             );
-            engine.create_session(&hotwords).await
+            (engine.create_session(hotwords).await, false)
         }
     };
 
+    result.map(|(session, event_rx)| (session, event_rx, show_recording_hint))
+}
+
+/// Connect the ASR session in the background (one retry), then attach it: flush
+/// any audio buffered during the connect and publish the ready session. Signals
+/// completion through `connect_tx` so `stop_recording` can wait when the user
+/// stops before the session is ready.
+async fn connect_and_attach(
+    app_handle: AppHandle,
+    config: crate::config::AppConfig,
+    hotwords: Vec<String>,
+    my_epoch: u64,
+    connect_tx: tokio::sync::oneshot::Sender<Result<(), String>>,
+) {
+    let app_inner: Arc<app_state::AppInner> =
+        Arc::clone(&app_handle.state::<Arc<app_state::AppInner>>());
+
+    // Each Doubao attempt is bounded to 5s inside the engine; retry once.
+    let mut result = create_active_session(&app_handle, &config, &hotwords).await;
+    if result.is_err() && is_current_epoch(&app_inner, my_epoch) {
+        if let Err(ref e) = result {
+            log_rec!(warn, "ASR connect failed, retrying once: {}", e);
+        }
+        result = create_active_session(&app_handle, &config, &hotwords).await;
+    }
+
+    // A newer session (cancel / restart) superseded us: discard quietly.
+    if !is_current_epoch(&app_inner, my_epoch) {
+        if let Ok((session, _, _)) = result {
+            session.close();
+        }
+        let _ = connect_tx.send(Err("已取消".to_string()));
+        return;
+    }
+
     match result {
-        Ok((session, event_rx)) => {
+        Ok((session, event_rx, show_recording_hint)) => {
             let session: Arc<dyn crate::asr::AsrSession> = Arc::from(session);
 
-            // Check if recording was cancelled during ASR connection
-            if !*recording_state.0.lock().unwrap() {
-                log_rec!(warn, "Cancelled during ASR connection, closing session");
-                session.close();
-                stop_renderer_audio(&app_handle, &app_inner, 1200).await;
-                set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-                if let Some(overlay) = app_handle.get_webview_window("overlay") {
-                    let _ = overlay.hide();
+            // Flush buffered audio then publish the session, all under the
+            // asr_session lock so send_audio_chunk cannot interleave a chunk
+            // between the drain and the attach.
+            {
+                let mut slot = app_inner.asr_session.lock().await;
+                if !is_current_epoch(&app_inner, my_epoch) {
+                    session.close();
+                    let _ = connect_tx.send(Err("已取消".to_string()));
+                    return;
                 }
-                return;
+                let buffered: Vec<Vec<f32>> =
+                    app_inner.pending_audio.lock().await.drain(..).collect();
+                for chunk in &buffered {
+                    session.append_audio(chunk);
+                }
+                if !buffered.is_empty() {
+                    log_rec!(
+                        debug,
+                        "Flushed {} buffered audio chunk(s) to ASR",
+                        buffered.len()
+                    );
+                }
+                *slot = Some(session);
             }
 
-            *app_inner.asr_session.lock().await = Some(session);
-            set_app_state(&app_handle, &app_inner, app_state::AppState::Recording).await;
-
-            let _ = app_handle.emit(
-                "overlay:event",
-                serde_json::json!({
-                    "type": "recording:start",
-                }),
-            );
-
-            // For non-streaming engines without simulated streaming,
-            // show a "recording" hint since partial results won't appear.
-            if entry.is_some_and(|e| !e.capabilities.streaming)
-                && !config.stream_simulate(engine_model_id, &registry)
-            {
+            if show_recording_hint {
                 let _ = app_handle.emit(
                     "overlay:event",
                     serde_json::json!({
@@ -751,25 +909,35 @@ async fn start_recording(app_handle: AppHandle) {
 
             let app_for_events = app_handle.clone();
             tauri::async_runtime::spawn(async move {
-                forward_asr_events(app_for_events, event_rx).await;
+                manage_asr_session(app_for_events, event_rx, my_epoch).await;
             });
+
+            let _ = connect_tx.send(Ok(()));
         }
         Err(e) => {
             log_rec!(error, "ASR connection failed: {}", e);
-            *recording_state.0.lock().unwrap() = false;
+            let _ = connect_tx.send(Err(e.clone()));
+
+            // If the user already stopped, stop_recording owns the error UI (it
+            // is awaiting connect_rx). Only handle the UI here when still
+            // recording (connect failed mid-session).
+            let still_recording = *app_handle.state::<RecordingState>().0.lock().unwrap();
+            if !still_recording {
+                return;
+            }
+            *app_handle.state::<RecordingState>().0.lock().unwrap() = false;
+            app_inner.pending_audio.lock().await.clear();
             stop_renderer_audio(&app_handle, &app_inner, 1200).await;
-            // Emit error hint BEFORE setting idle state so the overlay shows the
-            // error message.  The state:idle handler in the frontend only clears
-            // hints whose level is "info", so an "error" level hint survives.
+            // Emit error hint BEFORE setting idle so the overlay shows it: the
+            // frontend's idle handler only clears "info"-level hints.
             let _ = app_handle.emit("overlay:event", serde_json::json!({
                 "type": "hint",
                 "payload": { "text": format!("ASR 连接失败: {}", e), "level": "error", "variant": "text" }
             }));
             set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-            // Auto-hide the overlay after a short delay so the user can read the
-            // error.  Guard: only hide if still idle (not in a new session).
+            // Auto-hide after a delay so the user can read it; guard: still idle.
             let delayed_handle = app_handle.clone();
-            let delayed_inner: Arc<app_state::AppInner> = Arc::clone(&*app_inner);
+            let delayed_inner: Arc<app_state::AppInner> = Arc::clone(&app_inner);
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(Duration::from_secs(3)).await;
                 let still_idle = {
@@ -800,13 +968,27 @@ async fn stop_recording(app_handle: AppHandle) {
     // 2. Stop renderer audio first so the final buffered chunk is flushed.
     stop_renderer_audio(&app_handle, &app_inner, 1200).await;
 
-    // 3. Take the ASR session (removes it from state)
-    let session = app_inner.asr_session.lock().await.take();
+    // 3. Acquire the ready ASR session. If the background connect hasn't finished
+    //    (user stopped before it was ready), wait for it to resolve so the buffered
+    //    audio still gets transcribed instead of being thrown away.
+    let session = match app_inner.asr_session.lock().await.take() {
+        Some(s) => Some(s),
+        None => {
+            let rx = app_inner.connect_rx.lock().await.take();
+            match rx {
+                Some(rx) => match tokio::time::timeout(Duration::from_secs(12), rx).await {
+                    Ok(Ok(Ok(()))) => app_inner.asr_session.lock().await.take(),
+                    _ => None, // connect failed / timed out / task gone
+                },
+                None => None,
+            }
+        }
+    };
     *app_inner.asr_events.lock().await = None;
 
     if let Some(session) = session {
-        // 4. Commit and get final text
-        let text = match session.commit_and_await_final().await {
+        // 4. Commit and get this session's final text.
+        let session_text = match session.commit_and_await_final().await {
             Ok(t) => t,
             Err(_) => {
                 let (final_t, partial_t) = app_inner.latest_transcript.lock().await.clone();
@@ -818,196 +1000,65 @@ async fn stop_recording(app_handle: AppHandle) {
             }
         };
 
-        let mut trimmed = text.trim().to_string();
-        if !trimmed.is_empty() {
-            log_rec!(
-                info,
-                "Final text received ({} chars)",
-                trimmed.chars().count()
-            );
-            log_rec!(
-                debug,
-                "Final text preview: {:?}",
-                trimmed.chars().take(60).collect::<String>()
-            );
+        // Prepend any text accumulated across reconnects in this recording.
+        let prefix = app_inner.accumulated_text.lock().await.clone();
+        let combined = format!("{}{}", prefix, session_text);
 
-            // 5. Load config for LLM / behavior settings
-            let config = app_inner.config_manager.load_config().ok();
-            let data_dir = app_handle
-                .path()
-                .app_data_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let resource_dir = app_handle
-                .path()
-                .resource_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let registry = crate::model::load_registry(&data_dir, &resource_dir);
-
-            if let Some(ref config) = config {
-                let model_id = config.audio_provider();
-                if config.hotword_replace(model_id, &registry) {
-                    let hotwords = app_inner.hotword_manager.active_words();
-                    if !hotwords.is_empty() {
-                        trimmed = crate::asr::sherpa_onnx::online::restore_hotword_case(
-                            &trimmed, &hotwords,
-                        );
-                    }
-                }
-            }
-
-            if config
-                .as_ref()
-                .map(|config| config.app.remove_trailing_period)
-                .unwrap_or(true)
-                && (trimmed.ends_with('。') || trimmed.ends_with('.'))
-            {
-                trimmed.pop();
-            }
-
-            // 6. Apply LLM structure_text only when a prompt-specific hotkey was used.
-            // The main hotkey (active_prompt_id = None) pastes raw text without polishing.
-            let active_prompt_id = app_handle
-                .try_state::<ActivePromptId>()
-                .and_then(|s| s.0.lock().unwrap().clone());
-
-            let final_text = if let Some(ref config) = config {
-                if active_prompt_id.is_some() {
-                    let prompts = app_inner.config_manager.load_prompts();
-                    let mut system_prompt = active_prompt_id
-                        .as_ref()
-                        .and_then(|pid| {
-                            prompts
-                                .iter()
-                                .find(|p| &p.id == pid)
-                                .map(|p| p.prompt.clone())
-                                .filter(|p| !p.trim().is_empty())
-                        })
-                        .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
-
-                    let model_id = config.audio_provider();
-                    let hotword_mode = config.hotword_llm_mode(model_id, &registry);
-                    let append_hotwords = match hotword_mode.as_str() {
-                        "disabled" => false,
-                        "force" => true,
-                        _ => {
-                            let resource_dir = app_handle
-                                .path()
-                                .resource_dir()
-                                .unwrap_or_else(|_| std::path::PathBuf::from("."));
-                            let data_dir = app_handle
-                                .path()
-                                .app_data_dir()
-                                .unwrap_or_else(|_| std::path::PathBuf::from("."));
-                            let registry = crate::model::load_registry(&data_dir, &resource_dir);
-                            registry
-                                .models
-                                .iter()
-                                .find(|m| m.id == model_id)
-                                .map(|m| !m.capabilities.hotwords)
-                                .unwrap_or(false)
-                        }
-                    };
-
-                    if append_hotwords {
-                        let hw: Vec<String> = app_inner
-                            .hotword_manager
-                            .active_words()
-                            .iter()
-                            .map(|w| crate::hotword::strip_weight(w).to_string())
-                            .collect();
-                        if !hw.is_empty() {
-                            system_prompt = format!(
-                                "{}\n\n需要注意以下专有名词的准确拼写：{}",
-                                system_prompt,
-                                hw.join("、")
-                            );
-                        }
-                    }
-
-                    log_rec!(
-                        debug,
-                        "Applying LLM structure_text (prompt_id: {:?})",
-                        active_prompt_id
-                    );
-                    match crate::llm::call_llm_api(&config.llm, &trimmed, &system_prompt).await {
-                        Ok(result) => {
-                            log_rec!(
-                                info,
-                                "LLM polishing succeeded ({} chars)",
-                                result.chars().count()
-                            );
-                            result
-                        }
-                        Err(e) => {
-                            log_rec!(warn, "LLM polishing failed: {}, using raw text", e);
-                            let _ = app_handle.emit("overlay:event", serde_json::json!({
-                                "type": "hint",
-                                "payload": { "text": format!("文本润色失败，已输出原文"), "level": "warn", "variant": "text" }
-                            }));
-                            trimmed.clone()
-                        }
-                    }
-                } else {
-                    trimmed.clone()
-                }
-            } else {
-                trimmed.clone()
-            };
-
-            // Clear the active prompt ID after use
-            if let Some(active) = app_handle.try_state::<ActivePromptId>() {
-                *active.0.lock().unwrap() = None;
-            }
-
-            // 7. Write to clipboard
-            use tauri_plugin_clipboard_manager::ClipboardExt;
-
-            // Save original clipboard content if we need to restore it later
-            let keep_clipboard = config
-                .as_ref()
-                .map(|c| c.app.keep_clipboard)
-                .unwrap_or(true);
-            let original_clipboard: Option<String> = if !keep_clipboard {
-                app_handle.clipboard().read_text().ok()
-            } else {
-                None
-            };
-
-            if let Err(e) = app_handle.clipboard().write_text(&final_text) {
-                log_rec!(error, "Clipboard write failed: {}", e);
-                let _ = app_handle.emit("overlay:event", serde_json::json!({
-                    "type": "hint",
-                    "payload": { "text": format!("剪贴板写入失败: {}", e), "level": "error", "variant": "text" }
-                }));
-            }
-
-            // 8. Simulate paste keystroke
-            let _result = crate::paste::simulate_paste();
-
-            // Restore original clipboard content if keep_clipboard is disabled
-            if let Some(original) = original_clipboard {
-                if let Err(e) = app_handle.clipboard().write_text(&original) {
-                    log_rec!(error, "Failed to restore clipboard: {}", e);
-                }
-            }
-
-            // 9. Record usage stats
-            app_inner.stats.lock().await.record_session(&final_text);
-            play_configured_sound(&app_handle, &app_inner, "end");
-        } else {
-            log_rec!(warn, "Final text is empty, skipping paste");
-        }
+        // 5-9. Polish (if applicable), write clipboard, paste, record stats, end cue.
+        finalize_and_paste(&app_handle, &app_inner, combined).await;
 
         // 10. Close the WebSocket session
         session.close();
+    } else {
+        // No ready session: the connect never completed (or we stopped during a
+        // reconnect gap). Drop any buffered audio for this round.
+        app_inner.pending_audio.lock().await.clear();
+        let prefix = app_inner.accumulated_text.lock().await.clone();
+        if !prefix.trim().is_empty() {
+            // Salvage text accumulated before the disconnect instead of discarding.
+            log_rec!(
+                warn,
+                "Stop with no ready session; salvaging accumulated text"
+            );
+            finalize_and_paste(&app_handle, &app_inner, prefix).await;
+        } else {
+            log_rec!(
+                warn,
+                "Stop with no ready ASR session; discarding buffered audio"
+            );
+            let _ = app_handle.emit("overlay:event", serde_json::json!({
+                "type": "hint",
+                "payload": { "text": "语音服务连接失败，请重试", "level": "error", "variant": "text" }
+            }));
+            *app_inner.accumulated_text.lock().await = String::new();
+            set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+            let delayed_handle = app_handle.clone();
+            let delayed_inner: Arc<app_state::AppInner> = Arc::clone(&app_inner);
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                let still_idle = {
+                    let s = delayed_inner.state.lock().await;
+                    matches!(*s, app_state::AppState::Idle)
+                };
+                if still_idle {
+                    if let Some(overlay) = delayed_handle.get_webview_window("overlay") {
+                        let _ = overlay.hide();
+                    }
+                }
+            });
+            return;
+        }
     }
 
-    // 11. Hide overlay
+    // 11. Clear cross-reconnect accumulated text for the next recording.
+    *app_inner.accumulated_text.lock().await = String::new();
+
+    // 12. Hide overlay
     if let Some(overlay) = app_handle.get_webview_window("overlay") {
         let _ = overlay.hide();
     }
 
-    // 12. Set state back to idle
+    // 13. Set state back to idle
     set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
 }
 
@@ -1044,6 +1095,13 @@ async fn cancel_recording(app_handle: AppHandle) {
     *recording_state.0.lock().unwrap() = false;
     log_rec!(debug, "Cancel requested");
 
+    // Bump the epoch so any in-flight background connect task discards its
+    // result, and drop any audio buffered before the session was ready.
+    app_inner
+        .session_epoch
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    app_inner.pending_audio.lock().await.clear();
+
     // Clear the active prompt ID since the session was cancelled
     if let Some(active) = app_handle.try_state::<ActivePromptId>() {
         *active.0.lock().unwrap() = None;
@@ -1056,6 +1114,7 @@ async fn cancel_recording(app_handle: AppHandle) {
     }
     *app_inner.asr_events.lock().await = None;
     *app_inner.latest_transcript.lock().await = (String::new(), String::new());
+    *app_inner.accumulated_text.lock().await = String::new();
 
     let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
     if let Some(overlay) = app_handle.get_webview_window("overlay") {
@@ -1067,93 +1126,497 @@ async fn cancel_recording(app_handle: AppHandle) {
 /// Default system prompt for LLM text structuring.
 const DEFAULT_STRUCTURE_PROMPT: &str = "整理语音转写内容，仅输出最终文本，不附加其他内容。\n- 删除语气词、重复内容及多余口语词汇\n- 理顺语序，保证逻辑流畅\n- 修正识别错误，还原正确词汇与专有名词\n- 忠于原意，不新增、改动信息\n- 篇幅较长则使用列表结构化呈现，短句不作格式调整";
 
-/// Forward ASR events from the event channel to the overlay window.
-/// Runs in a spawned async task for the duration of an active recording session.
-async fn forward_asr_events(
+/// Maximum number of consecutive ASR reconnect attempts before giving up and
+/// finalizing the recording with whatever text was recognized so far. Reset to
+/// zero each time the reconnected session produces a fresh transcript.
+const MAX_ASR_RECONNECT: u32 = 3;
+
+/// Read the current recording flag without holding the lock across await points.
+fn is_recording(app: &AppHandle) -> bool {
+    app.try_state::<RecordingState>()
+        .map(|state| *state.0.lock().unwrap())
+        .unwrap_or(false)
+}
+
+/// True while this manager's recording session is still the active, current one
+/// (not stopped, cancelled, or superseded by a restart).
+fn session_is_active(app: &AppHandle, app_inner: &app_state::AppInner, my_epoch: u64) -> bool {
+    is_recording(app) && is_current_epoch(app_inner, my_epoch)
+}
+
+/// Snapshot the best text recognized in the current session from shared state.
+/// `manage_asr_session` stores every transcript here, so it serves as the
+/// carry-over source across a reconnect and the salvage source on failure.
+async fn current_session_text(app_inner: &app_state::AppInner) -> String {
+    let (final_t, partial_t) = app_inner.latest_transcript.lock().await.clone();
+    if !final_t.is_empty() {
+        final_t
+    } else {
+        partial_t
+    }
+}
+
+/// Manage an ASR session for the duration of a recording: forward transcripts to
+/// the overlay, and on a recoverable error/close, auto-reconnect a fresh session
+/// (carrying already-recognized text). On a fatal error or after reconnects are
+/// exhausted, finalize the recording with the accumulated text instead of
+/// discarding it.
+async fn manage_asr_session(
     app: AppHandle,
     mut event_rx: tokio::sync::mpsc::UnboundedReceiver<crate::asr::AsrEvent>,
+    my_epoch: u64,
 ) {
     use crate::asr::AsrEvent;
 
-    log_events!(debug, "Event forwarding task started");
-    while let Some(event) = event_rx.recv().await {
-        match event {
-            AsrEvent::Transcript {
-                final_text,
-                partial_text,
-            } => {
-                // Save latest transcript in shared state
-                let state = app.state::<Arc<app_state::AppInner>>();
-                *state.latest_transcript.lock().await = (final_text.clone(), partial_text.clone());
+    let app_inner = app.state::<Arc<app_state::AppInner>>().inner().clone();
+    let mut reconnect_attempts: u32 = 0;
 
-                let _ = app.emit(
-                    "overlay:event",
-                    serde_json::json!({
-                        "type": "transcript",
-                        "payload": {
-                            "finalText": final_text,
-                            "partialText": partial_text,
-                        }
-                    }),
-                );
-            }
-            AsrEvent::Error(msg) => {
-                log_events!(error, "ASR error: {}", msg);
-                let _ = app.emit(
-                    "overlay:event",
-                    serde_json::json!({
-                        "type": "hint",
-                        "payload": {
-                            "text": msg,
-                            "level": "error",
-                            "variant": "text",
-                        }
-                    }),
-                );
-                // Auto-stop: reset recording state and hide overlay
-                if let Some(state) = app.try_state::<RecordingState>() {
-                    *state.0.lock().unwrap() = false;
+    log_events!(debug, "ASR session manager started (epoch {})", my_epoch);
+    'outer: loop {
+        while let Some(event) = event_rx.recv().await {
+            match event {
+                AsrEvent::Transcript {
+                    final_text,
+                    partial_text,
+                } => {
+                    // A real transcript means the (possibly reconnected) session is
+                    // healthy again: reset the failure counter.
+                    reconnect_attempts = 0;
+
+                    // Save this session's transcript (without the cross-reconnect
+                    // prefix) so stop_recording can fall back to it.
+                    *app_inner.latest_transcript.lock().await =
+                        (final_text.clone(), partial_text.clone());
+
+                    // Prepend text accumulated from prior (disconnected) sessions
+                    // so the overlay shows the complete running transcript.
+                    let prefix = app_inner.accumulated_text.lock().await.clone();
+                    let display_final = format!("{}{}", prefix, final_text);
+
+                    let _ = app.emit(
+                        "overlay:event",
+                        serde_json::json!({
+                            "type": "transcript",
+                            "payload": {
+                                "finalText": display_final,
+                                "partialText": partial_text,
+                            }
+                        }),
+                    );
                 }
-                if let Some(inner) = app.try_state::<Arc<app_state::AppInner>>() {
-                    set_app_state(&app, &inner, app_state::AppState::Idle).await;
+                AsrEvent::Open => {
+                    log_events!(info, "ASR connection opened");
                 }
-                if let Some(overlay) = app.get_webview_window("overlay") {
-                    let _ = overlay.hide();
-                }
-            }
-            AsrEvent::Open => {
-                log_events!(info, "ASR connection opened");
-            }
-            AsrEvent::Close { code, reason } => {
-                log_events!(
-                    info,
-                    "ASR connection closed (code={:?}, reason={:?})",
-                    code,
-                    reason
-                );
-                // If connection closed during recording, auto-stop
-                // Extract the flag eagerly to avoid holding MutexGuard across .await
-                let was_recording = app
-                    .try_state::<RecordingState>()
-                    .map(|state| {
-                        let mut recording = state.0.lock().unwrap();
-                        let is_rec = *recording;
-                        *recording = false;
-                        is_rec
-                    })
-                    .unwrap_or(false);
-                if was_recording {
-                    if let Some(inner) = app.try_state::<Arc<app_state::AppInner>>() {
-                        set_app_state(&app, &inner, app_state::AppState::Idle).await;
+                AsrEvent::Error { message, fatal } => {
+                    log_events!(error, "ASR error: {} (fatal={})", message, fatal);
+                    // If the user stopped/cancelled/restarted, the owning path
+                    // handles finalization; don't interfere.
+                    if !session_is_active(&app, &app_inner, my_epoch) {
+                        break 'outer;
                     }
-                    if let Some(overlay) = app.get_webview_window("overlay") {
-                        let _ = overlay.hide();
+                    if !fatal && reconnect_attempts < MAX_ASR_RECONNECT {
+                        if let Some(rx) =
+                            try_reconnect_asr(&app, &app_inner, my_epoch, &mut reconnect_attempts)
+                                .await
+                        {
+                            event_rx = rx;
+                            continue 'outer;
+                        }
                     }
+                    finalize_on_failure(&app, &app_inner, &message).await;
+                    break 'outer;
+                }
+                AsrEvent::Close { code, reason } => {
+                    log_events!(
+                        info,
+                        "ASR connection closed (code={:?}, reason={:?})",
+                        code,
+                        reason
+                    );
+                    if !session_is_active(&app, &app_inner, my_epoch) {
+                        break 'outer;
+                    }
+                    // Unexpected close mid-recording: treat as recoverable.
+                    if reconnect_attempts < MAX_ASR_RECONNECT {
+                        if let Some(rx) =
+                            try_reconnect_asr(&app, &app_inner, my_epoch, &mut reconnect_attempts)
+                                .await
+                        {
+                            event_rx = rx;
+                            continue 'outer;
+                        }
+                    }
+                    finalize_on_failure(&app, &app_inner, "ASR 连接已断开").await;
+                    break 'outer;
                 }
             }
         }
+        // Event channel closed without an explicit terminal event.
+        break 'outer;
     }
-    log_events!(debug, "Event forwarding task ended");
+    log_events!(debug, "ASR session manager ended (epoch {})", my_epoch);
+}
+
+/// Attempt to rebuild the ASR session after a recoverable failure. Carries the
+/// dying session's recognized text into `accumulated_text`, connects a fresh
+/// session, flushes any audio buffered during the reconnect gap, and swaps it
+/// into shared state so audio routing resumes automatically. Returns the new
+/// event receiver on success, or `None` if the recording ended or the reconnect
+/// failed.
+async fn try_reconnect_asr(
+    app: &AppHandle,
+    app_inner: &Arc<app_state::AppInner>,
+    my_epoch: u64,
+    attempts: &mut u32,
+) -> Option<tokio::sync::mpsc::UnboundedReceiver<crate::asr::AsrEvent>> {
+    *attempts += 1;
+    log_events!(
+        warn,
+        "ASR reconnecting (attempt {}/{})",
+        attempts,
+        MAX_ASR_RECONNECT
+    );
+    let _ = app.emit(
+        "overlay:event",
+        serde_json::json!({
+            "type": "hint",
+            "payload": { "text": "网络中断，正在重连…", "level": "warn", "variant": "text" }
+        }),
+    );
+
+    // Play the end cue on the first reconnect attempt so the user audibly knows
+    // recording was interrupted and can stop talking until they hear it resume.
+    if *attempts == 1 {
+        emit_cue(app, app_inner, "end");
+    }
+
+    // Carry the dying session's recognized text into the accumulated prefix, and
+    // clear the session slot so chunks spoken during the gap buffer into
+    // pending_audio (drained into the new session below).
+    let carry = current_session_text(app_inner).await;
+    if let Some(old) = app_inner.asr_session.lock().await.take() {
+        old.close();
+    }
+    if !carry.is_empty() {
+        app_inner.accumulated_text.lock().await.push_str(&carry);
+    }
+    *app_inner.latest_transcript.lock().await = (String::new(), String::new());
+
+    // Small backoff before retrying.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    if !session_is_active(app, app_inner, my_epoch) {
+        return None;
+    }
+
+    let config = match app_inner.config_manager.load_config() {
+        Ok(c) => c,
+        Err(e) => {
+            log_events!(error, "Reconnect aborted, config load failed: {}", e);
+            return None;
+        }
+    };
+    let hotwords = app_inner.hotword_manager.active_words();
+
+    match create_active_session(app, &config, &hotwords).await {
+        Ok((session, event_rx, _)) => {
+            let session: Arc<dyn crate::asr::AsrSession> = Arc::from(session);
+            // Flush audio buffered during the gap, then publish, under the
+            // asr_session lock so send_audio_chunk cannot interleave.
+            {
+                let mut slot = app_inner.asr_session.lock().await;
+                if !session_is_active(app, app_inner, my_epoch) {
+                    session.close();
+                    return None;
+                }
+                let buffered: Vec<Vec<f32>> =
+                    app_inner.pending_audio.lock().await.drain(..).collect();
+                for chunk in &buffered {
+                    session.append_audio(chunk);
+                }
+                if !buffered.is_empty() {
+                    log_events!(
+                        debug,
+                        "Flushed {} buffered chunk(s) after reconnect",
+                        buffered.len()
+                    );
+                }
+                *slot = Some(session);
+            }
+            log_events!(info, "ASR reconnected successfully");
+            let _ = app.emit(
+                "overlay:event",
+                serde_json::json!({
+                    "type": "hint",
+                    "payload": { "text": "已重连", "level": "info", "variant": "text" }
+                }),
+            );
+            // Play the start cue so the user audibly knows recording resumed.
+            emit_cue(app, app_inner, "start");
+            Some(event_rx)
+        }
+        Err(e) => {
+            log_events!(error, "ASR reconnect failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Finalize a recording that failed mid-stream (fatal error or exhausted
+/// reconnects): salvage the accumulated text plus the current session's text and
+/// run it through the normal paste pipeline, then tear down and hide the overlay.
+async fn finalize_on_failure(app: &AppHandle, app_inner: &Arc<app_state::AppInner>, message: &str) {
+    // Stop recording so audio routing and hotkey toggling settle.
+    if let Some(state) = app.try_state::<RecordingState>() {
+        *state.0.lock().unwrap() = false;
+    }
+
+    // Gather salvageable text: accumulated prefix + the dying session's text.
+    let session_text = current_session_text(app_inner).await;
+    if let Some(s) = app_inner.asr_session.lock().await.take() {
+        s.close();
+    }
+
+    let prefix = app_inner.accumulated_text.lock().await.clone();
+    let combined = format!("{}{}", prefix, session_text);
+
+    // Reset cross-reconnect / buffering state.
+    *app_inner.accumulated_text.lock().await = String::new();
+    *app_inner.latest_transcript.lock().await = (String::new(), String::new());
+    *app_inner.asr_events.lock().await = None;
+    app_inner.pending_audio.lock().await.clear();
+
+    stop_renderer_audio(app, app_inner, 1200).await;
+
+    if combined.trim().is_empty() {
+        // Nothing to salvage: surface the error so the user understands the abort.
+        log_events!(warn, "ASR failed with no recognized text: {}", message);
+        let _ = app.emit(
+            "overlay:event",
+            serde_json::json!({
+                "type": "hint",
+                "payload": { "text": message, "level": "error", "variant": "text" }
+            }),
+        );
+        if let Some(active) = app.try_state::<ActivePromptId>() {
+            *active.0.lock().unwrap() = None;
+        }
+        set_app_state(app, app_inner, app_state::AppState::Idle).await;
+        let delayed_handle = app.clone();
+        let delayed_inner: Arc<app_state::AppInner> = Arc::clone(app_inner);
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            let still_idle = {
+                let s = delayed_inner.state.lock().await;
+                matches!(*s, app_state::AppState::Idle)
+            };
+            if still_idle {
+                if let Some(overlay) = delayed_handle.get_webview_window("overlay") {
+                    let _ = overlay.hide();
+                }
+            }
+        });
+        return;
+    }
+
+    // Salvaged text exists: paste it as if the recording had ended normally.
+    log_events!(
+        warn,
+        "ASR failed; salvaging recognized text ({} chars): {}",
+        combined.chars().count(),
+        message
+    );
+    finalize_and_paste(app, app_inner, combined).await;
+
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        let _ = overlay.hide();
+    }
+    set_app_state(app, app_inner, app_state::AppState::Idle).await;
+}
+
+/// Run recognized text through the finishing pipeline: optional LLM polishing
+/// (prompt-specific hotkeys only, with sherpa-onnx hotword hinting), trailing-
+/// period trimming, clipboard write (honoring keep_clipboard), simulated paste,
+/// usage stats, and the end cue. Shared by the normal stop path and the
+/// failure-salvage path.
+async fn finalize_and_paste(
+    app_handle: &AppHandle,
+    app_inner: &Arc<app_state::AppInner>,
+    raw_text: String,
+) {
+    let trimmed = raw_text.trim().to_string();
+
+    // Always clear the active prompt ID once a recording concludes.
+    let active_prompt_id = app_handle
+        .try_state::<ActivePromptId>()
+        .and_then(|s| s.0.lock().unwrap().clone());
+    if let Some(active) = app_handle.try_state::<ActivePromptId>() {
+        *active.0.lock().unwrap() = None;
+    }
+
+    if trimmed.is_empty() {
+        log_rec!(warn, "Final text is empty, skipping paste");
+        return;
+    }
+
+    log_rec!(
+        info,
+        "Final text received ({} chars)",
+        trimmed.chars().count()
+    );
+    log_rec!(
+        debug,
+        "Final text preview: {:?}",
+        trimmed.chars().take(60).collect::<String>()
+    );
+
+    // Load config + model registry for LLM / behavior settings.
+    let config = app_inner.config_manager.load_config().ok();
+    let resource_dir = app_handle
+        .path()
+        .resource_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let registry = crate::model::load_registry(&data_dir, &resource_dir);
+
+    let mut trimmed = trimmed;
+
+    // Restore hotword casing for engines configured to do so (e.g. sherpa-onnx
+    // lowercases proper nouns recognized via its hotword list).
+    if let Some(ref config) = config {
+        let model_id = config.audio_provider();
+        if config.hotword_replace(model_id, &registry) {
+            let hotwords = app_inner.hotword_manager.active_words();
+            if !hotwords.is_empty() {
+                trimmed =
+                    crate::asr::sherpa_onnx::online::restore_hotword_case(&trimmed, &hotwords);
+            }
+        }
+    }
+
+    if config
+        .as_ref()
+        .map(|config| config.app.remove_trailing_period)
+        .unwrap_or(true)
+        && (trimmed.ends_with('。') || trimmed.ends_with('.'))
+    {
+        trimmed.pop();
+    }
+
+    // Apply LLM structure_text only when a prompt-specific hotkey was used.
+    // The main hotkey (active_prompt_id = None) pastes raw text without polishing.
+    let final_text = if let Some(ref config) = config {
+        if active_prompt_id.is_some() {
+            let prompts = app_inner.config_manager.load_prompts();
+            let mut system_prompt = active_prompt_id
+                .as_ref()
+                .and_then(|pid| {
+                    prompts
+                        .iter()
+                        .find(|p| &p.id == pid)
+                        .map(|p| p.prompt.clone())
+                        .filter(|p| !p.trim().is_empty())
+                })
+                .unwrap_or_else(|| DEFAULT_STRUCTURE_PROMPT.to_string());
+
+            // Append hotwords to the LLM prompt as a proper-noun hint, per the
+            // model's hotword_llm_mode ("disabled" / "force" / auto = only when the
+            // engine itself lacks hotword support).
+            let model_id = config.audio_provider();
+            let append_hotwords = match config.hotword_llm_mode(model_id, &registry).as_str() {
+                "disabled" => false,
+                "force" => true,
+                _ => registry
+                    .models
+                    .iter()
+                    .find(|m| m.id == model_id)
+                    .map(|m| !m.capabilities.hotwords)
+                    .unwrap_or(false),
+            };
+            if append_hotwords {
+                let hw: Vec<String> = app_inner
+                    .hotword_manager
+                    .active_words()
+                    .iter()
+                    .map(|w| crate::hotword::strip_weight(w).to_string())
+                    .collect();
+                if !hw.is_empty() {
+                    system_prompt = format!(
+                        "{}\n\n需要注意以下专有名词的准确拼写：{}",
+                        system_prompt,
+                        hw.join("、")
+                    );
+                }
+            }
+
+            log_rec!(
+                debug,
+                "Applying LLM structure_text (prompt_id: {:?})",
+                active_prompt_id
+            );
+            match crate::llm::call_llm_api(&config.llm, &trimmed, &system_prompt).await {
+                Ok(result) => {
+                    log_rec!(
+                        info,
+                        "LLM polishing succeeded ({} chars)",
+                        result.chars().count()
+                    );
+                    result
+                }
+                Err(e) => {
+                    log_rec!(warn, "LLM polishing failed: {}, using raw text", e);
+                    let _ = app_handle.emit("overlay:event", serde_json::json!({
+                        "type": "hint",
+                        "payload": { "text": "文本润色失败，已输出原文", "level": "warn", "variant": "text" }
+                    }));
+                    trimmed.clone()
+                }
+            }
+        } else {
+            trimmed.clone()
+        }
+    } else {
+        trimmed.clone()
+    };
+
+    // Write to clipboard
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+
+    // Save original clipboard content if we need to restore it later
+    let keep_clipboard = config
+        .as_ref()
+        .map(|c| c.app.keep_clipboard)
+        .unwrap_or(true);
+    let original_clipboard: Option<String> = if !keep_clipboard {
+        app_handle.clipboard().read_text().ok()
+    } else {
+        None
+    };
+
+    if let Err(e) = app_handle.clipboard().write_text(&final_text) {
+        log_rec!(error, "Clipboard write failed: {}", e);
+        let _ = app_handle.emit("overlay:event", serde_json::json!({
+            "type": "hint",
+            "payload": { "text": format!("剪贴板写入失败: {}", e), "level": "error", "variant": "text" }
+        }));
+    }
+
+    // Simulate paste keystroke
+    let _result = crate::paste::simulate_paste();
+
+    // Restore original clipboard content if keep_clipboard is disabled
+    if let Some(original) = original_clipboard {
+        if let Err(e) = app_handle.clipboard().write_text(&original) {
+            log_rec!(error, "Failed to restore clipboard: {}", e);
+        }
+    }
+
+    // Record usage stats
+    app_inner.stats.lock().await.record_session(&final_text);
+    emit_cue(app_handle, app_inner, "end");
 }
 
 /// Reload all hotkey bindings from the current config and prompts.

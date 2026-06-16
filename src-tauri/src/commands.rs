@@ -9,6 +9,10 @@ use tauri::{utils::Theme, AppHandle, Emitter, Manager, State};
 // Re-export paste::PasteResult for use in commands
 use paste::PasteResult;
 
+/// Cap on audio chunks buffered before the ASR session is ready (~100ms per
+/// chunk, so ~30s). Bounds memory if the connect keeps failing.
+const MAX_PENDING_CHUNKS: usize = 300;
+
 /// Detect the actual OS-level light/dark theme preference.
 fn detect_system_theme() -> &'static str {
     #[cfg(target_os = "macos")]
@@ -300,39 +304,55 @@ pub async fn send_audio_chunk(
         );
     }
 
+    // Decode base64 → i16 PCM bytes → f32 samples
+    let bytes = match base64::engine::general_purpose::STANDARD.decode(&base64_chunk) {
+        Ok(data) => data,
+        Err(_) => {
+            log_audio!(warn, "Chunk #{} base64 decode failed", n);
+            return Ok(serde_json::json!({ "ok": false, "message": "音频数据解码失败" }));
+        }
+    };
+    let samples: Vec<f32> = bytes
+        .chunks_exact(2)
+        .map(|chunk| {
+            let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
+            sample as f32 / 32768.0
+        })
+        .collect();
+
+    // Drive the native waveform (macOS only) from the same PCM the ASR receives,
+    // whether the chunk is sent immediately or buffered.
+    #[cfg(target_os = "macos")]
+    if let Some(level) = compute_audio_level(&samples) {
+        crate::overlay::set_audio_level(&_app, level);
+    }
+
+    // Hold the `asr_session` lock across the decision so buffering stays ordered
+    // against the background connect task's drain (same lock), guaranteeing no
+    // buffered chunk is silently dropped between drain and session-attach.
     let session = state.asr_session.lock().await;
     if let Some(ref session) = *session {
         if session.is_ready() {
-            // Decode base64 → i16 PCM bytes → f32 samples
-            let bytes = match base64::engine::general_purpose::STANDARD.decode(&base64_chunk) {
-                Ok(data) => data,
-                Err(_) => {
-                    log_audio!(warn, "Chunk #{} base64 decode failed", n);
-                    return Ok(serde_json::json!({ "ok": false, "message": "音频数据解码失败" }));
-                }
-            };
-            let samples: Vec<f32> = bytes
-                .chunks_exact(2)
-                .map(|chunk| {
-                    let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
-                    sample as f32 / 32768.0
-                })
-                .collect();
-            // Drive the native waveform (macOS only) from the same PCM the ASR receives.
-            #[cfg(target_os = "macos")]
-            if let Some(level) = compute_audio_level(&samples) {
-                crate::overlay::set_audio_level(&_app, level);
-            }
             session.append_audio(&samples);
             return Ok(serde_json::json!({ "ok": true }));
         }
-        log_audio!(warn, "Chunk #{} dropped: session not ready", n);
-    } else {
-        if n == 0 {
-            log_audio!(warn, "Chunk #{} dropped: no session", n);
-        }
     }
-    Ok(serde_json::json!({ "ok": false, "message": "ASR 会话未建立" }))
+
+    // Session not ready yet (background connect in progress, or reconnect gap):
+    // buffer the samples so nothing the user says before the session attaches is
+    // lost. Drained into the session once it attaches.
+    let mut pending = state.pending_audio.lock().await;
+    if pending.len() < MAX_PENDING_CHUNKS {
+        pending.push(samples);
+    } else if n.is_multiple_of(50) {
+        log_audio!(
+            warn,
+            "Pending audio buffer full ({} chunks), dropping chunk #{}",
+            MAX_PENDING_CHUNKS,
+            n
+        );
+    }
+    Ok(serde_json::json!({ "ok": true, "buffered": true }))
 }
 
 /// Notify that audio has stopped in the renderer.
