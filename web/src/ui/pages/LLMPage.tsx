@@ -90,7 +90,7 @@ export function LLMPage() {
   const savedProviderCfg = (llm[providerKey] || {}) as Record<string, string>;
 
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
-  const promptsSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const promptsSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   // Load prompts
   const loadP = useCallback(async () => {
@@ -106,20 +106,22 @@ export function LLMPage() {
     loadP();
   }, [loadP]);
 
+  // Serialize prompt saves: each commit (blur/Enter) fires immediately, but
+  // later writes must never overtake earlier ones and clobber newer content.
   const scheduleSavePrompts = useCallback((items: PromptItem[]) => {
-    if (promptsSaveTimer.current) clearTimeout(promptsSaveTimer.current);
-    promptsSaveTimer.current = setTimeout(() => {
-      savePrompts(items as unknown[]).catch(() => {});
-    }, 500);
+    const next = promptsSaveChainRef.current
+      .then(() => savePrompts(items as unknown[]))
+      .catch(() => {});
+    promptsSaveChainRef.current = next;
+    return next;
   }, []);
 
-  const savePromptsNow = useCallback(async (items: PromptItem[]) => {
-    if (promptsSaveTimer.current) {
-      clearTimeout(promptsSaveTimer.current);
-      promptsSaveTimer.current = undefined;
-    }
-    await savePrompts(items as unknown[]);
-  }, []);
+  const savePromptsNow = useCallback(
+    async (items: PromptItem[]) => {
+      await scheduleSavePrompts(items);
+    },
+    [scheduleSavePrompts],
+  );
 
   // LLM provider switch
   const switchProvider = useCallback(
@@ -182,6 +184,7 @@ export function LLMPage() {
                   placeholder="留空使用默认地址"
                   value={savedProviderCfg.url || ""}
                   onChange={(v) => setLlmField("url", v)}
+                  commitOnBlur
                 />
               }
             />
@@ -195,6 +198,7 @@ export function LLMPage() {
                   placeholder="sk-..."
                   value={savedProviderCfg.api_key || ""}
                   onChange={(v) => setLlmField("api_key", v)}
+                  commitOnBlur
                 />
               }
             />
@@ -206,6 +210,7 @@ export function LLMPage() {
                   placeholder={currentP.model}
                   value={savedProviderCfg.model || ""}
                   onChange={(v) => setLlmField("model", v)}
+                  commitOnBlur
                 />
               }
               last
@@ -260,6 +265,7 @@ export function LLMPage() {
                       }}
                       className="w-full"
                       placeholder="模板名称"
+                      commitOnBlur
                     />
                     <Button
                       size="icon"
@@ -284,6 +290,7 @@ export function LLMPage() {
                   }}
                   textareaClassName="h-32 resize-none"
                   placeholder="输入系统提示词…"
+                  commitOnBlur
                 />
               </SectionItem>
             ))}

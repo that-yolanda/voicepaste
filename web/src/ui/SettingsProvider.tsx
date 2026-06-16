@@ -9,7 +9,6 @@ interface SettingsContextValue {
   config: ParsedConfig | null;
   loading: boolean;
   scheduleSave: (updates: Partial<ConfigPayload>) => void;
-  saveNow: () => void;
   refresh: () => Promise<void>;
 }
 
@@ -46,9 +45,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [config, setConfig] = useState<ParsedConfig | null>(null);
   const [loading, setLoading] = useState(true);
-  const pendingRef = useRef<Partial<ConfigPayload>>({});
   const configRef = useRef<ConfigPayload>({});
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Serialize saves so rapid successive edits (e.g. toggling several options)
+  // never drop an update: each save waits for the previous load to refresh
+  // configRef before merging the next patch.
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const load = useCallback(async () => {
     const data = await getData();
@@ -65,32 +66,22 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const scheduleSave = useCallback(
     (updates: Partial<ConfigPayload>) => {
-      pendingRef.current = mergeConfig(pendingRef.current, updates);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(async () => {
-        const payload = { ...pendingRef.current };
-        pendingRef.current = {};
-        const nextConfig = mergeConfig(configRef.current, payload);
-        await saveConfigObject(nextConfig);
-        await load();
-      }, 500);
+      saveChainRef.current = saveChainRef.current
+        .then(async () => {
+          const nextConfig = mergeConfig(configRef.current, updates);
+          await saveConfigObject(nextConfig);
+          await load();
+        })
+        .catch(() => {
+          // Keep the chain alive if a single save fails; the unchanged
+          // settings state surfaces the issue rather than a logged error.
+        });
     },
     [load],
   );
 
-  const saveNow = useCallback(async () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const payload = { ...pendingRef.current };
-    pendingRef.current = {};
-    if (Object.keys(payload).length > 0) {
-      const nextConfig = mergeConfig(configRef.current, payload);
-      await saveConfigObject(nextConfig);
-      await load();
-    }
-  }, [load]);
-
   return (
-    <SettingsContext value={{ settings, config, loading, scheduleSave, saveNow, refresh: load }}>
+    <SettingsContext value={{ settings, config, loading, scheduleSave, refresh: load }}>
       {children}
     </SettingsContext>
   );
