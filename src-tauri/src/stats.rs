@@ -198,9 +198,11 @@ mod tests {
 
     #[test]
     fn stats_serialize_roundtrip() {
-        let mut s = Stats::default();
-        s.total_sessions = 5;
-        s.total_characters = 100;
+        let s = Stats {
+            total_sessions: 5,
+            total_characters: 100,
+            ..Default::default()
+        };
         let json = serde_json::to_string(&s).unwrap();
         let restored: Stats = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.total_sessions, 5);
@@ -278,10 +280,12 @@ mod tests {
         let svc_path = dir.path().join("stats.json");
 
         // Write a pre-populated stats and history
-        let mut stats = Stats::default();
-        stats.total_sessions = 1;
-        stats.total_characters = 10;
-        stats.first_used_at = Some("2025-01-01T00:00:00+00:00".to_string());
+        let stats = Stats {
+            total_sessions: 1,
+            total_characters: 10,
+            first_used_at: Some("2025-01-01T00:00:00+00:00".to_string()),
+            ..Default::default()
+        };
         let _ = fs::write(&svc_path, serde_json::to_string(&stats).unwrap());
 
         // Write a history entry for today
