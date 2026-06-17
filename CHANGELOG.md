@@ -1,17 +1,61 @@
 # Changelog
 
-## v2.0.0 (2026-06-09)
+## v2.0.0 (2026-06-17)
 
-> **BREAKING CHANGE**: VoicePaste has been completely rewritten from Electron to Tauri v2 (Rust backend). This is a major architecture change.
+> **⚠️ BREAKING CHANGE**: VoicePaste has been completely rewritten from Electron to Tauri v2 (Rust backend). This is a major architecture change.
 >
 > **Config is NOT preserved** — please back up your `config.yaml` before upgrading. You will need to reconfigure your credentials and preferences after installing v2.0.0.
 
-- **Electron → Tauri v2 Rewrite** — Entire app rebuilt with Tauri v2 (Rust + WebView), replacing the Electron runtime. Installer size reduced from **~120 MB to ~8.8 MB** and memory usage from **~500 MB to ~100 MB**.
-- **Native Hotkey Engine** — Replaced `uiohook-napi` / `tauri-plugin-global-shortcut` with the `keytap` crate for reliable modifier-only key support and left/right key distinction.
-- **Structured Logging** — Replaced raw `eprintln!` with leveled module-prefixed logging (`[ASR][INFO]`, `[Hotkey][DEBUG]`, etc.) and file rotation (300KB, gzip compressed).
-- **Beta Update Channel** — Added `app.beta_updates` config option and settings UI toggle for receiving prerelease updates.
-- **Single-file Updater Metadata** — Consolidated per-platform updater JSON into a single `latest.json` with multi-platform `platforms` map for simpler release management.
-- **macOS Tray & Dock** — Proper tray icon lifecycle management and dock visibility control.
+### Architecture
+
+- **Electron → Tauri v2** — Entire app rebuilt with Tauri v2 (Rust + WebView). Installer reduced from ~120 MB to ~20 MB, idle memory from ~500 MB to ~80 MB.
+- **Apple Signed & Notarized** — macOS builds are signed and notarized with an Apple Developer certificate — no Gatekeeper warnings on install.
+- **React / TypeScript Frontend** — Settings UI rebuilt with React + TypeScript + Tailwind CSS. Unified design system with light / dark / system theme support.
+
+### ASR Speech Recognition
+
+- **Dual Engine (Cloud + Local)** — Online: ByteDance Doubao streaming ASR with new API Key authentication. Local: sherpa-onnx with 4 offline models.
+- **4 Local Models** — SenseVoice (ZH/EN/JP/KO/Cantonese), Zipformer (ZH + EN bilingual), FunASR-Nano (ZH/EN + 7 dialects), Qwen3-ASR-0.6B (30 languages). On-demand loading, 500 MB+ memory, CPU / CUDA / CoreML acceleration.
+- **VAD + Punctuation** — Built-in Silero VAD (Voice Activity Detection) for audio segmentation; optional Punctuation model for post-processing.
+- **Simulated Streaming** — Local models without native streaming get real-time partial results via VAD-based segmented decoding.
+- **Auto-Reconnect** — Online model auto-reconnects on disconnection for reliable long recordings.
+- **Dual Auth Compatibility** — Supports both the new Volcengine API Key flow and the legacy APP ID / Access Token / Secret Key flow.
+
+### LLM Text Polishing
+
+- **8 LLM Providers** — DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, SiliconFlow, Ollama, and OpenAI-compatible APIs.
+- **Custom Prompt Templates** — Built-in templates for general cleanup, translation, email drafting, and more. Customizable prompts with per-template hotkey bindings.
+- **Hotword Boosting** — Three modes (Auto / Enabled / Disabled) to append hotwords to the LLM prompt for stronger recognition accuracy.
+
+### Hotwords
+
+- **Multi-Group Libraries** — Create multiple hotword groups and switch between them.
+- **Weight Parameter** — `hotword|weight` format with 1–10 range.
+- **Batch Add** — Comma-separated input for adding multiple hotwords at once.
+- **Format Restoration** — Automatically restores original formatting (capitalization, punctuation, special characters) after recognition.
+- **Online Hotword Table** — Volcengine online hotwords work alongside local hotwords; local takes priority.
+
+### Hotkey System
+
+- **keytap Native Engine** — Replaces uiohook-napi / tauri-plugin-global-shortcut. Supports modifier-only bindings and precise left/right key distinction.
+- **Toggle & Hold Modes** — Toggle (press to start, press again to stop) and Hold (press and hold to speak, release to stop). ESC to cancel.
+- **Per-Template Hotkeys** — Bind independent hotkeys to different text polishing templates, each with its own trigger mode.
+
+### Configuration System
+
+- **registry.json Model Registry** — All model defaults managed in one place. Users only override what they need in config.yaml.
+- **Three-Layer Merge** — Shared defaults → model-specific defaults → user overrides. Unset fields fall through automatically.
+- **Hot Reload** — Changes take effect immediately on save — no restart required.
+- **1.x Config Migration** — Automatically imports Electron-era config on first v2.0 launch.
+
+### Other
+
+- **Beta Update Channel** — Opt in via settings to receive beta release notifications. Stable users are unaffected.
+- **Structured Logging** — Leveled, module-prefixed logging with file rotation (300KB, gzip) for easier troubleshooting.
+- **Custom Sound Effects** — Replace the default start/end sounds with your own audio files.
+- **Keep Clipboard** — Optionally keep results in the clipboard without auto-pasting.
+- **macOS Liquid Glass Overlay** — Native AppKit Liquid Glass transparent overlay with light/dark/system theme support.
+- **Configuration Guide** — New [GUIDANCE.md](GUIDANCE.md) covering quick start, model setup, hotwords, LLM, and all features.
 
 ## v1.2.0 (2026-05-26)
 
