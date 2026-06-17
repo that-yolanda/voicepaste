@@ -15,7 +15,11 @@ config.yaml
 src-tauri/target/
 src-tauri/Cargo.lock
 
-# Auto-generated (beforeBuildCommand)
+# Generated icons are committed to git; ignore only the unused tauri-icon
+# artifacts (mobile / msix-store / unreferenced sizes).
 web/lucide-icons.js
-web/icon.png
-src-tauri/icons/
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/Square*.png
+src-tauri/icons/StoreLogo.png
+src-tauri/icons/64x64.png

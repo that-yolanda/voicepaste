@@ -5,8 +5,8 @@
   "build": {
     "frontendDist": "../web/dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "npx tsx scripts/prepare-assets.ts && npx tsx scripts/validate-json.ts && vite",
-    "beforeBuildCommand": "npx tsx scripts/prepare-assets.ts && npx tsx scripts/validate-json.ts && vite build"
+    "beforeDevCommand": "npx tsx scripts/validate-json.ts && vite",
+    "beforeBuildCommand": "npx tsx scripts/validate-json.ts && vite build"
   },
   "app": {
     "macOSPrivateApi": true,
@@ -63,9 +63,7 @@
       "../assets/sounds/start.mp3": "sounds/start.mp3",
       "../assets/sounds/end.mp3": "sounds/end.mp3",
       "icons/icon.png": "icons/icon.png",
-      "icons/trayTemplate.png": "icons/trayTemplate.png",
-      "icons/trayTemplate@2x.png": "icons/trayTemplate@2x.png",
-      "icons/trayIcon.ico": "icons/trayIcon.ico"
+      "icons/trayTemplate.png": "icons/trayTemplate.png"
     },
     "macOS": {
       "minimumSystemVersion": "10.15",

@@ -28,6 +28,7 @@
     "dev:web": "vite",
     "build:web": "vite build",
     "pack": "tsx --env-file=.env scripts/pack.ts",
+    "icon": "tsx scripts/prepare-assets.ts",
     "clean": "tsx scripts/clean.ts",
     "lint": "biome lint . && cargo clippy --manifest-path src-tauri/Cargo.toml",
     "lint:ci": "biome ci . && cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
