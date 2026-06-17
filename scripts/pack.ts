@@ -161,6 +161,78 @@ async function buildPlatform(platformKey: string, includeUpdater: boolean): Prom
   await runTauri(args, { ...process.env });
 }
 
+// Spawn an `xcrun` subcommand. When hidePassword is set, the --password value
+// is masked in the echoed command line so credentials don't hit the log.
+function runXcrun(args: string[], hidePassword = false): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const echo = args
+      .map((a, i) => (hidePassword && i > 0 && args[i - 1] === "--password" ? "***" : a))
+      .join(" ");
+    console.log(`\n> xcrun ${echo}\n`);
+    const child = spawn("xcrun", args, { stdio: "inherit", env: process.env });
+    child.on("exit", (code, signal) => {
+      if (signal) {
+        process.kill(process.pid, signal);
+        return;
+      }
+      if (code === 0) resolve();
+      else reject(new Error(`xcrun ${args[0]} exited with code ${code}`));
+    });
+    child.on("error", (err) => reject(new Error(`Failed to start xcrun: ${err.message}`)));
+  });
+}
+
+// Tauri notarizes + staples the .app bundle but NOT the .dmg, so a freshly
+// built dmg is only signed (Gatekeeper still blocks it). Notarize + staple the
+// dmg here so the copy collected into dist/ already carries the ticket.
+async function notarizeDmg(platforms: string[]): Promise<void> {
+  const macPlatforms = platforms.filter((p) => PLATFORM_MAP[p].group === "mac");
+  if (macPlatforms.length === 0) return;
+
+  const appleId = process.env.APPLE_ID;
+  const applePassword = process.env.APPLE_PASSWORD;
+  const appleTeamId = process.env.APPLE_TEAM_ID;
+  if (!appleId || !applePassword || !appleTeamId) {
+    console.warn("  Skipping DMG notarization: APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID not set");
+    return;
+  }
+
+  const rootDir = path.join(__dirname, "..");
+  console.log("\n=== Notarizing macOS DMG installers ===");
+
+  for (const p of macPlatforms) {
+    const target = PLATFORM_MAP[p].target;
+    const dmgDir = path.join(rootDir, "src-tauri", "target", target, "release", "bundle", "dmg");
+    const dmgFile = fs.existsSync(dmgDir)
+      ? fs.readdirSync(dmgDir).find((f) => f.endsWith(".dmg"))
+      : undefined;
+    if (!dmgFile) {
+      console.warn(`  No dmg found for ${p} under ${dmgDir}; skipping`);
+      continue;
+    }
+    const dmgPath = path.join(dmgDir, dmgFile);
+
+    console.log(`\n--- ${dmgFile}: notarytool submit --wait ---`);
+    await runXcrun(
+      [
+        "notarytool",
+        "submit",
+        dmgPath,
+        "--apple-id",
+        appleId,
+        "--password",
+        applePassword,
+        "--team-id",
+        appleTeamId,
+        "--wait",
+      ],
+      true,
+    );
+    console.log(`\n--- ${dmgFile}: stapler staple ---`);
+    await runXcrun(["stapler", "staple", dmgPath]);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Artifact collection
 // ---------------------------------------------------------------------------
@@ -399,6 +471,17 @@ async function main(): Promise<void> {
   } catch (error) {
     console.error(`\nBuild failed: ${(error as Error).message}`);
     process.exit(1);
+  }
+
+  // Tauri leaves the dmg unnotarized; finish notarization + stapling before
+  // collecting so the dmg that lands in dist/ is Gatekeeper-ready.
+  if (sign) {
+    try {
+      await notarizeDmg(compatible);
+    } catch (error) {
+      console.error(`\nDMG notarization failed: ${(error as Error).message}`);
+      process.exit(1);
+    }
   }
 
   console.log("\n=== Collecting artifacts ===");
