@@ -2,11 +2,22 @@
 //
 // Usage:
 //   pnpm run pack                           # All platforms, unsigned
-//   pnpm run pack -s                        # All platforms, signed (macOS)
+//   pnpm run pack -s                        # macOS signed + notarized
 //   pnpm run pack -p apple_aarch64          # macOS ARM64 only
-//   pnpm run pack -s -p apple_aarch64,win_x64  # Signed, specific platforms
+//   pnpm run pack -s -p apple_aarch64,apple_x64  # Signed, both macOS arches
+//   pnpm run pack -g                        # Rebuild latest.json from dist/
 //
 // Platform keys: apple_aarch64, apple_x64, win_x64
+//
+// Cross-machine release workflow (mac and Windows are built on separate hosts):
+//   1. macOS:   pnpm run pack -s            # signs + notarizes app AND dmg
+//   2. Windows: pnpm run pack               # unsigned (updater sig via .env key)
+//   3. Copy Windows artifacts (setup.exe, .exe.sig, .msi) into the mac dist/
+//   4. macOS:   pnpm run pack -g            # MANDATORY: rebuilds latest.json
+//                                            #   from every artifact in dist/
+// Step 4 is required — each host's latest.json only lists the platforms it
+// built, so without --gen-json the merged manifest misses platforms or points
+// at the wrong signatures.
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";

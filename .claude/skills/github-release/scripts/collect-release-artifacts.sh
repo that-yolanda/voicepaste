@@ -65,8 +65,7 @@ for p in "${plat_array[@]}"; do
     win_x64)
       required+=("$dist_dir/VoicePaste_${version}_x64-setup.exe")
       required+=("$dist_dir/VoicePaste_${version}_x64_en-US.msi")
-      optional+=("$dist_dir/VoicePaste_${version}_x64-setup.nsis.zip")
-      optional+=("$dist_dir/VoicePaste_${version}_x64-setup.nsis.zip.sig")
+      optional+=("$dist_dir/VoicePaste_${version}_x64-setup.exe.sig")
       has_win=true
       ;;
     *)
@@ -77,11 +76,11 @@ for p in "${plat_array[@]}"; do
   esac
 done
 
-# Updater JSON metadata — single multi-platform file
+# Updater JSON metadata — single multi-platform file (required: updater 404s without it)
 if [[ "$beta" == true ]]; then
-  optional+=("$dist_dir/latest-beta.json")
+  required+=("$dist_dir/latest-beta.json")
 else
-  optional+=("$dist_dir/latest.json")
+  required+=("$dist_dir/latest.json")
 fi
 
 # Validation

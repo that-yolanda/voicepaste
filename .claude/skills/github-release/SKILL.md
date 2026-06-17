@@ -21,12 +21,12 @@ Use this skill for project-specific GitHub release work in this repository. Foll
 
 **Single source of truth: `package.json` → `"version"`**
 
-Only change version in `package.json`. The pack script (`scripts/pack.js`) automatically syncs it to `Cargo.toml` before building. `tauri.conf.json` omits the `version` field entirely — Tauri reads from `Cargo.toml` at build time.
+Only change version in `package.json`. The pack script (`scripts/pack.ts`) automatically syncs it to `Cargo.toml` before building. `tauri.conf.json` omits the `version` field entirely — Tauri reads from `Cargo.toml` at build time.
 
 | File | Field | How it stays in sync |
 |------|-------|---------------------|
 | `package.json` | `"version"` | ✏️ **Only file to edit manually** |
-| `src-tauri/Cargo.toml` | `version = "..."` | Auto-synced by `pack.js` before build |
+| `src-tauri/Cargo.toml` | `version = "..."` | Auto-synced by `pack.ts` before build |
 | `src-tauri/tauri.conf.json` | *(omitted)* | Falls back to `Cargo.toml` |
 
 When updating the version, only modify `package.json`:
@@ -102,17 +102,32 @@ If any file is missing the new version entry, flag this to the user before conti
 
 Run `pnpm check` — this project requires Biome lint + format to pass before any commit. Fix all errors and warnings before proceeding.
 
-### Step 6: Build Artifacts
+### Step 6: Build Artifacts (cross-machine)
+
+mac and Windows targets are built on separate hosts and merged into one `dist/`. Each host's `latest.json` only lists the platforms it built, so the manifest must be rebuilt at the end — see "Cross-Machine Build & `latest.json` Merge" below.
 
 ```bash
-# Stable release
+# 1. macOS host — signed + notarized (both arches; dmg is notarized too)
 pnpm run pack -s
+#   (single arch: pnpm run pack -s -p apple_aarch64)
 
-# Beta release
-pnpm run pack -s --beta
+# 2. Windows host — unsigned (updater sig still comes from .env TAURI_SIGNING_PRIVATE_KEY)
+pnpm run pack
+
+# 3. Copy Windows artifacts into the mac dist/:
+#      VoicePaste_<version>_x64-setup.exe, .exe.sig, _x64_en-US.msi
+
+# 4. macOS host — MUST run: rebuild latest.json from the merged dist/
+pnpm run pack --gen-json
 ```
 
-This builds all platforms with signing and notarization. Validate artifacts:
+`pack -s` notarizes + staples the dmg as well (Tauri only notarizes the .app). Verify before uploading:
+
+```bash
+spctl -a -vvv -t install dist/VoicePaste_<version>_aarch64.dmg   # expect: source=Notarized Developer ID
+```
+
+Validate the full artifact set:
 
 ```bash
 .claude/skills/github-release/scripts/collect-release-artifacts.sh <version>
@@ -148,7 +163,7 @@ git push origin v<version>
 # Stable release
 gh release create v<version> --title "v<version>" --notes-file <temp>
 
-# Beta release (prerelease flag prevents electron-updater from seeing it)
+# Beta release (prerelease keeps it off /releases/latest/ so stable users never resolve it)
 gh release create v<version> --prerelease --title "v<version>" --notes-file <temp>
 ```
 
@@ -243,8 +258,20 @@ Both URLs resolve from the **stable release** because `/releases/latest/` skips 
 
 - GitHub has no static URL for "latest prerelease" — must use REST API (requires auth, not suitable for desktop apps)
 - Tauri has no native multi-channel updater support ([tauri-apps/tauri#2595](https://github.com/tauri-apps/tauri/issues/2595))
-- `--prerelease` flag ensures `electron-updater` on the `main` branch ignores beta releases
+- `--prerelease` keeps the beta off `/releases/latest/`, so stable users (who fetch `latest.json`) never resolve it; beta users fetch `latest-beta.json` instead
 - SemVer guarantees `1.3.1-beta < 1.3.1`, so stable users are never offered beta updates
+
+## Cross-Machine Build & `latest.json` Merge
+
+Because macOS and Windows are built on different hosts, neither host sees the other's artifacts. The updater manifest (`latest.json` / `latest-beta.json`) is therefore generated per-host and **must be rebuilt once `dist/` holds artifacts from every platform**:
+
+```bash
+# After every platform's artifacts are collected in dist/ (including Windows
+# artifacts copied over from the Windows host), run on any host:
+pnpm run pack --gen-json
+```
+
+`--gen-json` skips the build entirely and rebuilds the manifest from whatever currently lives in `dist/` — each `platforms` entry's URL and signature are derived from the actual artifact files, so it can never point at a missing file or a wrong signature. **This step is mandatory** in the cross-machine workflow; without it the published manifest will be missing platforms or carry stale/incorrect signatures.
 
 ## Artifact Rules
 
@@ -261,10 +288,9 @@ Always upload the platform installers and update metadata files required by `tau
   - `VoicePaste_<version>_x64.app.tar.gz`
   - `VoicePaste_<version>_x64.app.tar.gz.sig`
 - Windows (x64):
-  - `VoicePaste_<version>_x64-setup.exe` (NSIS installer)
+  - `VoicePaste_<version>_x64-setup.exe` (NSIS installer; also the updater payload)
+  - `VoicePaste_<version>_x64-setup.exe.sig`
   - `VoicePaste_<version>_x64_en-US.msi`
-  - `VoicePaste_<version>_x64-setup.nsis.zip`
-  - `VoicePaste_<version>_x64-setup.nsis.zip.sig`
 - Keep all assets for the same version in the same GitHub Release.
 
 ## Commands
@@ -273,7 +299,7 @@ Always upload the platform installers and update metadata files required by `tau
 pnpm check
 pnpm run pack -s
 git status --short
-git log --oneline origin/main..HEAD
+git log --oneline origin/master..HEAD
 git push origin main
 git tag -a v<version> -m "Release v<version>"
 git push origin v<version>
