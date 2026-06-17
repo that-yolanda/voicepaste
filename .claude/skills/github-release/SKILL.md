@@ -208,10 +208,12 @@ Mirror the historical GitHub Release style:
 
 ## Downloads
 
-- `VoicePaste_<version>_aarch64.dmg` — macOS (Apple Silicon)
-- `VoicePaste_<version>_x64.dmg` — macOS (Intel)
-- `VoicePaste_<version>_x64-setup.exe` — Windows (x64 NSIS installer)
-- `VoicePaste_<version>_x64_en-US.msi` — Windows (x64 MSI)
+| 平台 | 下载 |
+|------|------|
+| macOS (Apple Silicon) | [`VoicePaste_<version>_aarch64.dmg`](https://github.com/that-yolanda/voicepaste/releases/download/v<version>/VoicePaste_<version>_aarch64.dmg) |
+| macOS (Intel) | [`VoicePaste_<version>_x64.dmg`](https://github.com/that-yolanda/voicepaste/releases/download/v<version>/VoicePaste_<version>_x64.dmg) |
+| Windows (x64 NSIS) | [`VoicePaste_<version>_x64-setup.exe`](https://github.com/that-yolanda/voicepaste/releases/download/v<version>/VoicePaste_<version>_x64-setup.exe) |
+| Windows (x64 MSI) | [`VoicePaste_<version>_x64_en-US.msi`](https://github.com/that-yolanda/voicepaste/releases/download/v<version>/VoicePaste_<version>_x64_en-US.msi) |
 
 **Full Changelog**: https://github.com/that-yolanda/voicepaste/compare/v<previous>...v<version>
 ```

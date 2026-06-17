@@ -47,9 +47,11 @@ echo "$section"
 echo
 echo "## Downloads"
 echo
-echo "- \`VoicePaste_${version}_aarch64.dmg\` — macOS (Apple Silicon)"
-echo "- \`VoicePaste_${version}_x64.dmg\` — macOS (Intel)"
-echo "- \`VoicePaste_${version}_x64-setup.exe\` — Windows (x64 NSIS installer)"
-echo "- \`VoicePaste_${version}_x64_en-US.msi\` — Windows (x64 MSI)"
+echo "| 平台 | 下载 |"
+echo "|------|------|"
+echo "| macOS (Apple Silicon) | [\`VoicePaste_${version}_aarch64.dmg\`](https://github.com/that-yolanda/voicepaste/releases/download/v${version}/VoicePaste_${version}_aarch64.dmg) |"
+echo "| macOS (Intel) | [\`VoicePaste_${version}_x64.dmg\`](https://github.com/that-yolanda/voicepaste/releases/download/v${version}/VoicePaste_${version}_x64.dmg) |"
+echo "| Windows (x64 NSIS) | [\`VoicePaste_${version}_x64-setup.exe\`](https://github.com/that-yolanda/voicepaste/releases/download/v${version}/VoicePaste_${version}_x64-setup.exe) |"
+echo "| Windows (x64 MSI) | [\`VoicePaste_${version}_x64_en-US.msi\`](https://github.com/that-yolanda/voicepaste/releases/download/v${version}/VoicePaste_${version}_x64_en-US.msi) |"
 echo
 echo "**Full Changelog**: ${compare_url}"
