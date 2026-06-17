@@ -179,6 +179,10 @@ function collectArtifacts(platformKey: string): string[] {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
+        // .app is a directory bundle; recursing into it would copy its internal
+        // Resources (hotwords.json, prompts.json, registry.json, …) as if they were
+        // release artifacts. Skip it — the real macOS artifacts are .dmg / .app.tar.gz.
+        if (entry.name.endsWith(".app")) continue;
         walk(fullPath);
       } else {
         const isArtifact = [".dmg", ".exe", ".msi", ".tar.gz", ".zip", ".sig", ".json"].some((e) =>
