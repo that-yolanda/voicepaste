@@ -6,6 +6,9 @@ use crate::paste;
 use crate::HotkeyMode;
 use tauri::{utils::Theme, AppHandle, Emitter, Manager, State};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 // Re-export paste::PasteResult for use in commands
 use paste::PasteResult;
 
@@ -30,16 +33,19 @@ fn detect_system_theme() -> &'static str {
     }
     #[cfg(target_os = "windows")]
     {
+        // CREATE_NO_WINDOW prevents reg.exe from flashing a console window
+        // when our GUI-subsystem release build spawns it.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut cmd = std::process::Command::new("reg");
+        cmd.args([
+            "query",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "/v",
+            "AppsUseLightTheme",
+        ])
+        .creation_flags(CREATE_NO_WINDOW);
         // Check registry: AppsUseLightTheme DWORD — 0 = dark, 1 = light.
-        if let Ok(output) = std::process::Command::new("reg")
-            .args([
-                "query",
-                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                "/v",
-                "AppsUseLightTheme",
-            ])
-            .output()
-        {
+        if let Ok(output) = cmd.output() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if stdout.contains("0x0") {
                 return "dark";

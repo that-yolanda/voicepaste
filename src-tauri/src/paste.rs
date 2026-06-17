@@ -2,6 +2,9 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 #[derive(serde::Serialize)]
 pub struct PasteResult {
     ok: bool,
@@ -9,6 +12,22 @@ pub struct PasteResult {
     message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     permission_error: Option<String>,
+}
+
+/// Process creation flag that suppresses the console window Windows would
+/// otherwise allocate when a GUI-subsystem process (our release build) spawns a
+/// console child such as powershell/reg.
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Prevent the spawned child process from flashing a console window on Windows.
+/// No-op on non-Windows, where these CLI tools never open a visible window.
+fn hide_console(cmd: &mut Command) {
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    // Non-Windows: nothing to do.
+    #[cfg(not(target_os = "windows"))]
+    let _ = cmd;
 }
 
 /// Simulate paste keystroke (Cmd+V / Ctrl+V) to the currently focused element.
@@ -82,8 +101,10 @@ fn simulate_paste_macos() -> Result<(), String> {
 
 fn simulate_paste_windows() -> Result<(), String> {
     let script = "(New-Object -ComObject WScript.Shell).SendKeys('^v')";
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+    hide_console(&mut cmd);
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to run PowerShell: {}", e))?;
 
@@ -112,10 +133,10 @@ pub fn play_sound(file_path: &str) {
     } else {
         let escaped = file_path.replace('\'', "''");
         let script = format!("(New-Object Media.SoundPlayer '{}').PlaySync()", escaped);
-        if let Ok(mut child) = Command::new("powershell.exe")
-            .args(["-NoProfile", "-Command", &script])
-            .spawn()
-        {
+        let mut cmd = Command::new("powershell.exe");
+        cmd.args(["-NoProfile", "-Command", &script]);
+        hide_console(&mut cmd);
+        if let Ok(mut child) = cmd.spawn() {
             thread::spawn(move || {
                 let _ = child.wait();
             });
