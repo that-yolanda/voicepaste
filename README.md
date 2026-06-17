@@ -1,8 +1,6 @@
 <div align="center">
 
-![VoicePaste Demo](docs/screenshots/demo.gif)
-
-**[中文](README.zh.md)** | **[English](README.md)**
+![VoicePaste Demo](docs/screenshots/banner.png)
 
 # VoicePaste
 
@@ -10,108 +8,109 @@ A voice input tool for macOS & Windows — trigger with a hotkey, speak, auto-pa
 
 [![Downloads](https://img.shields.io/github/downloads/that-yolanda/voicepaste/total?style=flat&logo=github)](https://github.com/that-yolanda/voicepaste/releases/latest)
 [![Version](https://img.shields.io/github/v/release/that-yolanda/voicepaste?style=flat&logo=github)](https://github.com/that-yolanda/voicepaste/releases/latest)
-[![License](https://img.shields.io/github/license/that-yolanda/voicepaste?style=flat&logo=github)]("https://github.com/that-yolanda/voicepaste/blob/master/LICENSE")
+[![License](https://img.shields.io/github/license/that-yolanda/voicepaste?style=flat&logo=github)](https://github.com/that-yolanda/voicepaste/blob/master/LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/thatyolanda)
+
+**[中文](README.zh.md)** | **[English](README.md)**
 
 </div>
 
+## Demo
+
+![VoicePaste Demo](docs/screenshots/demo.gif)
+
 ## Features
 
-- **Global Hotkey** — Default `Control+Space` from `config.yaml.example`, supports custom key recording
-- **Hotkey Modes** — Supports both `toggle` (press once to start, press again to finish) and `hold` (hold to speak, release to finish)
-- **Real-time ASR** — ByteDance Doubao streaming ASR via WebSocket
-- **Auto Paste** — Automatically pastes recognized text into the focused input field
-- **Floating Overlay** — Transparent overlay window showing real-time transcription
-- **Clipboard Options** — Can keep the recognized text in the clipboard for manual re-paste
-- **Text Cleanup** — Can automatically remove trailing `。` / `.`
-- **Auto Start** — Optional launch at login from the settings page
-- **Hotwords** — Custom hotwords to improve recognition accuracy for domain-specific terms
-- **Cross-platform** — Supports both macOS and Windows
-- **Theme** — Light / dark / system theme preference in settings
-- **Text Polishing** — Post-process ASR output via 8 LLM providers, with multiple prompt templates and per-template hotkey bindings
-- **Recording Feedback** — Real-time audio waveform animation with start sound (recording ready) and end sound (recognition success)
-- **Apple Signed** — macOS builds are signed and notarized with an Apple Developer certificate, no Gatekeeper warnings on install
+- **Lightweight**: ~20 MB installer; ~80 MB idle memory, ~100 MB with online API. Local models use on-demand loading — they only reside in memory during recognition and are released immediately after.
+- **Data Security**: All data stored locally; API keys are applied by the user, giving you full control.
+- **Fully Customizable**: Ready-to-use defaults with all parameters exposed for fine-tuning.
+- **ASR Dual Engine (Online / Local)**: Online — ByteDance Doubao streaming ASR; Local — powered by sherpa-onnx, 500 MB+ memory footprint depending on model, with CPU / CUDA / CoreML acceleration.
+- **LLM Support**: Built-in support for 8 LLM providers — DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, SiliconFlow, Ollama, and OpenAI-compatible APIs.
+- **Streaming Output**: For local models without native streaming, VAD-based segmentation with simulated streaming output delivers results in real time.
+- **Multi-Scenario Text Polishing**: Built-in templates for general cleanup, translation, email drafting, and more — customizable prompts with per-template hotkey bindings.
+- **Hotwords**: Multi-group hotword libraries to boost domain-specific term accuracy; automatically restores original formatting (capitalization, special characters, etc.), no manual corrections needed.
+- **Cross-Platform**: macOS (Apple Silicon / Intel) and Windows.
+- **Customizable Hotkeys**: Bind independent hotkeys for different scenarios (general, translation, formatting, etc.) with support for `toggle` (press to start, press again to stop) and `hold` (hold to speak, release to stop) modes.
+- **Enhanced Experience**: Audio feedback sounds, real-time waveform animation.
+- **Apple Signed & Notarized**: macOS builds are signed and notarized with an Apple Developer certificate — no Gatekeeper warnings on install (Windows builds are currently unsigned).
 
-## Settings Page
+## Quick Start
 
-![VoicePaste Settings](docs/screenshots/config.png)
+### Download
 
+Go to [GitHub Releases](https://github.com/that-yolanda/voicepaste/releases/latest) and download the latest version for your platform.
 
----
+| Platform               | Installer Filename                                |
+| ---------------------- | ------------------------------------------------- |
+| macOS (Apple Silicon)  | `VoicePaste_{version}_aarch64.dmg`                |
+| macOS (Intel)          | `VoicePaste_{version}_x64.dmg`                    |
+| Windows (x64)          | `VoicePaste_{version}_x64-setup.exe` / `.msi`     |
 
-## Getting API Credentials
+### Configuration Guide
 
-- Log in to the [Volcengine Console](https://console.volcengine.com/speech/app), create an app, and select "Doubao Streaming ASR Model 2.0 (Hourly)"
+| Type                          | Link                                                                  |
+| ----------------------------- | --------------------------------------------------------------------- |
+| General Setup                 | [EN](GUIDANCE.md#quick-start-minimal-setup) / [中文](GUIDANCE.zh.md#快速开始最小配置)  |
+| Doubao Streaming ASR          | [EN](GUIDANCE.md#volcengine-doubao) / [中文](GUIDANCE.zh.md#火山引擎)          |
+| Local Models                  | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)|
 
-![Create App](docs/screenshots/api-step1.png)
+## Model Support & Capabilities
 
-- Open the model, select your app, and enable the model package. You'll see the APP ID, Access Token, and Secret Key below
+### ASR Models
 
-![Get Credentials](docs/screenshots/api-step2.png)
+| Type   | Model                         | Guide                                                                 | Size    | Peak Memory | Languages                             | Streaming               | Hotwords                    | Punctuation                       | ITN                    | Model ID                                                   |
+| ------ | ----------------------------- | --------------------------------------------------------------------- | ------- | ----------- | ------------------------------------- | ----------------------- | --------------------------- | --------------------------------- | ---------------------- | ---------------------------------------------------------- |
+| Online | Doubao Streaming ASR 2.0      | [EN](docs/howto/doubao.md) / [中文](docs/howto/doubao.zh.md)          | -       | 120 MB      | Chinese + English mix, dialects       | ✅️                      | ✅️                          | ✅️                                | ✅️                     | -                                                          |
+| Local  | SenseVoice                    | [EN](docs/howto/sherpa-onnx.md) / [中文](docs/howto/sherpa-onnx.zh.md)| 158 MB  | 660 MB      | ZH / EN / JP / KO / Cantonese         | ☑️ Simulated streaming   | ☑️ via LLM                  | ☑️ via punctuation model          | ☑️ via LLM             | sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09    |
+| Local  | Zipformer (ZH + EN bilingual) | [EN](docs/howto/sherpa-onnx.md) / [中文](docs/howto/sherpa-onnx.zh.md)| 150 MB  | 560 MB      | Chinese + English                     | ✅️                      | ✅️                          | ☑️ via punctuation model          | ☑️ via LLM             | sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20 |
+| Local  | FunASR-Nano                   | [EN](docs/howto/sherpa-onnx.md) / [中文](docs/howto/sherpa-onnx.zh.md)| 948 MB  | 1.8 GB      | Chinese + English, 7 dialects         | ☑️ Simulated streaming   | ✅️                          | ✅️                                | ✅️                     | sherpa-onnx-funasr-nano-int8-2025-12-30                    |
+| Local  | Qwen3-ASR-0.6B                | [EN](docs/howto/sherpa-onnx.md) / [中文](docs/howto/sherpa-onnx.zh.md)| 938 MB  | 2.0 GB      | 30 languages, Chinese dialects, lyrics, rap | ☑️ Simulated streaming   | ✅️                          | ✅️                                | ✅️                     | sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25                 |
 
-- Enter the credentials in the settings page and click Save
+**Notes**
 
-![Save Config](docs/screenshots/api-step3.png)
+- ✅️ Native model capability, ☑️ Achieved through software composition
+- Idle memory ~80 MB; models are loaded on demand during recognition and released after completion.
+- Local models without native streaming output use built-in VAD (Voice Activity Detection) for audio segmentation with simulated streaming; optional punctuation restoration model available.
+- Memory data measured on Mac mini (Apple Silicon).
 
-- (Optional) Enable LLM text polishing under "Text Polishing", select a provider, and enter your API Key
+### LLM
 
-![LLM Polishing](docs/screenshots/api-step4.png)
-
-## Configuration
-
-Edit `config.yaml` in the project root and fill in your credentials:
-
-| Field | Description |
-|-------|-------------|
-| `app.hotkey` | Global hotkey. Default template value is `Control+Space` |
-| `app.hotkey_mode` | Hotkey trigger mode: `toggle` or `hold` |
-| `app.remove_trailing_period` | Remove trailing `。` / `.` from the final text |
-| `app.keep_clipboard` | Keep the result in the clipboard after paste |
-| `app.theme` | Theme preference: `dark` / `light` / `system` |
-| `connection.app_id` | Volcengine App ID |
-| `connection.access_token` | Volcengine Access Token |
-| `connection.secret_key` | Volcengine Secret Key |
-| `connection.resource_id` | ASR Resource ID |
-| `request.context_hotwords` | Custom hotwords list |
-| `llm.enabled` | Enable LLM text polishing |
-| `llm.provider` | LLM provider: deepseek / openai / anthropic / gemini / openrouter / siliconflow / ollama / openai_compatible |
-| `llm.<provider>.url` | Provider API URL (leave empty for built-in providers) |
-| `llm.<provider>.api_key` | Provider API Key |
-| `llm.<provider>.model` | Provider model name |
-
-Get your credentials from [Volcengine Voice Service](https://www.volcengine.com/product/voice-service).
-
-Note: packaged builds ship `config.yaml.example` as the default config template, so the effective default hotkey is `Control+Space`. The code-level fallback `F13` is only used when `app.hotkey` is missing.
+| Provider          | Supported |
+| ----------------- | --------- |
+| OpenAI            | ✅️        |
+| DeepSeek          | ✅️        |
+| Anthropic         | ✅️        |
+| OpenRouter        | ✅️        |
+| SiliconFlow       | ✅️        |
+| Gemini            | ✅️        |
+| Ollama            | ✅️        |
+| OpenAI-Compatible | ✅️        |
 
 ## FAQ
 
-### VoicePaste doesn't work on macOS?
+### Not working on macOS?
 
-VoicePaste requires **Microphone** and **Accessibility** permissions to function properly.
+VoicePaste requires **Microphone** and **Accessibility** permissions to function.
 
 **Microphone Permission**
 
 1. Settings page → System Permissions → Click "Request Permission"
-2. System Settings → Privacy & Security → Microphone, make sure VoicePaste is authorized
+2. System Settings → Privacy & Security → Microphone, ensure VoicePaste is authorized
 3. If previously denied, reset via Terminal and re-authorize:
+
 ```bash
 tccutil reset Microphone com.yolanda.voicepaste
 ```
 
 **Accessibility Permission**
 
-1. System Settings → Privacy & Security → Accessibility, make sure VoicePaste is authorized
-2. If reinstalled after deletion, you need to add it again
-
-### Hotwords work during streaming but are wrong in the final result with non-stream enabled?
-
-The non-stream (second-pass) recognition mode does not currently support hotword libraries or injected hotwords — only correction tables are supported. Create a [correction table](https://console.volcengine.com/speech/correctword) in the Volcengine console and replace `boosting_table_id` with `correct_table_id` in your config.
+1. System Settings → Privacy & Security → Accessibility, ensure VoicePaste is authorized
+2. If reinstalled after deletion, re-add it manually
 
 ## Docs
 
 - [Development Guide](docs/development.md)
 - [Changelog](CHANGELOG.md)
-
 
 ## License
 
