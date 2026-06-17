@@ -205,7 +205,7 @@ fn minimal_registry() -> ModelRegistry {
                 "url".to_string(),
                 "app_id".to_string(),
                 "access_token".to_string(),
-                "secret_key".to_string(),
+                "api_key".to_string(),
                 "resource_id".to_string(),
             ]),
             architecture: None,

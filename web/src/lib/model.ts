@@ -110,6 +110,15 @@ export const FIELD_META: Record<string, FieldMeta> = {
   },
 
   /* Doubao credentials */
+  auth_mode: {
+    label: "鉴权方式",
+    type: "segment",
+    options: [
+      { value: "legacy", label: "旧版" },
+      { value: "v2", label: "新版" },
+    ],
+    group: "credentials",
+  },
   url: {
     label: "WebSocket 地址",
     type: "text",
@@ -123,16 +132,16 @@ export const FIELD_META: Record<string, FieldMeta> = {
     group: "credentials",
     placeholder: "输入 Access Token",
   },
-  secret_key: {
-    label: "Secret Key",
-    type: "password",
-    group: "credentials",
-    placeholder: "输入 Secret Key",
-  },
   resource_id: {
     label: "Resource ID",
     group: "credentials",
     placeholder: "输入 Resource ID",
+  },
+  api_key: {
+    label: "API Key",
+    type: "password",
+    group: "credentials",
+    placeholder: "新版控制台 X-Api-Key",
   },
 
   /* Doubao basic settings & feature toggles & advanced / internal params */
@@ -378,4 +387,32 @@ export function getMergedAsrConfig(
     return ia - ib;
   });
   return fields;
+}
+
+/* ---------- Doubao auth-mode helpers (mirror backend effective_auth_mode) ---------- */
+
+/**
+ * True if the user has legacy Doubao credentials (App ID or Access Token) saved
+ * locally. Drives whether the auth-mode toggle is shown: existing users get the
+ * toggle, brand-new users see only the API Key field.
+ */
+export function hasLegacyDoubaoCreds(userConfig: Record<string, unknown> | undefined): boolean {
+  if (!userConfig) return false;
+  const app = String(userConfig.app_id ?? "").trim();
+  const tok = String(userConfig.access_token ?? "").trim();
+  return app.length > 0 || tok.length > 0;
+}
+
+/**
+ * Effective Doubao auth mode: an explicit saved value wins; otherwise fall back
+ * to v2 for users without legacy creds (new users) and legacy for users who
+ * already have App ID / Access Token. Mirrors the backend fallback so the UI
+ * matches the headers actually sent.
+ */
+export function effectiveDoubaoAuthMode(
+  userConfig: Record<string, unknown> | undefined,
+): "legacy" | "v2" {
+  const explicit = String(userConfig?.auth_mode ?? "").trim();
+  if (explicit === "v2" || explicit === "legacy") return explicit;
+  return hasLegacyDoubaoCreds(userConfig) ? "legacy" : "v2";
 }

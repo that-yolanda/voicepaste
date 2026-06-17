@@ -69,14 +69,19 @@ pub struct AsrVadDefaults {
 pub struct DoubaoStreamingConfig {
     #[serde(default = "default_doubao_url")]
     pub url: String,
+    /// Doubao console auth mode: "legacy" = App ID + Access Token,
+    /// "v2" = single API Key (new Volcengine console). Defaults to legacy.
+    #[serde(default = "default_auth_mode")]
+    pub auth_mode: String,
     #[serde(default)]
     pub app_id: String,
     #[serde(default)]
     pub access_token: String,
-    #[serde(default)]
-    pub secret_key: String,
     #[serde(default = "default_doubao_resource_id")]
     pub resource_id: String,
+    /// New-console API Key (sent as X-Api-Key). Used only when auth_mode == "v2".
+    #[serde(default)]
+    pub api_key: String,
     #[serde(default = "default_format")]
     pub format: String,
     #[serde(default = "default_rate")]
@@ -161,13 +166,15 @@ pub struct ConnectionConfig {
     #[serde(default)]
     pub url: String,
     #[serde(default)]
+    pub auth_mode: String,
+    #[serde(default)]
     pub app_id: String,
     #[serde(default)]
     pub access_token: String,
     #[serde(default)]
-    pub secret_key: String,
-    #[serde(default)]
     pub resource_id: String,
+    #[serde(default)]
+    pub api_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -359,6 +366,9 @@ fn default_doubao_url() -> String {
 fn default_doubao_resource_id() -> String {
     "volc.seedasr.sauc.duration".to_string()
 }
+fn default_auth_mode() -> String {
+    "legacy".to_string()
+}
 fn default_doubao_model_version() -> String {
     "400".to_string()
 }
@@ -448,10 +458,11 @@ impl DoubaoStreamingConfig {
     pub fn to_connection_config(&self) -> ConnectionConfig {
         ConnectionConfig {
             url: self.url.clone(),
+            auth_mode: self.auth_mode.clone(),
             app_id: self.app_id.clone(),
             access_token: self.access_token.clone(),
-            secret_key: self.secret_key.clone(),
             resource_id: self.resource_id.clone(),
+            api_key: self.api_key.clone(),
         }
     }
 
@@ -761,10 +772,11 @@ impl Default for DoubaoStreamingConfig {
     fn default() -> Self {
         Self {
             url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".to_string(),
+            auth_mode: "legacy".to_string(),
             app_id: String::new(),
             access_token: String::new(),
-            secret_key: String::new(),
             resource_id: "volc.seedasr.sauc.duration".to_string(),
+            api_key: String::new(),
             format: default_format(),
             rate: default_rate(),
             bits: default_bits(),
@@ -1053,6 +1065,7 @@ mod tests {
     fn doubao_streaming_default_values() {
         let cfg = DoubaoStreamingConfig::default();
         assert!(cfg.url.contains("openspeech.bytedance.com"));
+        assert_eq!(cfg.auth_mode, "legacy");
         assert_eq!(cfg.format, "pcm");
         assert_eq!(cfg.rate, 16000);
         assert_eq!(cfg.bits, 16);
@@ -1070,10 +1083,11 @@ mod tests {
         let cfg = DoubaoStreamingConfig::default();
         let conn = cfg.to_connection_config();
         assert_eq!(conn.url, cfg.url);
+        assert_eq!(conn.auth_mode, cfg.auth_mode);
         assert_eq!(conn.app_id, cfg.app_id);
         assert_eq!(conn.access_token, cfg.access_token);
-        assert_eq!(conn.secret_key, cfg.secret_key);
         assert_eq!(conn.resource_id, cfg.resource_id);
+        assert_eq!(conn.api_key, cfg.api_key);
     }
 
     #[test]

@@ -23,9 +23,12 @@ import type { ModelDownloadProgress } from "@/bridge/settings";
 import {
   type AsrDefaults,
   type ControlType,
+  DOUBAO_MODEL_ID,
+  effectiveDoubaoAuthMode,
   type FieldMeta,
   getFieldMeta,
   getMergedAsrConfig,
+  hasLegacyDoubaoCreds,
   type MergedField,
 } from "@/lib/model";
 import type { RegistryModel } from "@/types/models";
@@ -161,7 +164,25 @@ export function ModelCard({
     [model, userConfig, asrDefaults],
   );
   const fieldMeta = (f: MergedField) => getFieldMeta(f.key, f.value);
-  const visibleFields = fields.filter((f) => fieldMeta(f).group !== "advanced");
+
+  // Doubao auth-mode aware visibility: which credentials show depends on the
+  // active mode (legacy App ID/Token vs v2 API Key), and the mode toggle is only
+  // offered to users who already have legacy creds saved. New users see only the
+  // API Key, so they aren't confronted with a mode switch they don't need.
+  const isDoubao = model.id === DOUBAO_MODEL_ID;
+  const doubaoMode = isDoubao ? effectiveDoubaoAuthMode(userConfig) : null;
+  const doubaoHasLegacy = isDoubao && hasLegacyDoubaoCreds(userConfig);
+
+  const visibleFields = fields.filter((f) => {
+    const meta = fieldMeta(f);
+    if (meta.group === "advanced") return false;
+    if (isDoubao && doubaoMode) {
+      if (f.key === "auth_mode") return doubaoHasLegacy;
+      if (f.key === "app_id" || f.key === "access_token") return doubaoMode === "legacy";
+      if (f.key === "api_key") return doubaoMode === "v2";
+    }
+    return true;
+  });
   const advancedFields = fields.filter((f) => fieldMeta(f).group === "advanced");
   const hasConfig = visibleFields.length > 0 || advancedFields.length > 0;
 

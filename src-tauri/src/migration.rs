@@ -210,8 +210,10 @@ fn migrate_audio_section(legacy_conn: Option<&Mapping>, audio: &mut Mapping) {
         copy_str(Some(conn), ds, "url");
         copy_str(Some(conn), ds, "app_id");
         copy_str(Some(conn), ds, "access_token");
-        copy_str(Some(conn), ds, "secret_key");
         copy_str(Some(conn), ds, "resource_id");
+        // secret_key is intentionally not migrated: it was a dead field the ASR
+        // client never sent. auth_mode defaults to "legacy" via serde, so upgraded
+        // 1.x users keep using App ID + Access Token without any change.
     }
 }
 
@@ -695,7 +697,8 @@ llm:
         let ds = v.get("audio").unwrap().get("doubao-streaming").unwrap();
         assert_eq!(ds.get("app_id").unwrap().as_str(), Some("111"));
         assert_eq!(ds.get("access_token").unwrap().as_str(), Some("tok"));
-        assert_eq!(ds.get("secret_key").unwrap().as_str(), Some("sec"));
+        // secret_key is dropped during migration (dead field, never sent to ASR).
+        assert!(ds.get("secret_key").is_none());
         assert_eq!(
             ds.get("url").unwrap().as_str(),
             Some("wss://example.com/api")
@@ -893,7 +896,7 @@ llm:
             .map(|m| {
                 m.contains_key(kv("app_id"))
                     && m.contains_key(kv("access_token"))
-                    && m.contains_key(kv("secret_key"))
+                    && !m.contains_key(kv("secret_key"))
             })
             .unwrap_or(false);
 

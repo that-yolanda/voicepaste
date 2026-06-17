@@ -418,6 +418,22 @@ fn is_fatal_asr_code(code: u64) -> bool {
     matches!(code, 45000001 | 45000002)
 }
 
+/// Resolve the effective Doubao auth mode.
+///
+/// Explicit "v2" wins. For the default/legacy setting, fall back to v2 when the
+/// legacy credentials (app_id) are absent but an api_key is present — this lets a
+/// new user who filled only an api_key (no persisted auth_mode, no legacy creds)
+/// authenticate without first toggling the UI switch.
+fn effective_auth_mode(auth_mode: &str, app_id: &str, api_key: &str) -> &'static str {
+    if auth_mode.trim() == "v2" {
+        return "v2";
+    }
+    if app_id.trim().is_empty() && !api_key.trim().is_empty() {
+        return "v2";
+    }
+    "legacy"
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket sink type alias
 // ---------------------------------------------------------------------------
@@ -466,7 +482,7 @@ impl AsrEngine for DoubaoEngine {
         &self,
         hotwords: &[String],
     ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), String> {
-        // Validate required fields
+        // Validate required fields (common to both auth modes)
         if self.connection.url.is_empty() {
             return Err("语音识别模型还未配置，缺少 audio.doubao-streaming.url".to_string());
         }
@@ -475,12 +491,31 @@ impl AsrEngine for DoubaoEngine {
                 "语音识别模型还未配置，缺少 audio.doubao-streaming.resource_id".to_string(),
             );
         }
-        if self.connection.app_id.is_empty() {
-            return Err("语音识别模型还未配置，缺少 audio.doubao-streaming.app_id".to_string());
-        }
-        if self.connection.access_token.is_empty() {
+
+        // Resolve auth mode: explicit v2 wins; otherwise a new user with only an
+        // api_key (no legacy app_id) is treated as v2 so the UI toggle isn't required.
+        let mode = effective_auth_mode(
+            &self.connection.auth_mode,
+            &self.connection.app_id,
+            &self.connection.api_key,
+        );
+
+        if mode == "legacy" {
+            if self.connection.app_id.is_empty() {
+                return Err(
+                    "语音识别模型还未配置，缺少 audio.doubao-streaming.app_id（旧版鉴权）"
+                        .to_string(),
+                );
+            }
+            if self.connection.access_token.is_empty() {
+                return Err(
+                    "语音识别模型还未配置，缺少 audio.doubao-streaming.access_token（旧版鉴权）"
+                        .to_string(),
+                );
+            }
+        } else if self.connection.api_key.is_empty() {
             return Err(
-                "语音识别模型还未配置，缺少 audio.doubao-streaming.access_token".to_string(),
+                "语音识别模型还未配置，缺少 audio.doubao-streaming.api_key（新版鉴权）".to_string(),
             );
         }
 
@@ -498,16 +533,28 @@ impl AsrEngine for DoubaoEngine {
             .map_err(|e| format!("Failed to create WebSocket request: {}", e))?;
 
         let headers = request.headers_mut();
-        headers.insert("X-Api-App-Key", self.connection.app_id.parse().unwrap());
-        headers.insert(
-            "X-Api-Access-Key",
-            self.connection.access_token.parse().unwrap(),
-        );
+        // Common headers for both auth modes.
         headers.insert(
             "X-Api-Resource-Id",
             self.connection.resource_id.parse().unwrap(),
         );
         headers.insert("X-Api-Connect-Id", connect_id.parse().unwrap());
+
+        if mode == "v2" {
+            // New Volcengine console: single API Key auth.
+            headers.insert("X-Api-Key", self.connection.api_key.parse().unwrap());
+            headers.insert("X-Api-Request-Id", connect_id.parse().unwrap());
+            headers.insert("X-Api-Sequence", "-1".parse().unwrap());
+            log_asr!(info, "ASR auth mode: v2 (X-Api-Key)");
+        } else {
+            // Legacy console: App ID + Access Token pair.
+            headers.insert("X-Api-App-Key", self.connection.app_id.parse().unwrap());
+            headers.insert(
+                "X-Api-Access-Key",
+                self.connection.access_token.parse().unwrap(),
+            );
+            log_asr!(info, "ASR auth mode: legacy (App-Key/Access-Key)");
+        }
 
         // Connect with a bounded timeout. Without it a stalled handshake relies on
         // the OS-level TCP timeout (tens of seconds); the caller retries instead.
@@ -1123,6 +1170,32 @@ mod tests {
         assert!(!is_fatal_asr_code(45000081));
         assert!(!is_fatal_asr_code(0));
         assert!(!is_fatal_asr_code(99999999));
+    }
+
+    // ── effective_auth_mode ─────────────────────────────────────────────
+
+    #[test]
+    fn auth_mode_explicit_v2_wins() {
+        assert_eq!(effective_auth_mode("v2", "app", "key"), "v2");
+    }
+
+    #[test]
+    fn auth_mode_defaults_to_legacy_with_app_id() {
+        assert_eq!(effective_auth_mode("legacy", "app", ""), "legacy");
+        assert_eq!(effective_auth_mode("", "app", ""), "legacy");
+    }
+
+    #[test]
+    fn auth_mode_falls_back_to_v2_when_only_api_key_present() {
+        // New user: no legacy creds, filled only api_key → v2.
+        assert_eq!(effective_auth_mode("legacy", "", "key"), "v2");
+        assert_eq!(effective_auth_mode("", "", "key"), "v2");
+    }
+
+    #[test]
+    fn auth_mode_stays_legacy_when_app_id_present() {
+        // Has legacy app_id → keep legacy even if api_key is also filled.
+        assert_eq!(effective_auth_mode("legacy", "app", "key"), "legacy");
     }
 
     // ── is_empty_yaml_value ──────────────────────────────────────────────

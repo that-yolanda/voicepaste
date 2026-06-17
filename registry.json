@@ -38,10 +38,11 @@
       },
       "default_config": {
         "url": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+        "auth_mode": "legacy",
         "app_id": "",
         "access_token": "",
-        "secret_key": "",
         "resource_id": "volc.seedasr.sauc.duration",
+        "api_key": "",
         "format": "pcm",
         "rate": 16000,
         "bits": 16,
