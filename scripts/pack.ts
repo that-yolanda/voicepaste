@@ -44,10 +44,11 @@ const ALL_PLATFORMS = Object.keys(PLATFORM_MAP);
 // ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
-function parseArgs(): { sign: boolean; beta: boolean; platforms: string[] } {
+function parseArgs(): { sign: boolean; beta: boolean; genJson: boolean; platforms: string[] } {
   const args = process.argv.slice(2);
   let sign = false;
   let beta = false;
+  let genJson = false;
   let platforms: string[] | null = null;
 
   for (let i = 0; i < args.length; i++) {
@@ -55,6 +56,8 @@ function parseArgs(): { sign: boolean; beta: boolean; platforms: string[] } {
       sign = true;
     } else if (args[i] === "-b" || args[i] === "--beta") {
       beta = true;
+    } else if (args[i] === "-g" || args[i] === "--gen-json") {
+      genJson = true;
     } else if (args[i] === "-p" || args[i] === "--platform") {
       const next = args[i + 1];
       if (!next || next.startsWith("-")) {
@@ -66,7 +69,7 @@ function parseArgs(): { sign: boolean; beta: boolean; platforms: string[] } {
     }
   }
 
-  return { sign, beta, platforms: platforms || ALL_PLATFORMS };
+  return { sign, beta, genJson, platforms: platforms || ALL_PLATFORMS };
 }
 
 // ---------------------------------------------------------------------------
@@ -161,8 +164,9 @@ async function buildPlatform(platformKey: string, includeUpdater: boolean): Prom
 // ---------------------------------------------------------------------------
 // Artifact collection
 // ---------------------------------------------------------------------------
-function collectArtifacts(platformKey: string): string[] {
+function collectArtifacts(platformKey: string, version: string): string[] {
   const cfg = PLATFORM_MAP[platformKey];
+  const updaterCfg = UPDATER_PLATFORMS[platformKey];
   const rootDir = path.join(__dirname, "..");
   const distDir = path.join(rootDir, "dist");
   const bundleDir = path.join(rootDir, "src-tauri", "target", cfg.target, "release", "bundle");
@@ -174,6 +178,11 @@ function collectArtifacts(platformKey: string): string[] {
 
   const collected: string[] = [];
 
+  function copyToDist(srcPath: string, destName: string): void {
+    fs.copyFileSync(srcPath, path.join(distDir, destName));
+    collected.push(destName);
+  }
+
   function walk(dir: string): void {
     if (!fs.existsSync(dir)) return;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -184,17 +193,27 @@ function collectArtifacts(platformKey: string): string[] {
         // release artifacts. Skip it — the real macOS artifacts are .dmg / .app.tar.gz.
         if (entry.name.endsWith(".app")) continue;
         walk(fullPath);
-      } else {
-        const isArtifact = [".dmg", ".exe", ".msi", ".tar.gz", ".zip", ".sig", ".json"].some((e) =>
-          entry.name.endsWith(e),
-        );
-
-        if (isArtifact || path.extname(entry.name).toLowerCase() === ".yml") {
-          const dest = path.join(distDir, entry.name);
-          fs.copyFileSync(fullPath, dest);
-          collected.push(entry.name);
-        }
+        continue;
       }
+
+      // Updater artifact: copy under its canonical arch-scoped name so multiple
+      // macOS targets (aarch64 + x64) no longer collide as VoicePaste.app.tar.gz,
+      // and pair it with its .sig.
+      if (updaterCfg?.srcPattern.test(entry.name)) {
+        const destName = updaterCfg.dest(version);
+        copyToDist(fullPath, destName);
+        const sigSrc = `${fullPath}.sig`;
+        if (fs.existsSync(sigSrc)) {
+          copyToDist(sigSrc, `${destName}.sig`);
+        }
+        continue;
+      }
+
+      // Plain installers (.dmg / .msi) already carry version + arch in their names.
+      if (entry.name.endsWith(".dmg") || entry.name.endsWith(".msi")) {
+        copyToDist(fullPath, entry.name);
+      }
+      // Everything else (.json, .yml, stray .sig, intermediate files) is skipped.
     }
   }
 
@@ -206,18 +225,33 @@ function collectArtifacts(platformKey: string): string[] {
 // Updater metadata generation
 // ---------------------------------------------------------------------------
 interface UpdaterPlatformConfig {
+  /** Key used in the `platforms` map of latest.json. */
   id: string;
-  arch: string;
-  ext: string;
+  /** Matches the updater artifact exactly as Tauri emits it under target/.../bundle/. */
+  srcPattern: RegExp;
+  /** Canonical dist filename (version + arch) for the updater artifact. */
+  dest: (version: string) => string;
 }
 
 const UPDATER_PLATFORMS: Record<string, UpdaterPlatformConfig> = {
-  apple_aarch64: { id: "darwin-aarch64", arch: "aarch64", ext: ".app.tar.gz" },
-  apple_x64: { id: "darwin-x86_64", arch: "x64", ext: ".app.tar.gz" },
-  win_x64: { id: "windows-x86_64", arch: "x64", ext: ".nsis.zip" },
+  apple_aarch64: {
+    id: "darwin-aarch64",
+    srcPattern: /\.app\.tar\.gz$/,
+    dest: (v) => `VoicePaste_${v}_aarch64.app.tar.gz`,
+  },
+  apple_x64: {
+    id: "darwin-x86_64",
+    srcPattern: /\.app\.tar\.gz$/,
+    dest: (v) => `VoicePaste_${v}_x64.app.tar.gz`,
+  },
+  win_x64: {
+    id: "windows-x86_64",
+    srcPattern: /-setup\.exe$/,
+    dest: (v) => `VoicePaste_${v}_x64-setup.exe`,
+  },
 };
 
-function generateUpdaterArtifacts(platforms: string[], version: string, beta: boolean): void {
+function generateUpdaterArtifacts(version: string, beta: boolean): void {
   const distDir = path.join(__dirname, "..", "dist");
   const repoUrl = "https://github.com/that-yolanda/voicepaste/releases/download";
   const suffix = beta ? "-beta" : "";
@@ -226,71 +260,72 @@ function generateUpdaterArtifacts(platforms: string[], version: string, beta: bo
 
   console.log("\n=== Generating updater metadata ===");
 
-  let existing: { platforms?: Record<string, unknown>; notes?: string } = {
-    platforms: {},
-  };
+  // Only `notes` is carried over; the platform map is rebuilt from dist/ so the
+  // manifest always reflects the artifacts that actually exist (no stale entries).
+  let notes = "";
   if (fs.existsSync(jsonPath)) {
-    existing = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
-    console.log(`  Merging into existing ${jsonName}`);
+    try {
+      const existing = JSON.parse(fs.readFileSync(jsonPath, "utf8")) as { notes?: string };
+      notes = typeof existing.notes === "string" ? existing.notes : "";
+      console.log(`  Preserving notes from existing ${jsonName}`);
+    } catch {
+      // Ignore malformed manifests; start fresh.
+    }
   }
 
-  const platformEntries = (existing.platforms || {}) as Record<string, unknown>;
+  const platforms: Record<string, { url: string; signature: string }> = {};
 
-  for (const p of platforms) {
+  for (const p of ALL_PLATFORMS) {
     const cfg = UPDATER_PLATFORMS[p];
     if (!cfg) continue;
 
-    const files = fs.readdirSync(distDir);
-    const bundleFile = files.find((f) => f.endsWith(cfg.ext));
-    if (!bundleFile) {
-      console.log(`  Skipping ${p}: no ${cfg.ext} bundle found`);
+    const destName = cfg.dest(version);
+    const bundlePath = path.join(distDir, destName);
+    const sigPath = `${bundlePath}.sig`;
+
+    if (!fs.existsSync(bundlePath) || !fs.existsSync(sigPath)) {
+      console.log(`  Skipping ${cfg.id}: ${destName} (or its .sig) not in dist/`);
       continue;
     }
 
-    const sigFile = `${bundleFile}.sig`;
-    if (!files.includes(sigFile)) {
-      console.log(`  Skipping ${p}: no signature file (${sigFile}) found`);
-      continue;
-    }
-
-    const baseName = `VoicePaste_${version}_${cfg.arch}`;
-    const newBundle = `${baseName}${cfg.ext}`;
-    const newSig = `${newBundle}.sig`;
-
-    if (bundleFile !== newBundle) {
-      fs.renameSync(path.join(distDir, bundleFile), path.join(distDir, newBundle));
-    }
-    if (sigFile !== newSig) {
-      fs.renameSync(path.join(distDir, sigFile), path.join(distDir, newSig));
-    }
-
-    const signature = fs.readFileSync(path.join(distDir, newSig), "utf8").trim();
-
-    platformEntries[cfg.id] = {
-      url: `${repoUrl}/v${version}/${newBundle}`,
-      signature,
+    platforms[cfg.id] = {
+      url: `${repoUrl}/v${version}/${destName}`,
+      signature: fs.readFileSync(sigPath, "utf8").trim(),
     };
-
-    console.log(`  ${bundleFile} → ${newBundle}`);
-    console.log(`  Added platform ${cfg.id} to ${jsonName}`);
+    console.log(`  Added ${cfg.id} → ${destName}`);
   }
 
   const output = {
     version,
-    notes: existing.notes || "",
+    notes,
     pub_date: new Date().toISOString(),
-    platforms: platformEntries,
+    platforms,
   };
 
   fs.writeFileSync(jsonPath, `${JSON.stringify(output, null, 2)}\n`);
-  console.log(`  Generated ${jsonName} (${Object.keys(platformEntries).length} platform(s))`);
+  console.log(`  Generated ${jsonName} (${Object.keys(platforms).length} platform(s))`);
 }
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 async function main(): Promise<void> {
-  const { sign, beta, platforms } = parseArgs();
+  const { sign, beta, genJson, platforms } = parseArgs();
+
+  const rootDir = path.join(__dirname, "..");
+  const distDir = path.join(rootDir, "dist");
+  const version = (
+    JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")) as { version: string }
+  ).version;
+
+  // --gen-json: skip the build entirely and just rebuild latest.json from whatever
+  // is currently in dist/. Use it after merging cross-machine artifacts into one dist/.
+  if (genJson) {
+    fs.mkdirSync(distDir, { recursive: true });
+    generateUpdaterArtifacts(version, beta);
+    return;
+  }
+
   validatePlatforms(platforms);
 
   const hostOS = process.platform;
@@ -307,9 +342,6 @@ async function main(): Promise<void> {
     console.error("Error: no platforms compatible with this host OS.");
     process.exit(1);
   }
-
-  const rootDir = path.join(__dirname, "..");
-  const distDir = path.join(rootDir, "dist");
 
   // Filter non-system xattr from PATH
   {
@@ -332,10 +364,6 @@ async function main(): Promise<void> {
   }
 
   // Sync version from package.json → Cargo.toml
-  const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")) as {
-    version: string;
-  };
-  const version = pkg.version;
   const cargoTomlPath = path.join(rootDir, "src-tauri", "Cargo.toml");
   const cargoToml = fs.readFileSync(cargoTomlPath, "utf8");
   const updatedToml = cargoToml.replace(/^version\s*=\s*"[^"]*"/m, `version = "${version}"`);
@@ -376,14 +404,14 @@ async function main(): Promise<void> {
   console.log("\n=== Collecting artifacts ===");
   const allArtifacts: string[] = [];
   for (const p of compatible) {
-    const artifacts = collectArtifacts(p);
+    const artifacts = collectArtifacts(p, version);
     for (const a of artifacts) {
       if (!allArtifacts.includes(a)) allArtifacts.push(a);
     }
   }
 
   if (hasSigningKey) {
-    generateUpdaterArtifacts(compatible, version, beta);
+    generateUpdaterArtifacts(version, beta);
   }
 
   console.log("\nArtifacts in ./dist/:");
