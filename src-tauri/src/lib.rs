@@ -999,6 +999,12 @@ async fn stop_recording(app_handle: AppHandle) {
                 }
             }
         };
+        log_rec!(
+            debug,
+            "ASR commit final text ({} chars): {:?}",
+            session_text.chars().count(),
+            session_text.chars().take(200).collect::<String>()
+        );
 
         // Prepend any text accumulated across reconnects in this recording.
         let prefix = app_inner.accumulated_text.lock().await.clone();
@@ -1467,7 +1473,7 @@ async fn finalize_and_paste(
     log_rec!(
         debug,
         "Final text preview: {:?}",
-        trimmed.chars().take(60).collect::<String>()
+        trimmed.chars().take(200).collect::<String>()
     );
 
     // Load config + model registry for LLM / behavior settings.
@@ -1563,6 +1569,11 @@ async fn finalize_and_paste(
                         info,
                         "LLM polishing succeeded ({} chars)",
                         result.chars().count()
+                    );
+                    log_rec!(
+                        debug,
+                        "LLM polished preview: {:?}",
+                        result.chars().take(200).collect::<String>()
                     );
                     result
                 }

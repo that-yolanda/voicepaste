@@ -13,31 +13,31 @@ struct ProviderDefaults {
 fn get_provider_defaults(provider: &str) -> ProviderDefaults {
     match provider {
         "deepseek" => ProviderDefaults {
-            default_url: "https://api.deepseek.com/v1",
+            default_url: "https://api.deepseek.com/v1/chat/completions",
             default_model: "deepseek-v4-flash",
         },
         "openai" => ProviderDefaults {
-            default_url: "https://api.openai.com/v1",
+            default_url: "https://api.openai.com/v1/chat/completions",
             default_model: "gpt-4.1-mini",
         },
         "anthropic" => ProviderDefaults {
-            default_url: "https://api.anthropic.com/v1",
+            default_url: "https://api.anthropic.com/v1/chat/completions",
             default_model: "claude-3-5-haiku-latest",
         },
         "gemini" => ProviderDefaults {
-            default_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+            default_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
             default_model: "gemini-2.5-flash-lite",
         },
         "openrouter" => ProviderDefaults {
-            default_url: "https://openrouter.ai/api/v1",
+            default_url: "https://openrouter.ai/api/v1/chat/completions",
             default_model: "openai/gpt-4o-mini",
         },
         "siliconflow" => ProviderDefaults {
-            default_url: "https://api.siliconflow.cn/v1",
+            default_url: "https://api.siliconflow.cn/v1/chat/completions",
             default_model: "deepseek-ai/DeepSeek-V3",
         },
         "ollama" => ProviderDefaults {
-            default_url: "http://localhost:11434/api",
+            default_url: "http://localhost:11434/v1/chat/completions",
             default_model: "llama3.1",
         },
         _ => ProviderDefaults {
@@ -122,13 +122,15 @@ pub fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn normalize_base_url(url: &str) -> String {
-    let value = url.trim().to_string();
-    if value.is_empty() {
-        return value;
-    }
-    let value = value.trim_end_matches('/');
-    value.trim_end_matches("/chat/completions").to_string()
+/// OpenAI 模型是否接受 `reasoning_effort`（推理模型：o 系列 / GPT-5）。
+/// 把 reasoning_effort 发给非推理模型（gpt-4o / gpt-4.1 等）会被 API 拒绝。
+fn is_openai_reasoning_model(model: &str) -> bool {
+    let m = model.to_ascii_lowercase();
+    m.starts_with("o1")
+        || m.starts_with("o3")
+        || m.starts_with("o4")
+        || m.starts_with("o5")
+        || m.starts_with("gpt-5")
 }
 
 /// Call LLM API using OpenAI-compatible chat completion format.
@@ -155,22 +157,24 @@ pub async fn call_llm_api(
         ));
     }
 
-    let base_url = normalize_base_url(&provider_url);
-    let url = if base_url.is_empty() {
+    // The URL is the full chat-completions endpoint, stored verbatim so the
+    // settings UI shows exactly what we POST to. Fall back to the provider
+    // default endpoint only when the field is empty.
+    let url = if provider_url.trim().is_empty() {
         if defaults.default_url.is_empty() {
             return Err(format!(
                 "文本润色模型还未配置，缺少 llm.{}.url",
                 provider_id
             ));
         }
-        format!("{}/chat/completions", defaults.default_url)
+        defaults.default_url.to_string()
     } else {
-        format!("{}/chat/completions", base_url)
+        provider_url.trim().trim_end_matches('/').to_string()
     };
 
     let guarded_system = format!("{}\n\n{}", VOICE_TRANSCRIPT_GUARD_PROMPT, system_prompt);
 
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "messages": [
             { "role": "system", "content": guarded_system },
@@ -179,6 +183,48 @@ pub async fn call_llm_api(
         "temperature": 0.3,
         "max_tokens": 4096,
     });
+
+    // 润色/翻译是确定性任务，不需要推理。对支持 reasoning 控制的 provider
+    // 关闭或最小化推理，避免 reasoning 模型（如 deepseek-v4-flash）默认高强度
+    // 思考导致响应缓慢、撞上 timeout。
+    //   - openrouter: `reasoning.effort` 容错，对 reasoning 模型关闭、普通模型忽略。
+    //   - openai: `reasoning_effort` 仅对 o 系列 / GPT-5 有效，传给 gpt-4o / gpt-4.1
+    //     会被拒（400），故仅在这些模型时附加。
+    //   - anthropic / gemini / deepseek / ollama: 默认模型本就不推理，或其 OpenAI
+    //     兼容端点不支持思考参数，不附加。
+    match provider_id.as_str() {
+        "openrouter" => {
+            body["reasoning"] = json!({ "effort": "none" });
+        }
+        // ollama 的 thinking 模型（qwen3 系列）默认开启推理，本地 CPU 上会先
+        // 跑一遍思考再输出，显著拖慢响应。同时附 ollama 原生 think:false（官方
+        // thinking 开关）与 OpenAI 风格 reasoning_effort:none（ollama 兼容映射），
+        // 确保端点按任一方式解析都能关闭 thinking；普通模型忽略这两个参数。
+        "ollama" => {
+            body["think"] = json!(false);
+            body["reasoning_effort"] = json!("none");
+        }
+        "openai" if is_openai_reasoning_model(&model) => {
+            body["reasoning_effort"] = json!("minimal");
+        }
+        _ => {}
+    }
+
+    // Verbose request logging so the exact payload can be replayed in Postman
+    // to distinguish model-capability issues from wiring bugs.
+    crate::log_rec!(debug, "LLM request → model={}, url={}", model, url);
+    crate::log_rec!(
+        debug,
+        "LLM system prompt ({} chars): {:?}",
+        guarded_system.chars().count(),
+        guarded_system.chars().take(1500).collect::<String>()
+    );
+    crate::log_rec!(
+        debug,
+        "LLM user text ({} chars): {:?}",
+        text.chars().count(),
+        text.chars().take(500).collect::<String>()
+    );
 
     let client = reqwest::Client::new();
     let mut request = client.post(&url).json(&body);
@@ -196,7 +242,7 @@ pub async fn call_llm_api(
     }
 
     let response = request
-        .timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
         .map_err(|e| format!("LLM API request failed: {}", e))?;
@@ -327,7 +373,7 @@ mod tests {
     fn validate_ollama_skips_api_key_check() {
         let config = LlmConfig {
             provider: "ollama".to_string(),
-            url: Some("http://localhost:11434/api".to_string()),
+            url: Some("http://localhost:11434/v1".to_string()),
             api_key: Some("".to_string()),
             model: Some("llama3.1".to_string()),
             base_url: None,
@@ -384,60 +430,5 @@ mod tests {
     fn validate_provider_config_overrides_top_level() {
         let result = validate_llm_config(&make_openai_config());
         assert!(result.is_ok());
-    }
-
-    // ── normalize_base_url tests ───────────────────────────────────────────
-
-    #[test]
-    fn normalize_removes_trailing_slash() {
-        assert_eq!(
-            normalize_base_url("https://api.openai.com/v1/"),
-            "https://api.openai.com/v1"
-        );
-    }
-
-    #[test]
-    fn normalize_removes_chat_completions() {
-        assert_eq!(
-            normalize_base_url("https://api.openai.com/v1/chat/completions"),
-            "https://api.openai.com/v1"
-        );
-    }
-
-    #[test]
-    fn normalize_removes_chat_completions_with_trailing_slash() {
-        assert_eq!(
-            normalize_base_url("https://api.openai.com/v1/chat/completions/"),
-            "https://api.openai.com/v1"
-        );
-    }
-
-    #[test]
-    fn normalize_empty_string() {
-        assert_eq!(normalize_base_url(""), "");
-    }
-
-    #[test]
-    fn normalize_trims_whitespace() {
-        assert_eq!(
-            normalize_base_url("  https://api.example.com  "),
-            "https://api.example.com"
-        );
-    }
-
-    #[test]
-    fn normalize_preserves_non_chat_completions_path() {
-        assert_eq!(
-            normalize_base_url("https://api.openai.com/v1/embeddings"),
-            "https://api.openai.com/v1/embeddings"
-        );
-    }
-
-    #[test]
-    fn normalize_only_chat_completions() {
-        assert_eq!(
-            normalize_base_url("https://api.example.com/chat"),
-            "https://api.example.com/chat"
-        );
     }
 }

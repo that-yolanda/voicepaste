@@ -15,48 +15,51 @@ import {
 } from "@/ui/layout/PageLayout";
 import { useSettings } from "@/ui/SettingsProvider";
 
+// Defaults MUST mirror Rust `get_provider_defaults` (src-tauri/src/llm.rs):
+// when a field is left empty the backend fills it from that table, so the
+// values shown in the UI have to match what the backend actually requests.
 const LLM_PROVIDERS = [
   {
     key: "deepseek",
     label: "DeepSeek",
-    url: "https://api.deepseek.com",
-    model: "deepseek-chat",
+    url: "https://api.deepseek.com/v1/chat/completions",
+    model: "deepseek-v4-flash",
   },
   {
     key: "openai",
     label: "OpenAI",
-    url: "https://api.openai.com/v1",
-    model: "gpt-4o",
+    url: "https://api.openai.com/v1/chat/completions",
+    model: "gpt-4.1-mini",
   },
   {
     key: "openrouter",
     label: "OpenRouter",
-    url: "https://openrouter.ai/api/v1",
-    model: "openai/gpt-4o",
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    model: "openai/gpt-4o-mini",
   },
   {
     key: "siliconflow",
     label: "硅基流动",
-    url: "https://api.siliconflow.cn/v1",
-    model: "Qwen/Qwen2.5-7B-Instruct",
+    url: "https://api.siliconflow.cn/v1/chat/completions",
+    model: "deepseek-ai/DeepSeek-V3",
   },
   {
     key: "gemini",
     label: "Gemini",
-    url: "https://generativelanguage.googleapis.com/v1beta",
-    model: "gemini-pro",
+    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    model: "gemini-2.5-flash-lite",
   },
   {
     key: "anthropic",
     label: "Anthropic",
-    url: "https://api.anthropic.com/v1",
-    model: "claude-3-5-sonnet-20241022",
+    url: "https://api.anthropic.com/v1/chat/completions",
+    model: "claude-3-5-haiku-latest",
   },
   {
     key: "ollama",
     label: "Ollama 本地",
-    url: "http://localhost:11434",
-    model: "llama3.2",
+    url: "http://localhost:11434/v1/chat/completions",
+    model: "llama3.1",
   },
   {
     key: "openai_compatible",
@@ -123,21 +126,15 @@ export function LLMPage() {
     [scheduleSavePrompts],
   );
 
-  // LLM provider switch
+  // LLM provider switch: just flip the active provider. URL/model are shown
+  // via per-provider defaults at render time, so switching needs no data
+  // writes — and we must NOT copy the current provider's values into the
+  // target slot (that was the bug that made fields look unchanged).
   const switchProvider = useCallback(
     (key: string) => {
-      const p = LLM_PROVIDERS.find((x) => x.key === key) || LLM_PROVIDERS[0];
-      const llmUpdates: Record<string, unknown> = {
-        provider: key,
-        [key]: {
-          ...(savedProviderCfg || {}),
-          url: savedProviderCfg.url || p.url,
-          model: savedProviderCfg.model || p.model,
-        },
-      };
-      scheduleSave({ llm: { ...llm, ...llmUpdates } });
+      scheduleSave({ llm: { ...llm, provider: key } });
     },
-    [llm, savedProviderCfg, scheduleSave],
+    [llm, scheduleSave],
   );
 
   // LLM field change
@@ -181,8 +178,7 @@ export function LLMPage() {
               action={
                 <Input
                   className="w-full"
-                  placeholder="留空使用默认地址"
-                  value={savedProviderCfg.url || ""}
+                  value={savedProviderCfg.url || currentP.url}
                   onChange={(v) => setLlmField("url", v)}
                   commitOnBlur
                 />
@@ -207,8 +203,7 @@ export function LLMPage() {
               action={
                 <Input
                   className="w-full"
-                  placeholder={currentP.model}
-                  value={savedProviderCfg.model || ""}
+                  value={savedProviderCfg.model || currentP.model}
                   onChange={(v) => setLlmField("model", v)}
                   commitOnBlur
                 />

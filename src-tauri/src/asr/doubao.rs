@@ -791,10 +791,12 @@ impl AsrEngine for DoubaoEngine {
                                                 let text = latest_result_text.lock().await.clone();
                                                 *final_text.lock().await = text.clone();
                                                 *partial_text.lock().await = String::new();
-
-                                                if let Some(tx) = commit_tx.lock().await.take() {
-                                                    let _ = tx.send(text);
-                                                }
+                                                // Do NOT resolve the commit here: doubao keeps
+                                                // emitting final segments after the first
+                                                // definite one, only closing with "finish last
+                                                // sequence". Resolving on the first definite
+                                                // truncates the tail (e.g. "是哪一个？"); the
+                                                // close-frame handler resolves with full text.
                                             }
                                         }
                                     }
