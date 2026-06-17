@@ -2,9 +2,7 @@
 
 ## v2.0.0 (2026-06-17)
 
-> **⚠️ BREAKING CHANGE**: VoicePaste has been completely rewritten from Electron to Tauri v2 (Rust backend). This is a major architecture change.
->
-> **Config is NOT preserved** — please back up your `config.yaml` before upgrading. You will need to reconfigure your credentials and preferences after installing v2.0.0.
+> **⚠️ BREAKING CHANGE**: VoicePaste has been completely rewritten from Electron to Tauri v2 (Rust backend). This is a major architecture change. Config from 1.x is automatically migrated on first launch.
 
 ### Architecture
 
