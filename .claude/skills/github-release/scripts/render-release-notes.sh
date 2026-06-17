@@ -11,15 +11,14 @@ shift
 
 previous="${1:-}"
 
-# Auto-detect previous version from git tags if not provided
+# Auto-detect previous version from git tags if not provided.
+# Skip beta/RC/prerelease tags and the version currently being released.
 if [[ -z "$previous" ]]; then
-  previous=$(git tag --sort=-v:refname | head -1 || true)
-  if [[ "$previous" == "v${version}" ]]; then
-    previous=$(git tag --sort=-v:refname | sed -n '2p' || true)
-    previous="${previous#v}"
-  else
-    previous="${previous#v}"
-  fi
+  previous=$(git tag --sort=-v:refname \
+    | grep -vE -- '-beta|-rc|prerelease' \
+    | grep -vxF "v${version}" \
+    | head -1 || true)
+  previous="${previous#v}"
 fi
 
 compare_url="https://github.com/that-yolanda/voicepaste/compare/v${previous}...v${version}"
