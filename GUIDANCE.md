@@ -1,6 +1,6 @@
 # VoicePaste Configuration Guide
 
-## Quick Start (Minimal Setup)
+## Quick Start
 
 - Settings > System Permissions — enable Microphone and Accessibility permissions (macOS only)
 - Settings > Audio Model — configure an ASR model: online models require an API Key, local models require download and activation
@@ -51,7 +51,7 @@
 
 ## Model Configuration
 
-### Volcengine (Doubao)
+### Volcengine
 
 #### API Credentials
 

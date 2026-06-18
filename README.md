@@ -21,10 +21,10 @@ A voice input tool for macOS & Windows — trigger with a hotkey, speak, auto-pa
 
 ## Features
 
-- **Lightweight**: ~20 MB installer; ~80 MB idle memory, ~100 MB with online API. Local models use on-demand loading — they only reside in memory during recognition and are released immediately after.
+- **Lightweight**: ~20 MB installer; ~120 MB idle on macOS packaged builds. Online ASR peaks around ~150 MB; local models load on demand and vary by model/backend.
 - **Data Security**: All data stored locally; API keys are applied by the user, giving you full control.
 - **Fully Customizable**: Ready-to-use defaults with all parameters exposed for fine-tuning.
-- **ASR Dual Engine (Online / Local)**: Online — ByteDance Doubao streaming ASR; Local — powered by sherpa-onnx, 500 MB+ memory footprint depending on model, with CPU / CUDA / CoreML acceleration.
+- **ASR Dual Engine (Online / Local)**: Online — ByteDance Doubao streaming ASR; Local — powered by sherpa-onnx, with CPU / CUDA / CoreML acceleration and model-dependent memory usage.
 - **LLM Support**: Built-in support for 8 LLM providers — DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, SiliconFlow, Ollama, and OpenAI-compatible APIs.
 - **Streaming Output**: For local models without native streaming, VAD-based segmentation with simulated streaming output delivers results in real time.
 - **Multi-Scenario Text Polishing**: Built-in templates for general cleanup, translation, email drafting, and more — customizable prompts with per-template hotkey bindings.
@@ -50,28 +50,28 @@ Go to [GitHub Releases](https://github.com/that-yolanda/voicepaste/releases/late
 
 | Type                          | Link                                                                  |
 | ----------------------------- | --------------------------------------------------------------------- |
-| General Setup                 | [EN](GUIDANCE.md#quick-start-minimal-setup) / [中文](GUIDANCE.zh.md#快速开始最小配置)  |
-| Doubao Streaming ASR          | [EN](GUIDANCE.md#volcengine-doubao) / [中文](GUIDANCE.zh.md#火山引擎)          |
+| General Setup                 | [EN](GUIDANCE.md#quick-start) / [中文](GUIDANCE.zh.md#快速开始)  |
+| Doubao Streaming ASR          | [EN](GUIDANCE.md#volcengine) / [中文](GUIDANCE.zh.md#火山引擎)          |
 | Local Models                  | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)|
 
 ## Model Support & Capabilities
 
 ### ASR Models
 
-| Type   | Model                         | Guide                                                                 | Size    | Peak Memory | Languages                             | Streaming               | Hotwords                    | Punctuation                       | ITN                    | Model ID                                                   |
+| Type   | Model                         | Guide                                                                 | Size    | Peak Memory (macOS Activity Monitor) | Languages                             | Streaming               | Hotwords                    | Punctuation                       | ITN                    | Model ID                                                   |
 | ------ | ----------------------------- | --------------------------------------------------------------------- | ------- | ----------- | ------------------------------------- | ----------------------- | --------------------------- | --------------------------------- | ---------------------- | ---------------------------------------------------------- |
-| Online | Doubao Streaming ASR 2.0      | [EN](docs/howto/doubao.md) / [中文](docs/howto/doubao.zh.md)          | -       | 120 MB      | Chinese + English mix, dialects       | ✅️                      | ✅️                          | ✅️                                | ✅️                     | -                                                          |
-| Local  | SenseVoice                    | [EN](docs/howto/sherpa-onnx.md) / [中文](docs/howto/sherpa-onnx.zh.md)| 158 MB  | 660 MB      | ZH / EN / JP / KO / Cantonese         | ☑️ Simulated streaming   | ☑️ via LLM                  | ☑️ via punctuation model          | ☑️ via LLM             | sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09    |
-| Local  | Zipformer (ZH + EN bilingual) | [EN](docs/howto/sherpa-onnx.md) / [中文](docs/howto/sherpa-onnx.zh.md)| 150 MB  | 560 MB      | Chinese + English                     | ✅️                      | ✅️                          | ☑️ via punctuation model          | ☑️ via LLM             | sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20 |
-| Local  | FunASR-Nano                   | [EN](docs/howto/sherpa-onnx.md) / [中文](docs/howto/sherpa-onnx.zh.md)| 948 MB  | 1.8 GB      | Chinese + English, 7 dialects         | ☑️ Simulated streaming   | ✅️                          | ✅️                                | ✅️                     | sherpa-onnx-funasr-nano-int8-2025-12-30                    |
-| Local  | Qwen3-ASR-0.6B                | [EN](docs/howto/sherpa-onnx.md) / [中文](docs/howto/sherpa-onnx.zh.md)| 938 MB  | 2.0 GB      | 30 languages, Chinese dialects, lyrics, rap | ☑️ Simulated streaming   | ✅️                          | ✅️                                | ✅️                     | sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25                 |
+| Online | Doubao Streaming ASR 2.0      | [EN](GUIDANCE.md#volcengine) / [中文](GUIDANCE.zh.md#火山引擎)          | -       | ~150 MB     | Chinese + English mix, dialects       | ✅️                      | ✅️                          | ✅️                                | ✅️                     | -                                                          |
+| Local  | SenseVoice                    | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)| 158 MB  | ~580 MB     | ZH / EN / JP / KO / Cantonese         | ☑️ Simulated streaming   | ☑️ via LLM                  | ☑️ via punctuation model          | ☑️ via LLM             | sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09    |
+| Local  | Zipformer (ZH + EN bilingual) | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)| 150 MB  | ~465 MB     | Chinese + English                     | ✅️                      | ✅️                          | ☑️ via punctuation model          | ☑️ via LLM             | sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20 |
+| Local  | FunASR-Nano                   | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)| 948 MB  | ~2.5 GB     | Chinese + English, 7 dialects         | ☑️ Simulated streaming   | ✅️                          | ✅️                                | ✅️                     | sherpa-onnx-funasr-nano-int8-2025-12-30                    |
+| Local  | Qwen3-ASR-0.6B                | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)| 938 MB  | Not tested  | 30 languages, Chinese dialects, lyrics, rap | ☑️ Simulated streaming   | ✅️                          | ✅️                                | ✅️                     | sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25                 |
 
 **Notes**
 
 - ✅️ Native model capability, ☑️ Achieved through software composition
-- Idle memory ~80 MB; models are loaded on demand during recognition and released after completion.
+- Idle memory is ~120 MB on macOS packaged builds, measured from the Activity Monitor `Memory` column across the VoicePaste process group. Models are loaded on demand during recognition.
 - Local models without native streaming output use built-in VAD (Voice Activity Detection) for audio segmentation with simulated streaming; optional punctuation restoration model available.
-- Memory data measured on Mac mini (Apple Silicon).
+- Memory data was measured locally on Mac mini (Apple Silicon). Results may vary with system load, macOS memory compression, restart state, backend, and cache state. See the [performance test report](docs/tests/performance-report.md) for full details.
 
 ### LLM
 
