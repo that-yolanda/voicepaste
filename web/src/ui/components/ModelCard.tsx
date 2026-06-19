@@ -12,6 +12,7 @@ import {
   ChartNoAxesCombined,
   ChevronsUp,
   CircleCheck,
+  CircleX,
   CloudDownload,
   Cog,
   LoaderCircle,
@@ -271,15 +272,19 @@ export function ModelCard({
       <SectionContent>
         {model.capabilities && (
           <div className="flex items-center gap-2 flex-wrap">
-            {Object.entries(CAPABILITY_LABELS).map(([key, label]) => (
-              <Badge key={key} variant="ghost">
-                <CircleCheck
-                  size={16}
-                  className={`text-surface ${model.capabilities?.[key] ? "fill-success" : "fill-text-muted"}`}
-                />
-                <span>{label}</span>
-              </Badge>
-            ))}
+            {Object.entries(CAPABILITY_LABELS).map(([key, label]) =>
+              model.capabilities?.[key] ? (
+                <Badge key={key} variant="ghost">
+                  <CircleCheck size={16} className="text-surface fill-success" />
+                  <span>{label}</span>
+                </Badge>
+              ) : (
+                <Badge key={key} variant="ghost">
+                  <CircleX size={16} className="text-text-muted" />
+                  <span>{label}</span>
+                </Badge>
+              ),
+            )}
           </div>
         )}
 

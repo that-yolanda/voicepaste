@@ -1,5 +1,6 @@
 pub mod doubao;
 pub mod sherpa_onnx;
+pub mod stepfun;
 
 use async_trait::async_trait;
 use tokio::sync::mpsc;

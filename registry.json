@@ -1,5 +1,5 @@
 {
-  "version": 14,
+  "version": 15,
   "updated_at": "2026-06-16",
   "defaults": {
     "asr": {
@@ -69,6 +69,34 @@
           "boosting_table_id": "",
           "correct_table_id": ""
         }
+      }
+    },
+    {
+      "id": "stepfun-stepaudio-2.5-asr",
+      "type": "online",
+      "category": "asr",
+      "engine": "stepfun",
+      "name": "阶跃星辰 - Step ASR 2.5",
+      "description": "StepAudio 语音识别（HTTP+SSE 一次性提交，中英文）",
+      "tags": ["在线", "中英文", "热词库"],
+      "capabilities": {
+        "streaming": false,
+        "hotwords": true,
+        "punctuation": true,
+        "itn": true
+      },
+      "languages": ["zh", "en"],
+      "requires_config": ["api_key"],
+      "default_config": {
+        "url": "https://api.stepfun.com/v1/audio/asr/sse",
+        "api_key": "",
+        "model": "stepaudio-2.5-asr",
+        "language": "zh",
+        "enable_itn": true,
+        "enable_timestamp": false,
+        "rate": 16000,
+        "bits": 16,
+        "channel": 1
       }
     },
     {

@@ -821,6 +821,11 @@ async fn create_active_session(
                 && !config.stream_simulate(engine_model_id, &registry);
             (engine.create_session(hotwords).await, show_hint)
         }
+        Some(entry) if entry.engine == "stepfun" => {
+            let engine = crate::asr::stepfun::StepFunEngine::new(config.stepfun_config(&registry));
+            // Non-streaming one-shot engine: no partial results during recording.
+            (engine.create_session(hotwords).await, true)
+        }
         _ => {
             // Default / volcengine: Doubao online engine
             let doubao_config = config.doubao_streaming_config(&registry);

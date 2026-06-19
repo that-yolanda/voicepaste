@@ -9,6 +9,7 @@ use crate::model::ModelRegistry;
 pub const DOUBAO_STREAMING_ID: &str = "doubao-streaming";
 pub const SILERO_VAD_ID: &str = "silero-vad";
 pub const ASR_DEFAULTS_ID: &str = "asr_defaults";
+pub const STEPFUN_ID: &str = "stepfun-stepaudio-2.5-asr";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -128,6 +129,29 @@ pub struct DoubaoStreamingConfig {
     pub output_zh_variant: String,
     #[serde(default = "default_empty_corpus")]
     pub corpus: Option<serde_norway::Value>,
+}
+
+/// StepFun StepAudio ASR config (HTTP + SSE, one-shot audio submission).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StepFunConfig {
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub language: String,
+    #[serde(default = "default_true")]
+    pub enable_itn: bool,
+    #[serde(default)]
+    pub enable_timestamp: bool,
+    #[serde(default = "default_rate")]
+    pub rate: u32,
+    #[serde(default = "default_bits")]
+    pub bits: u32,
+    #[serde(default = "default_channel")]
+    pub channel: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -576,6 +600,11 @@ impl AppConfig {
 
     pub fn doubao_streaming_config(&self, registry: &ModelRegistry) -> DoubaoStreamingConfig {
         let merged = Self::resolve_model_config(registry, DOUBAO_STREAMING_ID, &self.audio);
+        serde_json::from_value(merged).unwrap_or_default()
+    }
+
+    pub fn stepfun_config(&self, registry: &ModelRegistry) -> StepFunConfig {
+        let merged = Self::resolve_model_config(registry, STEPFUN_ID, &self.audio);
         serde_json::from_value(merged).unwrap_or_default()
     }
 
