@@ -37,7 +37,10 @@ base64 = "0.22"
 regex = "1"
 url = "2"
 futures-util = "0.3"
-keytap = { version = "0.4", features = ["serde"] }
+# Temporary: track the fork until the Fn flag-bit fix ships on crates.io.
+# When that-yolanda/keytap merges fix/macos-fn-flag-bit and publishes a
+# release, switch this back to a version line (e.g. keytap = "0.5").
+keytap = { git = "https://github.com/that-yolanda/keytap.git", branch = "fix/macos-fn-flag-bit", features = ["serde"] }
 async-trait = "0.1"
 sherpa-onnx = { version = "1.13", default-features = false }
 tar = "0.4"
