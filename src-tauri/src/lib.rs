@@ -167,6 +167,7 @@ pub fn run() {
             commands::get_accessibility_status,
             commands::open_accessibility_settings,
             commands::reinit_hotkey,
+            commands::record_hotkey,
             commands::select_sound_file,
             commands::play_sound_file,
             commands::get_log_path,

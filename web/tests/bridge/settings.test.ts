@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // --- Mock @tauri-apps/api (use vi.hoisted to avoid hoisting issues) ---
 const { mockInvoke, mockListen } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(() => Promise.resolve()),
+  mockInvoke: vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>(() => Promise.resolve()),
   mockListen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
@@ -29,8 +29,6 @@ import {
   getMicrophoneStatus,
   getModelRegistry,
   getStats,
-  isModifier as isModFn,
-  KEY_NAME_MAP,
   loadHotwords,
   loadPrompts,
   onEvent,
@@ -45,8 +43,9 @@ import {
   selectSoundFile,
 } from "@/bridge/settings";
 
-// Re-import private functions via a type cast is not possible, so we test
-// recordHotkey's behavior as a public API and extract `isModifier` logic.
+// recordHotkey is a thin invoke wrapper over the backend keytap recorder
+// (hotkey::record_combination owns the capture state machine), so we only
+// verify the IPC contract here.
 
 // ---- Basic data methods ----
 
@@ -229,43 +228,6 @@ describe("settings bridge — requestMicrophoneAccess", () => {
   });
 });
 
-// ---- KEY_NAME_MAP ----
-
-describe("KEY_NAME_MAP", () => {
-  it("maps modifier keys correctly", () => {
-    expect(KEY_NAME_MAP.ControlLeft).toBe("ControlLeft");
-    expect(KEY_NAME_MAP.AltRight).toBe("AltRight");
-    expect(KEY_NAME_MAP.MetaLeft).toBe("MetaLeft");
-  });
-
-  it("maps special keys", () => {
-    expect(KEY_NAME_MAP.ArrowUp).toBe("Up");
-    expect(KEY_NAME_MAP.Space).toBe("Space");
-    expect(KEY_NAME_MAP.Enter).toBe("Enter");
-    expect(KEY_NAME_MAP.Escape).toBe("Escape");
-    expect(KEY_NAME_MAP.Backspace).toBe("Backspace");
-  });
-});
-
-// ---- isModifier ----
-
-describe("isModifier", () => {
-  it("returns true for Control/Shift/Alt/Meta prefixes", () => {
-    expect(isModFn("ControlLeft")).toBe(true);
-    expect(isModFn("ControlRight")).toBe(true);
-    expect(isModFn("ShiftLeft")).toBe(true);
-    expect(isModFn("AltRight")).toBe(true);
-    expect(isModFn("MetaLeft")).toBe(true);
-  });
-
-  it("returns false for regular keys", () => {
-    expect(isModFn("KeyA")).toBe(false);
-    expect(isModFn("Digit1")).toBe(false);
-    expect(isModFn("Space")).toBe(false);
-    expect(isModFn("Enter")).toBe(false);
-  });
-});
-
 // ---- Hotkey recording ----
 
 describe("settings bridge — recordHotkey", () => {
@@ -273,78 +235,24 @@ describe("settings bridge — recordHotkey", () => {
     vi.clearAllMocks();
   });
 
-  function fireKeyEvent(type: "keydown" | "keyup", code: string, opts: { key?: string } = {}) {
-    const event = new KeyboardEvent(type, {
-      code,
-      key: opts.key || code,
-      bubbles: true,
-      cancelable: true,
-    });
-    window.dispatchEvent(event);
-    return event;
-  }
+  it("invokes the backend record_hotkey command and returns its result", async () => {
+    // The backend (keytap) now owns capture, including keys the WebView never
+    // sees as DOM events (e.g. Fn/Globe). The bridge is a thin invoke wrapper.
+    const backendResult = { keys: ["Fn"], displayString: "Fn", hotkey: "Fn" };
+    mockInvoke.mockResolvedValueOnce(backendResult);
 
-  it("records a single non-modifier key", async () => {
-    const promise = recordHotkey();
-    fireKeyEvent("keydown", "KeyA");
-    fireKeyEvent("keyup", "KeyA");
-    const result = await promise;
-    expect(result.keys).toEqual(["A"]);
-    expect(result.displayString).toBe("A");
+    const result = await recordHotkey();
+
+    expect(invoke).toHaveBeenCalledWith("record_hotkey");
+    expect(result).toEqual(backendResult);
   });
 
-  it("records modifier + key combination", async () => {
-    const promise = recordHotkey();
-    fireKeyEvent("keydown", "ControlLeft");
-    fireKeyEvent("keydown", "KeyS");
-    fireKeyEvent("keyup", "KeyS");
-    const result = await promise;
-    expect(result.keys[0]).toContain("Control");
-    expect(result.keys[0]).toContain("S");
-  });
+  it("forwards an empty result when the user cancels (Escape / timeout)", async () => {
+    mockInvoke.mockResolvedValueOnce({ keys: [], displayString: "", hotkey: undefined });
 
-  it("cancels recording on Escape", async () => {
-    const promise = recordHotkey();
-    fireKeyEvent("keydown", "Escape");
-    const result = await promise;
+    const result = await recordHotkey();
+
     expect(result.keys).toEqual([]);
     expect(result.displayString).toBe("");
   });
-
-  it("prevents default on non-Mac platforms during keydown", async () => {
-    // jsdom defaults to no platform — we want default prevented (non-Mac)
-    const promise = recordHotkey();
-    const event = fireKeyEvent("keydown", "Space");
-    expect(event.defaultPrevented).toBe(true);
-    // Clean up: settle the promise
-    fireKeyEvent("keyup", "Space");
-    await promise;
-  });
-
-  it("cleanup removes event listeners after finish", async () => {
-    const addSpy = vi.spyOn(window, "addEventListener");
-    const removeSpy = vi.spyOn(window, "removeEventListener");
-    const promise = recordHotkey();
-    fireKeyEvent("keydown", "KeyX");
-    fireKeyEvent("keyup", "KeyX");
-    await promise;
-    expect(removeSpy).toHaveBeenCalledWith("keydown", expect.any(Function), true);
-    expect(removeSpy).toHaveBeenCalledWith("keyup", expect.any(Function), true);
-    addSpy.mockRestore();
-    removeSpy.mockRestore();
-  });
-
-  it("modifier-only hotkey after 300ms timeout", async () => {
-    vi.useFakeTimers();
-    const promise = recordHotkey();
-    fireKeyEvent("keydown", "ControlLeft");
-    // Timer is scheduled on keyup of modifier
-    fireKeyEvent("keyup", "ControlLeft");
-    // Advance past the 300ms debounce
-    vi.advanceTimersByTime(350);
-    const result = await promise;
-    expect(result.keys[0]).toBe("ControlLeft");
-    expect(result.displayString).toBe("ControlLeft");
-    vi.useRealTimers();
-  }, 10000);
 });

@@ -541,6 +541,47 @@ pub async fn reinit_hotkey(app: AppHandle) -> Result<serde_json::Value, String> 
     Ok(serde_json::json!({ "active": active }))
 }
 
+/// Result of recording a hotkey via the backend keytap tap. Mirrors the
+/// frontend `HotkeyRecordResult` shape: `keys` is a single-element array
+/// holding the full combination string (e.g. `["Fn"]`, `["ControlLeft+A"]`).
+#[derive(serde::Serialize)]
+pub struct HotkeyRecordResult {
+    pub keys: Vec<String>,
+    #[serde(rename = "displayString")]
+    pub display_string: String,
+    pub hotkey: Option<String>,
+}
+
+/// Record a hotkey combination from the live keyboard using a temporary keytap
+/// tap. Unlike a DOM keydown listener this captures keys the WebView never
+/// sees (e.g. the macOS Fn/Globe key). Blocks on a worker thread for up to
+/// ~10s; resolves with an empty result on Escape or timeout.
+#[tauri::command]
+pub async fn record_hotkey(app: AppHandle) -> Result<HotkeyRecordResult, String> {
+    let config = app
+        .try_state::<crate::hotkey::HotkeyConfig>()
+        .map(|c| c.inner().clone())
+        .ok_or_else(|| "hotkey system not initialized".to_string())?;
+    let result = tokio::task::spawn_blocking(move || {
+        crate::hotkey::record_combination(&config, std::time::Duration::from_secs(10))
+    })
+    .await
+    .map_err(|e| format!("record_hotkey worker panicked: {e}"))?;
+
+    Ok(match result {
+        Some(hotkey) => HotkeyRecordResult {
+            keys: vec![hotkey.clone()],
+            display_string: hotkey.clone(),
+            hotkey: Some(hotkey),
+        },
+        None => HotkeyRecordResult {
+            keys: vec![],
+            display_string: String::new(),
+            hotkey: None,
+        },
+    })
+}
+
 /// Select a sound file via file dialog.
 #[tauri::command]
 pub async fn select_sound_file(app: AppHandle) -> Result<Option<String>, String> {
