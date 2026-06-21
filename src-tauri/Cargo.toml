@@ -45,6 +45,7 @@ async-trait = "0.1"
 sherpa-onnx = { version = "1.13", default-features = false }
 tar = "0.4"
 bzip2 = "0.4"
+cpal = "0.15"
 
 [features]
 default = []

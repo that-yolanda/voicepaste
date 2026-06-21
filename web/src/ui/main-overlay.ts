@@ -444,6 +444,10 @@ function stopCueKeepAlive(): void {
   }
 }
 
+function usesNativeAudioCapture(): boolean {
+  return currentAppearance.platform === "macos";
+}
+
 // Create the cue context if needed, resume it, and start the keep-alive so the
 // output device is warm and settled by the time a cue plays. Idempotent; called
 // during warmup.
@@ -674,7 +678,12 @@ onOverlayEvent(async (event: OverlayEvent) => {
     case "audio:warmup":
       try {
         state.audioReady = false;
-        await startAudioCapture();
+        if (usesNativeAudioCapture()) {
+          ensureCueContextWarm();
+          state.audioReady = true;
+        } else {
+          await startAudioCapture();
+        }
         sendAudioWarmupReady();
       } catch (error) {
         const msg = (error as Error).message || String(error);
@@ -689,7 +698,11 @@ onOverlayEvent(async (event: OverlayEvent) => {
       try {
         state.appState = "recording";
         state.audioReady = false;
-        await startAudioCapture();
+        if (usesNativeAudioCapture()) {
+          state.audioReady = true;
+        } else {
+          await startAudioCapture();
+        }
         startWaveformAnimation();
         state.hintText = "";
         state.hintLevel = "info";
@@ -704,7 +717,12 @@ onOverlayEvent(async (event: OverlayEvent) => {
       updateView();
       break;
     case "recording:stop":
-      await stopAudioCapture();
+      if (usesNativeAudioCapture()) {
+        stopWaveformAnimation();
+        state.pendingSamples = [];
+      } else {
+        await stopAudioCapture();
+      }
       notifyAudioStopped();
       break;
     case "transcript": {

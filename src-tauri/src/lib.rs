@@ -9,6 +9,8 @@ mod hotword;
 mod llm;
 mod migration;
 mod model;
+#[cfg(target_os = "macos")]
+mod native_audio;
 mod overlay;
 mod paste;
 mod stats;
@@ -26,8 +28,9 @@ use tauri::{
 };
 
 /// Delay after the mic stream is ready, before entering Recording / playing the
-/// start cue. Gives the browser AEC/AGC time to converge so the first words are
-/// not attenuated. Trade-off: added latency between key press and "go".
+/// start cue. The renderer capture path uses this to let browser audio processing
+/// settle; native capture keeps the same short guard so the user-facing timing
+/// remains predictable across platforms.
 const AUDIO_SETTLE_MS: u64 = 350;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -424,6 +427,92 @@ async fn stop_renderer_audio(
     }
 }
 
+async fn stop_audio_capture(
+    app: &AppHandle,
+    app_inner: &Arc<app_state::AppInner>,
+    timeout_ms: u64,
+) {
+    #[cfg(target_os = "macos")]
+    native_audio::stop_capture(app_inner).await;
+
+    stop_renderer_audio(app, app_inner, timeout_ms).await;
+}
+
+async fn save_recording_wav(app: &AppHandle, app_inner: &Arc<app_state::AppInner>) {
+    let samples = {
+        let mut audio = app_inner.recording_audio.lock().await;
+        if audio.is_empty() {
+            return;
+        }
+        std::mem::take(&mut *audio)
+    };
+
+    let data_dir = match app.path().app_data_dir() {
+        Ok(dir) => dir,
+        Err(error) => {
+            log_audio!(
+                warn,
+                "Resolve app data dir for recording WAV failed: {}",
+                error
+            );
+            return;
+        }
+    };
+    let output_dir = data_dir.join("recordings");
+    if let Err(error) = std::fs::create_dir_all(&output_dir) {
+        log_audio!(
+            warn,
+            "Create recording WAV directory failed ({}): {}",
+            output_dir.display(),
+            error
+        );
+        return;
+    }
+
+    let ts = chrono::Local::now().format("%Y%m%d-%H%M%S%.3f");
+    let path = output_dir.join(format!("voicepaste-{ts}.wav"));
+    match write_wav_16k_mono(&path, &samples) {
+        Ok(()) => log_audio!(info, "Recording WAV saved: {}", path.display()),
+        Err(error) => log_audio!(
+            warn,
+            "Write recording WAV failed ({}): {}",
+            path.display(),
+            error
+        ),
+    }
+}
+
+fn write_wav_16k_mono(path: &std::path::Path, samples: &[f32]) -> Result<(), String> {
+    const SAMPLE_RATE: u32 = 16_000;
+    const CHANNELS: u16 = 1;
+    const BYTES_PER_SAMPLE: u16 = 2;
+
+    let data_bytes = samples.len() * BYTES_PER_SAMPLE as usize;
+    let riff_size = 36usize
+        .checked_add(data_bytes)
+        .ok_or_else(|| "WAV too large".to_string())?;
+    let mut wav = Vec::with_capacity(44 + data_bytes);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(riff_size as u32).to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&CHANNELS.to_le_bytes());
+    wav.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
+    wav.extend_from_slice(&(SAMPLE_RATE * CHANNELS as u32 * BYTES_PER_SAMPLE as u32).to_le_bytes());
+    wav.extend_from_slice(&(CHANNELS * BYTES_PER_SAMPLE).to_le_bytes());
+    wav.extend_from_slice(&(BYTES_PER_SAMPLE * 8).to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&(data_bytes as u32).to_le_bytes());
+    for &sample in samples {
+        let pcm = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+        wav.extend_from_slice(&pcm.to_le_bytes());
+    }
+
+    std::fs::write(path, wav).map_err(|e| e.to_string())
+}
+
 async fn wait_for_audio_warmup(
     app_inner: &Arc<app_state::AppInner>,
     timeout_ms: u64,
@@ -653,6 +742,7 @@ async fn start_recording(app_handle: AppHandle) {
     }
 
     *app_inner.latest_transcript.lock().await = (String::new(), String::new());
+    app_inner.recording_audio.lock().await.clear();
     let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
     // Re-position before showing so the overlay follows the current display layout
     // (e.g. after an external monitor was connected/disconnected).
@@ -663,6 +753,24 @@ async fn start_recording(app_handle: AppHandle) {
 
     // 2. Warm up microphone capture
     set_app_state(&app_handle, &app_inner, app_state::AppState::Connecting).await;
+    #[cfg(target_os = "macos")]
+    if let Err(e) = native_audio::start_capture(app_handle.clone(), Arc::clone(&app_inner)).await {
+        *recording_state.0.lock().unwrap() = false;
+        set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+        if let Some(overlay) = app_handle.get_webview_window("overlay") {
+            let _ = overlay.hide();
+        }
+        log_rec!(warn, "Native audio warmup failed: {}", e);
+        let _ = app_handle.emit(
+            "overlay:event",
+            serde_json::json!({
+                "type": "hint",
+                "payload": { "text": e, "level": "error", "variant": "text" }
+            }),
+        );
+        return;
+    }
+
     let _ = app_handle.emit(
         "overlay:event",
         serde_json::json!({
@@ -671,7 +779,7 @@ async fn start_recording(app_handle: AppHandle) {
     );
     if let Err(e) = wait_for_audio_warmup(&app_inner, 8000).await {
         *recording_state.0.lock().unwrap() = false;
-        stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+        stop_audio_capture(&app_handle, &app_inner, 1200).await;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
         if let Some(overlay) = app_handle.get_webview_window("overlay") {
             let _ = overlay.hide();
@@ -690,7 +798,7 @@ async fn start_recording(app_handle: AppHandle) {
     // Check if recording was cancelled during warmup (hold mode: quick press-release)
     if !*recording_state.0.lock().unwrap() {
         log_rec!(warn, "Cancelled during warmup, aborting start");
-        stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+        stop_audio_capture(&app_handle, &app_inner, 1200).await;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
         if let Some(overlay) = app_handle.get_webview_window("overlay") {
             let _ = overlay.hide();
@@ -698,19 +806,16 @@ async fn start_recording(app_handle: AppHandle) {
         return;
     }
 
-    // Settle delay before the cue: getUserMedia resolving only means the stream
-    // exists, not that its AEC/AGC have converged. The mic is live and DSP converges
-    // on real input during this wait (capture stays gated off until Recording), while
-    // the renderer's cue keep-alive (set up during warmup) holds the output device
-    // warm so the cue still plays smoothly afterwards. The cue is the user's "go"
-    // signal, so it must land AFTER this delay — never before, or the user would
-    // speak into the unconverged window and lose the first words.
+    // Settle delay before the cue: the selected capture backend is live during
+    // this wait (audio stays gated off until Recording), while the renderer's cue
+    // keep-alive holds the output device warm so the start cue plays smoothly.
+    // The cue is the user's "go" signal, so it lands after capture warmup.
     tokio::time::sleep(std::time::Duration::from_millis(AUDIO_SETTLE_MS)).await;
 
     // Re-check cancellation: the user may have released during the settle delay.
     if !*recording_state.0.lock().unwrap() {
         log_rec!(warn, "Cancelled during settle, aborting start");
-        stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+        stop_audio_capture(&app_handle, &app_inner, 1200).await;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
         if let Some(overlay) = app_handle.get_webview_window("overlay") {
             let _ = overlay.hide();
@@ -928,7 +1033,8 @@ async fn connect_and_attach(
             }
             *app_handle.state::<RecordingState>().0.lock().unwrap() = false;
             app_inner.pending_audio.lock().await.clear();
-            stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+            stop_audio_capture(&app_handle, &app_inner, 1200).await;
+            save_recording_wav(&app_handle, &app_inner).await;
             // Emit error hint BEFORE setting idle so the overlay shows it: the
             // frontend's idle handler only clears "info"-level hints.
             let _ = app_handle.emit("overlay:event", serde_json::json!({
@@ -967,7 +1073,8 @@ async fn stop_recording(app_handle: AppHandle) {
     set_app_state(&app_handle, &app_inner, app_state::AppState::Finishing).await;
 
     // 2. Stop renderer audio first so the final buffered chunk is flushed.
-    stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+    stop_audio_capture(&app_handle, &app_inner, 1200).await;
+    save_recording_wav(&app_handle, &app_inner).await;
 
     // 3. Acquire the ready ASR session. If the background connect hasn't finished
     //    (user stopped before it was ready), wait for it to resolve so the buffered
@@ -1108,13 +1215,14 @@ async fn cancel_recording(app_handle: AppHandle) {
         .session_epoch
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     app_inner.pending_audio.lock().await.clear();
+    app_inner.recording_audio.lock().await.clear();
 
     // Clear the active prompt ID since the session was cancelled
     if let Some(active) = app_handle.try_state::<ActivePromptId>() {
         *active.0.lock().unwrap() = None;
     }
 
-    stop_renderer_audio(&app_handle, &app_inner, 1200).await;
+    stop_audio_capture(&app_handle, &app_inner, 1200).await;
 
     if let Some(session) = app_inner.asr_session.lock().await.take() {
         session.close();
@@ -1393,7 +1501,8 @@ async fn finalize_on_failure(app: &AppHandle, app_inner: &Arc<app_state::AppInne
     *app_inner.asr_events.lock().await = None;
     app_inner.pending_audio.lock().await.clear();
 
-    stop_renderer_audio(app, app_inner, 1200).await;
+    stop_audio_capture(app, app_inner, 1200).await;
+    save_recording_wav(app, app_inner).await;
 
     if combined.trim().is_empty() {
         // Nothing to salvage: surface the error so the user understands the abort.
