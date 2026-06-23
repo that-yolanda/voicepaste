@@ -28,6 +28,7 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
+    "dev:no-watch": "tauri dev --no-watch",
     "dev:web": "vite",
     "build:web": "vite build",
     "pack": "tsx --env-file=.env scripts/pack.ts",
