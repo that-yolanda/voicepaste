@@ -1,6 +1,12 @@
-import { Copy, Trash2 } from "lucide-react";
+import { Copy, Play, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { deleteHistory, getHistory, getStats } from "@/bridge/settings";
+import {
+  deleteHistory,
+  getHistory,
+  getStats,
+  playSoundFile,
+  retryHistoryTranscription,
+} from "@/bridge/settings";
 import { formatCompact } from "@/lib/format";
 import { Button } from "@/ui/components/Button";
 import { Heatmap } from "@/ui/components/Heatmap";
@@ -49,8 +55,12 @@ interface Stats {
   totalCharacters?: number;
 }
 interface HistoryItem {
-  ts: number;
+  ts: string;
   text: string;
+  status?: "success" | "failed";
+  audioPath?: string;
+  error?: string;
+  retryOf?: string;
 }
 
 /* ---------- component ---------- */
@@ -59,6 +69,7 @@ export function HomePage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [days, setDays] = useState(1);
+  const [retryingTs, setRetryingTs] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -153,6 +164,11 @@ export function HomePage() {
                     const show = dk !== last;
                     last = dk;
                     const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                    const failed = item.status === "failed";
+                    const retrying = retryingTs === item.ts;
+                    const displayText = failed
+                      ? `转写失败：${item.error || item.text || "请检查网络连接"}`
+                      : item.text;
                     return (
                       <div key={item.ts} className="text-sm">
                         {show && (
@@ -162,27 +178,90 @@ export function HomePage() {
                             <div className="flex-1 h-px bg-border-subtle" />
                           </div>
                         )}
-                        <div className="group min-h-8 transition-colors hover:bg-fill-hover relative">
+                        <div
+                          className={`group min-h-8 transition-colors hover:bg-fill-hover relative ${failed ? "bg-warning/10" : ""}`}
+                        >
                           <div className="px-4 flex items-center gap-2 min-h-8 ">
                             <span className="text-xs text-text-muted shrink-0">{time}</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-text-dim truncate leading-[1.4]">{item.text}</p>
+                              <p
+                                className={`truncate leading-[1.4] ${failed ? "text-warning" : "text-text-dim"}`}
+                              >
+                                {displayText}
+                              </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute top-1/2 right-2 -translate-y-1/2 h-full">
-                            <Button
-                              size="icon"
-                              variant="accent"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(item.text);
-                                } catch {
-                                  /* */
-                                }
-                              }}
-                            >
-                              <Copy size={14} />
-                            </Button>
+                          <div
+                            className={`flex items-center gap-2 transition-opacity duration-200 absolute top-1/2 right-2 -translate-y-1/2 h-full ${
+                              retrying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                            }`}
+                          >
+                            {item.audioPath && (
+                              <Button
+                                size="icon"
+                                variant="accent"
+                                onClick={async () => {
+                                  try {
+                                    await playSoundFile(item.audioPath || "");
+                                  } catch {
+                                    /* */
+                                  }
+                                }}
+                              >
+                                <Play size={14} />
+                              </Button>
+                            )}
+                            {failed ? (
+                              <Button
+                                size="icon"
+                                variant="accent"
+                                disabled={retrying}
+                                onClick={async () => {
+                                  setRetryingTs(item.ts);
+                                  try {
+                                    const result = (await retryHistoryTranscription(item.ts)) as {
+                                      text?: string;
+                                    };
+                                    if (result.text) {
+                                      setHistory((prev) =>
+                                        prev.map((entry) =>
+                                          entry.ts === item.ts
+                                            ? {
+                                                ...entry,
+                                                text: result.text || "",
+                                                status: "success",
+                                                error: undefined,
+                                                retryOf: undefined,
+                                              }
+                                            : entry,
+                                        ),
+                                      );
+                                    }
+                                    await load();
+                                  } catch {
+                                    /* */
+                                  } finally {
+                                    setRetryingTs(null);
+                                  }
+                                }}
+                              >
+                                <RefreshCw size={14} className={retrying ? "animate-spin" : ""} />
+                              </Button>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="accent"
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(item.text);
+                                  } catch {
+                                    /* */
+                                  }
+                                }}
+                              >
+                                <Copy size={14} />
+                              </Button>
+                            )}
                             <Button
                               size="icon"
                               variant="accent"

@@ -24,26 +24,95 @@ pub fn set_audio_level(app: &AppHandle, level: f64) {
     macos::set_audio_level(app, level);
 }
 
+/// Remember the app the user is currently working in, so we can hand keyboard
+/// focus back to it after a retry (clicking the native retry button activates the
+/// overlay, which would otherwise swallow the paste). No-op off macOS.
+#[allow(unused_variables)]
+pub fn capture_foreground_app(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    macos::capture_foreground_app(app);
+}
+
+/// Reactivate the app captured by [`capture_foreground_app`] so the subsequent
+/// paste lands in the window the user was in. No-op off macOS.
+#[allow(unused_variables)]
+pub fn restore_foreground_app(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    macos::restore_foreground_app(app);
+}
+
 /// Native macOS overlay renderer. Builds and updates an AppKit pill
 /// (`NSGlassEffectView` → container → indicator + transcript label) living inside
 /// the overlay window's content view, above the transparent WebView.
 #[cfg(target_os = "macos")]
 mod macos {
     use objc2::rc::Retained;
-    use objc2::runtime::AnyObject;
-    use objc2::{msg_send, MainThreadMarker};
+    use objc2::runtime::{AnyClass, AnyObject, ClassBuilder, Sel};
+    use objc2::{class, msg_send, sel, MainThreadMarker};
     use objc2_app_kit::{
-        NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSColor, NSFont,
-        NSGlassEffectView, NSGlassEffectViewStyle, NSLineBreakMode, NSProgressIndicator,
-        NSProgressIndicatorStyle, NSTextField, NSView, NSVisualEffectBlendingMode,
-        NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
+        NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
+        NSApplicationActivationOptions, NSAttributedStringNSStringDrawing, NSBezelStyle, NSButton,
+        NSColor, NSFont, NSGlassEffectView, NSGlassEffectViewStyle, NSLineBreakMode,
+        NSProgressIndicator, NSProgressIndicatorStyle, NSRunningApplication, NSTextField, NSView,
+        NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState,
+        NSVisualEffectView, NSWindow, NSWorkspace,
     };
     use objc2_foundation::{
-        NSArray, NSAttributedString, NSMutableAttributedString, NSNumber, NSPoint, NSRange, NSRect,
-        NSSize, NSString,
+        NSArray, NSAttributedString, NSBundle, NSMutableAttributedString, NSNumber, NSPoint,
+        NSRange, NSRect, NSSize, NSString,
     };
     use std::cell::RefCell;
+    use std::sync::{Mutex as StdMutex, OnceLock};
     use tauri::{AppHandle, Manager};
+
+    static RETRY_APP: OnceLock<StdMutex<Option<AppHandle>>> = OnceLock::new();
+    /// Bundle id of the app the user was in before the overlay stole focus, so a
+    /// successful retry can hand keyboard focus back for the paste.
+    static PREV_FOREGROUND_BUNDLE: OnceLock<StdMutex<Option<String>>> = OnceLock::new();
+
+    fn our_bundle_id() -> Option<String> {
+        NSBundle::mainBundle()
+            .bundleIdentifier()
+            .map(|s| s.to_string())
+    }
+
+    pub fn capture_foreground_app(app: &AppHandle) {
+        let _ = app.run_on_main_thread(|| {
+            let ws = NSWorkspace::sharedWorkspace();
+            let Some(front) = ws.frontmostApplication() else {
+                return;
+            };
+            let Some(bid) = front.bundleIdentifier() else {
+                return;
+            };
+            let bid = bid.to_string();
+            // If we are already frontmost (e.g. re-arming retry after a failed
+            // attempt), keep the previously captured app instead of ourselves.
+            if our_bundle_id().as_deref() == Some(bid.as_str()) {
+                return;
+            }
+            let slot = PREV_FOREGROUND_BUNDLE.get_or_init(|| StdMutex::new(None));
+            if let Ok(mut guard) = slot.lock() {
+                *guard = Some(bid);
+            }
+        });
+    }
+
+    pub fn restore_foreground_app(app: &AppHandle) {
+        let bid = PREV_FOREGROUND_BUNDLE
+            .get()
+            .and_then(|slot| slot.lock().ok().and_then(|g| g.clone()));
+        let Some(bid) = bid else {
+            return;
+        };
+        let _ = app.run_on_main_thread(move || {
+            let ns_bid = NSString::from_str(&bid);
+            let apps = NSRunningApplication::runningApplicationsWithBundleIdentifier(&ns_bid);
+            if let Some(target) = apps.firstObject() {
+                target.activateWithOptions(NSApplicationActivationOptions::ActivateAllWindows);
+            }
+        });
+    }
 
     // --- Layout constants (mirror web/styles.css + app.js scheduleResize) ---
     const FONT_SIZE: f64 = 14.0;
@@ -67,6 +136,11 @@ mod macos {
     const WAVE_GAP_LEFT: f64 = 12.0; // gap between text and waveform
     const WAVE_MAX_H: f64 = 22.0;
     const WAVE_MIN_H: f64 = 3.0;
+    const RETRY_SIZE: f64 = 22.0;
+    const RETRY_MIN_W: f64 = 38.0; // floor; the button grows to fit "重试 (R ⌥)"
+    const RETRY_TEXT_PAD: f64 = 24.0; // horizontal padding around the button title
+    const RETRY_GAP_LEFT: f64 = 8.0;
+    const RETRY_RIGHT_INSET: f64 = 26.0;
 
     /// Logical overlay model, mirrored from overlay events (parallels app.js `state`).
     #[derive(Default)]
@@ -75,7 +149,9 @@ mod macos {
         partial_text: String,
         hint_text: String,
         hint_level: String,   // "info" | "warn" | "error"
-        hint_variant: String, // "text" | "progress"
+        hint_variant: String, // "text" | "progress" | "retry"
+        hint_retryable: bool,
+        retry_hotkey: String, // formatted main hotkey label, e.g. "R ⌥"
         app_state: String,    // "idle" | "connecting" | "recording" | "finishing"
         // Sticky layout (prevents width jitter while recording/finishing).
         layout_width: f64,
@@ -117,8 +193,13 @@ mod macos {
         spinner: Retained<NSProgressIndicator>,
         label: Retained<NSTextField>,
         bars: [Retained<NSView>; WAVE_N],
+        retry_view: Retained<NSView>,
+        retry_button: Retained<NSButton>,
+        _retry_target: Retained<AnyObject>,
         dot_layer: Retained<AnyObject>, // CALayer for the indicator dot
         ripple_layer: Retained<AnyObject>, // CALayer halo behind the dot (recording ripple)
+        retry_track_layer: Retained<AnyObject>, // CALayer for the retry ring track
+        retry_progress_layer: Retained<AnyObject>, // CALayer for the retry countdown ring
         fade_mask: Retained<AnyObject>, // CAGradientLayer for the multi-line top fade
         applied_variant: String,        // "" (auto/inherit) | "light" | "dark"
     }
@@ -126,6 +207,36 @@ mod macos {
     thread_local! {
         static MODEL: RefCell<Model> = RefCell::new(Model::default());
         static VIEWS: RefCell<Option<Views>> = const { RefCell::new(None) };
+    }
+
+    extern "C" fn retry_clicked(_this: *mut AnyObject, _sel: Sel, _sender: *mut AnyObject) {
+        let Some(lock) = RETRY_APP.get() else {
+            return;
+        };
+        let Ok(guard) = lock.lock() else {
+            return;
+        };
+        let Some(app) = guard.as_ref().cloned() else {
+            return;
+        };
+        tauri::async_runtime::spawn(async move {
+            let _ = crate::retry_latest_failed_transcription(app).await;
+        });
+    }
+
+    fn retry_target_class() -> &'static AnyClass {
+        if let Some(cls) = AnyClass::get(c"VoicePasteRetryTarget") {
+            return cls;
+        }
+        let mut builder =
+            ClassBuilder::new(c"VoicePasteRetryTarget", class!(NSObject)).expect("class builder");
+        unsafe {
+            builder.add_method(
+                sel!(retryClicked:),
+                retry_clicked as extern "C" fn(*mut AnyObject, Sel, *mut AnyObject),
+            );
+        }
+        builder.register()
     }
 
     fn liquid_glass_available() -> bool {
@@ -151,6 +262,11 @@ mod macos {
 
     /// Parse an incoming overlay event and update the native pill on the main thread.
     pub fn dispatch(app: &AppHandle, event: &serde_json::Value) {
+        let slot = RETRY_APP.get_or_init(|| StdMutex::new(None));
+        if let Ok(mut guard) = slot.lock() {
+            *guard = Some(app.clone());
+        }
+
         let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
         // Only visual events drive the native pill. Audio lifecycle events
         // (audio:warmup / recording:start / recording:stop) belong to the WebView worker.
@@ -183,6 +299,8 @@ mod macos {
                     model.hint_text.clear();
                     model.hint_level = "info".into();
                     model.hint_variant = "text".into();
+                    model.hint_retryable = false;
+                    model.retry_hotkey.clear();
                     model.layout_width = 0.0;
                     model.layout_wrap = false;
                     model.smoothed_level = 0.0;
@@ -200,6 +318,8 @@ mod macos {
                         {
                             model.hint_text.clear();
                             model.hint_variant = "text".into();
+                            model.hint_retryable = false;
+                            model.retry_hotkey.clear();
                         }
                         // Collapse the waveform when not actively recording.
                         if s != "recording" {
@@ -235,6 +355,15 @@ mod macos {
                         .and_then(|p| p.get("variant"))
                         .and_then(|v| v.as_str())
                         .unwrap_or("text")
+                        .into();
+                    model.hint_retryable = payload
+                        .and_then(|p| p.get("retryable"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    model.retry_hotkey = payload
+                        .and_then(|p| p.get("hotkey"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
                         .into();
                 }
                 "appearance" => {
@@ -306,6 +435,18 @@ mod macos {
                 "Preparing…".into()
             };
         }
+        if visual_state == "finishing" && model.hint_variant == "retry" {
+            // Placeholder shown only until the replayed transcript starts
+            // streaming in; then yield to the live text below.
+            if model.final_text.is_empty() && model.partial_text.is_empty() {
+                return if zh {
+                    "重试中…".into()
+                } else {
+                    "Retrying…".into()
+                };
+            }
+            return String::new();
+        }
         if visual_state == "finishing" && model.hint_variant == "progress" {
             return if zh {
                 "思考中…".into()
@@ -313,6 +454,8 @@ mod macos {
                 "Thinking…".into()
             };
         }
+        // The retry label + hotkey live inside the retry button, not in the
+        // message text, so the hint is just the error message.
         model.hint_text.clone()
     }
 
@@ -373,6 +516,52 @@ mod macos {
             container.addSubview(&spinner);
             container.addSubview(&label);
 
+            let retry_view = NSView::new(mtm);
+            retry_view.setWantsLayer(true);
+            set_layer_color(&retry_view, &NSColor::clearColor(), RETRY_SIZE / 2.0);
+            let retry_track_layer = make_retry_ring_layer();
+            let retry_progress_layer = make_retry_ring_layer();
+            unsafe {
+                let retry_layer: *mut AnyObject = msg_send![&*retry_view, layer];
+                if !retry_layer.is_null() {
+                    let _: () = msg_send![retry_layer, addSublayer: &*retry_track_layer];
+                    let _: () = msg_send![retry_layer, addSublayer: &*retry_progress_layer];
+                }
+            }
+            let retry_target = unsafe {
+                let cls = retry_target_class();
+                let obj: *mut AnyObject = msg_send![cls, new];
+                Retained::from_raw(obj).expect("retry target init")
+            };
+            let retry_button = unsafe {
+                NSButton::buttonWithTitle_target_action(
+                    &NSString::from_str("重试"),
+                    Some(&retry_target),
+                    Some(sel!(retryClicked:)),
+                    mtm,
+                )
+            };
+            retry_button.setBordered(true);
+            retry_button.setTransparent(false);
+            retry_button.setShowsBorderOnlyWhileMouseInside(true);
+            retry_button.setBezelStyle(NSBezelStyle::AccessoryBarAction);
+            retry_button.setFont(Some(&NSFont::systemFontOfSize_weight(12.0, 600.0)));
+            retry_button.setContentTintColor(Some(&NSColor::systemRedColor()));
+            retry_button.setBezelColor(Some(&NSColor::colorWithSRGBRed_green_blue_alpha(
+                1.0, 0.231, 0.231, 0.10,
+            )));
+            retry_button.setAttributedTitle(&retry_title_attr(""));
+            unsafe {
+                let cell: *mut AnyObject = msg_send![&*retry_button, cell];
+                if !cell.is_null() {
+                    let _: () = msg_send![cell, setHighlightsBy: 1usize];
+                    let _: () = msg_send![cell, setShowsStateBy: 0usize];
+                }
+            }
+            retry_view.addSubview(&retry_button);
+            retry_view.setHidden(true);
+            container.addSubview(&retry_view);
+
             // Waveform bars (right side), green and rounded; positioned per render.
             let bars: [Retained<NSView>; WAVE_N] = std::array::from_fn(|_| {
                 let b = NSView::new(mtm);
@@ -413,8 +602,13 @@ mod macos {
                 spinner,
                 label,
                 bars,
+                retry_view,
+                retry_button,
+                _retry_target: retry_target,
                 dot_layer,
                 ripple_layer,
+                retry_track_layer,
+                retry_progress_layer,
                 fade_mask: make_fade_mask(),
                 applied_variant: "<unset>".into(),
             });
@@ -463,6 +657,100 @@ mod macos {
             let layer = Retained::from_raw(obj).expect("CALayer init");
             let _: () = msg_send![&*layer, setCornerRadius: DOT_SIZE / 2.0];
             layer
+        }
+    }
+
+    fn make_retry_ring_layer() -> Retained<AnyObject> {
+        unsafe {
+            let cls = objc2::runtime::AnyClass::get(c"CAShapeLayer").expect("CAShapeLayer");
+            let obj: *mut AnyObject = msg_send![cls, alloc];
+            let obj: *mut AnyObject = msg_send![obj, init];
+            let layer = Retained::from_raw(obj).expect("CAShapeLayer init");
+            let clear = NSColor::clearColor();
+            let clear_cg: *mut AnyObject = msg_send![&*clear, CGColor];
+            let _: () = msg_send![&*layer, setFillColor: clear_cg];
+            let _: () = msg_send![&*layer, setLineWidth: 1.6f64];
+            let cap = NSString::from_str("round");
+            let _: () = msg_send![&*layer, setLineCap: &*cap];
+            let _: () = msg_send![&*layer, setStrokeEnd: 1.0f64];
+            layer
+        }
+    }
+
+    fn set_retry_ring_path(layer: &AnyObject, width: f64) {
+        unsafe {
+            let cls = objc2::runtime::AnyClass::get(c"NSBezierPath").expect("NSBezierPath");
+            let inset = 1.9;
+            let left = inset;
+            let right = width - inset;
+            let top = RETRY_SIZE - inset;
+            let bottom = inset;
+            let radius = (top - bottom) / 2.0;
+            let center_y = RETRY_SIZE / 2.0;
+            let left_center = NSPoint {
+                x: left + radius,
+                y: center_y,
+            };
+            let right_center = NSPoint {
+                x: right - radius,
+                y: center_y,
+            };
+            let path: *mut AnyObject = msg_send![cls, bezierPath];
+            let _: () = msg_send![path, moveToPoint: NSPoint { x: width / 2.0, y: top }];
+            let _: () = msg_send![path, lineToPoint: NSPoint { x: left + radius, y: top }];
+            let _: () = msg_send![
+                path,
+                appendBezierPathWithArcWithCenter: left_center,
+                radius: radius,
+                startAngle: 90.0f64,
+                endAngle: 270.0f64,
+                clockwise: false
+            ];
+            let _: () = msg_send![path, lineToPoint: NSPoint { x: right - radius, y: bottom }];
+            let _: () = msg_send![
+                path,
+                appendBezierPathWithArcWithCenter: right_center,
+                radius: radius,
+                startAngle: 270.0f64,
+                endAngle: 90.0f64,
+                clockwise: false
+            ];
+            let _: () = msg_send![path, closePath];
+            let cg_path: *mut AnyObject = msg_send![path, CGPath];
+            let _: () = msg_send![layer, setPath: cg_path];
+        }
+    }
+
+    fn set_retry_countdown(layer: &AnyObject, on: bool) {
+        unsafe {
+            let key = NSString::from_str("retry-countdown");
+            if on {
+                let existing: *mut AnyObject = msg_send![layer, animationForKey: &*key];
+                if !existing.is_null() {
+                    return;
+                }
+                let anim_cls =
+                    objc2::runtime::AnyClass::get(c"CABasicAnimation").expect("CABasicAnimation");
+                let path = NSString::from_str("strokeStart");
+                let anim: *mut AnyObject = msg_send![anim_cls, animationWithKeyPath: &*path];
+                let _: () = msg_send![anim, setFromValue: &*NSNumber::numberWithDouble(0.0)];
+                let _: () = msg_send![anim, setToValue: &*NSNumber::numberWithDouble(1.0)];
+                let _: () = msg_send![anim, setDuration: 5.0f64];
+                let _: () = msg_send![anim, setRemovedOnCompletion: false];
+                let fill = NSString::from_str("forwards");
+                let _: () = msg_send![anim, setFillMode: &*fill];
+                let tcls = objc2::runtime::AnyClass::get(c"CAMediaTimingFunction")
+                    .expect("CAMediaTimingFunction");
+                let tname = NSString::from_str("linear");
+                let tf: *mut AnyObject = msg_send![tcls, functionWithName: &*tname];
+                let _: () = msg_send![anim, setTimingFunction: tf];
+                let _: () = msg_send![layer, addAnimation: anim, forKey: &*key];
+            } else {
+                let _: () = msg_send![layer, removeAnimationForKey: &*key];
+                let _: () = msg_send![layer, setOpacity: 1.0f32];
+                let _: () = msg_send![layer, setStrokeStart: 0.0f64];
+                let _: () = msg_send![layer, setStrokeEnd: 1.0f64];
+            }
         }
     }
 
@@ -672,6 +960,28 @@ mod macos {
         Retained::into_super(attr)
     }
 
+    fn retry_title_attr(hotkey: &str) -> Retained<NSAttributedString> {
+        // "重试 (R ⌥)" — label + the configured hotkey, matching settings symbols.
+        let text = if hotkey.is_empty() {
+            "重试".to_string()
+        } else {
+            format!("重试 ({hotkey})")
+        };
+        let attr = NSMutableAttributedString::from_nsstring(&NSString::from_str(&text));
+        let font = NSFont::systemFontOfSize_weight(12.0, 600.0);
+        let range = NSRange::new(0, text.encode_utf16().count());
+        let color = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.231, 0.231, 1.0);
+        unsafe {
+            attr.addAttribute_value_range(objc2_app_kit::NSFontAttributeName, &font, range);
+            attr.addAttribute_value_range(
+                objc2_app_kit::NSForegroundColorAttributeName,
+                &color,
+                range,
+            );
+        }
+        Retained::into_super(attr)
+    }
+
     fn hint_color(level: &str) -> Retained<NSColor> {
         match level {
             "error" => NSColor::systemRedColor(),
@@ -703,6 +1013,15 @@ mod macos {
         let hint = visible_hint(model);
         let has_hint = !hint.is_empty();
         let has_text = !model.final_text.is_empty() || !model.partial_text.is_empty();
+        let show_retry = model.hint_retryable && model.hint_level == "error" && has_hint;
+        // Build the retry button title ("重试 (R ⌥)") and size the button to fit it,
+        // so the label + hotkey live inside the button rather than in the message.
+        let retry_title = retry_title_attr(&model.retry_hotkey);
+        let retry_w = if show_retry {
+            (retry_title.size().width.ceil() + RETRY_TEXT_PAD).max(RETRY_MIN_W)
+        } else {
+            0.0
+        };
 
         VIEWS.with(|v| {
             let mut slot = v.borrow_mut();
@@ -749,13 +1068,18 @@ mod macos {
             // its width so the text never overlaps the bars.
             let show_wave = model.app_state == "recording";
 
-            // Chrome around the text (left pad + indicator + gap + right pad + waveform).
+            // Chrome around the text (left pad + indicator + gap + right action area).
             let wave_reserve = if show_wave {
                 WAVE_GAP_LEFT + WAVE_AREA_W
             } else {
                 0.0
             };
-            let chrome = PAD_LEFT + INDICATOR_W + GAP + PAD_RIGHT + wave_reserve;
+            let retry_reserve = if show_retry {
+                RETRY_GAP_LEFT + retry_w + (RETRY_RIGHT_INSET - PAD_RIGHT)
+            } else {
+                0.0
+            };
+            let chrome = PAD_LEFT + INDICATOR_W + GAP + PAD_RIGHT + wave_reserve + retry_reserve;
             let text_w = measured_w + TEXT_SLACK;
             let next_width = if want_wrap {
                 MULTI_LINE_WIDTH + chrome
@@ -929,6 +1253,58 @@ mod macos {
 
             // Waveform bars (right), shown only while recording.
             layout_bars(views, pill_w, pill_h, model, show_wave);
+
+            views.retry_view.setHidden(!show_retry);
+            if show_retry {
+                let retry_x = pill_w - RETRY_RIGHT_INSET - retry_w;
+                let retry_y = ((pill_h - RETRY_SIZE) / 2.0).round();
+                views.retry_view.setFrame(NSRect {
+                    origin: NSPoint {
+                        x: retry_x,
+                        y: retry_y,
+                    },
+                    size: NSSize {
+                        width: retry_w,
+                        height: RETRY_SIZE,
+                    },
+                });
+                views.retry_button.setFrame(NSRect {
+                    origin: NSPoint { x: 0.0, y: 0.0 },
+                    size: NSSize {
+                        width: retry_w,
+                        height: RETRY_SIZE,
+                    },
+                });
+                views.retry_button.setAttributedTitle(&retry_title);
+                unsafe {
+                    let bg = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.231, 0.231, 0.08);
+                    let border =
+                        NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.231, 0.231, 0.84);
+                    let view_layer: *mut AnyObject = msg_send![&*views.retry_view, layer];
+                    if !view_layer.is_null() {
+                        let bg_cg: *mut AnyObject = msg_send![&*bg, CGColor];
+                        let _: () = msg_send![view_layer, setBackgroundColor: bg_cg];
+                        let _: () = msg_send![view_layer, setCornerRadius: RETRY_SIZE / 2.0];
+                    }
+                    let ring_frame = NSRect {
+                        origin: NSPoint { x: 0.0, y: 0.0 },
+                        size: NSSize {
+                            width: retry_w,
+                            height: RETRY_SIZE,
+                        },
+                    };
+                    let _: () = msg_send![&*views.retry_track_layer, setFrame: ring_frame];
+                    let _: () = msg_send![&*views.retry_progress_layer, setFrame: ring_frame];
+                    set_retry_ring_path(&views.retry_track_layer, retry_w);
+                    set_retry_ring_path(&views.retry_progress_layer, retry_w);
+                    let track = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.231, 0.231, 0.18);
+                    let track_cg: *mut AnyObject = msg_send![&*track, CGColor];
+                    let _: () = msg_send![&*views.retry_track_layer, setStrokeColor: track_cg];
+                    let border_cg: *mut AnyObject = msg_send![&*border, CGColor];
+                    let _: () = msg_send![&*views.retry_progress_layer, setStrokeColor: border_cg];
+                }
+            }
+            set_retry_countdown(&views.retry_progress_layer, show_retry);
 
             // Keep the pill visible throughout an active session (so the indicator
             // stays up while waiting for the first transcript); only hide it when idle

@@ -67,3 +67,8 @@ export async function sendAudioWarmupFailed(payload: { message?: string } = {}):
 export async function getConfig(): Promise<OverlayAppConfig> {
   return invoke("get_app_config");
 }
+
+/** Retry the latest failed recording directly from the overlay. */
+export async function retryLatestFailedTranscription(): Promise<void> {
+  await invoke("retry_latest_failed_transcription");
+}

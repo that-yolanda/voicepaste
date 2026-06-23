@@ -175,11 +175,21 @@ export function AppSettingsPage() {
             <SectionItem
               title="保留剪贴板"
               description="输入完成后恢复原剪贴板内容"
-              last
               action={
                 <Toggle
                   checked={app.keep_clipboard !== false}
                   onChange={(v) => setAppBool("keep_clipboard", v)}
+                />
+              }
+            />
+            <SectionItem
+              title="保留录音"
+              description="开启后保留最近 1 个月录音；关闭时仅保留失败录音用于重试"
+              last
+              action={
+                <Toggle
+                  checked={app.keep_recordings === true}
+                  onChange={(v) => setAppBool("keep_recordings", v)}
                 />
               }
             />

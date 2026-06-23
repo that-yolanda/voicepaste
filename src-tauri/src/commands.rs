@@ -271,6 +271,23 @@ pub async fn delete_history(
     Ok(serde_json::json!({ "ok": true }))
 }
 
+/// Retry a failed history entry by replaying its saved WAV through ASR.
+#[tauri::command]
+pub async fn retry_history_transcription(
+    app: AppHandle,
+    ts: String,
+) -> Result<serde_json::Value, String> {
+    crate::retry_history_transcription(app, ts).await
+}
+
+/// Retry the latest failed recording from the overlay retry button.
+#[tauri::command]
+pub async fn retry_latest_failed_transcription(
+    app: AppHandle,
+) -> Result<serde_json::Value, String> {
+    crate::retry_latest_failed_transcription(app).await
+}
+
 /// Compute a 0..1 loudness level from f32 PCM samples for the overlay waveform.
 /// Mirrors the web AnalyserNode mapping (RMS + peak, mild compression).
 #[cfg(target_os = "macos")]

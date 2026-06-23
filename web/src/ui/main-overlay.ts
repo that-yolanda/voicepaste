@@ -9,6 +9,7 @@ import {
   getConfig,
   notifyAudioStopped,
   onOverlayEvent,
+  retryLatestFailedTranscription,
   sendAudioChunk,
   sendAudioWarmupFailed,
   sendAudioWarmupReady,
@@ -28,6 +29,7 @@ interface OverlayState {
   hintText: string;
   hintLevel: HintLevel;
   hintVariant: string;
+  retryHotkey: string;
   appState: AppState;
   audioReady: boolean;
   mediaStream: MediaStream | null;
@@ -40,6 +42,8 @@ interface OverlayState {
   layoutWrap: boolean;
   renderedWidth: number;
   waveBarLevels: number[];
+  retryVisible: boolean;
+  retrying: boolean;
 }
 
 interface AppearanceConfig {
@@ -56,6 +60,7 @@ const state: OverlayState = {
   hintText: "",
   hintLevel: "info",
   hintVariant: "text",
+  retryHotkey: "",
   appState: "idle",
   audioReady: false,
   mediaStream: null,
@@ -68,6 +73,8 @@ const state: OverlayState = {
   layoutWrap: false,
   renderedWidth: 0,
   waveBarLevels: [],
+  retryVisible: false,
+  retrying: false,
 };
 
 // ---- DOM elements ----
@@ -88,9 +95,12 @@ const elements = {
   transcript: getEl("transcript"),
   measureText: getEl("measureText"),
   statusBars: getEl("statusBars"),
+  retryButton: getEl("retryButton") as HTMLButtonElement,
+  retryLabel: getEl("retryLabel"),
 };
 
 const statusBarItems = Array.from(elements.statusBars.querySelectorAll(".status-bar"));
+let retryHideTimer = 0;
 
 // ---- Appearance ----
 
@@ -111,9 +121,7 @@ function applyAppearance(cfg: AppearanceConfig = {}): void {
   currentAppearance.overlayStyle = cfg.overlayStyle || "liquid";
   currentAppearance.theme = cfg.theme || "system";
   const isMac = cfg.platform === "macos";
-  if (elements.stage) {
-    elements.stage.style.display = isMac ? "none" : "";
-  }
+  syncStageVisibility();
   const isVibrancy = isMac && cfg.overlayStyle === "vibrancy";
   elements.bubble.classList.toggle("platform-mac", isMac);
   elements.bubble.classList.toggle("platform-win", !isMac);
@@ -122,6 +130,11 @@ function applyAppearance(cfg: AppearanceConfig = {}): void {
     "is-light",
     isMac && !isVibrancy && resolvedGlassVariant() === "light",
   );
+}
+
+function syncStageVisibility(): void {
+  const isMac = currentAppearance.platform === "macos";
+  elements.stage.style.display = isMac ? "none" : "";
 }
 
 // ---- Waveform ----
@@ -208,14 +221,44 @@ function getVisibleHintText(): string {
   const visualState: string =
     state.appState === "recording" && !state.audioReady ? "connecting" : state.appState;
   if (visualState === "connecting") return isZhLocale ? "准备中…" : "Preparing…";
+  if (visualState === "finishing" && state.hintVariant === "retry") {
+    // Placeholder until the replayed transcript starts streaming in.
+    if (!state.finalText && !state.partialText) return isZhLocale ? "重试中…" : "Retrying…";
+    return "";
+  }
   if (visualState === "finishing" && state.hintVariant === "progress") {
     return isZhLocale ? "思考中…" : "Thinking…";
   }
+  // The retry label + hotkey live inside the retry button, not in the message.
   return state.hintText || "";
 }
 
 function shouldShowHint(): boolean {
   return Boolean(getVisibleHintText());
+}
+
+function clearRetryTimer(): void {
+  if (retryHideTimer) {
+    window.clearTimeout(retryHideTimer);
+    retryHideTimer = 0;
+  }
+}
+
+function showRetryAction(): void {
+  clearRetryTimer();
+  state.retryVisible = true;
+  state.retrying = false;
+  retryHideTimer = window.setTimeout(() => {
+    state.retryVisible = false;
+    state.retrying = false;
+    updateView();
+  }, 5000);
+}
+
+function hideRetryAction(): void {
+  clearRetryTimer();
+  state.retryVisible = false;
+  state.retrying = false;
 }
 
 // ---- Layout ----
@@ -250,7 +293,8 @@ function scheduleResize(): void {
 
     const indicatorWidth = 22 + 12;
     const waveformWidth = state.appState === "recording" ? 18 + 12 : 0;
-    const chrome = 14 + 16 + 2 + indicatorWidth + waveformWidth;
+    const retryWidth = state.retryVisible ? 22 + 8 : 0;
+    const chrome = 14 + 16 + 2 + indicatorWidth + waveformWidth + retryWidth;
     const textSlack = 10;
     const singleLineLimit = 520;
     const multiLineWidth = 520;
@@ -308,6 +352,17 @@ function updateView(): void {
 
   elements.stage.dataset.state = visualState;
   elements.stage.dataset.mode = hasHint ? "hint" : "transcript";
+  elements.stage.dataset.retry =
+    state.retryVisible && state.hintLevel === "error" ? "true" : "false";
+  elements.stage.dataset.retrying = state.retrying ? "true" : "false";
+  elements.retryButton.disabled = state.retrying || !state.retryVisible;
+  // Label + hotkey live inside the button, e.g. "重试 (R ⌥)".
+  elements.retryLabel.textContent = state.retryHotkey
+    ? `${isZhLocale ? "重试" : "Retry"} (${state.retryHotkey})`
+    : isZhLocale
+      ? "重试"
+      : "Retry";
+  syncStageVisibility();
   elements.finalText.textContent = showTranscript ? state.finalText : "";
   elements.partialText.textContent = showTranscript ? state.partialText : "";
   if (showTranscript) scrollTranscriptToBottom();
@@ -334,7 +389,9 @@ function resetState(): void {
   state.hintText = "";
   state.hintLevel = "info";
   state.hintVariant = "text";
+  state.retryHotkey = "";
   state.audioReady = false;
+  hideRetryAction();
   state.layoutWidth = 0;
   state.layoutWrap = false;
   state.renderedWidth = 0;
@@ -655,6 +712,7 @@ onOverlayEvent(async (event: OverlayEvent) => {
       break;
     case "state":
       state.appState = (payload as { state: AppState }).state;
+      if (state.appState !== "idle") hideRetryAction();
       if (state.appState === "idle" || state.appState === "connecting") state.audioReady = false;
       if (state.appState === "idle") {
         // Session over: suspend the cue context. No-op if the end cue is still
@@ -733,10 +791,22 @@ onOverlayEvent(async (event: OverlayEvent) => {
       break;
     }
     case "hint": {
-      const p = payload as { text?: string; level?: HintLevel; variant?: string };
+      const p = payload as {
+        text?: string;
+        level?: HintLevel;
+        variant?: string;
+        retryable?: boolean;
+        hotkey?: string;
+      };
       state.hintText = p.text || "";
       state.hintLevel = p.level || "info";
       state.hintVariant = p.variant || "text";
+      state.retryHotkey = p.hotkey || "";
+      if (p.retryable === true && state.hintLevel === "error" && state.hintText) {
+        showRetryAction();
+      } else {
+        hideRetryAction();
+      }
       updateView();
       break;
     }
@@ -752,6 +822,25 @@ onOverlayEvent(async (event: OverlayEvent) => {
     default:
       break;
   }
+});
+
+elements.retryButton.addEventListener("click", async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!state.retryVisible || state.retrying) return;
+  clearRetryTimer();
+  state.retrying = true;
+  updateView();
+  try {
+    await retryLatestFailedTranscription();
+    hideRetryAction();
+  } catch (error) {
+    state.hintText = (error as Error).message || String(error) || "重试失败";
+    state.hintLevel = "error";
+    state.hintVariant = "text";
+    showRetryAction();
+  }
+  updateView();
 });
 
 window.addEventListener("beforeunload", () => {
