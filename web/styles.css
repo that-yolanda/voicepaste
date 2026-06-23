@@ -239,13 +239,16 @@ body {
 }
 .status-bar {
   width: 2.5px;
-  height: 6px;
+  /* Fixed full height is the scaleY baseline; the rAF loop drives height via
+     transform (GPU compositor, no reflow) instead of mutating height. There is
+     deliberately NO transition here — the JS easing owns all smoothing, so a
+     CSS transition would double-interpolate against it and make bars laggy. */
+  height: 20px;
   border-radius: 999px;
   background: linear-gradient(180deg, var(--accent), #3aa874);
+  transform: scaleY(0.3);
   transform-origin: center center;
-  transition:
-    height 0.16s ease-out,
-    transform 0.16s ease-out;
+  will-change: transform;
 }
 
 /* ===========================================================

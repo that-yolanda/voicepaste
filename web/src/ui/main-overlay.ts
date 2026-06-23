@@ -39,8 +39,7 @@ interface OverlayState {
   layoutWidth: number;
   layoutWrap: boolean;
   renderedWidth: number;
-  waveBarHeights: number[];
-  smoothedLevel: number;
+  waveBarLevels: number[];
 }
 
 interface AppearanceConfig {
@@ -68,8 +67,7 @@ const state: OverlayState = {
   layoutWidth: 0,
   layoutWrap: false,
   renderedWidth: 0,
-  waveBarHeights: [],
-  smoothedLevel: 0,
+  waveBarLevels: [],
 };
 
 // ---- DOM elements ----
@@ -130,42 +128,56 @@ function applyAppearance(cfg: AppearanceConfig = {}): void {
 
 let waveformRaf = 0;
 
+/** Slice the analyser's low-mid range into one frequency band per waveform bar.
+ * Returns barCount + 1 bin indices. Voice energy lives in the low-mid range, so
+ * bands start at bin 1 (skip DC) and cap where speech fades (~6 kHz). */
+function computeBandEdges(barCount: number, binCount: number): number[] {
+  const minBin = 1;
+  const maxBin = Math.min(binCount, 32);
+  const edges: number[] = [];
+  for (let b = 0; b <= barCount; b++) {
+    edges.push(Math.round(minBin + ((maxBin - minBin) * b) / barCount));
+  }
+  return edges;
+}
+
 function startWaveformAnimation(): void {
   const analyser = state.analyserNode;
   if (!analyser || statusBarItems.length === 0) return;
 
-  const sampleCount = analyser.fftSize;
-  const data = new Float32Array(sampleCount);
-  const centerIndex = (statusBarItems.length - 1) / 2;
-  const maxDistance = Math.max(1, centerIndex);
+  // Drive each bar from its own frequency band instead of a single loudness
+  // scalar, so bars move independently and look alive while speaking rather
+  // than all peaking together.
+  const barCount = statusBarItems.length;
+  const freqData = new Uint8Array(analyser.frequencyBinCount);
+  const bandEdges = computeBandEdges(barCount, analyser.frequencyBinCount);
 
   function tick(): void {
     // analyser is non-null here (checked before starting waveform animation)
     const a = analyser as AnalyserNode;
-    a.getFloatTimeDomainData(data);
-    let sumSquares = 0;
-    let peak = 0;
-    for (let i = 0; i < sampleCount; i++) {
-      const s = data[i];
-      sumSquares += s * s;
-      peak = Math.max(peak, Math.abs(s));
-    }
-    const rms = Math.sqrt(sumSquares / sampleCount);
-    const boostedLevel = Math.min(1, (rms * 13 + peak * 2.8) ** 0.82);
-    const targetLevel = boostedLevel < 0.035 ? 0 : boostedLevel;
-    state.smoothedLevel += (targetLevel - state.smoothedLevel) * 0.14;
+    a.getByteFrequencyData(freqData);
 
-    statusBarItems.forEach((bar, index) => {
-      const distance = Math.abs(index - centerIndex);
-      const centerWeight = 0.22 + (1 - distance / maxDistance) ** 1.7 * 0.78;
-      const targetHeight = 3 + state.smoothedLevel * centerWeight * 20;
-      const currentHeight = state.waveBarHeights[index] ?? targetHeight;
-      const height = currentHeight + (targetHeight - currentHeight) * 0.18;
-      state.waveBarHeights[index] = height;
-      const el = bar as HTMLElement;
-      el.style.height = `${Math.round(Math.max(3, Math.min(18, height)))}px`;
-      el.style.transform = "scaleY(1)";
-    });
+    for (let b = 0; b < barCount; b++) {
+      const start = bandEdges[b];
+      const end = bandEdges[b + 1];
+      let sum = 0;
+      for (let i = start; i < end; i++) sum += freqData[i];
+      const avg = sum / Math.max(1, end - start) / 255;
+      // Lift + compress so quiet speech still reads on the bars.
+      const target = Math.min(1, (avg * 2.6) ** 0.75);
+      // Asymmetric envelope: fast attack (snap up with the voice), slow
+      // release (ease back down instead of dropping flat between syllables).
+      const prev = state.waveBarLevels[b] ?? 0;
+      const rate = target > prev ? 0.4 : 0.08;
+      const level = prev + (target - prev) * rate;
+      state.waveBarLevels[b] = level;
+
+      const el = statusBarItems[b] as HTMLElement;
+      // scaleY relative to the 20px CSS baseline — compositor-only, no reflow.
+      // level 0–1 maps to 3–18 px ⇒ scale 0.15–0.9.
+      const clamped = Math.max(3, Math.min(18, 3 + level * 15));
+      el.style.transform = `scaleY(${(clamped / 20).toFixed(3)})`;
+    }
     elements.statusBars.dataset.active = "true";
     waveformRaf = requestAnimationFrame(tick);
   }
@@ -183,11 +195,9 @@ function stopWaveformAnimation(): void {
   }
   statusBarItems.forEach((bar) => {
     const el = bar as HTMLElement;
-    el.style.height = "";
     el.style.transform = "";
   });
-  state.waveBarHeights = [];
-  state.smoothedLevel = 0;
+  state.waveBarLevels = [];
 }
 
 // ---- Hints ----
@@ -576,7 +586,7 @@ async function startAudioCapture(): Promise<void> {
 
   const analyserNode = audioContext.createAnalyser();
   analyserNode.fftSize = 256;
-  analyserNode.smoothingTimeConstant = 0.55;
+  analyserNode.smoothingTimeConstant = 0.7;
   sourceNode.connect(analyserNode);
   analyserNode.connect(processorNode);
   processorNode.connect(audioContext.destination);
