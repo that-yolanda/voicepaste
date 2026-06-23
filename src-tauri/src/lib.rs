@@ -28,9 +28,12 @@ use tauri::{
 };
 
 /// Delay after the mic stream is ready, before entering Recording / playing the
-/// start cue. The renderer capture path uses this to let browser audio processing
-/// settle; native capture keeps the same short guard so the user-facing timing
-/// remains predictable across platforms.
+/// start cue. The renderer (getUserMedia) path needs it so the browser's AEC/AGC
+/// converge before the first words. Native cpal capture has no such DSP warmup,
+/// so macOS uses 0 — testing whether dropped leading words / cue glitches return.
+#[cfg(target_os = "macos")]
+const AUDIO_SETTLE_MS: u64 = 0;
+#[cfg(not(target_os = "macos"))]
 const AUDIO_SETTLE_MS: u64 = 350;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -374,14 +377,19 @@ fn resolve_configured_sound_path(
 /// dedicated, kept-warm AudioContext, so the cue is full-volume and never
 /// truncated. Falls back to `afplay` only if the file cannot be read.
 fn emit_cue(app: &AppHandle, app_inner: &Arc<app_state::AppInner>, name: &str) {
-    use base64::Engine as _;
-
     let Some(file_path) = resolve_configured_sound_path(app, app_inner, name) else {
         return;
     };
 
+    #[cfg(target_os = "macos")]
+    {
+        crate::paste::play_sound(&file_path);
+    }
+
+    #[cfg(not(target_os = "macos"))]
     match std::fs::read(&file_path) {
         Ok(bytes) => {
+            use base64::Engine as _;
             let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
             let _ = app.emit(
                 "overlay:event",
