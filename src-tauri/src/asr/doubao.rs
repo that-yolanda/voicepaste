@@ -629,8 +629,6 @@ impl AsrEngine for DoubaoEngine {
         let session = DoubaoSession {
             is_ready: is_ready.clone(),
             is_committed: is_committed.clone(),
-            final_text: final_text.clone(),
-            latest_result_text: latest_result_text.clone(),
             writer_tx,
             commit_tx: commit_tx.clone(),
         };
@@ -930,8 +928,6 @@ impl AsrEngine for DoubaoEngine {
 struct DoubaoSession {
     is_ready: Arc<AtomicBool>,
     is_committed: Arc<AtomicBool>,
-    final_text: Arc<Mutex<String>>,
-    latest_result_text: Arc<Mutex<String>>,
     /// Sends frames to the dedicated writer task. A single FIFO consumer keeps
     /// frames ordered and guarantees the last packet is written after all audio.
     writer_tx: mpsc::UnboundedSender<WsWrite>,
@@ -979,14 +975,9 @@ impl AsrSession for DoubaoSession {
         let (tx, rx) = tokio::sync::oneshot::channel();
         *self.commit_tx.lock().await = Some(tx);
 
-        match tokio::time::timeout(std::time::Duration::from_secs(5), rx).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(15), rx).await {
             Ok(Ok(text)) => Ok(text),
-            _ => {
-                // Timeout: use whatever we have
-                let latest = self.latest_result_text.lock().await.clone();
-                let final_t = self.final_text.lock().await.clone();
-                Ok(if latest.is_empty() { final_t } else { latest })
-            }
+            _ => Err("ASR 最终结果超时，请检查网络连接".to_string()),
         }
     }
 
