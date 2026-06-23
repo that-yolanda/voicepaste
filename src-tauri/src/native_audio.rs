@@ -34,7 +34,7 @@ pub async fn start_capture(
 
     let (audio_tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<f32>>();
     let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
-    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
 
     let input_thread = thread::Builder::new()
         .name("voicepaste-native-audio".to_string())
@@ -45,7 +45,9 @@ pub async fn start_capture(
         })
         .map_err(|e| format!("启动原生录音线程失败: {e}"))?;
 
-    match ready_rx.recv() {
+    // Await the ready signal asynchronously: the worker sends it the moment the
+    // input stream is built, so we never block a tokio worker thread.
+    match ready_rx.await {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
             let _ = stop_tx.send(());
@@ -92,7 +94,7 @@ pub async fn stop_capture(app_inner: &Arc<app_state::AppInner>) {
 fn run_input_thread(
     tx: tokio::sync::mpsc::UnboundedSender<Vec<f32>>,
     stop_rx: std::sync::mpsc::Receiver<()>,
-    ready_tx: std::sync::mpsc::Sender<Result<(), String>>,
+    ready_tx: tokio::sync::oneshot::Sender<Result<(), String>>,
 ) -> Result<(), String> {
     let final_chunk = Arc::new(Mutex::new(Vec::<f32>::with_capacity(TARGET_CHUNK_SAMPLES)));
     let stream = match build_input_stream(tx.clone(), Arc::clone(&final_chunk)) {
