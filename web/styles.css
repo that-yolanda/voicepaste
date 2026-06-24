@@ -277,7 +277,7 @@ body {
 }
 .retry-label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1;
 }
 .stage[data-retry="true"] .pill.platform-mac .indicator,

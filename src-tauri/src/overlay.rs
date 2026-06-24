@@ -545,7 +545,7 @@ mod macos {
             retry_button.setTransparent(false);
             retry_button.setShowsBorderOnlyWhileMouseInside(true);
             retry_button.setBezelStyle(NSBezelStyle::AccessoryBarAction);
-            retry_button.setFont(Some(&NSFont::systemFontOfSize_weight(12.0, 600.0)));
+            retry_button.setFont(Some(&NSFont::systemFontOfSize(12.0)));
             retry_button.setContentTintColor(Some(&NSColor::systemRedColor()));
             retry_button.setBezelColor(Some(&NSColor::colorWithSRGBRed_green_blue_alpha(
                 1.0, 0.231, 0.231, 0.10,
@@ -968,7 +968,7 @@ mod macos {
             format!("重试 ({hotkey})")
         };
         let attr = NSMutableAttributedString::from_nsstring(&NSString::from_str(&text));
-        let font = NSFont::systemFontOfSize_weight(12.0, 600.0);
+        let font = NSFont::systemFontOfSize(12.0);
         let range = NSRange::new(0, text.encode_utf16().count());
         let color = NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.231, 0.231, 1.0);
         unsafe {

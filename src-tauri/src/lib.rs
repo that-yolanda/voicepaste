@@ -1429,9 +1429,22 @@ async fn connect_and_attach(
     let app_inner: Arc<app_state::AppInner> =
         Arc::clone(&app_handle.state::<Arc<app_state::AppInner>>());
 
+    // If stop_recording already ended this session before we even started
+    // connecting, abort early instead of establishing a WebSocket that will
+    // only time out on the server side (no audio will be fed to it).
+    if !is_recording(&app_handle) {
+        let _ = connect_tx.send(Err("已取消".to_string()));
+        return;
+    }
+
     // Each Doubao attempt is bounded to 5s inside the engine; retry once.
     let mut result = create_active_session(&app_handle, &config, &hotwords).await;
     if result.is_err() && is_current_epoch(&app_inner, my_epoch) {
+        // Check again before spending another 5 s on the retry.
+        if !is_recording(&app_handle) {
+            let _ = connect_tx.send(Err("已取消".to_string()));
+            return;
+        }
         if let Err(ref e) = result {
             log_rec!(warn, "ASR connect failed, retrying once: {}", e);
         }
@@ -1487,9 +1500,15 @@ async fn connect_and_attach(
             }
 
             let app_for_events = app_handle.clone();
-            tauri::async_runtime::spawn(async move {
-                manage_asr_session(app_for_events, event_rx, my_epoch).await;
-            });
+            // Only spawn the event manager when the recording is still active.
+            // If stop_recording already ended it the session will be taken and
+            // committed directly — spawning here would just produce a spurious
+            // "started / error / ended" log triplet when the server times out.
+            if is_recording(&app_handle) {
+                tauri::async_runtime::spawn(async move {
+                    manage_asr_session(app_for_events, event_rx, my_epoch).await;
+                });
+            }
 
             let _ = connect_tx.send(Ok(()));
         }
@@ -1548,6 +1567,31 @@ async fn stop_recording(app_handle: AppHandle) {
     let session = match app_inner.asr_session.lock().await.take() {
         Some(s) => Some(s),
         None => {
+            // If the recording was too short to contain speech and nothing was
+            // recognized, cancel the in-flight connect rather than waiting up to
+            // 12 s for a session that will only time out on the server side.
+            // Genuine speech (signal present) still waits so the buffered audio
+            // gets transcribed instead of being thrown away.
+            if !captured_audio_signal {
+                let prefix = app_inner.accumulated_text.lock().await.clone();
+                if prefix.trim().is_empty() {
+                    log_rec!(
+                        info,
+                        "Stop with no speech signal; cancelling in-flight connect"
+                    );
+                    app_inner
+                        .session_epoch
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    app_inner.pending_audio.lock().await.clear();
+                    discard_recording_artifacts(&app_inner).await;
+                    set_overlay_retry_interaction(&app_handle, false);
+                    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+                        let _ = overlay.hide();
+                    }
+                    set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+                    return;
+                }
+            }
             let rx = app_inner.connect_rx.lock().await.take();
             match rx {
                 Some(rx) => match tokio::time::timeout(Duration::from_secs(12), rx).await {
