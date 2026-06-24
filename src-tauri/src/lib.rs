@@ -4,12 +4,12 @@ mod app_state;
 mod asr;
 mod commands;
 mod config;
+mod cue;
 mod hotkey;
 mod hotword;
 mod llm;
 mod migration;
 mod model;
-#[cfg(target_os = "macos")]
 mod native_audio;
 mod overlay;
 mod paste;
@@ -28,13 +28,11 @@ use tauri::{
 };
 
 /// Delay after the mic stream is ready, before entering Recording / playing the
-/// start cue. The renderer (getUserMedia) path needs it so the browser's AEC/AGC
-/// converge before the first words. Native cpal capture has no such DSP warmup,
-/// so macOS uses 0 — testing whether dropped leading words / cue glitches return.
-#[cfg(target_os = "macos")]
+/// start cue. Capture is native cpal on every platform (CoreAudio/WASAPI), which
+/// does no AEC/AGC warmup, so no settle is needed — the cue plays the instant the
+/// stream is ready. (The old 350ms value was for the renderer getUserMedia path,
+/// which has been removed.)
 const AUDIO_SETTLE_MS: u64 = 0;
-#[cfg(not(target_os = "macos"))]
-const AUDIO_SETTLE_MS: u64 = 350;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -164,10 +162,6 @@ pub fn run() {
             commands::delete_history,
             commands::retry_history_transcription,
             commands::retry_latest_failed_transcription,
-            commands::send_audio_chunk,
-            commands::audio_stopped,
-            commands::audio_warmup_ready,
-            commands::audio_warmup_failed,
             commands::send_diagnostic,
             commands::paste_text,
             commands::get_microphone_status,
@@ -473,86 +467,25 @@ fn resolve_configured_sound_path(
     Some(file_path)
 }
 
-/// Play a cue (`name` = "start" / "end") through the renderer's AudioContext
-/// instead of spawning `afplay`. A freshly spawned `afplay` process competes with
-/// the audio output device that is still settling, which attenuated the cue (low
-/// volume) or cut it short (partial playback). The renderer plays it through a
-/// dedicated, kept-warm AudioContext, so the cue is full-volume and never
-/// truncated. Falls back to `afplay` only if the file cannot be read.
+/// Play a cue (`name` = "start" / "end") through rodio in the backend process.
+/// Playing in-process (instead of spawning `afplay`/PowerShell or routing through
+/// the renderer's AudioContext) keeps the cue full-volume, immune to the overlay
+/// WebView being torn down mid-playback, and free of decode/keep-alive jank.
 fn emit_cue(app: &AppHandle, app_inner: &Arc<app_state::AppInner>, name: &str) {
     let Some(file_path) = resolve_configured_sound_path(app, app_inner, name) else {
         return;
     };
-
-    #[cfg(target_os = "macos")]
-    {
-        crate::paste::play_sound(&file_path);
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    match std::fs::read(&file_path) {
-        Ok(bytes) => {
-            use base64::Engine as _;
-            let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
-            let _ = app.emit(
-                "overlay:event",
-                serde_json::json!({
-                    "type": "cue:play",
-                    "payload": { "kind": name, "data": data }
-                }),
-            );
-        }
-        Err(error) => {
-            log_app!(
-                warn,
-                "Cue '{}' read failed ({}), falling back to afplay: {}",
-                name,
-                file_path,
-                error
-            );
-            crate::paste::play_sound(&file_path);
-        }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-async fn stop_renderer_audio(
-    app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    timeout_ms: u64,
-) {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    *app_inner.pending_audio_stop.lock().await = Some(tx);
-
-    let _ = app.emit(
-        "overlay:event",
-        serde_json::json!({
-            "type": "recording:stop",
-        }),
-    );
-
-    if tokio::time::timeout(Duration::from_millis(timeout_ms), rx)
-        .await
-        .is_err()
-    {
-        let _ = app_inner.pending_audio_stop.lock().await.take();
-    }
+    cue::play_cue_file(&file_path);
 }
 
 async fn stop_audio_capture(
-    app: &AppHandle,
+    _app: &AppHandle,
     app_inner: &Arc<app_state::AppInner>,
-    timeout_ms: u64,
+    _timeout_ms: u64,
 ) {
-    #[cfg(target_os = "macos")]
-    {
-        native_audio::stop_capture(app_inner).await;
-        let _ = timeout_ms;
-        let _ = app;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    stop_renderer_audio(app, app_inner, timeout_ms).await;
+    // Audio capture is native (cpal); the renderer no longer owns a getUserMedia
+    // stream, so there is nothing to flush or await.
+    native_audio::stop_capture(app_inner).await;
 }
 
 async fn save_recording_wav(
@@ -760,24 +693,6 @@ async fn record_success_and_apply_retention(
     drop(stats);
 
     prune_old_recordings(app);
-}
-
-#[cfg(not(target_os = "macos"))]
-async fn wait_for_audio_warmup(
-    app_inner: &Arc<app_state::AppInner>,
-    timeout_ms: u64,
-) -> Result<(), String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    *app_inner.pending_audio_warmup.lock().await = Some(tx);
-
-    match tokio::time::timeout(Duration::from_millis(timeout_ms), rx).await {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(_)) => Err("音频设备初始化失败".to_string()),
-        Err(_) => {
-            let _ = app_inner.pending_audio_warmup.lock().await.take();
-            Err("音频设备初始化超时".to_string())
-        }
-    }
 }
 
 /// Show or hide the app in the macOS Dock.
@@ -1018,9 +933,10 @@ async fn start_recording(app_handle: AppHandle) {
         let _ = overlay.show();
     }
 
-    // 2. Warm up microphone capture
+    // 2. Warm up microphone capture (native cpal on macOS + Windows). The capture
+    //    owns its own ready signal (a oneshot the input thread fires once the
+    //    stream is built), so there is no renderer warmup round-trip to wait on.
     set_app_state(&app_handle, &app_inner, app_state::AppState::Connecting).await;
-    #[cfg(target_os = "macos")]
     if let Err(e) = native_audio::start_capture(app_handle.clone(), Arc::clone(&app_inner)).await {
         *recording_state.0.lock().unwrap() = false;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
@@ -1036,33 +952,6 @@ async fn start_recording(app_handle: AppHandle) {
             }),
         );
         return;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = app_handle.emit(
-            "overlay:event",
-            serde_json::json!({
-                "type": "audio:warmup",
-            }),
-        );
-        if let Err(e) = wait_for_audio_warmup(&app_inner, 8000).await {
-            *recording_state.0.lock().unwrap() = false;
-            stop_audio_capture(&app_handle, &app_inner, 1200).await;
-            set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-            if let Some(overlay) = app_handle.get_webview_window("overlay") {
-                let _ = overlay.hide();
-            }
-            log_rec!(warn, "Audio warmup failed: {}", e);
-            let _ = app_handle.emit(
-                "overlay:event",
-                serde_json::json!({
-                    "type": "hint",
-                    "payload": { "text": e, "level": "error", "variant": "text" }
-                }),
-            );
-            return;
-        }
     }
 
     // Check if recording was cancelled during warmup (hold mode: quick press-release)
@@ -1122,11 +1011,6 @@ async fn start_recording(app_handle: AppHandle) {
 
     emit_cue(&app_handle, &app_inner, "start");
     set_app_state(&app_handle, &app_inner, app_state::AppState::Recording).await;
-    #[cfg(not(target_os = "macos"))]
-    let _ = app_handle.emit(
-        "overlay:event",
-        serde_json::json!({ "type": "recording:start" }),
-    );
 
     // 5. Connect the ASR session in the background; attach it once ready.
     let connect_handle = app_handle.clone();

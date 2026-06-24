@@ -15,15 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import {
-  getConfig,
-  notifyAudioStopped,
-  onOverlayEvent,
-  sendAudioChunk,
-  sendAudioWarmupFailed,
-  sendAudioWarmupReady,
-  sendDiagnostic,
-} from "@/bridge/overlay";
+import { getConfig, onOverlayEvent, retryLatestFailedTranscription } from "@/bridge/overlay";
 
 describe("overlay bridge", () => {
   describe("onOverlayEvent", () => {
@@ -49,52 +41,17 @@ describe("overlay bridge", () => {
     });
   });
 
-  describe("sendAudioChunk", () => {
-    it("invokes send_audio_chunk with base64Chunk", async () => {
-      await sendAudioChunk("dGVzdA==");
-      expect(invoke).toHaveBeenCalledWith("send_audio_chunk", { base64Chunk: "dGVzdA==" });
-    });
-  });
-
-  describe("sendDiagnostic", () => {
-    it("invokes send_diagnostic with payload", async () => {
-      await sendDiagnostic({ info: "test" });
-      expect(invoke).toHaveBeenCalledWith("send_diagnostic", { payload: { info: "test" } });
-    });
-  });
-
-  describe("notifyAudioStopped", () => {
-    it("invokes audio_stopped", async () => {
-      await notifyAudioStopped();
-      expect(invoke).toHaveBeenCalledWith("audio_stopped");
-    });
-  });
-
-  describe("sendAudioWarmupReady", () => {
-    it("invokes audio_warmup_ready", async () => {
-      await sendAudioWarmupReady();
-      expect(invoke).toHaveBeenCalledWith("audio_warmup_ready");
-    });
-  });
-
-  describe("sendAudioWarmupFailed", () => {
-    it("invokes audio_warmup_failed with message", async () => {
-      await sendAudioWarmupFailed({ message: "test error" });
-      expect(invoke).toHaveBeenCalledWith("audio_warmup_failed", {
-        message: "test error",
-      });
-    });
-
-    it("defaults message to empty string", async () => {
-      await sendAudioWarmupFailed();
-      expect(invoke).toHaveBeenCalledWith("audio_warmup_failed", { message: "" });
-    });
-  });
-
   describe("getConfig", () => {
     it("invokes get_app_config", async () => {
       await getConfig();
       expect(invoke).toHaveBeenCalledWith("get_app_config");
+    });
+  });
+
+  describe("retryLatestFailedTranscription", () => {
+    it("invokes retry_latest_failed_transcription", async () => {
+      await retryLatestFailedTranscription();
+      expect(invoke).toHaveBeenCalledWith("retry_latest_failed_transcription");
     });
   });
 });

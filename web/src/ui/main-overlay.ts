@@ -1,21 +1,13 @@
 /**
  * Overlay entry point — vanilla TypeScript (no React).
- * Preserves the exact audio pipeline, waveform animation, and state machine
- * from the original app.js, using typed bridge + lib imports.
+ *
+ * Audio capture and cue playback live entirely in the backend (cpal on macOS +
+ * Windows, rodio for cues); the renderer only paints transcript/hint text, the
+ * retry affordance, and a waveform driven by the backend `audio:level` event.
  */
 
 import type { OverlayEvent } from "@/bridge/overlay";
-import {
-  getConfig,
-  notifyAudioStopped,
-  onOverlayEvent,
-  retryLatestFailedTranscription,
-  sendAudioChunk,
-  sendAudioWarmupFailed,
-  sendAudioWarmupReady,
-  sendDiagnostic,
-} from "@/bridge/overlay";
-import { downsampleBuffer, floatTo16BitPCM, int16ToBase64 } from "@/lib/audio";
+import { getConfig, onOverlayEvent, retryLatestFailedTranscription } from "@/bridge/overlay";
 import "../styles/app.css";
 
 // ---- Types ----
@@ -31,13 +23,7 @@ interface OverlayState {
   hintVariant: string;
   retryHotkey: string;
   appState: AppState;
-  audioReady: boolean;
-  mediaStream: MediaStream | null;
-  audioContext: AudioContext | null;
-  sourceNode: MediaStreamAudioSourceNode | null;
-  processorNode: ScriptProcessorNode | null;
-  analyserNode: AnalyserNode | null;
-  pendingSamples: number[];
+  audioLevel: number; // 0..1 loudness from the backend `audio:level` event
   layoutWidth: number;
   layoutWrap: boolean;
   renderedWidth: number;
@@ -62,13 +48,7 @@ const state: OverlayState = {
   hintVariant: "text",
   retryHotkey: "",
   appState: "idle",
-  audioReady: false,
-  mediaStream: null,
-  audioContext: null,
-  sourceNode: null,
-  processorNode: null,
-  analyserNode: null,
-  pendingSamples: [],
+  audioLevel: 0,
   layoutWidth: 0,
   layoutWrap: false,
   renderedWidth: 0,
@@ -116,6 +96,13 @@ function resolvedGlassVariant(): "light" | "dark" {
   return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
 }
 
+function syncStageVisibility(): void {
+  // macOS renders the pill natively (NSGlassEffectView); the WebView stage is
+  // hidden there and only acts as a hidden worker for cue playback historically.
+  const isMac = currentAppearance.platform === "macos";
+  elements.stage.style.display = isMac ? "none" : "";
+}
+
 function applyAppearance(cfg: AppearanceConfig = {}): void {
   currentAppearance.platform = cfg.platform || "";
   currentAppearance.overlayStyle = cfg.overlayStyle || "liquid";
@@ -132,54 +119,26 @@ function applyAppearance(cfg: AppearanceConfig = {}): void {
   );
 }
 
-function syncStageVisibility(): void {
-  const isMac = currentAppearance.platform === "macos";
-  elements.stage.style.display = isMac ? "none" : "";
-}
-
 // ---- Waveform ----
 
 let waveformRaf = 0;
 
-/** Slice the analyser's low-mid range into one frequency band per waveform bar.
- * Returns barCount + 1 bin indices. Voice energy lives in the low-mid range, so
- * bands start at bin 1 (skip DC) and cap where speech fades (~6 kHz). */
-function computeBandEdges(barCount: number, binCount: number): number[] {
-  const minBin = 1;
-  const maxBin = Math.min(binCount, 32);
-  const edges: number[] = [];
-  for (let b = 0; b <= barCount; b++) {
-    edges.push(Math.round(minBin + ((maxBin - minBin) * b) / barCount));
-  }
-  return edges;
-}
+// Per-bar multipliers so the 4 bars rise with a slight phase spread from a
+// single loudness scalar — mirrors the macOS native renderer, which also drives
+// 4 bars from one backend level instead of per-band FFT data.
+const WAVE_BAR_MULTIPLIERS = [1.0, 0.82, 0.92, 0.7];
 
 function startWaveformAnimation(): void {
-  const analyser = state.analyserNode;
-  if (!analyser || statusBarItems.length === 0) return;
-
-  // Drive each bar from its own frequency band instead of a single loudness
-  // scalar, so bars move independently and look alive while speaking rather
-  // than all peaking together.
+  if (statusBarItems.length === 0) return;
   const barCount = statusBarItems.length;
-  const freqData = new Uint8Array(analyser.frequencyBinCount);
-  const bandEdges = computeBandEdges(barCount, analyser.frequencyBinCount);
 
   function tick(): void {
-    // analyser is non-null here (checked before starting waveform animation)
-    const a = analyser as AnalyserNode;
-    a.getByteFrequencyData(freqData);
-
+    const base = state.audioLevel;
     for (let b = 0; b < barCount; b++) {
-      const start = bandEdges[b];
-      const end = bandEdges[b + 1];
-      let sum = 0;
-      for (let i = start; i < end; i++) sum += freqData[i];
-      const avg = sum / Math.max(1, end - start) / 255;
       // Lift + compress so quiet speech still reads on the bars.
-      const target = Math.min(1, (avg * 2.6) ** 0.75);
-      // Asymmetric envelope: fast attack (snap up with the voice), slow
-      // release (ease back down instead of dropping flat between syllables).
+      const target = Math.min(1, (base * (WAVE_BAR_MULTIPLIERS[b] ?? 1) * 2.6) ** 0.75);
+      // Asymmetric envelope: fast attack (snap up with the voice), slow release
+      // (ease back down instead of dropping flat between syllables).
       const prev = state.waveBarLevels[b] ?? 0;
       const rate = target > prev ? 0.4 : 0.08;
       const level = prev + (target - prev) * rate;
@@ -191,7 +150,7 @@ function startWaveformAnimation(): void {
       const clamped = Math.max(3, Math.min(18, 3 + level * 15));
       el.style.transform = `scaleY(${(clamped / 20).toFixed(3)})`;
     }
-    elements.statusBars.dataset.active = "true";
+    elements.statusBars.dataset.active = base > 0.02 ? "true" : "false";
     waveformRaf = requestAnimationFrame(tick);
   }
 
@@ -218,15 +177,14 @@ function stopWaveformAnimation(): void {
 const isZhLocale = (navigator.language || "").toLowerCase().startsWith("zh");
 
 function getVisibleHintText(): string {
-  const visualState: string =
-    state.appState === "recording" && !state.audioReady ? "connecting" : state.appState;
-  if (visualState === "connecting") return isZhLocale ? "准备中…" : "Preparing…";
-  if (visualState === "finishing" && state.hintVariant === "retry") {
+  const appState = state.appState;
+  if (appState === "connecting") return isZhLocale ? "准备中…" : "Preparing…";
+  if (appState === "finishing" && state.hintVariant === "retry") {
     // Placeholder until the replayed transcript starts streaming in.
     if (!state.finalText && !state.partialText) return isZhLocale ? "重试中…" : "Retrying…";
     return "";
   }
-  if (visualState === "finishing" && state.hintVariant === "progress") {
+  if (appState === "finishing" && state.hintVariant === "progress") {
     return isZhLocale ? "思考中…" : "Thinking…";
   }
   // The retry label + hotkey live inside the retry button, not in the message.
@@ -343,14 +301,13 @@ function scrollTranscriptToBottom(): void {
 // ---- View ----
 
 function updateView(): void {
-  const visualState: string =
-    state.appState === "recording" && !state.audioReady ? "connecting" : state.appState;
+  const appState = state.appState;
   const hintText = getVisibleHintText();
   const hasHint = Boolean(hintText);
   const showTranscript = !hasHint;
-  const showWaveform = visualState === "recording";
+  const showWaveform = appState === "recording";
 
-  elements.stage.dataset.state = visualState;
+  elements.stage.dataset.state = appState;
   elements.stage.dataset.mode = hasHint ? "hint" : "transcript";
   elements.stage.dataset.retry =
     state.retryVisible && state.hintLevel === "error" ? "true" : "false";
@@ -371,8 +328,7 @@ function updateView(): void {
   elements.hint.dataset.level = state.hintLevel;
   elements.stage.dataset.level = hasHint ? state.hintLevel : "info";
   elements.hint.dataset.variant =
-    visualState === "connecting" ||
-    (visualState === "finishing" && state.hintVariant === "progress")
+    appState === "connecting" || (appState === "finishing" && state.hintVariant === "progress")
       ? "progress"
       : state.hintVariant;
   if (elements.statusBars) {
@@ -390,7 +346,7 @@ function resetState(): void {
   state.hintLevel = "info";
   state.hintVariant = "text";
   state.retryHotkey = "";
-  state.audioReady = false;
+  state.audioLevel = 0;
   hideRetryAction();
   state.layoutWidth = 0;
   state.layoutWrap = false;
@@ -399,312 +355,9 @@ function resetState(): void {
   updateView();
 }
 
-// ---- Audio pipeline ----
-
-// Returns a promise that resolves once every chunk dispatched in this call has
-// been acked by the backend. The final flush (force=true) is awaited by
-// stopAudioCapture so the last audio reaches the backend *before* audio_stopped
-// fires, guaranteeing the commit's last packet is sent after all audio.
-function flushPendingAudio(force = false): Promise<unknown[]> {
-  const targetChunkSize = 1600;
-  const sends: Promise<unknown>[] = [];
-  while (
-    state.pendingSamples.length >= targetChunkSize ||
-    (force && state.pendingSamples.length > 0)
-  ) {
-    const chunkSize = force
-      ? Math.min(state.pendingSamples.length, targetChunkSize)
-      : targetChunkSize;
-    const chunk = state.pendingSamples.splice(0, chunkSize);
-    const pcm16 = floatTo16BitPCM(new Float32Array(chunk));
-    const base64Chunk = int16ToBase64(pcm16);
-
-    if (!state.audioReady) {
-      state.audioReady = true;
-      updateView();
-    }
-    sends.push(
-      sendAudioChunk(base64Chunk).catch(() => {
-        state.hintText = "音频发送失败";
-        state.hintLevel = "error";
-        state.hintVariant = "text";
-        updateView();
-      }),
-    );
-    if (force) break;
-  }
-  return Promise.all(sends);
-}
-
-// Dedicated AudioContext used to play both the start and end cues. It is kept
-// separate from the capture context on purpose: the capture context is driven by
-// a main-thread ScriptProcessorNode doing heavy per-chunk work (downsample +
-// base64 + IPC), and that congestion underruns the shared output, making a cue
-// rendered there stutter. A capture-free context renders cues on its own audio
-// thread, unaffected by capture load.
-//
-// Lifecycle (warm during the session, suspended while idle so it draws no power
-// and does not hold the output device):
-//   - warmup            → resume the context and start the keep-alive
-//   - start cue         → plays; context stays running (decoded buffer cached)
-//   - recording / stop  → stays running through the finishing flow
-//   - end cue           → plays on the still-warm context
-//   - back to idle      → stop the keep-alive and suspend
-let cueAudioContext: AudioContext | null = null;
-let cuePlaying = false;
-let cueKeepAlive: AudioBufferSourceNode | null = null;
-
-// Decoded cue AudioBuffers cached by kind ("start" / "end"), so decodeAudioData
-// runs once per sound instead of on every play — eliminating decode-time jank.
-// Re-decoded only if the underlying bytes change (custom sound swapped in).
-const cueBufferCache = new Map<string, { data: string; buffer: AudioBuffer }>();
-
-// Amplitude of the keep-alive priming signal — kept inaudibly low. NOTE: raising
-// this (tried up to ~ -60 dBFS / 0.001) did NOT stop the cue stutter and was
-// audible as hiss, so do not raise it. The cue stutter is instead addressed by
-// pre-decoding the cue into a cached AudioBuffer (eliminating decode-time jank).
-const CUE_KEEPALIVE_AMPLITUDE = 0.00012;
-
-// A looping low-amplitude noise source that keeps the output device actively
-// rendering for the whole session. Without it (or with pure silence), a resumed
-// context lets the OS power the output device back down, so the next cue plays
-// into a cold device and glitches mid-playback (notably the start cue after even
-// a few seconds idle). The continuous inaudible priming keeps the device hot.
-function startCueKeepAlive(): void {
-  if (cueKeepAlive || !cueAudioContext || cueAudioContext.state !== "running") {
-    return;
-  }
-  const frames = Math.max(1, Math.floor(cueAudioContext.sampleRate * 0.5));
-  const buffer = cueAudioContext.createBuffer(1, frames, cueAudioContext.sampleRate);
-  // Fill with tiny noise (not zeros) so the device stays powered. Inaudible.
-  const channel = buffer.getChannelData(0);
-  for (let index = 0; index < channel.length; index += 1) {
-    channel[index] = (Math.random() * 2 - 1) * CUE_KEEPALIVE_AMPLITUDE;
-  }
-  const source = cueAudioContext.createBufferSource();
-  source.buffer = buffer;
-  source.loop = true;
-  source.connect(cueAudioContext.destination);
-  source.start();
-  cueKeepAlive = source;
-}
-
-function stopCueKeepAlive(): void {
-  if (cueKeepAlive) {
-    try {
-      cueKeepAlive.stop();
-    } catch {
-      // already stopped
-    }
-    cueKeepAlive.disconnect();
-    cueKeepAlive = null;
-  }
-}
-
-function usesNativeAudioCapture(): boolean {
-  return currentAppearance.platform === "macos";
-}
-
-// Create the cue context if needed, resume it, and start the keep-alive so the
-// output device is warm and settled by the time a cue plays. Idempotent; called
-// during warmup.
-function ensureCueContextWarm(): void {
-  try {
-    if (!cueAudioContext) {
-      const AudioContextCtor =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioContextCtor) return;
-      cueAudioContext = new AudioContextCtor();
-    }
-    if (cueAudioContext.state === "suspended") {
-      cueAudioContext
-        .resume()
-        .then(() => startCueKeepAlive())
-        .catch(() => {});
-    } else {
-      startCueKeepAlive();
-    }
-  } catch (error) {
-    sendDiagnostic({
-      type: "cue:warm-failed",
-      message: (error as Error).message || String(error),
-    });
-  }
-}
-
-// Release the cue context once the session is fully over. Suspends (and stops the
-// keep-alive) only when back to idle and no cue is mid-playback, so the end cue —
-// which plays during the finishing flow — is never cut off.
-function maybeSuspendCue(): void {
-  if (state.appState !== "idle" || cuePlaying) {
-    return;
-  }
-  stopCueKeepAlive();
-  if (cueAudioContext && cueAudioContext.state === "running") {
-    cueAudioContext.suspend().catch(() => {});
-  }
-}
-
-// Decode the cue bytes to an AudioBuffer, caching by kind so decodeAudioData runs
-// once per sound. Re-decodes only when the bytes change (custom sound swapped in).
-async function getCueBuffer(kind: string, base64Data: string): Promise<AudioBuffer> {
-  const cached = cueBufferCache.get(kind);
-  if (cached && cached.data === base64Data) {
-    return cached.buffer;
-  }
-  const binary = atob(base64Data);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  if (!cueAudioContext) throw new Error("cue context unavailable");
-  const buffer = await cueAudioContext.decodeAudioData(bytes.buffer);
-  cueBufferCache.set(kind, { data: base64Data, buffer });
-  return buffer;
-}
-
-// Play a cue (start or end). Backend sends the raw audio file bytes (e.g. mp3) as
-// base64; we decode (cached) and play it through the cue context, then try to
-// suspend once it ends (only takes effect when the session is idle).
-async function playCue(payload: { kind?: string; data?: string }): Promise<void> {
-  const kind = payload?.kind || "start";
-  const base64Data = payload?.data;
-  if (!base64Data) return;
-
-  // Mark the cue in-flight before any await. The end cue and the idle-state event
-  // arrive back-to-back; their async handlers interleave at await points. If
-  // maybeSuspendCue (from the idle handler) ran while this was still false it
-  // would suspend the context mid-decode, so the cue would start on a suspended
-  // context and only sound on the next resume (next session). Setting the flag up
-  // front makes that suspend a no-op until this cue's onended fires.
-  cuePlaying = true;
-
-  try {
-    ensureCueContextWarm();
-    if (!cueAudioContext) {
-      cuePlaying = false;
-      return;
-    }
-    if (cueAudioContext.state === "suspended") {
-      await cueAudioContext.resume();
-      startCueKeepAlive();
-    }
-
-    const audioBuffer = await getCueBuffer(kind, base64Data);
-    const source = cueAudioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(cueAudioContext.destination);
-    source.onended = () => {
-      cuePlaying = false;
-      maybeSuspendCue();
-    };
-    source.start();
-  } catch (error) {
-    cuePlaying = false;
-    maybeSuspendCue();
-    sendDiagnostic({
-      type: "cue:play-failed",
-      message: (error as Error).message || String(error),
-    });
-  }
-}
-
-async function startAudioCapture(): Promise<void> {
-  // Create/resume the cue context early (during warmup) so the start cue has no
-  // cold-start. The keep-alive started here is restarted after getUserMedia below,
-  // because opening the mic reconfigures the shared output device. Suspended when idle.
-  ensureCueContextWarm();
-
-  if (state.mediaStream) return;
-
-  sendDiagnostic({ type: "audio:capture-starting" });
-
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, noiseSuppression: true, echoCancellation: true },
-    video: false,
-  });
-
-  const AudioContextCtor =
-    window.AudioContext ||
-    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextCtor) throw new Error("AudioContext not available");
-  const audioContext = new AudioContextCtor();
-  if (audioContext.state === "suspended") await audioContext.resume();
-
-  const sourceNode = audioContext.createMediaStreamSource(stream);
-  const processorNode = audioContext.createScriptProcessor(4096, 1, 1);
-  state.pendingSamples = [];
-  state.audioReady = false;
-
-  processorNode.onaudioprocess = (event) => {
-    if (state.appState !== "recording") return;
-    const inputData = (event as AudioProcessingEvent).inputBuffer.getChannelData(0);
-    const downsampled = downsampleBuffer(inputData, audioContext.sampleRate, 16000);
-    for (let i = 0; i < downsampled.length; i++) state.pendingSamples.push(downsampled[i]);
-    flushPendingAudio(false);
-  };
-
-  const analyserNode = audioContext.createAnalyser();
-  analyserNode.fftSize = 256;
-  analyserNode.smoothingTimeConstant = 0.7;
-  sourceNode.connect(analyserNode);
-  analyserNode.connect(processorNode);
-  processorNode.connect(audioContext.destination);
-
-  state.mediaStream = stream;
-  state.audioContext = audioContext;
-  state.sourceNode = sourceNode;
-  state.processorNode = processorNode;
-  state.analyserNode = analyserNode;
-
-  // getUserMedia just reconfigured the shared output device, which can silence the
-  // cue keep-alive started above (the device is re-routed without firing onended).
-  // Restart it now, after capture is fully set up, so it actively holds the output
-  // device warm through the backend's pre-cue settle delay — otherwise the device
-  // cools during that wait and the start cue plays back stuttering.
-  stopCueKeepAlive();
-  ensureCueContextWarm();
-
-  sendDiagnostic({ type: "audio:capture-started", sampleRate: audioContext.sampleRate });
-}
-
-async function stopAudioCapture(): Promise<void> {
-  stopWaveformAnimation();
-  // Await so the final chunk reaches the backend before we signal audio_stopped.
-  await flushPendingAudio(true);
-
-  if (state.analyserNode) {
-    state.analyserNode.disconnect();
-    state.analyserNode = null;
-  }
-  if (state.processorNode) {
-    state.processorNode.disconnect();
-    state.processorNode.onaudioprocess = null;
-    state.processorNode = null;
-  }
-  if (state.sourceNode) {
-    state.sourceNode.disconnect();
-    state.sourceNode = null;
-  }
-  if (state.mediaStream) {
-    for (const track of state.mediaStream.getTracks()) track.stop();
-    state.mediaStream = null;
-  }
-  if (state.audioContext) {
-    await state.audioContext.close();
-    state.audioContext = null;
-  }
-  state.pendingSamples = [];
-
-  // Note: the cue context is intentionally left running here. The end cue plays
-  // later in the finishing flow, so it is only suspended once the session is back
-  // to idle (see maybeSuspendCue, called from the end cue and the idle handler).
-}
-
 // ---- Event handling ----
 
-onOverlayEvent(async (event: OverlayEvent) => {
+onOverlayEvent((event: OverlayEvent) => {
   const { type, payload = {} } = event;
   switch (type) {
     case "reset":
@@ -713,13 +366,7 @@ onOverlayEvent(async (event: OverlayEvent) => {
     case "state":
       state.appState = (payload as { state: AppState }).state;
       if (state.appState !== "idle") hideRetryAction();
-      if (state.appState === "idle" || state.appState === "connecting") state.audioReady = false;
-      if (state.appState === "idle") {
-        // Session over: suspend the cue context. No-op if the end cue is still
-        // playing — its onended handler suspends once it finishes.
-        maybeSuspendCue();
-      }
-      if (state.appState === "recording") startWaveformAnimation();
+      if (state.appState === "idle" || state.appState === "connecting") state.audioLevel = 0;
       if (
         state.appState === "idle" ||
         state.appState === "connecting" ||
@@ -731,63 +378,20 @@ onOverlayEvent(async (event: OverlayEvent) => {
           state.hintVariant = "text";
         }
       }
+      if (state.appState === "recording") startWaveformAnimation();
+      else stopWaveformAnimation();
       updateView();
-      break;
-    case "audio:warmup":
-      try {
-        state.audioReady = false;
-        if (usesNativeAudioCapture()) {
-          ensureCueContextWarm();
-          state.audioReady = true;
-        } else {
-          await startAudioCapture();
-        }
-        sendAudioWarmupReady();
-      } catch (error) {
-        const msg = (error as Error).message || String(error);
-        sendAudioWarmupFailed({ message: msg });
-        state.hintText = msg || "无法获取麦克风权限";
-        state.hintLevel = "error";
-        state.hintVariant = "text";
-        updateView();
-      }
-      break;
-    case "recording:start":
-      try {
-        state.appState = "recording";
-        state.audioReady = false;
-        if (usesNativeAudioCapture()) {
-          state.audioReady = true;
-        } else {
-          await startAudioCapture();
-        }
-        startWaveformAnimation();
-        state.hintText = "";
-        state.hintLevel = "info";
-        state.hintVariant = "text";
-      } catch (error) {
-        const msg = (error as Error).message || String(error);
-        sendDiagnostic({ type: "audio:capture-failed", message: msg });
-        state.hintText = msg || "无法获取麦克风权限";
-        state.hintLevel = "error";
-        state.hintVariant = "text";
-      }
-      updateView();
-      break;
-    case "recording:stop":
-      if (usesNativeAudioCapture()) {
-        stopWaveformAnimation();
-        state.pendingSamples = [];
-      } else {
-        await stopAudioCapture();
-      }
-      notifyAudioStopped();
       break;
     case "transcript": {
       const p = payload as { finalText?: string; partialText?: string };
       state.finalText = p.finalText || "";
       state.partialText = p.partialText || "";
       updateView();
+      break;
+    }
+    case "audio:level": {
+      const p = payload as { level?: number };
+      state.audioLevel = typeof p.level === "number" ? Math.max(0, Math.min(1, p.level)) : 0;
       break;
     }
     case "hint": {
@@ -810,12 +414,6 @@ onOverlayEvent(async (event: OverlayEvent) => {
       updateView();
       break;
     }
-    case "cue:play":
-      playCue(payload as { kind?: string; data?: string });
-      break;
-    case "paste:done":
-    case "sound:config":
-      break;
     case "appearance":
       applyAppearance((payload || {}) as AppearanceConfig);
       break;
@@ -844,7 +442,7 @@ elements.retryButton.addEventListener("click", async (event) => {
 });
 
 window.addEventListener("beforeunload", () => {
-  stopAudioCapture();
+  stopWaveformAnimation();
 });
 
 getConfig().then((config) => {

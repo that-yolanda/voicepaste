@@ -17,13 +17,6 @@ pub fn handle_event(app: &AppHandle, event: &serde_json::Value) {
     macos::dispatch(app, event);
 }
 
-/// Feed a microphone level (0..1) to the native waveform. macOS only.
-#[cfg(target_os = "macos")]
-pub fn set_audio_level(app: &AppHandle, level: f64) {
-    #[cfg(target_os = "macos")]
-    macos::set_audio_level(app, level);
-}
-
 /// Remember the app the user is currently working in, so we can hand keyboard
 /// focus back to it after a retry (clicking the native retry button activates the
 /// overlay, which would otherwise swallow the paste). No-op off macOS.
@@ -268,6 +261,18 @@ mod macos {
         }
 
         let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        // audio:level drives the native waveform through its own smoothed render
+        // path (separate from the visual event flow below).
+        if kind == "audio:level" {
+            if let Some(level) = event
+                .get("payload")
+                .and_then(|p| p.get("level"))
+                .and_then(|v| v.as_f64())
+            {
+                set_audio_level(app, level);
+            }
+            return;
+        }
         // Only visual events drive the native pill. Audio lifecycle events
         // (audio:warmup / recording:start / recording:stop) belong to the WebView worker.
         let relevant = matches!(

@@ -134,7 +134,7 @@ fn build_input_stream(
     let config = device
         .default_input_config()
         .map_err(|e| format!("读取默认麦克风配置失败: {e}"))?;
-    let sample_rate = config.sample_rate().0;
+    let sample_rate = config.sample_rate();
     let channels = usize::from(config.channels());
     let stream_config = config.config();
 

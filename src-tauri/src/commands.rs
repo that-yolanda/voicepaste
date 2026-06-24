@@ -288,9 +288,9 @@ pub async fn retry_latest_failed_transcription(
     crate::retry_latest_failed_transcription(app).await
 }
 
-/// Compute a 0..1 loudness level from f32 PCM samples for the overlay waveform.
-/// Mirrors the web AnalyserNode mapping (RMS + peak, mild compression).
-#[cfg(target_os = "macos")]
+/// Compute a 0..1 loudness level from f32 PCM samples for the overlay waveform
+/// (RMS + peak, mild compression). Every platform consumes this via the unified
+/// `audio:level` overlay event.
 fn compute_audio_level(samples: &[f32]) -> Option<f64> {
     if samples.is_empty() {
         return None;
@@ -329,15 +329,16 @@ pub(crate) async fn append_audio_samples(
         .await
         .extend_from_slice(&samples);
 
-    // Drive the native waveform (macOS only) from the same PCM the ASR receives,
-    // whether the chunk is sent immediately or buffered.
-    #[cfg(target_os = "macos")]
+    // Drive the overlay waveform from the same PCM the ASR receives, whether the
+    // chunk is sent immediately or buffered. Every renderer — the macOS native
+    // pill (via overlay::handle_event) and the Windows WebView — consumes the
+    // unified `audio:level` event.
     if let Some(level) = compute_audio_level(&samples) {
-        crate::overlay::set_audio_level(app, level);
+        let _ = app.emit(
+            "overlay:event",
+            serde_json::json!({ "type": "audio:level", "payload": { "level": level } }),
+        );
     }
-    // `app` only drives the macOS native waveform above; unused on other platforms.
-    #[cfg(not(target_os = "macos"))]
-    let _ = app;
 
     // Hold the `asr_session` lock across the decision so buffering stays ordered
     // against the background connect task's drain (same lock), guaranteeing no
@@ -366,71 +367,6 @@ pub(crate) async fn append_audio_samples(
         );
     }
     true
-}
-
-/// Receive an audio chunk from the renderer (base64-encoded i16 PCM),
-/// decode to f32 samples and forward to the active ASR session.
-#[tauri::command]
-pub async fn send_audio_chunk(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    base64_chunk: String,
-) -> Result<serde_json::Value, String> {
-    use base64::Engine as _;
-
-    // Decode base64 → i16 PCM bytes → f32 samples
-    let bytes = match base64::engine::general_purpose::STANDARD.decode(&base64_chunk) {
-        Ok(data) => data,
-        Err(_) => {
-            log_audio!(warn, "Audio chunk base64 decode failed");
-            return Ok(serde_json::json!({ "ok": false, "message": "音频数据解码失败" }));
-        }
-    };
-    let samples: Vec<f32> = bytes
-        .chunks_exact(2)
-        .map(|chunk| {
-            let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
-            sample as f32 / 32768.0
-        })
-        .collect();
-
-    let buffered = append_audio_samples(&app, &state, samples).await;
-    Ok(serde_json::json!({ "ok": true, "buffered": buffered }))
-}
-
-/// Notify that audio has stopped in the renderer.
-#[tauri::command]
-pub async fn audio_stopped(state: State<'_, AppState>) -> Result<(), String> {
-    let mut pending = state.pending_audio_stop.lock().await;
-    if let Some(tx) = pending.take() {
-        let _ = tx.send(());
-    }
-    Ok(())
-}
-
-/// Notify that audio warmup is ready.
-#[tauri::command]
-pub async fn audio_warmup_ready(_app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let mut pending = state.pending_audio_warmup.lock().await;
-    if let Some(tx) = pending.take() {
-        let _ = tx.send(());
-    }
-    Ok(())
-}
-
-/// Notify that audio warmup failed.
-#[tauri::command]
-pub async fn audio_warmup_failed(
-    _app: AppHandle,
-    state: State<'_, AppState>,
-    message: String,
-) -> Result<(), String> {
-    log_audio!(error, "Audio warmup failed: {}", message);
-    let mut pending = state.pending_audio_warmup.lock().await;
-    if let Some(tx) = pending.take() {
-        drop(tx);
-    }
-    Ok(())
 }
 
 /// Send diagnostic info from renderer.
@@ -731,4 +667,38 @@ pub async fn delete_model(app: AppHandle, model_id: String) -> Result<serde_json
         .map_err(|e| format!("Failed to resolve data dir: {}", e))?;
     model::delete_model(&data_dir, &model_id)?;
     Ok(serde_json::json!({ "ok": true }))
+}
+
+#[cfg(test)]
+mod audio_level_tests {
+    use super::compute_audio_level;
+
+    #[test]
+    fn empty_samples_return_none() {
+        assert_eq!(compute_audio_level(&[]), None);
+    }
+
+    #[test]
+    fn silence_maps_to_zero() {
+        // All-zero PCM: RMS and peak are both 0, so 0^0.82 = 0.
+        let samples = vec![0.0f32; 1600];
+        let level = compute_audio_level(&samples).unwrap();
+        assert!(level < 1e-6);
+    }
+
+    #[test]
+    fn normal_amplitude_stays_in_unit_range() {
+        // A moderate-amplitude sine (~0.1) lands somewhere in 0..1.
+        let samples: Vec<f32> = (0..1600).map(|i| (i as f32 * 0.01).sin() * 0.1).collect();
+        let level = compute_audio_level(&samples).unwrap();
+        assert!(level > 0.0 && level <= 1.0);
+    }
+
+    #[test]
+    fn full_scale_clamps_to_one() {
+        // Full-scale PCM must clamp at 1.0 (the .min(1.0) guard).
+        let samples = vec![1.0f32; 1600];
+        let level = compute_audio_level(&samples).unwrap();
+        assert!((level - 1.0).abs() < 1e-9);
+    }
 }

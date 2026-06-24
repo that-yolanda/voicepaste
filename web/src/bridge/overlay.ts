@@ -1,6 +1,7 @@
 /**
- * Overlay bridge — typed API replacing window.voiceOverlay.
- * Uses @tauri-apps/api for IPC (invoke + listen).
+ * Overlay bridge — typed API for the overlay renderer.
+ * Audio capture and cue playback are handled entirely in the backend (cpal +
+ * rodio), so this only exposes event listening, config, and the retry action.
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -9,10 +10,6 @@ import { listen } from "@tauri-apps/api/event";
 export interface OverlayEvent {
   type: string;
   payload: Record<string, unknown>;
-}
-
-export interface OverlayAudioChunkResult {
-  ok: boolean;
 }
 
 export interface OverlayAppConfig {
@@ -36,31 +33,6 @@ export function onOverlayEvent(listener: (event: OverlayEvent) => void): () => v
     active = false;
     unlisten.then((fn) => fn());
   };
-}
-
-/** Send a base64-encoded audio chunk to the backend ASR session. */
-export async function sendAudioChunk(base64Chunk: string): Promise<OverlayAudioChunkResult> {
-  return invoke("send_audio_chunk", { base64Chunk });
-}
-
-/** Send a diagnostic message from the renderer. */
-export async function sendDiagnostic(payload: unknown): Promise<void> {
-  return invoke("send_diagnostic", { payload });
-}
-
-/** Notify the backend that audio capture has stopped. */
-export async function notifyAudioStopped(): Promise<void> {
-  return invoke("audio_stopped");
-}
-
-/** Notify the backend that audio warmup is ready. */
-export async function sendAudioWarmupReady(): Promise<void> {
-  return invoke("audio_warmup_ready");
-}
-
-/** Notify the backend that audio warmup failed. */
-export async function sendAudioWarmupFailed(payload: { message?: string } = {}): Promise<void> {
-  return invoke("audio_warmup_failed", { message: payload.message || "" });
 }
 
 /** Get the current app configuration. */

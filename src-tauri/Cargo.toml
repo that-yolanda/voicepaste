@@ -45,6 +45,11 @@ async-trait = "0.1"
 sherpa-onnx = { version = "1.13", default-features = false }
 tar = "0.4"
 bzip2 = "0.4"
+# Audio capture (cpal — CoreAudio/WASAPI/ALSA) and cue playback (rodio). cpal's
+# own [target] deps pick the right backend per platform; Linux only needs the
+# libasound2-dev system package (installed in CI), so these are plain deps.
+cpal = "0.17"
+rodio = "0.20"
 
 [features]
 default = []
@@ -59,6 +64,3 @@ wiremock = "0.6"
 objc2 = "0.6"
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
-# Native microphone capture is macOS-only (native_audio is cfg(macos)); keeping
-# cpal off other targets avoids pulling ALSA (libasound2-dev) into the Linux CI.
-cpal = "0.15"

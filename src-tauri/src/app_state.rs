@@ -24,8 +24,6 @@ pub struct AppInner {
     pub stats: Mutex<StatsService>,
     pub asr_session: Mutex<Option<Arc<dyn AsrSession>>>,
     pub asr_events: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<AsrEvent>>>,
-    pub pending_audio_stop: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
-    pub pending_audio_warmup: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     pub latest_transcript: Mutex<(String, String)>, // (final_text, partial_text)
     /// Audio sample chunks captured before the ASR session is ready (background
     /// connect in progress, or during a reconnect gap). Drained into the session
@@ -53,9 +51,8 @@ pub struct AppInner {
     /// audio, so already-recognized text is accumulated here and prepended to the
     /// new session's output. Reset at the start of every recording.
     pub accumulated_text: Mutex<String>,
-    /// Native microphone capture used on macOS to avoid WebView/WebRTC input
-    /// processing. Other platforms keep the renderer getUserMedia path.
-    #[cfg(target_os = "macos")]
+    /// Native microphone capture (cpal — CoreAudio on macOS, WASAPI on Windows,
+    /// ALSA on Linux). The overlay renderer no longer captures audio.
     pub native_audio: Mutex<Option<crate::native_audio::NativeAudioCapture>>,
 }
 
@@ -76,8 +73,6 @@ pub fn create_app_state(
         stats: Mutex::new(stats_service),
         asr_session: Mutex::new(None),
         asr_events: Mutex::new(None),
-        pending_audio_stop: Mutex::new(None),
-        pending_audio_warmup: Mutex::new(None),
         latest_transcript: Mutex::new((String::new(), String::new())),
         pending_audio: Mutex::new(Vec::new()),
         recording_audio: Mutex::new(Vec::new()),
@@ -87,7 +82,6 @@ pub fn create_app_state(
         connect_rx: Mutex::new(None),
         session_epoch: std::sync::atomic::AtomicU64::new(0),
         accumulated_text: Mutex::new(String::new()),
-        #[cfg(target_os = "macos")]
         native_audio: Mutex::new(None),
     })
 }
