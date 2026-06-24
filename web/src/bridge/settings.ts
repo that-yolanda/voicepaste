@@ -177,8 +177,16 @@ export async function getHistory(daysBack = 1): Promise<unknown[]> {
   return invoke("get_history", { daysBack });
 }
 
-export async function deleteHistory(ts: number): Promise<void> {
+export async function deleteHistory(ts: string): Promise<void> {
   return invoke("delete_history", { ts });
+}
+
+export async function playSoundFile(filePath: string): Promise<void> {
+  return invoke("play_sound_file", { filePath });
+}
+
+export async function retryHistoryTranscription(ts: string): Promise<unknown> {
+  return invoke("retry_history_transcription", { ts });
 }
 
 // ---- Prompts ----

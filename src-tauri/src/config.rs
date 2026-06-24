@@ -140,6 +140,8 @@ pub struct AppSettings {
     pub remove_trailing_period: bool,
     #[serde(default = "default_true")]
     pub keep_clipboard: bool,
+    #[serde(default)]
+    pub keep_recordings: bool,
     #[serde(default = "default_theme")]
     pub theme: String,
     #[serde(default = "default_overlay_style")]
@@ -812,6 +814,7 @@ impl Default for AppConfig {
                 hotkey_mode: default_hotkey_mode(),
                 remove_trailing_period: true,
                 keep_clipboard: true,
+                keep_recordings: false,
                 theme: default_theme(),
                 overlay_style: default_overlay_style(),
                 sound: None,

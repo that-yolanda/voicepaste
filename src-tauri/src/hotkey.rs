@@ -505,7 +505,7 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                     escape_was_pressed = true;
                     let handle = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        crate::cancel_recording(handle).await;
+                        crate::on_escape(handle).await;
                     });
                 }
 

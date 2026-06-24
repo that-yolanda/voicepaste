@@ -251,6 +251,58 @@ body {
   will-change: transform;
 }
 
+/* ---------- Retry action (failed state only) ---------- */
+.retry-button {
+  flex: 0 0 auto;
+  height: 22px;
+  position: relative;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 10px;
+  margin-left: -2px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.24),
+    0 4px 12px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.stage[data-retry="true"] .retry-button {
+  display: inline-flex;
+  opacity: 0;
+}
+.retry-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+}
+.stage[data-retry="true"] .pill.platform-mac .indicator,
+.stage[data-retry="true"] .pill.platform-mac .body,
+.stage[data-retry="true"] .pill.platform-mac .wave {
+  visibility: hidden;
+}
+.retry-button:hover {
+  background: rgba(255, 255, 255, 0.17);
+}
+.retry-button:active {
+  transform: scale(0.96);
+}
+.retry-icon {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.stage[data-retrying="true"] .retry-icon {
+  animation: vp-spin 0.85s linear infinite;
+}
 /* ===========================================================
    Platform variant: Windows 11 — Mica/Acrylic + Reveal
    =========================================================== */
@@ -416,6 +468,12 @@ body {
 .pill.platform-mac:not(.is-vibrancy)::before,
 .pill.platform-mac:not(.is-vibrancy)::after {
   display: none;
+}
+.stage[data-retry="true"] .pill.platform-mac {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  text-shadow: none;
 }
 
 /* ===========================================================

@@ -24,6 +24,14 @@ pub struct HistoryEntry {
     pub text: String,
     #[serde(default)]
     pub chars: usize,
+    #[serde(default = "default_history_status")]
+    pub status: String,
+    #[serde(rename = "audioPath", default, skip_serializing_if = "Option::is_none")]
+    pub audio_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(rename = "retryOf", default, skip_serializing_if = "Option::is_none")]
+    pub retry_of: Option<String>,
 }
 
 pub struct StatsService {
@@ -54,7 +62,12 @@ impl StatsService {
         }
     }
 
-    pub fn record_session(&mut self, text: &str) {
+    pub fn record_session_with_audio(
+        &mut self,
+        text: &str,
+        audio_path: Option<String>,
+        retry_of: Option<String>,
+    ) {
         if text.is_empty() {
             return;
         }
@@ -79,8 +92,94 @@ impl StatsService {
             ts: now.to_rfc3339(),
             text: text.to_string(),
             chars: char_count,
+            status: "success".to_string(),
+            audio_path,
+            error: None,
+            retry_of,
         };
         self.append_history(&entry);
+    }
+
+    pub fn replace_history_with_success(
+        &mut self,
+        ts: &str,
+        text: &str,
+        audio_path: Option<String>,
+    ) -> bool {
+        if text.is_empty() {
+            return false;
+        }
+
+        let Ok(d) = chrono::DateTime::parse_from_rfc3339(ts) else {
+            return false;
+        };
+        let local = d.with_timezone(&Local);
+        let key = local.format("%Y-%m-%d").to_string();
+        let file_path = self.history_dir.join(format!("{}.jsonl", key));
+        let Ok(content) = fs::read_to_string(&file_path) else {
+            return false;
+        };
+
+        let mut replaced = false;
+        let char_count = text.len();
+        let mut next_lines = Vec::new();
+        for line in content.lines().filter(|line| !line.is_empty()) {
+            match serde_json::from_str::<HistoryEntry>(line) {
+                Ok(mut entry) if entry.ts == ts => {
+                    entry.text = text.to_string();
+                    entry.chars = char_count;
+                    entry.status = "success".to_string();
+                    entry.audio_path = audio_path.clone();
+                    entry.error = None;
+                    entry.retry_of = None;
+                    if let Ok(json) = serde_json::to_string(&entry) {
+                        next_lines.push(json);
+                        replaced = true;
+                    } else {
+                        next_lines.push(line.to_string());
+                    }
+                }
+                Ok(entry) => {
+                    if let Ok(json) = serde_json::to_string(&entry) {
+                        next_lines.push(json);
+                    } else {
+                        next_lines.push(line.to_string());
+                    }
+                }
+                Err(_) => next_lines.push(line.to_string()),
+            }
+        }
+
+        if !replaced {
+            return false;
+        }
+
+        if fs::write(&file_path, format!("{}\n", next_lines.join("\n"))).is_err() {
+            return false;
+        }
+        self.record_usage(text);
+        true
+    }
+
+    pub fn record_failure(
+        &mut self,
+        message: &str,
+        audio_path: Option<String>,
+        retry_of: Option<String>,
+    ) -> String {
+        let now = Local::now();
+        let ts = now.to_rfc3339();
+        let entry = HistoryEntry {
+            ts: ts.clone(),
+            text: message.to_string(),
+            chars: 0,
+            status: "failed".to_string(),
+            audio_path,
+            error: Some(message.to_string()),
+            retry_of,
+        };
+        self.append_history(&entry);
+        ts
     }
 
     pub fn get_stats(&self) -> &Stats {
@@ -123,6 +222,10 @@ impl StatsService {
     }
 
     pub fn delete_history(&mut self, ts: &str) {
+        self.delete_history_entry(ts, true);
+    }
+
+    pub fn delete_history_entry(&mut self, ts: &str, delete_audio: bool) {
         if let Ok(d) = chrono::DateTime::parse_from_rfc3339(ts) {
             let local = d.with_timezone(&Local);
             let key = local.format("%Y-%m-%d").to_string();
@@ -131,12 +234,18 @@ impl StatsService {
             if file_path.exists() {
                 if let Ok(content) = fs::read_to_string(&file_path) {
                     let lines: Vec<&str> = content.lines().filter(|l| !l.is_empty()).collect();
+                    let mut removed_audio_paths = Vec::new();
                     let new_lines: Vec<String> = lines
                         .iter()
-                        .filter(|line| {
-                            serde_json::from_str::<HistoryEntry>(line)
-                                .map(|e| e.ts != ts)
-                                .unwrap_or(true)
+                        .filter(|line| match serde_json::from_str::<HistoryEntry>(line) {
+                            Ok(e) if e.ts == ts => {
+                                if let Some(path) = e.audio_path {
+                                    removed_audio_paths.push(path);
+                                }
+                                false
+                            }
+                            Ok(_) => true,
+                            Err(_) => true,
                         })
                         .map(|s| s.to_string())
                         .collect();
@@ -147,10 +256,21 @@ impl StatsService {
                         } else {
                             let _ = fs::write(&file_path, format!("{}\n", new_lines.join("\n")));
                         }
+                        if delete_audio {
+                            for path in removed_audio_paths {
+                                let _ = fs::remove_file(path);
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    pub fn find_history(&self, ts: &str) -> Option<HistoryEntry> {
+        self.get_history(365)
+            .into_iter()
+            .find(|entry| entry.ts == ts)
     }
 
     fn flush_stats(&mut self) {
@@ -159,6 +279,22 @@ impl StatsService {
         if let Ok(json) = serde_json::to_string_pretty(&self.stats) {
             let _ = fs::write(path, json);
         }
+    }
+
+    fn record_usage(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        let now = Local::now();
+        if self.stats.first_used_at.is_none() {
+            self.stats.first_used_at = Some(now.to_rfc3339());
+        }
+        self.stats.total_sessions += 1;
+        self.stats.total_characters += text.len() as u64;
+        let key = now.format("%Y-%m-%d").to_string();
+        *self.stats.daily_counts.entry(key).or_insert(0) += text.len() as u64;
+        self.flush_stats();
     }
 
     fn prune_daily_counts(&mut self) {
@@ -192,6 +328,10 @@ impl StatsService {
 /// Whether a string is a `YYYY-MM-DD` history file date key.
 fn is_date_key(s: &str) -> bool {
     chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok()
+}
+
+fn default_history_status() -> String {
+    "success".to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +373,10 @@ mod tests {
             ts: "2025-01-01T00:00:00+00:00".to_string(),
             text: "hello".to_string(),
             chars: 5,
+            status: "success".to_string(),
+            audio_path: None,
+            error: None,
+            retry_of: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("hello"));
@@ -250,7 +394,7 @@ mod tests {
     #[test]
     fn record_session_increments_counters() {
         let (mut svc, _dir) = new_stats_service();
-        svc.record_session("hello world");
+        svc.record_session_with_audio("hello world", None, None);
         let stats = svc.get_stats();
         assert_eq!(stats.total_sessions, 1);
         assert_eq!(stats.total_characters, 11); // "hello world".len()
@@ -260,7 +404,7 @@ mod tests {
     #[test]
     fn record_session_empty_text_ignored() {
         let (mut svc, _dir) = new_stats_service();
-        svc.record_session("");
+        svc.record_session_with_audio("", None, None);
         let stats = svc.get_stats();
         assert_eq!(stats.total_sessions, 0);
     }
@@ -268,8 +412,8 @@ mod tests {
     #[test]
     fn record_session_multiple_increments() {
         let (mut svc, _dir) = new_stats_service();
-        svc.record_session("first");
-        svc.record_session("second");
+        svc.record_session_with_audio("first", None, None);
+        svc.record_session_with_audio("second", None, None);
         let stats = svc.get_stats();
         assert_eq!(stats.total_sessions, 2);
         assert_eq!(stats.total_characters, 11);
@@ -278,7 +422,7 @@ mod tests {
     #[test]
     fn daily_counts_populated() {
         let (mut svc, _dir) = new_stats_service();
-        svc.record_session("test");
+        svc.record_session_with_audio("test", None, None);
         let stats = svc.get_stats();
         assert_eq!(stats.daily_counts.len(), 1);
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -346,6 +490,26 @@ mod tests {
         let history = svc.get_history(3);
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].text, "old");
+    }
+
+    #[test]
+    fn replace_history_with_success_updates_entry_in_place() {
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let (mut svc, _dir) = new_stats_service();
+        let failure_ts = svc.record_failure("timeout", Some("/tmp/retry.wav".to_string()), None);
+
+        assert_eq!(failure_ts[0..10], today);
+        assert!(svc.replace_history_with_success(&failure_ts, "重试成功", None));
+
+        let history = svc.get_history(365);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].ts, failure_ts);
+        assert_eq!(history[0].text, "重试成功");
+        assert_eq!(history[0].status, "success");
+        assert_eq!(history[0].chars, "重试成功".len());
+        assert!(history[0].audio_path.is_none());
+        assert!(history[0].error.is_none());
+        assert_eq!(svc.get_stats().total_sessions, 1);
     }
 
     #[test]

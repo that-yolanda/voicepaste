@@ -271,6 +271,23 @@ pub async fn delete_history(
     Ok(serde_json::json!({ "ok": true }))
 }
 
+/// Retry a failed history entry by replaying its saved WAV through ASR.
+#[tauri::command]
+pub async fn retry_history_transcription(
+    app: AppHandle,
+    ts: String,
+) -> Result<serde_json::Value, String> {
+    crate::retry_history_transcription(app, ts).await
+}
+
+/// Retry the latest failed recording from the overlay retry button.
+#[tauri::command]
+pub async fn retry_latest_failed_transcription(
+    app: AppHandle,
+) -> Result<serde_json::Value, String> {
+    crate::retry_latest_failed_transcription(app).await
+}
+
 /// Compute a 0..1 loudness level from f32 PCM samples for the overlay waveform.
 /// Mirrors the web AnalyserNode mapping (RMS + peak, mild compression).
 #[cfg(target_os = "macos")]
@@ -289,32 +306,83 @@ fn compute_audio_level(samples: &[f32]) -> Option<f64> {
     Some((rms * 13.0 + peak * 2.8).powf(0.82).min(1.0))
 }
 
-/// Receive an audio chunk from the renderer (base64-encoded i16 PCM),
-/// decode to f32 samples and forward to the active ASR session.
-#[tauri::command]
-pub async fn send_audio_chunk(
-    _app: AppHandle,
-    state: State<'_, AppState>,
-    base64_chunk: String,
-) -> Result<serde_json::Value, String> {
-    use base64::Engine as _;
+pub(crate) async fn append_audio_samples(
+    app: &AppHandle,
+    state: &AppState,
+    samples: Vec<f32>,
+) -> bool {
     use std::sync::atomic::{AtomicU64, Ordering};
     static CHUNK_COUNT: AtomicU64 = AtomicU64::new(0);
     let n = CHUNK_COUNT.fetch_add(1, Ordering::Relaxed);
     if n == 0 || n.is_multiple_of(50) {
         log_audio!(
             debug,
-            "Received chunk #{} ({} bytes base64)",
+            "Received audio chunk #{} ({} samples)",
             n,
-            base64_chunk.len()
+            samples.len()
         );
     }
+
+    state
+        .recording_audio
+        .lock()
+        .await
+        .extend_from_slice(&samples);
+
+    // Drive the native waveform (macOS only) from the same PCM the ASR receives,
+    // whether the chunk is sent immediately or buffered.
+    #[cfg(target_os = "macos")]
+    if let Some(level) = compute_audio_level(&samples) {
+        crate::overlay::set_audio_level(app, level);
+    }
+    // `app` only drives the macOS native waveform above; unused on other platforms.
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+
+    // Hold the `asr_session` lock across the decision so buffering stays ordered
+    // against the background connect task's drain (same lock), guaranteeing no
+    // buffered chunk is silently dropped between drain and session-attach.
+    let session = state.asr_session.lock().await;
+    if let Some(ref session) = *session {
+        if session.is_ready() {
+            session.append_audio(&samples);
+            return false;
+        }
+    }
+
+    // Session not ready yet (background connect in progress, or reconnect gap):
+    // buffer the samples so nothing the user says before the session attaches is
+    // lost. Drained into the session once it attaches.
+    let mut pending = state.pending_audio.lock().await;
+    if pending.len() < MAX_PENDING_CHUNKS {
+        pending.push(samples);
+        return true;
+    } else if n.is_multiple_of(50) {
+        log_audio!(
+            warn,
+            "Pending audio buffer full ({} chunks), dropping chunk #{}",
+            MAX_PENDING_CHUNKS,
+            n
+        );
+    }
+    true
+}
+
+/// Receive an audio chunk from the renderer (base64-encoded i16 PCM),
+/// decode to f32 samples and forward to the active ASR session.
+#[tauri::command]
+pub async fn send_audio_chunk(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    base64_chunk: String,
+) -> Result<serde_json::Value, String> {
+    use base64::Engine as _;
 
     // Decode base64 → i16 PCM bytes → f32 samples
     let bytes = match base64::engine::general_purpose::STANDARD.decode(&base64_chunk) {
         Ok(data) => data,
         Err(_) => {
-            log_audio!(warn, "Chunk #{} base64 decode failed", n);
+            log_audio!(warn, "Audio chunk base64 decode failed");
             return Ok(serde_json::json!({ "ok": false, "message": "音频数据解码失败" }));
         }
     };
@@ -326,39 +394,8 @@ pub async fn send_audio_chunk(
         })
         .collect();
 
-    // Drive the native waveform (macOS only) from the same PCM the ASR receives,
-    // whether the chunk is sent immediately or buffered.
-    #[cfg(target_os = "macos")]
-    if let Some(level) = compute_audio_level(&samples) {
-        crate::overlay::set_audio_level(&_app, level);
-    }
-
-    // Hold the `asr_session` lock across the decision so buffering stays ordered
-    // against the background connect task's drain (same lock), guaranteeing no
-    // buffered chunk is silently dropped between drain and session-attach.
-    let session = state.asr_session.lock().await;
-    if let Some(ref session) = *session {
-        if session.is_ready() {
-            session.append_audio(&samples);
-            return Ok(serde_json::json!({ "ok": true }));
-        }
-    }
-
-    // Session not ready yet (background connect in progress, or reconnect gap):
-    // buffer the samples so nothing the user says before the session attaches is
-    // lost. Drained into the session once it attaches.
-    let mut pending = state.pending_audio.lock().await;
-    if pending.len() < MAX_PENDING_CHUNKS {
-        pending.push(samples);
-    } else if n.is_multiple_of(50) {
-        log_audio!(
-            warn,
-            "Pending audio buffer full ({} chunks), dropping chunk #{}",
-            MAX_PENDING_CHUNKS,
-            n
-        );
-    }
-    Ok(serde_json::json!({ "ok": true, "buffered": true }))
+    let buffered = append_audio_samples(&app, &state, samples).await;
+    Ok(serde_json::json!({ "ok": true, "buffered": buffered }))
 }
 
 /// Notify that audio has stopped in the renderer.

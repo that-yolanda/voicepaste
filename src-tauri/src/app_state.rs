@@ -32,6 +32,15 @@ pub struct AppInner {
     /// once it attaches. Always accessed while holding `asr_session` to stay
     /// ordered against the drain.
     pub pending_audio: Mutex<Vec<Vec<f32>>>,
+    /// Full-session 16k mono PCM captured from the same stream sent to ASR.
+    /// Saved as a WAV when a recording is finalized, for diagnostics and review.
+    pub recording_audio: Mutex<Vec<f32>>,
+    /// WAV path for the current recording once saved.
+    pub current_recording_wav: Mutex<Option<std::path::PathBuf>>,
+    /// History timestamp of the failed entry currently being retried.
+    pub current_retry_of: Mutex<Option<String>>,
+    /// Latest failed history entry that has a WAV and can be retried from the overlay.
+    pub current_failure_ts: Mutex<Option<String>>,
     /// Resolves when the background ASR connect finishes (Ok) or fails (Err).
     /// `stop_recording` awaits this when the user stops before the session is ready.
     pub connect_rx: Mutex<Option<tokio::sync::oneshot::Receiver<Result<(), String>>>>,
@@ -44,6 +53,10 @@ pub struct AppInner {
     /// audio, so already-recognized text is accumulated here and prepended to the
     /// new session's output. Reset at the start of every recording.
     pub accumulated_text: Mutex<String>,
+    /// Native microphone capture used on macOS to avoid WebView/WebRTC input
+    /// processing. Other platforms keep the renderer getUserMedia path.
+    #[cfg(target_os = "macos")]
+    pub native_audio: Mutex<Option<crate::native_audio::NativeAudioCapture>>,
 }
 
 pub type AppHandle = Arc<AppInner>;
@@ -67,8 +80,14 @@ pub fn create_app_state(
         pending_audio_warmup: Mutex::new(None),
         latest_transcript: Mutex::new((String::new(), String::new())),
         pending_audio: Mutex::new(Vec::new()),
+        recording_audio: Mutex::new(Vec::new()),
+        current_recording_wav: Mutex::new(None),
+        current_retry_of: Mutex::new(None),
+        current_failure_ts: Mutex::new(None),
         connect_rx: Mutex::new(None),
         session_epoch: std::sync::atomic::AtomicU64::new(0),
         accumulated_text: Mutex::new(String::new()),
+        #[cfg(target_os = "macos")]
+        native_audio: Mutex::new(None),
     })
 }

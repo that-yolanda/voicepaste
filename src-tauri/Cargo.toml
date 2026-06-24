@@ -59,3 +59,6 @@ wiremock = "0.6"
 objc2 = "0.6"
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
+# Native microphone capture is macOS-only (native_audio is cfg(macos)); keeping
+# cpal off other targets avoids pulling ALSA (libasound2-dev) into the Linux CI.
+cpal = "0.15"
