@@ -318,6 +318,9 @@ pub(crate) async fn append_audio_samples(
     if let Some(level) = compute_audio_level(&samples) {
         crate::overlay::set_audio_level(app, level);
     }
+    // `app` only drives the macOS native waveform above; unused on other platforms.
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
 
     // Hold the `asr_session` lock across the decision so buffering stays ordered
     // against the background connect task's drain (same lock), guaranteeing no
