@@ -15,7 +15,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "macos-private-api", "image-png"] }
+# "unstable" enables tauri::window::WindowBuilder so the macOS overlay can be a
+# pure native Window (no WebView), dropping a resident WKWebView (~30-80MB).
+tauri = { version = "2", features = ["tray-icon", "macos-private-api", "image-png", "unstable"] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
@@ -65,3 +67,5 @@ wiremock = "0.6"
 objc2 = "0.6"
 objc2-app-kit = "0.3"
 objc2-foundation = "0.3"
+# Used by overlay.rs to reach the NSWindow of the WebView-less overlay window.
+raw-window-handle = "0.6"

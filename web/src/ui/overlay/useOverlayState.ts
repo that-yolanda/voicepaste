@@ -1,12 +1,6 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { getConfig, onOverlayEvent, retryLatestFailedTranscription } from "@/bridge/overlay";
-import {
-  type AppearanceConfig,
-  type AppState,
-  type HintLevel,
-  INITIAL_OVERLAY_STATE,
-  type OverlayState,
-} from "./types";
+import { useCallback, useEffect, useReducer, useRef } from "react";
+import { onOverlayEvent, retryLatestFailedTranscription } from "@/bridge/overlay";
+import { type AppState, type HintLevel, INITIAL_OVERLAY_STATE, type OverlayState } from "./types";
 
 type Action =
   | { type: "reset" }
@@ -92,7 +86,6 @@ function reducer(state: OverlayState, action: Action): OverlayState {
 
 export interface UseOverlayState {
   state: OverlayState;
-  appearance: AppearanceConfig;
   /** Latest backend audio level (0..1). Mutated on every `audio:level` event
    * without triggering a re-render; the waveform RAF reads it each frame. */
   audioLevelRef: React.RefObject<number>;
@@ -101,7 +94,6 @@ export interface UseOverlayState {
 
 export function useOverlayState(): UseOverlayState {
   const [state, dispatch] = useReducer(reducer, INITIAL_OVERLAY_STATE);
-  const [appearance, setAppearance] = useState<AppearanceConfig>({});
   const audioLevelRef = useRef(0);
 
   useEffect(() => {
@@ -148,16 +140,11 @@ export function useOverlayState(): UseOverlayState {
           });
           break;
         }
-        case "appearance":
-          setAppearance(payload as AppearanceConfig);
-          break;
+        // "appearance" only concerns the macOS native renderer; ignored here.
         default:
           break;
       }
     });
-    getConfig()
-      .then((cfg) => setAppearance(cfg || {}))
-      .catch(() => {});
     return unlisten;
   }, []);
 
@@ -182,5 +169,5 @@ export function useOverlayState(): UseOverlayState {
       });
   }, [state.retryVisible, state.retrying]);
 
-  return { state, appearance, audioLevelRef, onRetry };
+  return { state, audioLevelRef, onRetry };
 }

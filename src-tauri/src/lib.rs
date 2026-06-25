@@ -214,12 +214,44 @@ pub fn run() {
         });
 }
 
-/// Configure the overlay window.
-/// Window properties (cursor_events, visible_on_all_workspaces) are deferred to
-/// position_overlay() in RunEvent::Ready to avoid "Window move completed without
-/// beginning" warnings on macOS.
+/// Create the overlay window in code. tauri.conf.json declares it with
+/// `create: false`; macOS builds a WebView-less native Window (the pill is
+/// rendered natively by overlay.rs), while Windows builds a WebviewWindow that
+/// hosts the React overlay. Window properties (cursor_events,
+/// visible_on_all_workspaces, position) are still applied in position_overlay()
+/// at RunEvent::Ready to avoid "Window move completed without beginning" on macOS.
 fn setup_overlay_window(app: &App) {
-    let _ = app.get_webview_window("overlay");
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::window::WindowBuilder;
+        let _ = WindowBuilder::new(app, "overlay")
+            .title("VoicePaste")
+            .inner_size(720.0, 300.0)
+            .decorations(false)
+            .transparent(true)
+            .always_on_top(true)
+            .resizable(false)
+            .visible(false)
+            .skip_taskbar(true)
+            .shadow(false)
+            .build();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        use tauri::{WebviewUrl, WebviewWindowBuilder};
+        let _ = WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("index.html".into()))
+            .title("VoicePaste")
+            .inner_size(720.0, 300.0)
+            .decorations(false)
+            .transparent(true)
+            .always_on_top(true)
+            .resizable(false)
+            .visible(false)
+            .skip_taskbar(true)
+            .shadow(false)
+            .focusable(false)
+            .build();
+    }
 }
 
 /// Position the overlay at bottom-center of the primary screen.
@@ -230,7 +262,7 @@ fn setup_overlay_window(app: &App) {
 /// in or unplugged the primary monitor (and its work area) changes, but the window
 /// keeps its old frame until repositioned — which previously required an app restart.
 fn position_overlay(app_handle: &AppHandle) {
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+    if let Some(overlay) = app_handle.get_window("overlay") {
         // Set window properties here (RunEvent::Ready) rather than during setup()
         // to avoid macOS window server timing issues.
         let _ = overlay.set_ignore_cursor_events(true);
@@ -264,7 +296,7 @@ fn position_overlay(app_handle: &AppHandle) {
 }
 
 fn set_overlay_retry_interaction(app_handle: &AppHandle, enabled: bool) {
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+    if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.set_ignore_cursor_events(!enabled);
     }
     if enabled {
@@ -357,7 +389,7 @@ fn schedule_retry_overlay_hide(app_handle: AppHandle, app_inner: Arc<app_state::
             *app_inner.current_failure_ts.lock().await = None;
             set_escape_enabled_now(&app_handle, false);
             set_overlay_retry_interaction(&app_handle, false);
-            if let Some(overlay) = app_handle.get_webview_window("overlay") {
+            if let Some(overlay) = app_handle.get_window("overlay") {
                 let _ = overlay.hide();
             }
         }
@@ -901,7 +933,7 @@ async fn start_recording(app_handle: AppHandle) {
             // Show overlay with error, auto-hide after delay
             let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
             position_overlay(&app_handle);
-            if let Some(overlay) = app_handle.get_webview_window("overlay") {
+            if let Some(overlay) = app_handle.get_window("overlay") {
                 let _ = overlay.show();
             }
             set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
@@ -922,7 +954,7 @@ async fn start_recording(app_handle: AppHandle) {
                     matches!(*s, app_state::AppState::Idle)
                 };
                 if still_idle {
-                    if let Some(overlay) = delayed_handle.get_webview_window("overlay") {
+                    if let Some(overlay) = delayed_handle.get_window("overlay") {
                         let _ = overlay.hide();
                     }
                 }
@@ -941,7 +973,7 @@ async fn start_recording(app_handle: AppHandle) {
     // Re-position before showing so the overlay follows the current display layout
     // (e.g. after an external monitor was connected/disconnected).
     position_overlay(&app_handle);
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+    if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.show();
     }
 
@@ -952,7 +984,7 @@ async fn start_recording(app_handle: AppHandle) {
     if let Err(e) = native_audio::start_capture(app_handle.clone(), Arc::clone(&app_inner)).await {
         *recording_state.0.lock().unwrap() = false;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-        if let Some(overlay) = app_handle.get_webview_window("overlay") {
+        if let Some(overlay) = app_handle.get_window("overlay") {
             let _ = overlay.hide();
         }
         log_rec!(warn, "Native audio warmup failed: {}", e);
@@ -971,7 +1003,7 @@ async fn start_recording(app_handle: AppHandle) {
         log_rec!(warn, "Cancelled during warmup, aborting start");
         stop_audio_capture(&app_handle, &app_inner, 1200).await;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-        if let Some(overlay) = app_handle.get_webview_window("overlay") {
+        if let Some(overlay) = app_handle.get_window("overlay") {
             let _ = overlay.hide();
         }
         return;
@@ -988,7 +1020,7 @@ async fn start_recording(app_handle: AppHandle) {
         log_rec!(warn, "Cancelled during settle, aborting start");
         stop_audio_capture(&app_handle, &app_inner, 1200).await;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-        if let Some(overlay) = app_handle.get_webview_window("overlay") {
+        if let Some(overlay) = app_handle.get_window("overlay") {
             let _ = overlay.hide();
         }
         return;
@@ -1251,7 +1283,7 @@ async fn retry_history_transcription_inner(
     session.close();
     *app_inner.current_failure_ts.lock().await = None;
     set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+    if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.hide();
     }
     Ok(serde_json::json!({ "ok": true, "text": text }))
@@ -1481,7 +1513,7 @@ async fn stop_recording(app_handle: AppHandle) {
                     app_inner.pending_audio.lock().await.clear();
                     discard_recording_artifacts(&app_inner).await;
                     set_overlay_retry_interaction(&app_handle, false);
-                    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+                    if let Some(overlay) = app_handle.get_window("overlay") {
                         let _ = overlay.hide();
                     }
                     set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
@@ -1522,7 +1554,7 @@ async fn stop_recording(app_handle: AppHandle) {
             *app_inner.accumulated_text.lock().await = String::new();
             discard_recording_artifacts(&app_inner).await;
             set_overlay_retry_interaction(&app_handle, false);
-            if let Some(overlay) = app_handle.get_webview_window("overlay") {
+            if let Some(overlay) = app_handle.get_window("overlay") {
                 let _ = overlay.hide();
             }
             set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
@@ -1592,7 +1624,7 @@ async fn stop_recording(app_handle: AppHandle) {
 
     // 12. Hide overlay
     set_overlay_retry_interaction(&app_handle, false);
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+    if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.hide();
     }
 
@@ -1660,7 +1692,7 @@ async fn abort_retry_or_failure(app_handle: &AppHandle, app_inner: &Arc<app_stat
     *app_inner.accumulated_text.lock().await = String::new();
     set_overlay_retry_interaction(app_handle, false);
     let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+    if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.hide();
     }
     // set_app_state(Idle) also re-syncs (disables) the ESC shortcut.
@@ -1707,7 +1739,7 @@ async fn cancel_recording(app_handle: AppHandle) {
     *app_inner.accumulated_text.lock().await = String::new();
 
     let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
-    if let Some(overlay) = app_handle.get_webview_window("overlay") {
+    if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.hide();
     }
     set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
@@ -2006,7 +2038,7 @@ async fn finalize_on_failure(app: &AppHandle, app_inner: &Arc<app_state::AppInne
     );
     finalize_and_paste(app, app_inner, combined).await;
 
-    if let Some(overlay) = app.get_webview_window("overlay") {
+    if let Some(overlay) = app.get_window("overlay") {
         let _ = overlay.hide();
     }
     set_app_state(app, app_inner, app_state::AppState::Idle).await;

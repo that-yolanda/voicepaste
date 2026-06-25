@@ -1,12 +1,12 @@
 //! Overlay event dispatch + native macOS Liquid Glass renderer.
 //!
-//! The backend already emits every overlay visual update as an `overlay:event`
-//! (consumed by the WebView). A single Rust-side listener (registered in `lib.rs`)
-//! forwards those same events here via [`handle_event`]. On Windows this is a no-op
-//! (the WebView is the sole renderer). On macOS the event drives a native AppKit pill
-//! rendered *inside* an `NSGlassEffectView`, so the transcript text receives the OS's
-//! built-in, content-aware legibility adaptation (the whole point of the refactor) —
-//! and the WebView is reduced to a hidden audio worker (see web/app.js).
+//! The backend emits every overlay visual update as an `overlay:event`. A single
+//! Rust-side listener (registered in `lib.rs`) forwards those same events here via
+//! [`handle_event`]. On Windows this is a no-op (the WebviewWindow is the sole
+//! renderer, hosting the React overlay). On macOS the overlay is a WebView-less
+//! native Window; the event drives an AppKit pill rendered *inside* an
+//! `NSGlassEffectView`, so the transcript text gets the OS's built-in,
+//! content-aware legibility adaptation (the whole point of the native renderer).
 
 use tauri::AppHandle;
 
@@ -465,8 +465,23 @@ mod macos {
     }
 
     fn make_window_ptr(app: &AppHandle) -> Option<*mut std::ffi::c_void> {
-        let overlay = app.get_webview_window("overlay")?;
-        overlay.ns_window().ok()
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        // The macOS overlay is a plain native Window (no WebView), so reach its
+        // NSWindow via the raw-window-handle AppKit handle instead of
+        // WebviewWindow::ns_window (which only exists on webview windows).
+        let overlay = app.get_window("overlay")?;
+        let handle = overlay.window_handle().ok()?;
+        let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+            return None;
+        };
+        let ns_view = appkit.ns_view.as_ptr();
+        if ns_view.is_null() {
+            return None;
+        }
+        // [ns_view window] — the NSView's owning NSWindow.
+        let ns_window: *mut std::ffi::c_void =
+            unsafe { objc2::msg_send![ns_view as *mut AnyObject, window] };
+        (!ns_window.is_null()).then_some(ns_window)
     }
 
     /// (Re)build the native view tree if missing or if the glass style changed.

@@ -9,7 +9,7 @@ import { useOverlayLayout } from "./useOverlayLayout";
 import { useOverlayState } from "./useOverlayState";
 
 export function OverlayApp() {
-  const { state, appearance, audioLevelRef, onRetry } = useOverlayState();
+  const { state, audioLevelRef, onRetry } = useOverlayState();
 
   const visibleHint = visibleHintText(state);
   const hasHint = Boolean(visibleHint);
@@ -31,11 +31,6 @@ export function OverlayApp() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [showTranscript, state.finalText, state.partialText]);
 
-  // macOS renders the pill natively (NSGlassEffectView), so the WebView stage
-  // stays hidden there. Temporary compat — dropped once the macOS overlay window
-  // is converted to a native Window (see the macos-native-overlay-window step).
-  const hidden = appearance.platform === "macos";
-
   return (
     <main className="overlay">
       <section
@@ -45,7 +40,6 @@ export function OverlayApp() {
         data-level={hasHint ? state.hintLevel : "info"}
         data-retry={state.retryVisible && state.hintLevel === "error" ? "true" : "false"}
         data-retrying={state.retrying ? "true" : "false"}
-        style={hidden ? { display: "none" } : undefined}
       >
         <div className="pill" data-wrap={wrap ? "multi" : "single"} ref={pillRef}>
           <Indicator />

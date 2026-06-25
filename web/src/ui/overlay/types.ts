@@ -3,12 +3,6 @@ import type { OverlayEvent } from "@/bridge/overlay";
 export type AppState = "idle" | "connecting" | "recording" | "finishing";
 export type HintLevel = "info" | "error" | "warn";
 
-export interface AppearanceConfig {
-  platform?: string;
-  overlayStyle?: string;
-  theme?: string;
-}
-
 /** Logical overlay state mirrored from backend `overlay:event`s. Audio level is
  * kept out of here (high-frequency; lives in a ref to avoid re-renders) and
  * layout width/wrap are owned by useOverlayLayout. */
