@@ -142,12 +142,14 @@ The app has three window-like surfaces:
 - Visible on all workspaces (follows Spaces)
 - Positioned at bottom-center of the primary monitor's work area (720×300, 48px above bottom)
 - Repositioned on every show to follow display changes (external monitor plug/unplug)
-- **macOS**: dual rendering — transparent WebView (hidden, acts as audio worker) + native AppKit `NSGlassEffectView` pill for Liquid Glass vibrancy
-- **Windows**: WebView-only rendering
+- Created in code (`setup_overlay_window` in `lib.rs`; tauri.conf.json declares it with `create: false`). Audio is captured in the backend (cpal), so the overlay only renders
+- **macOS**: a WebView-less native `Window` (`tauri::window::WindowBuilder`, requires the `unstable` feature) — the pill is painted natively by `overlay.rs` as an `NSGlassEffectView` (Liquid Glass). No resident WKWebView, saving ~30–80MB
+- **Windows**: a `WebviewWindow` hosting the React overlay (`web/src/ui/Overlay.tsx`); the native renderer in `overlay.rs` is a no-op here
 
 ### Settings Window
-- Standard window hosting the React settings app
-- On close (X button): hidden, not destroyed (`api.prevent_close()`)
+- Standard window hosting the React settings app; shown on launch (update/stats indicator + launch affordance)
+- On close (X button): destroyed to release its WebView memory (not hidden)
+- Rebuilt on demand from the bundled window config when the tray "Settings" item is clicked (`WebviewWindowBuilder::from_config` in `show_settings`)
 - Dock icon: shown when settings is open, hidden otherwise
 
 ### System Tray
@@ -181,11 +183,12 @@ The app has three window-like surfaces:
 │               Overlay Window                  │
 │  (transparent, always-on-top, no cursor)      │
 │  ┌────────────────────────────────────────┐  │
-│  │  NSGlassEffectView (macOS native)       │  │
+│  │  macOS: NSGlassEffectView native pill   │  │
+│  │         (WebView-less Window, overlay.rs)│  │
+│  │  Windows: React overlay (Overlay.tsx)   │  │
 │  │  ┌──────────────────────────────────┐  │  │
 │  │  │  ●   Transcript text...           │  │  │
 │  │  └──────────────────────────────────┘  │  │
-│  │  (WebView hidden, used as audio worker) │  │
 │  └────────────────────────────────────────┘  │
 └──────────────────────────────────────────────┘
 ```
@@ -196,7 +199,7 @@ The app has three window-like surfaces:
 |----------|-----------|
 | **keytap** over `tauri-plugin-global-shortcut` | Supports modifier-only hotkeys and left/right modifier distinction; lower latency via raw keyboard event stream |
 | **Trait-based ASR** (`AsrEngine` / `AsrSession`) | Enables swapping between cloud (Doubao) and local (sherpa-onnx) engines without changing the recording loop |
-| **WebView as audio worker** on macOS | `getUserMedia` only works in the WebView; the transparent overlay WebView captures audio while the native AppKit view handles display |
+| **Native overlay on macOS, React on Windows** | macOS renders the pill in a WebView-less native `Window` (`NSGlassEffectView` via `overlay.rs`) for OS-grade Liquid Glass legibility and zero resident WKWebView; Windows renders the React overlay in a `WebviewWindow`. Audio is captured in the backend (cpal), so no WebView is needed for `getUserMedia` |
 | **serde_norway** for YAML | Preserves YAML structure and comments better than serde_yaml; important for user-editable config files |
 | **gzip-compressed binary frames** for Doubao | Reduces WebSocket bandwidth for JSON-heavy protocol headers; matches ByteDance's proprietary wire format |
 | **Feature-gated integration tests** | ASR and LLM integration tests require external resources (model files, API keys); gating them lets `cargo test` run fast in CI |

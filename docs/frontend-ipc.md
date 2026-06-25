@@ -6,8 +6,8 @@ The frontend has two entry points, built by Vite as separate pages:
 
 ```
 web/
-├── index.html                    # Overlay window entry
-│   └── src/ui/main-overlay.ts    #   Vanilla TypeScript (no framework)
+├── index.html                    # Overlay window entry (Windows)
+│   └── src/ui/Overlay.tsx        #   React 19 + TypeScript (macOS renders natively)
 ├── settings.html                 # Settings window entry
 │   └── src/ui/SettingsApp.tsx    #   React 19 + TypeScript
 ├── src/
@@ -16,7 +16,6 @@ web/
 │   │   ├── overlay.ts            #   Overlay IPC wrappers
 │   │   └── settings.ts           #   Settings IPC wrappers
 │   ├── lib/                      # Pure utilities (no DOM/side-effects)
-│   │   ├── audio.ts              #   PCM helpers (downsample, float→int16, base64)
 │   │   ├── format.ts             #   Text formatting
 │   │   ├── hotkey.ts             #   Hotkey display/parse
 │   │   ├── model.ts              #   Model registry helpers
@@ -28,6 +27,14 @@ web/
 │   │   ├── stats.ts
 │   │   └── update.ts
 │   └── ui/
+│       ├── Overlay.tsx            # Overlay root (Windows): React entry
+│       ├── overlay/               # Overlay React app
+│       │   ├── OverlayApp.tsx     #   stage + pill composition
+│       │   ├── useOverlayState.ts #   overlay:event → state reducer
+│       │   ├── useWaveform.ts     #   RAF waveform from audio:level
+│       │   ├── useOverlayLayout.ts#   measureText pill sizing
+│       │   ├── overlayText.ts     #   i18n hint/retry labels
+│       │   └── components/        #   Indicator/Transcript/Waveform/Hint/RetryButton
 │       ├── SettingsApp.tsx       # Settings root: sidebar + page routing
 │       ├── SettingsProvider.tsx  # Shared state context
 │       ├── components/           # Reusable UI primitives
@@ -57,7 +64,6 @@ web/
     │   ├── overlay.test.ts
     │   └── settings.test.ts
     └── lib/
-        ├── audio.test.ts
         ├── format.test.ts
         ├── hotkey.test.ts
         └── model.test.ts
@@ -82,16 +88,23 @@ SettingsApp
             └── FeedbackPage
 ```
 
-### Overlay Window (Vanilla TS)
+### Overlay Window (React, Windows only)
 
-The overlay uses vanilla TypeScript to minimize overhead — it needs to capture audio and render text with low latency. No React, no framework. The entry point is `main-overlay.ts`:
+The overlay is a React app (`web/src/ui/Overlay.tsx` → `OverlayApp`), used only on Windows. On macOS the overlay is a WebView-less native Window whose pill is rendered by `overlay.rs` (see [Architecture](./architecture.md)). Audio is captured in the backend (cpal), so the renderer only paints text, the retry affordance, and a waveform driven by the backend `audio:level` event.
 
 ```
-main-overlay.ts
-├── State management (appState, transcript)
-├── Audio capture (getUserMedia → ScriptProcessorNode → downsample → base64 → IPC)
-├── Event handling (overlay:event listener → update text/waveform/state)
-└── DOM updates (text display, waveform, state-dependent visibility)
+OverlayApp
+├── useOverlayState   (overlay:event → state reducer; audio level via ref)
+├── useOverlayLayout  (measureText → pill width + single/multi wrap)
+├── useWaveform       (RAF: audio level → 4-bar scaleY)
+└── stage
+    └── pill
+        ├── Indicator   (dot + spinner, state-driven via data-*)
+        ├── body
+        │   ├── Transcript (final + partial text)
+        │   └── Hint        (status/error message)
+        ├── Waveform     (4 bars)
+        └── RetryButton  (failed-state retry, 5s auto-hide)
 ```
 
 ## IPC Bridge Design
@@ -105,9 +118,9 @@ Frontend calls typed async wrappers that map to `#[tauri::command]` functions in
 ```
 Frontend                          Backend
 ───────                          ───────
-bridge/overlay.ts                commands.rs
-  sendAudioChunk() ────────────▶ send_audio_chunk()
-  getConfig() ─────────────────▶ get_app_config()
+bridge/overlay.ts                  commands.rs
+  getConfig() ───────────────────▶ get_app_config()
+  retryLatestFailedTranscription() ─▶ retry_latest_failed_transcription()
 
 bridge/settings.ts               commands.rs
   getData() ───────────────────▶ get_settings_data()
@@ -150,71 +163,53 @@ sequenceDiagram
 
 ## Audio Capture Pipeline
 
-Audio capture happens entirely in the frontend WebView (required for `getUserMedia`):
+Audio is captured in the **backend** via cpal (CoreAudio on macOS, WASAPI on Windows), not in the WebView. This keeps mic capture off the renderer thread and lets the macOS overlay drop its WebView entirely.
 
 ```mermaid
 sequenceDiagram
     participant Mic as Microphone
-    participant FE as Overlay WebView
-    participant BE as Backend (Rust)
+    participant BE as Backend (cpal)
+    participant ASR as ASR Engine
+    participant FE as Overlay (Windows) / Native (macOS)
 
-    BE->>FE: overlay:event (audio:warmup)
-    FE->>Mic: getUserMedia({ audio: true })
-    Mic-->>FE: MediaStream (44.1kHz default)
-    FE->>FE: Create ScriptProcessorNode
-    FE->>BE: audio_warmup_ready
-
-    loop Every audio buffer (4096 samples)
-        Mic->>FE: onaudioprocess
-        FE->>FE: downsampleBuffer(44.1kHz → 16kHz)
-        FE->>FE: floatTo16BitPCM(Float32Array)
-        FE->>FE: int16ToBase64(Int16Array)
-        FE->>BE: invoke("send_audio_chunk", { base64Chunk })
-        BE->>BE: base64 decode → i16 → f32
-        BE->>BE: session.append_audio(samples)
+    BE->>Mic: cpal input stream (16kHz, mono, f32)
+    loop Every chunk (~100ms / 1600 samples)
+        Mic->>BE: f32 samples
+        BE->>BE: compute_audio_level → emit overlay:event (audio:level)
+        BE->>ASR: session.append_audio(samples)
+        ASR-->>BE: AsrEvent::Transcript
+        BE->>FE: emit overlay:event (transcript / audio:level)
     end
-
-    BE->>FE: overlay:event (audio:stop)
-    FE->>FE: Stop ScriptProcessorNode
-    FE->>FE: Release MediaStream
-    FE->>BE: audio_stopped
 ```
 
-### PCM Helper Functions (`web/src/lib/audio.ts`)
-
-| Function | Input | Output | Purpose |
-|----------|-------|--------|---------|
-| `downsampleBuffer` | Float32Array, in rate, out rate | Float32Array | Decimate to 16kHz via averaging |
-| `floatTo16BitPCM` | Float32Array (-1..1) | Int16Array | Quantize float to 16-bit integer |
-| `int16ToBase64` | Int16Array | string (base64) | Encode for IPC transport |
+The frontend no longer ships PCM helpers — `web/src/lib/audio.ts` was removed when capture moved to the backend.
 
 ## Overlay Window
 
-### WebView Overlay (All Platforms)
+### Window properties (both platforms)
 
-- Transparent window (`transparent: true` in tauri.conf.json)
-- Ignores cursor events — clicks pass through to windows below
+- Transparent window (created in code; tauri.conf.json `create: false`)
+- Ignores cursor events — clicks pass through (re-enabled only for the retry button)
 - Visible on all workspaces — follows macOS Spaces
 - Positioned at bottom-center of primary monitor (720×300, 48px above bottom)
 - Repositioned on every show to handle display changes (external monitor)
 
-### macOS Liquid Glass (Native Rendering)
+### macOS — native Liquid Glass (no WebView)
 
-On macOS, the overlay has **dual rendering**:
-
-1. **WebView** — transparent, acts as audio worker (hidden from view)
-2. **NSGlassEffectView** — native AppKit pill rendered by `overlay.rs`
-
-The native pill mirrors the WebView's overlay events via `app.listen_any("overlay:event")`:
+The overlay is a WebView-less native `Window`. `overlay.rs` paints an AppKit pill inside an `NSGlassEffectView`, driven by the same `overlay:event` stream tapped via `app.listen_any`:
 
 ```
-overlay:event ──▶ WebView (hidden, audio worker)
-              ──▶ NSGlassEffectView (visible, native Liquid Glass)
-                   ├── NSProgressIndicator (audio level bar)
-                   └── NSTextField (transcript text, max 3 lines)
+overlay:event ──▶ NSGlassEffectView (visible, native Liquid Glass)
+                   ├── indicator (dot / spinner)
+                   ├── NSTextField (transcript, max 3 lines)
+                   └── waveform bars + retry button
 ```
 
-Layout: pill auto-sizes — single-line height for short text, up to 3 lines for longer content. Max width 520px.
+The `NSWindow` is reached via `raw-window-handle` (`AppKit.ns_view` → `[ns_view window]`), since `WebviewWindow::ns_window` no longer applies to this WebView-less window.
+
+### Windows — React overlay
+
+The overlay is a `WebviewWindow` running the React app above. `overlay:event`s drive React state → the pill's `data-*` attributes (state/mode/level/retry), with CSS doing the visual switching. Layout: pill auto-sizes — single-line for short text, up to 3 lines for longer content. Max width 520px.
 
 ## Paste Mechanism
 

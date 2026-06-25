@@ -3,6 +3,7 @@
 - Date: 2026-06-21
 - Status: Approved
 - Branch: `codex/native-cpal-capture`
+- Update (2026-06-25, `refactor/overlay-webview-lifecycle`): the macOS overlay window is now a WebView-less native `Window` (`tauri::window::WindowBuilder`, `unstable` feature), reached via `raw-window-handle`; the hidden overlay WebView this design assumed is gone entirely, and the settings window is destroyed on close and rebuilt on demand.
 
 ## Goal
 
