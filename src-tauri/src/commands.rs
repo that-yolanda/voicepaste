@@ -534,12 +534,18 @@ pub async fn record_hotkey(app: AppHandle) -> Result<HotkeyRecordResult, String>
     let config = app
         .try_state::<crate::hotkey::HotkeyConfig>()
         .map(|c| c.inner().clone())
-        .ok_or_else(|| "hotkey system not initialized".to_string())?;
+        .ok_or_else(|| {
+            log_hotkey!(error, "record_hotkey: HotkeyConfig not in managed state");
+            "hotkey system not initialized".to_string()
+        })?;
     let result = tokio::task::spawn_blocking(move || {
         crate::hotkey::record_combination(&config, std::time::Duration::from_secs(10))
     })
     .await
-    .map_err(|e| format!("record_hotkey worker panicked: {e}"))?;
+    .map_err(|e| {
+        log_hotkey!(error, "record_hotkey: worker panicked: {e}");
+        format!("record_hotkey worker panicked: {e}")
+    })?;
 
     Ok(match result {
         Some(hotkey) => HotkeyRecordResult {

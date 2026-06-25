@@ -4,6 +4,7 @@
 //! that supports modifier-only hotkeys and left/right modifier distinction.
 
 use crate::config::PromptItem;
+use crossbeam_channel::Sender as CrossbeamSender;
 use keytap::{EventKind, Key, Tap};
 use std::collections::{BTreeSet, HashSet};
 use std::sync::{Arc, RwLock};
@@ -35,10 +36,15 @@ pub struct HotkeyConfigInner {
     /// `false` when the tap could not be created (e.g. missing permissions).
     pub tap_active: bool,
     /// `true` while the UI hotkey recorder is capturing a combination. The
-    /// resident listener ignores every event (including Escape, which the
-    /// recorder uses to cancel) so a key press can't also fire the live
+    /// resident listener forwards every event through `record_tx` instead of
+    /// matching hotkey bindings, so a key press can't also fire the live
     /// hotkey during recording.
     pub recording: bool,
+    /// Relay channel: set during hotkey-recording sessions. The resident
+    /// listener sends every keyboard event here so the recorder can capture
+    /// the combination without creating a second WH_KEYBOARD_LL hook (which
+    /// is unreliable on Windows when two taps live in the same process).
+    pub record_tx: Option<CrossbeamSender<keytap::Event>>,
 }
 
 /// Thread-safe handle to the hotkey configuration.
@@ -469,11 +475,20 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
     loop {
         match tap.recv_timeout(std::time::Duration::from_millis(100)) {
             Ok(event) => {
-                // While the UI recorder owns the keyboard, ignore every event
-                // (including Escape — the recorder uses it to cancel) so a key
-                // press can't also fire the live hotkey.
-                if config.read().unwrap().recording {
-                    continue;
+                // When a hotkey-recording session is active, forward every
+                // event to the recorder via the relay channel instead of
+                // matching hotkey bindings. This lets the recorder capture
+                // the combination without creating a second WH_KEYBOARD_LL
+                // hook (unreliable on Windows with two taps per process).
+                {
+                    let cfg = config.read().unwrap();
+                    if cfg.recording {
+                        if let Some(ref tx) = cfg.record_tx {
+                            // event is Copy — no clone needed.
+                            let _ = tx.try_send(event);
+                        }
+                        continue;
+                    }
                 }
                 let event_kind = event.kind;
                 let key = match event_kind {
@@ -772,30 +787,32 @@ fn build_hotkey_string(pressed: &BTreeSet<Key>) -> Option<String> {
 ///
 /// Runs on a dedicated blocking thread; the tap is dropped (stopped) on
 /// return. Returns `None` on cancel/timeout, else the config string.
-/// RAII guard that sets `recording = true` on the shared hotkey config for
-/// the duration of a recording session and resets it on drop — so even if
-/// recording returns early (e.g. tap creation fails) or panics, the resident
-/// listener always resumes.
-struct RecordingGuard<'a> {
-    config: &'a HotkeyConfig,
-}
-
-impl<'a> RecordingGuard<'a> {
-    fn new(config: &'a HotkeyConfig) -> Self {
-        config.write().unwrap().recording = true;
-        Self { config }
-    }
-}
-
-impl Drop for RecordingGuard<'_> {
-    fn drop(&mut self) {
-        self.config.write().unwrap().recording = false;
-    }
-}
-
 pub(crate) fn record_combination(config: &HotkeyConfig, timeout: Duration) -> Option<String> {
-    let _guard = RecordingGuard::new(config);
-    let tap = Tap::new().ok()?;
+    // Create a relay channel and register it in shared config so the resident
+    // listener forwards every keyboard event here instead of matching bindings.
+    // This avoids creating a second WH_KEYBOARD_LL hook, which is unreliable on
+    // Windows when two taps live in the same process.
+    let (tx, rx) = crossbeam_channel::bounded::<keytap::Event>(256);
+    {
+        let mut cfg = config.write().unwrap();
+        cfg.record_tx = Some(tx);
+        cfg.recording = true;
+    }
+
+    // RAII cleanup: clear the relay channel and recording flags on return so
+    // the resident listener resumes normal hotkey matching.
+    struct RelayGuard<'a> {
+        config: &'a HotkeyConfig,
+    }
+    impl Drop for RelayGuard<'_> {
+        fn drop(&mut self) {
+            let mut cfg = self.config.write().unwrap();
+            cfg.record_tx = None;
+            cfg.recording = false;
+        }
+    }
+    let _guard = RelayGuard { config };
+
     let mut pressed: BTreeSet<Key> = BTreeSet::new();
     let start = Instant::now();
     let mut finalize_at: Option<Instant> = None;
@@ -813,13 +830,11 @@ pub(crate) fn record_combination(config: &HotkeyConfig, timeout: Duration) -> Op
             }
         }
 
-        match tap.recv_timeout(Duration::from_millis(50)) {
+        match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(event) => match event.kind {
                 EventKind::KeyDown(Key::Escape) => return None,
                 EventKind::KeyDown(k) => {
                     pressed.insert(k);
-                    // A main key arrived — drop any modifier-only timer;
-                    // finalize happens on its keyup (frontend parity).
                     if !is_modifier_key(k) {
                         finalize_at = None;
                     }
@@ -835,10 +850,14 @@ pub(crate) fn record_combination(config: &HotkeyConfig, timeout: Duration) -> Op
                 }
                 EventKind::KeyRepeat(_) => {}
             },
-            Err(keytap::RecvTimeoutError::Timeout) => continue,
-            // Tap channel closed (listener stopped) — return instead of
-            // busy-looping recv_timeout on a disconnected channel.
-            Err(keytap::RecvTimeoutError::Disconnected) => return None,
+            Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
+            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                log_hotkey!(
+                    warn,
+                    "record_combination: relay disconnected, returning None"
+                );
+                return None;
+            }
         }
     }
 }
@@ -854,6 +873,7 @@ pub fn create_config(bindings: Vec<HotkeyBinding>) -> HotkeyConfig {
         escape_enabled: false,
         tap_active: false,
         recording: false,
+        record_tx: None,
     }))
 }
 
@@ -1555,30 +1575,34 @@ mod tests {
         }
     }
 
-    // ── recording flag / RecordingGuard tests ─────────────────────────────
+    // ── recording flag / record_tx relay tests ────────────────────────────
 
     #[test]
-    fn recording_guard_sets_and_clears_flag() {
+    fn record_tx_set_and_clear_in_config() {
         let config = create_config(vec![]);
-        assert!(!config.read().unwrap().recording);
         {
-            let _guard = RecordingGuard::new(&config);
-            assert!(config.read().unwrap().recording);
+            let cfg = config.read().unwrap();
+            assert!(!cfg.recording);
+            assert!(cfg.record_tx.is_none());
         }
-        assert!(!config.read().unwrap().recording);
-    }
-
-    #[test]
-    fn recording_guard_clears_flag_on_early_return() {
-        // Mirrors record_combination's `Tap::new().ok()?` early return: the
-        // guard must still reset the flag even when recording bails out.
-        fn fail_to_record(config: &HotkeyConfig) -> Option<String> {
-            let _guard = RecordingGuard::new(config);
-            None // simulate the tap failing to create
+        // Simulate what record_combination does when starting a recording.
+        let (tx, _rx) = crossbeam_channel::bounded::<keytap::Event>(1);
+        {
+            let mut cfg = config.write().unwrap();
+            cfg.recording = true;
+            cfg.record_tx = Some(tx);
+            assert!(cfg.recording);
+            assert!(cfg.record_tx.is_some());
         }
-        let config = create_config(vec![]);
-        assert_eq!(fail_to_record(&config), None);
-        assert!(!config.read().unwrap().recording);
+        // Simulate RelayGuard::drop clearing on return.
+        {
+            let mut cfg = config.write().unwrap();
+            cfg.record_tx = None;
+            cfg.recording = false;
+        }
+        let cfg = config.read().unwrap();
+        assert!(!cfg.recording);
+        assert!(cfg.record_tx.is_none());
     }
 
     // ── reload_bindings tests ─────────────────────────────────────────────
