@@ -1,0 +1,330 @@
+/* VoicePaste overlay pill — React renderer (Windows).
+   The macOS overlay is rendered natively by src-tauri/src/overlay.rs
+   (NSGlassEffectView); this stylesheet only styles the Windows WebView pill.
+   Visual state is driven by data-* attributes set from React, mirroring the
+   legacy main-overlay.ts behaviour 1:1. Theme colours come from app.css
+   (--color-overlay-*), so the overlay shares the settings palette. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+.overlay {
+  width: 100%;
+  height: 100%;
+  /* Extra room on all sides so the pill's soft drop shadow can fade out
+     instead of being clipped flat by the window edge. */
+  padding: 28px 32px 40px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  overflow: hidden;
+  font-family: var(--font-family-ui);
+}
+
+.stage {
+  width: 100%;
+  max-width: 680px;
+  max-height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  overflow: visible;
+}
+
+/* ===========================================================
+   PILL — Windows 11 Mica/Acrylic + Fluent Reveal
+   =========================================================== */
+.pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 16px 0 14px;
+  border-radius: 999px;
+  color: #f3f3f3;
+  letter-spacing: 0;
+  min-width: 116px;
+  max-width: 100%;
+  overflow: hidden;
+  /* No size/radius animation: the native macOS glass layer tracks the pill via
+     discrete frame updates, so animating width/radius would detach from it. */
+  background: rgba(32, 32, 32, 0.62);
+  backdrop-filter: blur(60px) saturate(140%);
+  -webkit-backdrop-filter: blur(60px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.pill::before {
+  /* Fluent reveal highlight */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 60% at 30% 0%, rgba(255, 255, 255, 0.1), transparent 60%);
+  pointer-events: none;
+}
+
+/* ---------- Multi-line layout (3 lines max, top fades out) ---------- */
+.pill[data-wrap="multi"] {
+  border-radius: 16px;
+  padding: 6px 14px;
+  height: auto;
+  align-items: center;
+  min-height: 56px;
+  max-height: calc(100vh - 68px);
+}
+
+/* ---------- Indicator (left) ---------- */
+.indicator {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+.ind-dot,
+.ind-spinner {
+  display: none;
+}
+/* recording: filled green dot with ripple */
+.ind-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-overlay-accent);
+  box-shadow: 0 0 0 0 var(--color-overlay-accent-soft);
+  position: relative;
+}
+.ind-dot::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+}
+/* connecting / thinking: arc spinner */
+.ind-spinner {
+  width: 16px;
+  height: 16px;
+}
+.ind-spinner circle {
+  fill: none;
+  stroke-width: 2;
+}
+.ind-spinner .track {
+  stroke: rgba(255, 255, 255, 0.14);
+}
+.ind-spinner .arc {
+  stroke: var(--color-overlay-accent);
+  stroke-linecap: round;
+  stroke-dasharray: 12 38;
+  transform-origin: center;
+  animation: vp-spin 1.1s linear infinite;
+}
+
+/* indicator visibility by state */
+.stage[data-state="recording"] .ind-dot {
+  display: block;
+  animation: vp-ring 1.6s ease-out infinite;
+}
+.stage[data-state="connecting"] .ind-spinner,
+.stage[data-state="finishing"] .ind-spinner {
+  display: block;
+}
+/* error overrides spinner with a static red dot */
+.stage[data-level="error"] .ind-spinner {
+  display: none;
+}
+.stage[data-level="error"] .ind-dot {
+  display: block;
+  animation: none;
+  background: var(--color-overlay-err);
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.45);
+}
+.stage[data-level="error"] .ind-dot::after {
+  display: none;
+}
+
+/* ---------- Text body (center) ---------- */
+.body {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: 500 14px / 1.3 inherit;
+}
+.pill[data-wrap="single"] .transcript {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pill[data-wrap="multi"] .transcript {
+  display: block;
+  line-height: 1.32;
+  max-height: calc(1.32em * 3 + 1px);
+  overflow: hidden;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 30%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 30%);
+}
+.final-text {
+  color: inherit;
+}
+.partial-text {
+  opacity: 0.55;
+}
+
+/* hint text replaces transcript */
+.hint {
+  display: none;
+}
+.stage[data-mode="hint"] .hint {
+  display: block;
+}
+.stage[data-mode="hint"] .transcript {
+  display: none;
+}
+.pill[data-wrap="single"] .hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hint-label {
+  color: inherit;
+}
+.stage[data-level="error"] .hint-label {
+  color: #ff9b9b;
+}
+
+/* ---------- Waveform (right) ---------- */
+.wave {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  height: 20px;
+}
+.stage[data-state="recording"] .wave {
+  display: flex;
+}
+.status-bars {
+  display: flex;
+  gap: 2.5px;
+  align-items: center;
+  height: 20px;
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+.status-bars[data-active="true"] {
+  opacity: 1;
+}
+.status-bar {
+  width: 2.5px;
+  /* Fixed full height is the scaleY baseline; the rAF loop drives height via
+     transform (GPU compositor, no reflow) instead of mutating height. There is
+     deliberately NO transition here — the JS easing owns all smoothing. */
+  height: 20px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--color-overlay-accent), #3aa874);
+  transform: scaleY(0.3);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* ---------- Retry action (failed state only) ---------- */
+.retry-button {
+  flex: 0 0 auto;
+  height: 22px;
+  position: relative;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 10px;
+  margin-left: -2px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.24),
+    0 4px 12px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.stage[data-retry="true"] .retry-button {
+  display: inline-flex;
+  opacity: 0;
+}
+.retry-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+}
+.retry-button:hover {
+  background: rgba(255, 255, 255, 0.17);
+}
+.retry-button:active {
+  transform: scale(0.96);
+}
+.retry-icon {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.stage[data-retrying="true"] .retry-icon {
+  animation: vp-spin 0.85s linear infinite;
+}
+
+/* ---------- Hidden measurement node ---------- */
+.measure-text {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: none;
+  font-family: var(--font-family-ui);
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+/* ===========================================================
+   Keyframes
+   =========================================================== */
+@keyframes vp-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--color-overlay-accent-soft);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(76, 210, 142, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 210, 142, 0);
+  }
+}
+@keyframes vp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
