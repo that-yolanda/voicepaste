@@ -195,13 +195,12 @@ pub fn run() {
             }
             RunEvent::WindowEvent {
                 label,
-                event: tauri::WindowEvent::CloseRequested { api, .. },
+                event: tauri::WindowEvent::CloseRequested { .. },
                 ..
             } if label == "settings" => {
-                api.prevent_close();
-                if let Some(window) = app.get_webview_window("settings") {
-                    let _ = window.hide();
-                }
+                // Let the settings window close for real so its WebView memory is
+                // released. The app stays alive via the tray + ExitRequested below;
+                // show_settings() rebuilds the window on the next "设置" click.
                 set_dock_visible(false);
             }
             RunEvent::ExitRequested { code, api, .. }
@@ -714,13 +713,26 @@ fn set_dock_visible(visible: bool) {
 #[cfg(not(target_os = "macos"))]
 fn set_dock_visible(_visible: bool) {}
 
-/// Bring the settings window to front and show it in the Dock.
+/// Bring the settings window to front and show it in the Dock. If it was closed
+/// (lazy lifecycle: closing destroys it to free the WebView), rebuild it from the
+/// bundled window config before showing.
 fn show_settings(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("settings") {
         let _ = window.show();
         let _ = window.set_focus();
-        set_dock_visible(true);
+    } else if let Some(cfg) = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == "settings")
+    {
+        match tauri::WebviewWindowBuilder::from_config(app, cfg).and_then(|b| b.build()) {
+            Ok(_) => {}
+            Err(e) => log_tray!(error, "failed to rebuild settings window: {e}"),
+        }
     }
+    set_dock_visible(true);
 }
 
 /// Setup the system tray icon with menu items.
