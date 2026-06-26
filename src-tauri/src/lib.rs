@@ -750,6 +750,7 @@ fn set_dock_visible(_visible: bool) {}
 /// bundled window config before showing.
 fn show_settings(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.set_always_on_top(true);
         let _ = window.show();
         let _ = window.set_focus();
     } else if let Some(cfg) = app
@@ -759,9 +760,13 @@ fn show_settings(app: &tauri::AppHandle) {
         .iter()
         .find(|w| w.label == "settings")
     {
-        match tauri::WebviewWindowBuilder::from_config(app, cfg).and_then(|b| b.build()) {
-            Ok(_) => {}
-            Err(e) => log_tray!(error, "failed to rebuild settings window: {e}"),
+        match tauri::WebviewWindowBuilder::from_config(app, cfg) {
+            Ok(builder) => {
+                if let Err(e) = builder.always_on_top(true).build() {
+                    log_tray!(error, "failed to rebuild settings window: {e}");
+                }
+            }
+            Err(e) => log_tray!(error, "failed to create settings window builder: {e}"),
         }
     }
     set_dock_visible(true);
