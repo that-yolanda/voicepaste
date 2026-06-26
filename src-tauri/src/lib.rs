@@ -152,6 +152,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_config,
+            commands::get_overlay_layout_metrics,
             commands::get_audio_config_defaults,
             commands::get_settings_data,
             commands::save_config_object,
@@ -426,6 +427,11 @@ async fn set_app_state(
     next_state: app_state::AppState,
 ) {
     *app_inner.state.lock().await = next_state.clone();
+    // Reset the waveform smoothing whenever we leave Recording, so the next
+    // session's bars don't start from a stale loudness tail.
+    if next_state != app_state::AppState::Recording {
+        *app_inner.wave_smoothed.lock().await = 0.0;
+    }
     sync_escape_shortcut(app, &next_state);
 
     let _ = app.emit(

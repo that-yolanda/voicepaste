@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeHotwords, parseHotwordInput } from "@/lib/hotwords";
+import { mergeHotwords, parseHotwordInput } from "@/settings/lib/hotwords";
 
 describe("parseHotwordInput", () => {
   it("returns a single entry untouched (no commas)", () => {

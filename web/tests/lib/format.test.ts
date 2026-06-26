@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeHtml, formatCompact, formatDuration } from "@/lib/format";
+import { escapeHtml, formatCompact, formatDuration } from "@/settings/lib/format";
 
 describe("formatCompact", () => {
   it("formats numbers < 1000 as-is", () => {

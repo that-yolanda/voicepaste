@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { clonePlain } from "@/lib/clone";
-import { type AsrDefaults, getFieldMeta, getMergedAsrConfig, inferControlType } from "@/lib/model";
-import { soundFileName } from "@/lib/sound";
-import type { RegistryModel } from "@/types/models";
+import { clonePlain } from "@/settings/lib/clone";
+import {
+  type AsrDefaults,
+  getFieldMeta,
+  getMergedAsrConfig,
+  inferControlType,
+} from "@/settings/lib/model";
+import { soundFileName } from "@/settings/lib/sound";
+import type { RegistryModel } from "@/settings/types/models";
 
 describe("getMergedAsrConfig", () => {
   const model: RegistryModel = {

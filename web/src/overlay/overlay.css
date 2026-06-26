@@ -1,0 +1,46 @@
+/* VoicePaste overlay pill — glass surface + animations only.
+   Everything else (layout, indicator states, transcript, waveform, retry) is
+   expressed inline as Tailwind utilities in OverlayApp.tsx. What remains here is
+   the backdrop-filter glass that is too verbose for utility classes, its Fluent
+   reveal highlight, and the two keyframes referenced via arbitrary animate-*
+   classes. The macOS overlay is rendered natively by overlay.rs. */
+
+.pill {
+  color: #f3f3f3;
+  background: rgba(32, 32, 32, 0.62);
+  backdrop-filter: blur(60px) saturate(140%);
+  -webkit-backdrop-filter: blur(60px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.pill::before {
+  /* Fluent reveal highlight */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 60% at 30% 0%, rgba(255, 255, 255, 0.1), transparent 60%);
+  pointer-events: none;
+}
+
+@keyframes vp-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--color-overlay-accent-soft);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(76, 210, 142, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 210, 142, 0);
+  }
+}
+
+@keyframes vp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

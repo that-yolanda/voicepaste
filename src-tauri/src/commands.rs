@@ -107,6 +107,14 @@ pub async fn get_app_config(state: State<'_, AppState>) -> Result<serde_json::Va
     }))
 }
 
+/// Overlay pill layout constants, shared with the macOS native renderer via
+/// `overlay::shared`. The Windows WebView fetches these once at startup so both
+/// pills size identically (text width is still measured in the DOM).
+#[tauri::command]
+pub async fn get_overlay_layout_metrics() -> Result<crate::overlay::shared::LayoutMetrics, String> {
+    Ok(crate::overlay::shared::LayoutMetrics::current())
+}
+
 /// Get audio config defaults used as runtime fallback.
 #[tauri::command]
 pub async fn get_audio_config_defaults() -> Result<serde_json::Value, String> {
@@ -334,9 +342,19 @@ pub(crate) async fn append_audio_samples(
     // pill (via overlay::handle_event) and the Windows WebView — consumes the
     // unified `audio:level` event.
     if let Some(level) = compute_audio_level(&samples) {
+        // Derive the 4 bar heights here (shared::wave_heights) so both renderers
+        // — the macOS native pill and the Windows WebView — consume one computed
+        // value instead of each re-deriving it from `level`.
+        let wave_heights = {
+            let mut smoothed = state.wave_smoothed.lock().await;
+            crate::overlay::shared::wave_heights(&mut smoothed, level)
+        };
         let _ = app.emit(
             "overlay:event",
-            serde_json::json!({ "type": "audio:level", "payload": { "level": level } }),
+            serde_json::json!({
+                "type": "audio:level",
+                "payload": { "level": level, "waveHeights": wave_heights.to_vec() }
+            }),
         );
     }
 

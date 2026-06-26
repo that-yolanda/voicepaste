@@ -41,7 +41,7 @@ import {
   saveHotwords,
   savePrompts,
   selectSoundFile,
-} from "@/bridge/settings";
+} from "@/settings/bridge";
 
 // recordHotkey is a thin invoke wrapper over the backend keytap recorder
 // (hotkey::record_combination owns the capture state machine), so we only

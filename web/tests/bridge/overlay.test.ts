@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getConfig, onOverlayEvent, retryLatestFailedTranscription } from "@/bridge/overlay";
+import { getConfig, onOverlayEvent, retryLatestFailedTranscription } from "@/overlay/bridge";
 
 describe("overlay bridge", () => {
   describe("onOverlayEvent", () => {

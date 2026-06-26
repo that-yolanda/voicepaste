@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPromptHotkey, KEY_DISPLAY_NAMES, normalizeHotkeyLabel } from "@/lib/hotkey";
+import { formatPromptHotkey, KEY_DISPLAY_NAMES, normalizeHotkeyLabel } from "@/settings/lib/hotkey";
 
 describe("normalizeHotkeyLabel", () => {
   it("converts Control to ⌃", () => {
