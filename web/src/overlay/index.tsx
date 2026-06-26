@@ -152,6 +152,20 @@ function OverlayApp() {
             )}
           </span>
 
+          {/* Waveform: 4 bars driven by backend-computed heights. Sits right of
+              the indicator (mirrors the macOS native pill) so layout — not text
+              length — fixes its position; the pill can grow without it drifting. */}
+          {showWave && (
+            <span className="flex h-5 shrink-0 items-center" aria-hidden="true">
+              <span className="flex h-5 items-center gap-[2.5px]">
+                <span className={BAR_CLASS} style={barStyle(waveHeights[0] ?? 3)} />
+                <span className={BAR_CLASS} style={barStyle(waveHeights[1] ?? 3)} />
+                <span className={BAR_CLASS} style={barStyle(waveHeights[2] ?? 3)} />
+                <span className={BAR_CLASS} style={barStyle(waveHeights[3] ?? 3)} />
+              </span>
+            </span>
+          )}
+
           {/* Body: transcript or hint (mutually exclusive). */}
           <div className="min-w-0 flex-1 text-[14px] font-medium leading-[1.3]">
             {hasHint ? (
@@ -172,18 +186,6 @@ function OverlayApp() {
               </div>
             )}
           </div>
-
-          {/* Waveform: 4 bars driven by backend-computed heights (shared::wave_heights). */}
-          {showWave && (
-            <span className="flex h-5 shrink-0 items-center" aria-hidden="true">
-              <span className="flex h-5 items-center gap-[2.5px]">
-                <span className={BAR_CLASS} style={barStyle(waveHeights[0] ?? 3)} />
-                <span className={BAR_CLASS} style={barStyle(waveHeights[1] ?? 3)} />
-                <span className={BAR_CLASS} style={barStyle(waveHeights[2] ?? 3)} />
-                <span className={BAR_CLASS} style={barStyle(waveHeights[3] ?? 3)} />
-              </span>
-            </span>
-          )}
 
           {/* Retry affordance (error + retryable only). */}
           {showRetry && (

@@ -26,6 +26,9 @@ body,
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     inset 0 -1px 0 rgba(255, 255, 255, 0.04),
     0 8px 24px rgba(0, 0, 0, 0.35);
+  /* Smooth width growth via the compositor (no JS timer). idle clears the
+     inline width back to auto, which CSS cannot transition, so it snaps. */
+  transition: width 100ms ease-out;
 }
 
 .pill::before {

@@ -119,6 +119,9 @@ struct Views {
     retry_progress_layer: Retained<AnyObject>, // CALayer for the retry countdown ring
     fade_mask: Retained<AnyObject>,    // CAGradientLayer for the multi-line top fade
     applied_variant: String,           // "" (auto/inherit) | "light" | "dark"
+    /// Previous pill width; `f64::NAN` until the first frame. Drives the
+    /// grow-only animation decision in `render`.
+    last_pill_w: f64,
 }
 
 thread_local! {
@@ -518,6 +521,7 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
             retry_progress_layer,
             fade_mask: make_fade_mask(),
             applied_variant: "<unset>".into(),
+            last_pill_w: f64::NAN,
         });
     });
 }
@@ -781,12 +785,37 @@ fn set_corner(view: &NSView, radius: f64) {
     }
 }
 
-/// Position + size the 4 waveform bars on the right of the pill from the
-/// given heights (computed by the emitter via `shared::wave_heights` and read
-/// back from the `WAVE_HEIGHTS` thread-local). Hidden unless `show`.
-fn layout_bars(views: &Views, pill_w: f64, pill_h: f64, heights: &[f64; WAVE_N], show: bool) {
-    let area_right = pill_w - PAD_RIGHT;
-    let area_left = area_right - WAVE_AREA_W;
+/// Set a view's frame, animating via Core Animation when `animate` is true so it
+/// grows in lockstep with the pill surface in `render`; instant when false.
+/// Used for glass + container only — the waveform is anchored to a constant x
+/// (left of the pill) and set directly in `layout_bars`, so it deliberately is
+/// NOT animated here (animating it let `audio:level` height updates yank it out
+/// of sync with the still-growing glass, which read as "drift").
+fn set_frame(view: &NSView, frame: NSRect, animate: bool) {
+    if animate {
+        unsafe {
+            let ctx: *mut AnyObject = msg_send![class!(NSAnimationContext), currentContext];
+            let _: () = msg_send![ctx, setDuration: 0.1f64];
+            let animator: *mut AnyObject = msg_send![view, animator];
+            if !animator.is_null() {
+                (&*(animator as *const NSView)).setFrame(frame);
+            }
+        }
+    } else {
+        view.setFrame(frame);
+    }
+}
+
+/// Position + size the 4 waveform bars just right of the indicator (LEFT of
+/// the pill) from the given heights (computed by the emitter via
+/// `shared::wave_heights` and read back from the `WAVE_HEIGHTS` thread-local).
+/// Hidden unless `show`. The x is a CONSTANT — the waveform does not track the
+/// pill width — so `audio:level` height updates can never shift its position.
+/// That is what kills the "drift" the old right-anchored layout had: when the
+/// bar's x depended on `pill_w` and the pill was animating wider, the ~10 Hz
+/// height updates kept snapping the bar to the target x ahead of the glass.
+fn layout_bars(views: &Views, pill_h: f64, heights: &[f64; WAVE_N], show: bool) {
+    let area_left = PAD_LEFT + INDICATOR_W + GAP;
     let center_y = pill_h / 2.0;
     for (i, bar) in views.bars.iter().enumerate() {
         bar.setHidden(!show);
@@ -839,7 +868,7 @@ pub fn set_wave_heights(app: &AppHandle, heights: &[f64; WAVE_N]) {
             VIEWS.with(|v| {
                 if let Some(views) = v.borrow().as_ref() {
                     let frame = views.glass.view().frame();
-                    layout_bars(views, frame.size.width, frame.size.height, &heights, true);
+                    layout_bars(views, frame.size.height, &heights, true);
                 }
             });
         });
@@ -1047,7 +1076,17 @@ fn render(app: &AppHandle, model: &mut Model) {
                 height: pill_h,
             },
         };
-        views.glass.view().setFrame(glass_frame);
+        // Animate only pill growth (Core Animation on a background thread); snap
+        // instantly when shrinking, on hints, or on the first frame so resets
+        // and placeholder text never play a "shrink-back" animation. Drives glass
+        // + container so the pill surface grows smoothly. The waveform is left
+        // out on purpose: it is anchored to a constant x (left of the pill), so
+        // it never tracks the pill width and cannot drift as the pill grows.
+        let prev_pill_w = views.last_pill_w;
+        let growing = prev_pill_w.is_nan() || pill_w > prev_pill_w + 0.5;
+        views.last_pill_w = pill_w;
+        let animate = growing && !has_hint;
+        set_frame(views.glass.view(), glass_frame, animate);
         let radius = if model.layout_wrap {
             16.0
         } else {
@@ -1070,7 +1109,7 @@ fn render(app: &AppHandle, model: &mut Model) {
                 height: pill_h,
             },
         };
-        views.container.setFrame(container_bounds);
+        set_frame(&views.container, container_bounds, animate);
         // Top fade only when the transcript actually overflows the visible lines.
         let faded = model.layout_wrap && full_h > visible_text_h + 1.0;
         apply_top_fade(&views.container, &views.fade_mask, faded, container_bounds);
@@ -1152,7 +1191,16 @@ fn render(app: &AppHandle, model: &mut Model) {
         // text sits in the (vertically centered) visible window: single-line is just
         // centered; multi-line lets the LATEST lines show while older lines overflow
         // upward and get clipped by the container (top fade is a later refinement).
-        let label_x = PAD_LEFT + INDICATOR_W + GAP;
+        // Label sits right of the indicator, or right of the waveform when
+        // recording (the waveform occupies the indicator's right slot).
+        let label_x = PAD_LEFT
+            + INDICATOR_W
+            + GAP
+            + if show_wave {
+                WAVE_AREA_W + WAVE_GAP_LEFT
+            } else {
+                0.0
+            };
         let pad_v = ((pill_h - visible_text_h) / 2.0).round();
         views.label.setFrame(NSRect {
             origin: NSPoint {
@@ -1165,10 +1213,10 @@ fn render(app: &AppHandle, model: &mut Model) {
             },
         });
 
-        // Waveform bars (right), shown only while recording. Heights come
-        // from the WAVE_HEIGHTS thread-local (updated by audio:level).
+        // Waveform bars (left, beside the indicator), shown only while recording.
+        // Heights come from the WAVE_HEIGHTS thread-local (updated by audio:level).
         let heights = WAVE_HEIGHTS.with(|w| *w.borrow());
-        layout_bars(views, pill_w, pill_h, &heights, show_wave);
+        layout_bars(views, pill_h, &heights, show_wave);
 
         views.retry_view.setHidden(!show_retry);
         if show_retry {
