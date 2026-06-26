@@ -308,29 +308,35 @@ fn set_overlay_retry_interaction(app_handle: &AppHandle, enabled: bool) {
     }
 }
 
-/// Map one accelerator token to the symbol the settings UI shows. Mirrors the
-/// frontend `normalizeHotkeyLabel` so the overlay label matches system settings.
+/// Map one accelerator token to the display label the settings UI shows.
+/// Mirrors the frontend `normalizeHotkeyLabel` so the overlay label matches
+/// system settings. Compiled per target OS: macOS renders Apple symbols
+/// (⌃ ⇧ ⌥ ⌘), Windows renders its native labels (Ctrl / Shift / Alt / Win).
 fn normalize_hotkey_key(key: &str) -> &str {
+    // [windows_label, macos_symbol], indexed by the compiled target OS.
+    let idx = cfg!(target_os = "macos") as usize;
     match key {
-        "CmdOrCtrl" | "CommandOrControl" | "Command" | "Cmd" | "Meta" => "⌘",
-        "Control" | "Ctrl" => "⌃",
-        "Shift" => "⇧",
-        "Alt" | "Option" => "⌥",
+        // CmdOrCtrl resolves to Ctrl on Windows (accelerator convention).
+        "CmdOrCtrl" | "CommandOrControl" | "Command" | "Cmd" | "Meta" => ["Ctrl", "⌘"][idx],
+        "Control" | "Ctrl" => ["Ctrl", "⌃"][idx],
+        "Shift" => ["Shift", "⇧"][idx],
+        "Alt" | "Option" => ["Alt", "⌥"][idx],
         "Space" => "␣",
-        "ControlLeft" => "L ⌃",
-        "ControlRight" => "R ⌃",
-        "ShiftLeft" => "L ⇧",
-        "ShiftRight" => "R ⇧",
-        "AltLeft" => "L ⌥",
-        "AltRight" => "R ⌥",
-        "MetaLeft" => "L ⌘",
-        "MetaRight" => "R ⌘",
+        "ControlLeft" => ["L Ctrl", "L ⌃"][idx],
+        "ControlRight" => ["R Ctrl", "R ⌃"][idx],
+        "ShiftLeft" => ["L Shift", "L ⇧"][idx],
+        "ShiftRight" => ["R Shift", "R ⇧"][idx],
+        "AltLeft" => ["L Alt", "L ⌥"][idx],
+        "AltRight" => ["R Alt", "R ⌥"][idx],
+        "MetaLeft" => ["L Win", "L ⌘"][idx],
+        "MetaRight" => ["R Win", "R ⌘"][idx],
         other => other,
     }
 }
 
-/// Format an accelerator string ("AltRight", "Control+Space") into the symbol
-/// label shown in settings ("R ⌥", "⌃ ␣").
+/// Format an accelerator string ("AltRight", "Control+Space") into the display
+/// label shown in settings. Per-platform via `normalize_hotkey_key`: macOS
+/// ("R ⌥", "⌃ ␣"), Windows ("R Alt", "Ctrl ␣").
 fn format_hotkey_label(hotkey: &str) -> String {
     hotkey
         .split('+')
@@ -2336,14 +2342,23 @@ mod hotkey_label_tests {
 
     #[test]
     fn sided_modifier_matches_settings_symbol() {
-        // Mirrors the frontend normalizeHotkeyLabel ("AltRight" -> "R ⌥").
-        assert_eq!(format_hotkey_label("AltRight"), "R ⌥");
+        // Mirrors the frontend normalizeHotkeyLabel.
+        if cfg!(target_os = "macos") {
+            assert_eq!(format_hotkey_label("AltRight"), "R ⌥");
+        } else {
+            assert_eq!(format_hotkey_label("AltRight"), "R Alt");
+        }
     }
 
     #[test]
     fn combo_is_symbolized_and_joined() {
-        assert_eq!(format_hotkey_label("Control+Space"), "⌃ ␣");
-        assert_eq!(format_hotkey_label("CmdOrCtrl+Shift+A"), "⌘ ⇧ A");
+        if cfg!(target_os = "macos") {
+            assert_eq!(format_hotkey_label("Control+Space"), "⌃ ␣");
+            assert_eq!(format_hotkey_label("CmdOrCtrl+Shift+A"), "⌘ ⇧ A");
+        } else {
+            assert_eq!(format_hotkey_label("Control+Space"), "Ctrl ␣");
+            assert_eq!(format_hotkey_label("CmdOrCtrl+Shift+A"), "Ctrl Shift A");
+        }
     }
 
     #[test]

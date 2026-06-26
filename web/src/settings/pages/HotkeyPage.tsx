@@ -12,7 +12,7 @@ import {
   SectionItem,
   SectionItemList,
 } from "@/settings/layout/PageLayout";
-import { formatPromptHotkey, normalizeHotkeyLabel } from "@/settings/lib/hotkey";
+import { formatPromptHotkey, normalizeHotkeyToken } from "@/settings/lib/hotkey";
 import { useSettings } from "@/settings/SettingsProvider";
 
 interface PromptItem {
@@ -30,6 +30,8 @@ export function HotkeyPage() {
   const app = (cfg.app || {}) as Record<string, string | undefined>;
   const hotkeyStr = app.hotkey || "F13";
   const hotkeyMode = (app.hotkey_mode as string) || "toggle";
+  // Show Apple symbols on macOS, native labels (Ctrl/Alt/Win/Shift) on Windows.
+  const isMac = settings?.runtime?.platform === "macos";
 
   const [recording, setRecording] = useState(false);
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
@@ -81,7 +83,7 @@ export function HotkeyPage() {
         <div className="space-y-2 text-xs text-text-muted py-2">
           <p>
             点击切换：按一次开始，按一次结束，
-            <KeyCap label={normalizeHotkeyLabel("ESC")} /> 取消
+            <KeyCap label={normalizeHotkeyToken("ESC", isMac).main} /> 取消
           </p>
           <p>按住说话：按住开始，松开结束</p>
         </div>
@@ -94,9 +96,10 @@ export function HotkeyPage() {
               action={
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 flex-wrap border border-border px-2 py-1 rounded-md h-full">
-                    {hotkeyStr.split("+").map((k) => (
-                      <KeyCap key={k} label={normalizeHotkeyLabel(k)} />
-                    ))}
+                    {hotkeyStr.split("+").map((k) => {
+                      const token = normalizeHotkeyToken(k, isMac);
+                      return <KeyCap key={k} label={token.main} side={token.side} />;
+                    })}
                   </div>
                   <Button variant="accent" onClick={startRecord} disabled={recording}>
                     {recording ? "请按键…" : "录制"}
@@ -125,7 +128,10 @@ export function HotkeyPage() {
                       {item._displayString || formatPromptHotkey(item.hotkey) ? (
                         (item._displayString || formatPromptHotkey(item.hotkey))
                           .split("+")
-                          .map((k) => <KeyCap key={k} label={normalizeHotkeyLabel(k)} />)
+                          .map((k) => {
+                            const token = normalizeHotkeyToken(k, isMac);
+                            return <KeyCap key={k} label={token.main} side={token.side} />;
+                          })
                       ) : (
                         <span className="text-xs text-text-muted">未绑定</span>
                       )}

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatPromptHotkey, KEY_DISPLAY_NAMES, normalizeHotkeyLabel } from "@/settings/lib/hotkey";
+import {
+  formatPromptHotkey,
+  KEY_DISPLAY_NAMES,
+  normalizeHotkeyLabel,
+  normalizeHotkeyToken,
+} from "@/settings/lib/hotkey";
 
 describe("normalizeHotkeyLabel", () => {
   it("converts Control to ⌃", () => {
@@ -81,5 +86,64 @@ describe("KEY_DISPLAY_NAMES", () => {
     expect(KEY_DISPLAY_NAMES[57]).toBe("␣");
     expect(KEY_DISPLAY_NAMES[59]).toBe("F1");
     expect(KEY_DISPLAY_NAMES[88]).toBe("F12");
+  });
+  it("maps modifier keycodes to physical key names", () => {
+    expect(KEY_DISPLAY_NAMES[29]).toBe("ControlLeft");
+    expect(KEY_DISPLAY_NAMES[56]).toBe("AltLeft");
+    expect(KEY_DISPLAY_NAMES[3675]).toBe("MetaLeft");
+  });
+});
+
+describe("normalizeHotkeyLabel (Windows)", () => {
+  it("converts Control/Ctrl to Ctrl", () => {
+    expect(normalizeHotkeyLabel("Control", false)).toBe("Ctrl");
+    expect(normalizeHotkeyLabel("Ctrl", false)).toBe("Ctrl");
+  });
+  it("converts Shift to Shift", () => {
+    expect(normalizeHotkeyLabel("Shift", false)).toBe("Shift");
+  });
+  it("converts Alt/Option to Alt", () => {
+    expect(normalizeHotkeyLabel("Alt", false)).toBe("Alt");
+    expect(normalizeHotkeyLabel("Option", false)).toBe("Alt");
+  });
+  it("resolves CmdOrCtrl to Ctrl on Windows", () => {
+    expect(normalizeHotkeyLabel("CmdOrCtrl", false)).toBe("Ctrl");
+  });
+  it("maps the physical Meta key to the Win label", () => {
+    expect(normalizeHotkeyLabel("MetaLeft", false)).toBe("L Win");
+    expect(normalizeHotkeyLabel("MetaRight", false)).toBe("R Win");
+  });
+  it("keeps sided modifiers with L/R prefix", () => {
+    expect(normalizeHotkeyLabel("ControlLeft", false)).toBe("L Ctrl");
+    expect(normalizeHotkeyLabel("AltRight", false)).toBe("R Alt");
+    expect(normalizeHotkeyLabel("ShiftLeft", false)).toBe("L Shift");
+  });
+  it("keeps Space identical", () => {
+    expect(normalizeHotkeyLabel("Space", false)).toBe("␣");
+  });
+  it("returns unknown keys as-is", () => {
+    expect(normalizeHotkeyLabel("F13", false)).toBe("F13");
+  });
+});
+
+describe("normalizeHotkeyToken", () => {
+  it("splits ControlLeft into main symbol + L side on macOS", () => {
+    expect(normalizeHotkeyToken("ControlLeft")).toEqual({ main: "⌃", side: "L" });
+  });
+  it("splits AltRight into main symbol + R side on macOS", () => {
+    expect(normalizeHotkeyToken("AltRight")).toEqual({ main: "⌥", side: "R" });
+  });
+  it("splits MetaLeft into Win label + L side on Windows", () => {
+    expect(normalizeHotkeyToken("MetaLeft", false)).toEqual({ main: "Win", side: "L" });
+  });
+  it("splits ShiftRight into Shift label + R side on Windows", () => {
+    expect(normalizeHotkeyToken("ShiftRight", false)).toEqual({ main: "Shift", side: "R" });
+  });
+  it("returns no side for unsided keys", () => {
+    expect(normalizeHotkeyToken("CmdOrCtrl")).toEqual({ main: "⌘" });
+    expect(normalizeHotkeyToken("F13")).toEqual({ main: "F13" });
+  });
+  it("trims surrounding whitespace", () => {
+    expect(normalizeHotkeyToken(" ControlLeft ")).toEqual({ main: "⌃", side: "L" });
   });
 });
