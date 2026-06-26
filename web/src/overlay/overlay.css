@@ -5,6 +5,17 @@
    reveal highlight, and the two keyframes referenced via arbitrary animate-*
    classes. The macOS overlay is rendered natively by overlay.rs. */
 
+/* Root height chain. The WebView's html/body/#root need an explicit height
+   (app.css only sets min-height) so <main class="h-full"> resolves to the full
+   window instead of collapsing to content height — without this the pill sticks
+   to the top of the window instead of the bottom on Windows. */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
 .pill {
   color: #f3f3f3;
   background: rgba(32, 32, 32, 0.62);
