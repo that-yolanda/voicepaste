@@ -8,6 +8,9 @@ export interface OverlayLayoutInput {
   visibleHintText: string;
   appState: AppState;
   retryVisible: boolean;
+  /** Current hint level ("info" | "warn" | "error") — drives the left-slot width
+   * (recording+warn reconnects with a spinner, not the waveform). */
+  hintLevel?: string;
   /** Layout constants fetched from the backend (overlay::shared) so the Windows
    * pill sizes identically to the macOS native pill. */
   metrics: OverlayLayoutMetrics;
@@ -71,11 +74,15 @@ export function useOverlayLayout(input: OverlayLayoutInput): UseOverlayLayout {
         hintWidth = Math.ceil(measure.getBoundingClientRect().width);
       }
 
-      const indicatorWidth = m.indicator_w + m.gap;
-      const waveformWidth = input.appState === "recording" ? m.wave_area_w + m.wave_gap_left : 0;
       const retryWidth = input.retryVisible ? m.retry_size + m.retry_gap_left : 0;
+      // Left slot holds the indicator (spinner/dot), or the waveform while
+      // recording — both are followed by GAP. Reconnect (recording+warn) shows a
+      // spinner, so it uses the indicator width. Mirrors shared.rs.
+      const reconnecting = input.appState === "recording" && input.hintLevel === "warn";
+      const leftSlotW =
+        input.appState === "recording" && !reconnecting ? m.wave_area_w : m.indicator_w;
       // Chrome mirrors src-tauri/src/overlay/shared.rs (single source of truth).
-      const chrome = m.pad_left + m.pad_right + indicatorWidth + waveformWidth + retryWidth;
+      const chrome = m.pad_left + m.pad_right + leftSlotW + m.gap + retryWidth;
       const lockLayout =
         !shouldMeasureHintOnly &&
         (input.appState === "recording" || input.appState === "finishing");
@@ -121,6 +128,7 @@ export function useOverlayLayout(input: OverlayLayoutInput): UseOverlayLayout {
     input.visibleHintText,
     input.appState,
     input.retryVisible,
+    input.hintLevel,
     input.metrics,
   ]);
 

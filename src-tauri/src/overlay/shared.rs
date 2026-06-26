@@ -105,9 +105,9 @@ pub fn visible_hint(model: &Model) -> String {
     }
     if visual_state == "finishing" && model.hint_variant == "progress" {
         return if zh {
-            "思考中…".into()
+            "润色中…".into()
         } else {
-            "Thinking…".into()
+            "Polishing…".into()
         };
     }
     // The retry label + hotkey live inside the retry button, not in the message
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn visible_hint_state_placeholders() {
         assert_eq!(visible_hint(&model("connecting", "", "text")), "准备中…");
-        assert_eq!(visible_hint(&model("finishing", "", "progress")), "思考中…");
+        assert_eq!(visible_hint(&model("finishing", "", "progress")), "润色中…");
         // Retry placeholder only while no transcript has streamed in yet.
         assert_eq!(visible_hint(&model("finishing", "", "retry")), "重试中…");
         // Once transcript text arrives during a retry, yield to the live text.

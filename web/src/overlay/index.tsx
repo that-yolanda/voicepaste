@@ -34,7 +34,7 @@ function visibleHintText(state: OverlayState): string {
       if (!state.finalText && !state.partialText) return "重试中…";
       return "";
     }
-    if (state.hintVariant === "progress") return "思考中…";
+    if (state.hintVariant === "progress") return "润色中…";
   }
   return state.hintText;
 }
@@ -67,9 +67,13 @@ function OverlayApp() {
   const hasHint = Boolean(visibleHint);
   const isError = state.hintLevel === "error";
   const showSpinner =
-    !isError && (state.appState === "connecting" || state.appState === "finishing");
-  const showWave = state.appState === "recording";
-  const showDot = (showWave || isError) && !showSpinner;
+    !isError &&
+    (state.appState === "connecting" ||
+      state.appState === "finishing" ||
+      (state.appState === "recording" && state.hintLevel === "warn"));
+  const showWave = state.appState === "recording" && state.hintLevel !== "warn";
+  const showDot = isError && !showSpinner;
+  const shouldPulse = hasHint && !isError && state.appState !== "idle";
   const showRetry = state.retryVisible && isError;
 
   const { measureRef, pillRef, transcriptRef, wrap } = useOverlayLayout({
@@ -78,6 +82,7 @@ function OverlayApp() {
     visibleHintText: visibleHint,
     appState: state.appState,
     retryVisible: showRetry,
+    hintLevel: state.hintLevel,
     metrics,
   });
 
@@ -101,56 +106,59 @@ function OverlayApp() {
               : "h-[40px] rounded-full"
           }`}
         >
-          {/* Indicator: spinner while connecting/finishing, else a colored dot. */}
-          <span
-            className="relative grid h-[22px] w-[22px] shrink-0 place-items-center"
-            aria-hidden="true"
-          >
-            {showSpinner && (
-              <svg
-                className="h-4 w-4 animate-[vp-spin_1.1s_linear_infinite]"
-                viewBox="0 0 16 16"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <circle
-                  className="stroke-white/[0.14]"
-                  cx="8"
-                  cy="8"
-                  r="6.5"
-                  fill="none"
-                  strokeWidth="2"
-                />
-                <circle
-                  className="stroke-[var(--color-overlay-accent)]"
-                  cx="8"
-                  cy="8"
-                  r="6.5"
-                  fill="none"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeDasharray="12 38"
-                />
-              </svg>
-            )}
-            {showDot && (
-              <span
-                className={`relative block h-[14px] w-[14px] rounded-full ${showWave ? "animate-[vp-ring_1.6s_ease-out_infinite]" : ""}`}
-                style={{
-                  background: isError
-                    ? "var(--color-overlay-err)"
-                    : showWave
-                      ? "var(--color-overlay-accent)"
-                      : "rgba(250, 249, 245, 0.35)",
-                  boxShadow: isError ? "0 0 10px rgba(255, 107, 107, 0.45)" : undefined,
-                }}
-              >
-                {showWave && !isError && (
-                  <span className="absolute inset-[3px] rounded-full bg-black/45" />
-                )}
-              </span>
-            )}
-          </span>
+          {/* Indicator slot: spinner while connecting/finishing/reconnecting, a
+              red dot on error; recording shows the waveform here instead. */}
+          {(showSpinner || showDot) && (
+            <span
+              className="relative grid h-[22px] w-[22px] shrink-0 place-items-center"
+              aria-hidden="true"
+            >
+              {showSpinner && (
+                <svg
+                  className="h-4 w-4 animate-[vp-spin_1.1s_linear_infinite]"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <circle
+                    className="stroke-white/[0.14]"
+                    cx="8"
+                    cy="8"
+                    r="6.5"
+                    fill="none"
+                    strokeWidth="2"
+                  />
+                  <circle
+                    className="stroke-[var(--color-overlay-accent)]"
+                    cx="8"
+                    cy="8"
+                    r="6.5"
+                    fill="none"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeDasharray="12 38"
+                  />
+                </svg>
+              )}
+              {showDot && (
+                <span
+                  className={`relative block h-[14px] w-[14px] rounded-full ${showWave ? "animate-[vp-ring_1.6s_ease-out_infinite]" : ""}`}
+                  style={{
+                    background: isError
+                      ? "var(--color-overlay-err)"
+                      : showWave
+                        ? "var(--color-overlay-accent)"
+                        : "rgba(250, 249, 245, 0.35)",
+                    boxShadow: isError ? "0 0 10px rgba(255, 107, 107, 0.45)" : undefined,
+                  }}
+                >
+                  {showWave && !isError && (
+                    <span className="absolute inset-[3px] rounded-full bg-black/45" />
+                  )}
+                </span>
+              )}
+            </span>
+          )}
 
           {/* Waveform: 4 bars driven by backend-computed heights. Sits right of
               the indicator (mirrors the macOS native pill) so layout — not text
@@ -169,7 +177,10 @@ function OverlayApp() {
           {/* Body: transcript or hint (mutually exclusive). */}
           <div className="min-w-0 flex-1 text-[14px] font-medium leading-[1.3]">
             {hasHint ? (
-              <span className="block truncate" style={{ color: isError ? "#ff9b9b" : undefined }}>
+              <span
+                className={`block truncate ${shouldPulse ? "pulse-text" : ""}`}
+                style={{ color: isError ? "#ff9b9b" : undefined }}
+              >
                 {visibleHint}
               </span>
             ) : (

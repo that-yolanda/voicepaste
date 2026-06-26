@@ -2184,6 +2184,15 @@ async fn finalize_and_paste(
                 "Applying LLM structure_text (prompt_id: {:?})",
                 active_prompt_id
             );
+            // Show a "润色中…" hint (with shimmer) in place of the recognized text
+            // while the LLM is working, until polishing completes or fails.
+            let _ = app_handle.emit(
+                "overlay:event",
+                serde_json::json!({
+                    "type": "hint",
+                    "payload": { "text": "润色中…", "level": "info", "variant": "progress" }
+                }),
+            );
             match crate::llm::call_llm_api(&config.llm, &trimmed, &system_prompt).await {
                 Ok(result) => {
                     log_rec!(

@@ -23,7 +23,7 @@ use super::shared::{
     visible_hint, Model, BOTTOM_OFFSET, DOT_SIZE, FONT_SIZE, GAP, INDICATOR_W, MAX_LINES,
     MIN_PILL_W, MULTI_LINE_WIDTH, PAD_LEFT, PAD_RIGHT, PILL_H_SINGLE, RETRY_GAP_LEFT, RETRY_MIN_W,
     RETRY_RIGHT_INSET, RETRY_SIZE, RETRY_TEXT_PAD, SINGLE_LINE_LIMIT, TEXT_SLACK, WAVE_AREA_W,
-    WAVE_BAR_GAP, WAVE_BAR_W, WAVE_GAP_LEFT, WAVE_MAX_H, WAVE_MIN_H, WAVE_N,
+    WAVE_BAR_GAP, WAVE_BAR_W, WAVE_MAX_H, WAVE_MIN_H, WAVE_N,
 };
 
 static RETRY_APP: OnceLock<StdMutex<Option<AppHandle>>> = OnceLock::new();
@@ -397,6 +397,8 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
 
         let label = NSTextField::labelWithString(&NSString::from_str(""), mtm);
         label.setFont(Some(&NSFont::systemFontOfSize(FONT_SIZE)));
+        // Layer-backed so the hint-text pulse (a layer.opacity animation) works.
+        label.setWantsLayer(true);
 
         let indicator = NSView::new(mtm);
         indicator.setWantsLayer(true);
@@ -750,6 +752,43 @@ fn make_fade_mask() -> Retained<AnyObject> {
     }
 }
 
+/// Pulse the hint label's opacity — a gentle breathing load indicator that
+/// stays clean on Liquid Glass (it's the text itself fading, not an overlay on
+/// the glass surface). `on` adds a reversing opacity animation; `off` removes
+/// it. Reuses the "skip if key exists" pattern from `set_ripple`.
+fn set_label_pulse(label: &NSTextField, on: bool) {
+    unsafe {
+        let ll: *mut AnyObject = msg_send![label, layer];
+        if ll.is_null() {
+            return;
+        }
+        let key = NSString::from_str("hint-pulse");
+        if on {
+            let existing: *mut AnyObject = msg_send![ll, animationForKey: &*key];
+            if !existing.is_null() {
+                return;
+            }
+            let anim_cls =
+                objc2::runtime::AnyClass::get(c"CABasicAnimation").expect("CABasicAnimation");
+            let path = NSString::from_str("opacity");
+            let anim: *mut AnyObject = msg_send![anim_cls, animationWithKeyPath: &*path];
+            let _: () = msg_send![anim, setFromValue: &*NSNumber::numberWithDouble(1.0)];
+            let _: () = msg_send![anim, setToValue: &*NSNumber::numberWithDouble(0.45)];
+            let _: () = msg_send![anim, setDuration: 0.9f64];
+            let _: () = msg_send![anim, setAutoreverses: true];
+            let _: () = msg_send![anim, setRepeatCount: f32::INFINITY];
+            let tcls = objc2::runtime::AnyClass::get(c"CAMediaTimingFunction")
+                .expect("CAMediaTimingFunction");
+            let tname = NSString::from_str("easeInEaseOut");
+            let tf: *mut AnyObject = msg_send![tcls, functionWithName: &*tname];
+            let _: () = msg_send![anim, setTimingFunction: tf];
+            let _: () = msg_send![ll, addAnimation: anim, forKey: &*key];
+        } else {
+            let _: () = msg_send![ll, removeAnimationForKey: &*key];
+        }
+    }
+}
+
 /// Apply (or remove) the top-fade mask on the container layer.
 fn apply_top_fade(container: &NSView, mask: &AnyObject, faded: bool, bounds: NSRect) {
     unsafe {
@@ -806,16 +845,14 @@ fn set_frame(view: &NSView, frame: NSRect, animate: bool) {
     }
 }
 
-/// Position + size the 4 waveform bars just right of the indicator (LEFT of
-/// the pill) from the given heights (computed by the emitter via
-/// `shared::wave_heights` and read back from the `WAVE_HEIGHTS` thread-local).
-/// Hidden unless `show`. The x is a CONSTANT — the waveform does not track the
-/// pill width — so `audio:level` height updates can never shift its position.
-/// That is what kills the "drift" the old right-anchored layout had: when the
-/// bar's x depended on `pill_w` and the pill was animating wider, the ~10 Hz
-/// height updates kept snapping the bar to the target x ahead of the glass.
+/// Position + size the 4 waveform bars, centered in the indicator slot (LEFT of
+/// the pill) — the waveform replaces the dot during recording. Heights come from
+/// the emitter via `shared::wave_heights` (read back from the `WAVE_HEIGHTS`
+/// thread-local). Hidden unless `show`. The x is a CONSTANT — it does not track
+/// the pill width — so `audio:level` height updates can never shift its position
+/// (no drift while the pill grows).
 fn layout_bars(views: &Views, pill_h: f64, heights: &[f64; WAVE_N], show: bool) {
-    let area_left = PAD_LEFT + INDICATOR_W + GAP;
+    let area_left = PAD_LEFT + (INDICATOR_W - WAVE_AREA_W) / 2.0;
     let center_y = pill_h / 2.0;
     for (i, bar) in views.bars.iter().enumerate() {
         bar.setHidden(!show);
@@ -1006,23 +1043,19 @@ fn render(app: &AppHandle, model: &mut Model) {
             !has_hint && matches!(model.app_state.as_str(), "recording" | "finishing");
         let want_wrap = !has_hint && (model.layout_wrap || measured_w > SINGLE_LINE_LIMIT);
 
-        // Waveform shows on the right while recording, even when a hint
-        // (e.g. "录制中…" for non-streaming engines) is displayed. Reserve
-        // its width so the text never overlaps the bars.
-        let show_wave = model.app_state == "recording";
+        // Waveform occupies the indicator slot while recording (the dot is gone
+        // in this state). Hidden during a network reconnect (warn hint), where the
+        // slot shows a spinner instead.
+        let show_wave = model.app_state == "recording" && model.hint_level != "warn";
 
-        // Chrome around the text (left pad + indicator + gap + right action area).
-        let wave_reserve = if show_wave {
-            WAVE_GAP_LEFT + WAVE_AREA_W
-        } else {
-            0.0
-        };
+        // Chrome around the text (left pad + indicator/waveform slot + gap + right
+        // action area). The waveform reuses the indicator slot, so it adds no width.
         let retry_reserve = if show_retry {
             RETRY_GAP_LEFT + retry_w + (RETRY_RIGHT_INSET - PAD_RIGHT)
         } else {
             0.0
         };
-        let chrome = PAD_LEFT + INDICATOR_W + GAP + PAD_RIGHT + wave_reserve + retry_reserve;
+        let chrome = PAD_LEFT + INDICATOR_W + GAP + PAD_RIGHT + retry_reserve;
         let text_w = measured_w + TEXT_SLACK;
         let next_width = if want_wrap {
             MULTI_LINE_WIDTH + chrome
@@ -1114,10 +1147,12 @@ fn render(app: &AppHandle, model: &mut Model) {
         let faded = model.layout_wrap && full_h > visible_text_h + 1.0;
         apply_top_fade(&views.container, &views.fade_mask, faded, container_bounds);
 
-        // Indicator (left): a spinner while connecting/finishing (unless error),
-        // otherwise a colored dot (green = recording, red = error, gray = idle).
+        // Indicator slot (left): spinner while connecting/finishing/reconnecting
+        // (unless error), a red dot on error, otherwise empty — recording shows the
+        // waveform in this slot instead.
         let show_spinner = model.hint_level != "error"
-            && matches!(model.app_state.as_str(), "connecting" | "finishing");
+            && (matches!(model.app_state.as_str(), "connecting" | "finishing")
+                || (model.app_state == "recording" && model.hint_level == "warn"));
         let spinner_size = 16.0;
         views.spinner.setFrame(NSRect {
             origin: NSPoint {
@@ -1157,7 +1192,7 @@ fn render(app: &AppHandle, model: &mut Model) {
                 height: INDICATOR_W,
             },
         });
-        views.indicator.setHidden(show_spinner);
+        views.indicator.setHidden(show_spinner || show_wave);
         let dot_bounds = NSRect {
             origin: NSPoint { x: 0.0, y: 0.0 },
             size: NSSize {
@@ -1169,7 +1204,7 @@ fn render(app: &AppHandle, model: &mut Model) {
             x: INDICATOR_W / 2.0,
             y: INDICATOR_W / 2.0,
         };
-        let is_recording = model.app_state == "recording" && model.hint_level != "error";
+        let is_recording = false; // recording uses the waveform, never the dot/ripple
         unsafe {
             let dl = &*views.dot_layer;
             let _: () = msg_send![dl, setBounds: dot_bounds];
@@ -1187,20 +1222,13 @@ fn render(app: &AppHandle, model: &mut Model) {
         }
         set_ripple(&views.ripple_layer, is_recording);
 
-        // Label, after the indicator. Anchored so the bottom `visible_text_h` of the
-        // text sits in the (vertically centered) visible window: single-line is just
-        // centered; multi-line lets the LATEST lines show while older lines overflow
-        // upward and get clipped by the container (top fade is a later refinement).
-        // Label sits right of the indicator, or right of the waveform when
-        // recording (the waveform occupies the indicator's right slot).
-        let label_x = PAD_LEFT
-            + INDICATOR_W
-            + GAP
-            + if show_wave {
-                WAVE_AREA_W + WAVE_GAP_LEFT
-            } else {
-                0.0
-            };
+        // Label, right of the indicator slot. The slot holds spinner/dot/waveform
+        // (all INDICATOR_W wide), so label_x is constant regardless of state.
+        // Anchored so the bottom `visible_text_h` of the text sits in the (vertically
+        // centered) visible window: single-line is just centered; multi-line lets the
+        // LATEST lines show while older lines overflow upward and get clipped by the
+        // container (top fade is a later refinement).
+        let label_x = PAD_LEFT + INDICATOR_W + GAP;
         let pad_v = ((pill_h - visible_text_h) / 2.0).round();
         views.label.setFrame(NSRect {
             origin: NSPoint {
@@ -1217,6 +1245,11 @@ fn render(app: &AppHandle, model: &mut Model) {
         // Heights come from the WAVE_HEIGHTS thread-local (updated by audio:level).
         let heights = WAVE_HEIGHTS.with(|w| *w.borrow());
         layout_bars(views, pill_h, &heights, show_wave);
+
+        // Hint-text pulse (a gentle breathing opacity) for connecting/润色/重试/
+        // 重连/录制中提示; off for transcript text, errors, and idle.
+        let should_pulse = has_hint && model.hint_level != "error" && model.app_state != "idle";
+        set_label_pulse(&views.label, should_pulse);
 
         views.retry_view.setHidden(!show_retry);
         if show_retry {

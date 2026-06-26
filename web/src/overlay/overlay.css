@@ -58,3 +58,19 @@ body,
     transform: rotate(360deg);
   }
 }
+
+/* Hint-text breathing pulse (connecting/润色/重连/录制中提示): the text itself
+   fades in/out — clean, no overlay on the glass/pill surface. */
+@keyframes vp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.pulse-text {
+  animation: vp-pulse 1.8s ease-in-out infinite;
+}
