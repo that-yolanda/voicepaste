@@ -8,25 +8,32 @@
 
 // --- Layout constants (logical px). The macOS renderer imports these directly;
 // the Windows WebView receives them via get_overlay_layout_metrics. ---
+#[cfg(target_os = "macos")]
 pub const FONT_SIZE: f64 = 14.0;
 pub const PAD_LEFT: f64 = 14.0;
 pub const PAD_RIGHT: f64 = 16.0;
 pub const INDICATOR_W: f64 = 22.0;
 pub const GAP: f64 = 12.0;
+#[cfg(target_os = "macos")]
 pub const DOT_SIZE: f64 = 14.0;
 pub const PILL_H_SINGLE: f64 = 40.0;
 pub const SINGLE_LINE_LIMIT: f64 = 520.0;
 pub const MULTI_LINE_WIDTH: f64 = 520.0;
 pub const MIN_PILL_W: f64 = 116.0;
 pub const TEXT_SLACK: f64 = 10.0;
+#[cfg(target_os = "macos")]
 pub const MAX_LINES: usize = 3;
+#[cfg(target_os = "macos")]
 pub const BOTTOM_OFFSET: f64 = 48.0;
 
 // --- Retry affordance geometry ---
 pub const RETRY_SIZE: f64 = 22.0;
+#[cfg(target_os = "macos")]
 pub const RETRY_MIN_W: f64 = 38.0;
+#[cfg(target_os = "macos")]
 pub const RETRY_TEXT_PAD: f64 = 24.0;
 pub const RETRY_GAP_LEFT: f64 = 8.0;
+#[cfg(target_os = "macos")]
 pub const RETRY_RIGHT_INSET: f64 = 26.0;
 
 // --- Waveform (4 bars, right side, recording only) ---
@@ -59,6 +66,7 @@ pub fn wave_heights(smoothed: &mut f64, level: f64) -> [f64; WAVE_N] {
 /// Logical overlay state used to derive display text. Parallels the Windows
 /// WebView's `OverlayState`; only the macOS renderer holds a live instance.
 #[derive(Default)]
+#[cfg(any(target_os = "macos", test))]
 pub struct Model {
     pub final_text: String,
     pub partial_text: String,
@@ -81,6 +89,7 @@ pub struct Model {
 /// The hint text shown in the pill body. State-driven placeholders take
 /// precedence over the backend hint message. This is the authoritative logic;
 /// the Windows WebView keeps an aligned TS copy in `overlayText`.
+#[cfg(any(target_os = "macos", test))]
 pub fn visible_hint(model: &Model) -> String {
     let visual_state = model.app_state.as_str();
     let zh = true; // app is Chinese-first; matches the WebView's isZhLocale default.
