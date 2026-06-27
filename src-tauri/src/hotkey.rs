@@ -45,6 +45,9 @@ pub struct HotkeyConfigInner {
     /// the combination without creating a second WH_KEYBOARD_LL hook (which
     /// is unreliable on Windows when two taps live in the same process).
     pub record_tx: Option<CrossbeamSender<keytap::Event>>,
+    /// The hotkey state machine. Held under the same lock so lib.rs can reset
+    /// it when a recording is cancelled or a start is diverted/failed.
+    pub matcher: MatcherState,
 }
 
 /// Thread-safe handle to the hotkey configuration.
@@ -381,6 +384,181 @@ fn keycode_to_key(kc: u32) -> Option<Key> {
 }
 
 // ---------------------------------------------------------------------------
+// Hotkey state machine
+// ---------------------------------------------------------------------------
+
+/// Which kind of recording a started session uses, as tracked by the matcher.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MatcherMode {
+    Toggle,
+    Hold,
+}
+
+/// Actions emitted by [`MatcherState::process`]. The listener spawns these on
+/// the async runtime; lib.rs decides whether a `StartRecording` actually
+/// records (or is diverted to a retry) and resets the matcher when it doesn't.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HotkeyAction {
+    /// Begin a neutral recording — the prompt is decided later, on stop.
+    /// `is_main` is true when the triggering chord is the main hotkey
+    /// (prompt_id `None`), which gates the "press main hotkey to retry the
+    /// last failure" shortcut.
+    StartRecording { is_main: bool },
+    /// End the recording and finalize with the given prompt (`None` = raw
+    /// paste, no polishing).
+    StopRecording { prompt_id: Option<String> },
+}
+
+/// Pure state machine over the raw keytap event stream.
+///
+/// Resolves chord conflicts without any timeout/pending:
+/// - A **hold** chord starts recording the instant its keys are all pressed
+///   (keydown) — zero latency, prompt undecided.
+/// - A **toggle** chord starts/stops on completion of a press cycle (the held
+///   set empties at keyup); the prompt is the longest chord reached in that
+///   stop cycle.
+/// - Recording always starts *neutral*; the prompt is fixed only when it ends,
+///   from the longest chord held during the hold (peak) or the stop cycle.
+///   The chord is fully known at that point, so prefix conflicts like `Ctrl`
+///   vs `Ctrl+Shift` resolve correctly with no waiting.
+#[derive(Debug, Default)]
+pub struct MatcherState {
+    /// Currently physically held keys.
+    held: HashSet<Key>,
+    /// Longest binding matched during the current press cycle / hold (peak).
+    cycle_best: Option<usize>,
+    /// What the matcher believes is recording, if anything. Authoritative on
+    /// the hotkey side; lib.rs resets it via [`MatcherState::reset_recording`]
+    /// when a start is diverted to retry or fails, or when recording cancels.
+    recording: Option<MatcherMode>,
+    /// For hold: the binding that started the session — its keys leaving the
+    /// held set ends the session.
+    active_hold: Option<usize>,
+}
+
+impl MatcherState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Clear the recording-side tracking (physical `held` keys are untouched).
+    pub fn reset_recording(&mut self) {
+        self.recording = None;
+        self.cycle_best = None;
+        self.active_hold = None;
+    }
+
+    /// Advance the machine one event. Returns the actions to dispatch.
+    pub fn process(&mut self, kind: EventKind, bindings: &[HotkeyBinding]) -> Vec<HotkeyAction> {
+        let mut actions = Vec::new();
+        match kind {
+            EventKind::KeyDown(k) => {
+                self.held.insert(k);
+                self.update_cycle_best(bindings);
+                // Hold starts on keydown the moment its chord completes.
+                if self.recording.is_none() {
+                    if let Some(idx) = longest_match(&self.held, bindings) {
+                        if bindings[idx].mode == "hold" {
+                            let is_main = bindings[idx].prompt_id.is_none();
+                            self.recording = Some(MatcherMode::Hold);
+                            self.active_hold = Some(idx);
+                            actions.push(HotkeyAction::StartRecording { is_main });
+                        }
+                    }
+                }
+            }
+            EventKind::KeyUp(k) => {
+                self.held.remove(&k);
+                self.update_cycle_best(bindings);
+                match self.recording {
+                    Some(MatcherMode::Hold) => {
+                        // End when the active hold chord is no longer fully held.
+                        let still_held = self
+                            .active_hold
+                            .map(|i| bindings[i].keys.iter().all(|key| self.held.contains(key)))
+                            .unwrap_or(false);
+                        if !still_held {
+                            let prompt_id = self
+                                .cycle_best
+                                .and_then(|i| bindings.get(i))
+                                .and_then(|b| b.prompt_id.clone());
+                            self.reset_recording();
+                            actions.push(HotkeyAction::StopRecording { prompt_id });
+                        }
+                    }
+                    Some(MatcherMode::Toggle) => {
+                        if self.held.is_empty() {
+                            // Stop only if this cycle reached a toggle chord.
+                            if let Some(i) =
+                                self.cycle_best.filter(|&i| bindings[i].mode == "toggle")
+                            {
+                                let prompt_id = bindings.get(i).and_then(|b| b.prompt_id.clone());
+                                self.reset_recording();
+                                actions.push(HotkeyAction::StopRecording { prompt_id });
+                            } else {
+                                // Only irrelevant keys pressed — keep recording,
+                                // begin a fresh stop cycle.
+                                self.cycle_best = None;
+                            }
+                        }
+                    }
+                    None => {
+                        if self.held.is_empty() {
+                            // Start cycle: begin only if it reached a toggle chord.
+                            if let Some(i) =
+                                self.cycle_best.filter(|&i| bindings[i].mode == "toggle")
+                            {
+                                let is_main = bindings[i].prompt_id.is_none();
+                                self.recording = Some(MatcherMode::Toggle);
+                                actions.push(HotkeyAction::StartRecording { is_main });
+                            }
+                            self.cycle_best = None;
+                        }
+                    }
+                }
+            }
+            EventKind::KeyRepeat(_) => {}
+        }
+        actions
+    }
+
+    /// Track the longest binding matched since the cycle/hold began. Only grows
+    /// (strictly longer) so it holds the peak across a hold.
+    fn update_cycle_best(&mut self, bindings: &[HotkeyBinding]) {
+        if let Some(idx) = longest_match(&self.held, bindings) {
+            let take = self
+                .cycle_best
+                .map(|prev| bindings[idx].keys.len() > bindings[prev].keys.len())
+                .unwrap_or(true);
+            if take {
+                self.cycle_best = Some(idx);
+            }
+        }
+    }
+}
+
+/// Longest-match resolution: of all bindings whose keys are a subset of `held`,
+/// the one with the most keys wins; ties are broken by registration order
+/// (earlier wins). Replaces the old first-subset-match that let a bare `Ctrl`
+/// steal `Ctrl+Shift`.
+pub fn longest_match(held: &HashSet<Key>, bindings: &[HotkeyBinding]) -> Option<usize> {
+    let mut best: Option<(usize, usize)> = None;
+    for (i, b) in bindings.iter().enumerate() {
+        if !b.keys.is_empty() && b.keys.iter().all(|k| held.contains(k)) {
+            let len = b.keys.len();
+            let take = match best {
+                None => true,
+                Some((_, best_len)) => len > best_len,
+            };
+            if take {
+                best = Some((i, len));
+            }
+        }
+    }
+    best.map(|(i, _)| i)
+}
+
+// ---------------------------------------------------------------------------
 // Listener thread
 // ---------------------------------------------------------------------------
 
@@ -467,19 +645,21 @@ pub fn ensure_hotkey_active(config: &HotkeyConfig, app_handle: &tauri::AppHandle
 }
 
 /// Main loop for the listener thread.
+///
+/// Forwards raw keytap events to the shared [`MatcherState`] and dispatches
+/// the resulting [`HotkeyAction`]s on the async runtime. Escape cancellation
+/// and the UI hotkey-recorder relay are handled here, independent of chord
+/// matching.
 fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHandle) {
-    let mut held: HashSet<Key> = HashSet::new();
-    let mut active_binding: Option<usize> = None;
     let mut escape_was_pressed = false;
 
     loop {
         match tap.recv_timeout(std::time::Duration::from_millis(100)) {
             Ok(event) => {
-                // When a hotkey-recording session is active, forward every
-                // event to the recorder via the relay channel instead of
-                // matching hotkey bindings. This lets the recorder capture
-                // the combination without creating a second WH_KEYBOARD_LL
-                // hook (unreliable on Windows with two taps per process).
+                // While the UI hotkey recorder is capturing a combination,
+                // forward every event to it via the relay channel instead of
+                // matching bindings. This avoids a second WH_KEYBOARD_LL hook
+                // (unreliable on Windows with two taps per process).
                 {
                     let cfg = config.read().unwrap();
                     if cfg.recording {
@@ -490,30 +670,15 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                         continue;
                     }
                 }
+
                 let event_kind = event.kind;
-                let key = match event_kind {
-                    EventKind::KeyDown(k) => {
-                        held.insert(k);
-                        Some(k)
-                    }
-                    EventKind::KeyUp(k) => {
-                        held.remove(&k);
-                        Some(k)
-                    }
-                    EventKind::KeyRepeat(_) => None, // Ignore key repeats
-                };
 
-                if key.is_none() {
-                    continue;
-                }
-
-                // Check escape cancellation
-                let cfg = config.read().unwrap();
+                // Escape cancellation (independent of chord matching).
                 if matches!(event_kind, EventKind::KeyUp(Key::Escape)) {
                     escape_was_pressed = false;
                 }
-
-                if cfg.escape_enabled
+                let escape_enabled = config.read().unwrap().escape_enabled;
+                if escape_enabled
                     && matches!(event_kind, EventKind::KeyDown(Key::Escape))
                     && !escape_was_pressed
                 {
@@ -524,31 +689,26 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                     });
                 }
 
-                // Match hotkey bindings
-                let matched_idx = find_matching_binding(&held, &cfg.bindings);
-
-                match (matched_idx, active_binding) {
-                    // New binding activated (press)
-                    (Some(new_idx), None) => {
-                        active_binding = Some(new_idx);
-                        let binding = &cfg.bindings[new_idx];
-                        spawn_hotkey_pressed(app_handle, &binding.mode, binding.prompt_id.clone());
+                // Drive the state machine under the config lock, then dispatch
+                // the emitted actions without holding the lock.
+                let actions = {
+                    let mut cfg = config.write().unwrap();
+                    // Clone the bindings out so the matcher borrows them by
+                    // shared ref while we hold a mut borrow on the guard. The
+                    // set is tiny (a handful of chords) and key events are
+                    // infrequent, so the clone is negligible.
+                    let bindings = cfg.bindings.clone();
+                    cfg.matcher.process(event_kind, &bindings)
+                };
+                for action in actions {
+                    match action {
+                        HotkeyAction::StartRecording { is_main } => {
+                            spawn_recording_start(app_handle, is_main)
+                        }
+                        HotkeyAction::StopRecording { prompt_id } => {
+                            spawn_recording_stop(app_handle, prompt_id)
+                        }
                     }
-                    // Different binding activated (transition)
-                    (Some(new_idx), Some(old_idx)) if new_idx != old_idx => {
-                        let old = &cfg.bindings[old_idx];
-                        spawn_hotkey_released(app_handle, &old.mode);
-                        active_binding = Some(new_idx);
-                        let binding = &cfg.bindings[new_idx];
-                        spawn_hotkey_pressed(app_handle, &binding.mode, binding.prompt_id.clone());
-                    }
-                    // Binding deactivated (release)
-                    (None, Some(old_idx)) => {
-                        let old = &cfg.bindings[old_idx];
-                        spawn_hotkey_released(app_handle, &old.mode);
-                        active_binding = None;
-                    }
-                    _ => {}
                 }
             }
             Err(keytap::RecvTimeoutError::Timeout) => continue,
@@ -560,29 +720,28 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
     }
 }
 
-/// Find the first binding whose keys are all currently held.
-fn find_matching_binding(held: &HashSet<Key>, bindings: &[HotkeyBinding]) -> Option<usize> {
-    bindings
-        .iter()
-        .position(|b| b.keys.iter().all(|k| held.contains(k)))
-}
-
-/// Dispatch a hotkey pressed event to the async runtime.
-fn spawn_hotkey_pressed(app_handle: &tauri::AppHandle, mode: &str, prompt_id: Option<String>) {
+/// Dispatch a "start recording" action to the async runtime.
+fn spawn_recording_start(app_handle: &tauri::AppHandle, is_main: bool) {
     let handle = app_handle.clone();
-    let mode = mode.to_string();
     tauri::async_runtime::spawn(async move {
-        crate::on_hotkey_pressed(handle, &mode, prompt_id).await;
+        crate::on_recording_start(handle, is_main).await;
     });
 }
 
-/// Dispatch a hotkey released event to the async runtime.
-fn spawn_hotkey_released(app_handle: &tauri::AppHandle, mode: &str) {
+/// Dispatch a "stop recording" action (with the resolved prompt) to the async
+/// runtime.
+fn spawn_recording_stop(app_handle: &tauri::AppHandle, prompt_id: Option<String>) {
     let handle = app_handle.clone();
-    let mode = mode.to_string();
     tauri::async_runtime::spawn(async move {
-        crate::on_hotkey_released(handle, &mode).await;
+        crate::on_recording_stop(handle, prompt_id).await;
     });
+}
+
+/// Reset the matcher's recording tracking. Called by lib.rs when a recording
+/// is cancelled, or when a start is diverted to retry or fails, so the matcher
+/// does not believe it is still recording.
+pub fn reset_recording(config: &HotkeyConfig) {
+    config.write().unwrap().matcher.reset_recording();
 }
 
 // ---------------------------------------------------------------------------
@@ -874,6 +1033,7 @@ pub fn create_config(bindings: Vec<HotkeyBinding>) -> HotkeyConfig {
         tap_active: false,
         recording: false,
         record_tx: None,
+        matcher: MatcherState::new(),
     }))
 }
 
@@ -1418,6 +1578,266 @@ mod tests {
         assert_eq!(build_hotkey_string(&pressed).as_deref(), Some("F13"));
     }
 
+    // ── MatcherState tests ─────────────────────────────────────────────────
+
+    fn down(k: Key) -> EventKind {
+        EventKind::KeyDown(k)
+    }
+    fn up(k: Key) -> EventKind {
+        EventKind::KeyUp(k)
+    }
+
+    /// Drive the matcher through an event sequence, collecting emitted actions.
+    fn run_matcher(bindings: &[HotkeyBinding], events: &[EventKind]) -> Vec<HotkeyAction> {
+        let mut m = MatcherState::new();
+        let mut out = Vec::new();
+        for e in events {
+            out.extend(m.process(e.clone(), bindings));
+        }
+        out
+    }
+
+    fn binding(keys: &[Key], mode: &str, prompt_id: Option<&str>) -> HotkeyBinding {
+        HotkeyBinding {
+            keys: keys.iter().copied().collect(),
+            mode: mode.to_string(),
+            prompt_id: prompt_id.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn toggle_main_cycle_starts_neutral_then_stops_raw() {
+        // Single main hotkey Ctrl (toggle): one press cycle starts (neutral),
+        // the next stops with prompt None (raw paste).
+        let bindings = [binding(&[Key::ControlLeft], "toggle", None)];
+        let actions = run_matcher(
+            &bindings,
+            &[
+                down(Key::ControlLeft),
+                up(Key::ControlLeft),
+                down(Key::ControlLeft),
+                up(Key::ControlLeft),
+            ],
+        );
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: true },
+                HotkeyAction::StopRecording { prompt_id: None },
+            ]
+        );
+    }
+
+    #[test]
+    fn toggle_prefix_conflict_stop_chord_decides_prompt() {
+        // Ctrl (main, toggle) + Ctrl+Shift (polish, toggle). The stop chord
+        // decides the prompt — the bug we're fixing: pressing Ctrl+Shift used
+        // to trigger Ctrl.
+        let bindings = [
+            binding(&[Key::ControlLeft], "toggle", None),
+            binding(
+                &[Key::ControlLeft, Key::ShiftLeft],
+                "toggle",
+                Some("polish"),
+            ),
+        ];
+        let actions = run_matcher(
+            &bindings,
+            &[
+                down(Key::ControlLeft),
+                up(Key::ControlLeft),
+                down(Key::ControlLeft),
+                down(Key::ShiftLeft),
+                up(Key::ShiftLeft),
+                up(Key::ControlLeft),
+            ],
+        );
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: true },
+                HotkeyAction::StopRecording {
+                    prompt_id: Some("polish".to_string())
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn toggle_start_long_stop_short_follows_stop_cycle() {
+        // Same bindings: start with Ctrl+Shift, stop with Ctrl → raw. The
+        // prompt follows the stop cycle, not the start cycle.
+        let bindings = [
+            binding(&[Key::ControlLeft], "toggle", None),
+            binding(
+                &[Key::ControlLeft, Key::ShiftLeft],
+                "toggle",
+                Some("polish"),
+            ),
+        ];
+        let actions = run_matcher(
+            &bindings,
+            &[
+                down(Key::ControlLeft),
+                down(Key::ShiftLeft),
+                up(Key::ShiftLeft),
+                up(Key::ControlLeft),
+                down(Key::ControlLeft),
+                up(Key::ControlLeft),
+            ],
+        );
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: false },
+                HotkeyAction::StopRecording { prompt_id: None },
+            ]
+        );
+    }
+
+    #[test]
+    fn hold_starts_on_keydown_stops_on_release() {
+        let bindings = [binding(&[Key::ControlLeft], "hold", None)];
+        let actions = run_matcher(&bindings, &[down(Key::ControlLeft), up(Key::ControlLeft)]);
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: true },
+                HotkeyAction::StopRecording { prompt_id: None },
+            ]
+        );
+    }
+
+    #[test]
+    fn hold_prefix_conflict_uses_peak_for_prompt() {
+        // Ctrl (hold, main) + Ctrl+Shift (hold, polish). Pressing Ctrl starts
+        // immediately (zero latency); adding Shift then releasing resolves the
+        // prompt from the peak reached during the hold.
+        let bindings = [
+            binding(&[Key::ControlLeft], "hold", None),
+            binding(&[Key::ControlLeft, Key::ShiftLeft], "hold", Some("polish")),
+        ];
+        let actions = run_matcher(
+            &bindings,
+            &[
+                down(Key::ControlLeft),
+                down(Key::ShiftLeft),
+                up(Key::ShiftLeft),
+                up(Key::ControlLeft),
+            ],
+        );
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: true },
+                HotkeyAction::StopRecording {
+                    prompt_id: Some("polish".to_string())
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn hold_short_only_yields_raw_prompt() {
+        let bindings = [
+            binding(&[Key::ControlLeft], "hold", None),
+            binding(&[Key::ControlLeft, Key::ShiftLeft], "hold", Some("polish")),
+        ];
+        // Press and release only Ctrl → raw.
+        let actions = run_matcher(&bindings, &[down(Key::ControlLeft), up(Key::ControlLeft)]);
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: true },
+                HotkeyAction::StopRecording { prompt_id: None },
+            ]
+        );
+    }
+
+    #[test]
+    fn mixed_toggle_short_hold_long_no_conflict() {
+        // Ctrl (toggle) + Ctrl+Shift (hold). The hold chord wins on keydown;
+        // the toggle stays silent until its own cycle. No prefix conflict.
+        let bindings = [
+            binding(&[Key::ControlLeft], "toggle", None),
+            binding(&[Key::ControlLeft, Key::ShiftLeft], "hold", Some("polish")),
+        ];
+        let actions = run_matcher(
+            &bindings,
+            &[
+                down(Key::ControlLeft),
+                down(Key::ShiftLeft),
+                up(Key::ShiftLeft),
+                up(Key::ControlLeft),
+            ],
+        );
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: false },
+                HotkeyAction::StopRecording {
+                    prompt_id: Some("polish".to_string())
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn toggle_irrelevant_key_during_recording_does_not_stop() {
+        // Recording in toggle mode; pressing an unregistered key (Space) and
+        // releasing must NOT stop the session.
+        let bindings = [binding(&[Key::F13], "toggle", None)];
+        let actions = run_matcher(
+            &bindings,
+            &[
+                down(Key::F13),
+                up(Key::F13),
+                down(Key::Space),
+                up(Key::Space),
+                down(Key::F13),
+                up(Key::F13),
+            ],
+        );
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: true },
+                HotkeyAction::StopRecording { prompt_id: None },
+            ]
+        );
+    }
+
+    #[test]
+    fn longest_match_prefers_more_keys_then_registration_order() {
+        let bindings = [
+            binding(&[Key::A], "toggle", None),         // idx 0, len 1
+            binding(&[Key::A, Key::B], "toggle", None), // idx 1, len 2
+            binding(&[Key::A, Key::C], "toggle", None), // idx 2, len 2 (tie with 1)
+        ];
+        // A+B and A+C both match with len 2; earlier registration (idx 1) wins.
+        let held: HashSet<Key> = [Key::A, Key::B, Key::C].into_iter().collect();
+        assert_eq!(longest_match(&held, &bindings), Some(1));
+
+        let held: HashSet<Key> = [Key::A, Key::C].into_iter().collect();
+        assert_eq!(longest_match(&held, &bindings), Some(2));
+
+        let held: HashSet<Key> = [Key::A].into_iter().collect();
+        assert_eq!(longest_match(&held, &bindings), Some(0));
+    }
+
+    #[test]
+    fn reset_recording_clears_session_tracking() {
+        let bindings = [binding(&[Key::F13], "hold", None)];
+        let mut m = MatcherState::new();
+        let started = m.process(down(Key::F13), &bindings);
+        assert_eq!(started.len(), 1); // StartRecording emitted → session active
+        m.reset_recording();
+        // After reset, releasing the key must not emit a stray StopRecording
+        // (the session was cancelled out-of-band).
+        let actions = m.process(up(Key::F13), &bindings);
+        assert!(actions.is_empty());
+    }
+
     // ── find_matching_binding tests ────────────────────────────────────────
 
     fn make_binding(keys: BTreeSet<Key>, mode: &str) -> HotkeyBinding {
@@ -1426,61 +1846,6 @@ mod tests {
             mode: mode.to_string(),
             prompt_id: None,
         }
-    }
-
-    #[test]
-    fn find_first_matching_binding() {
-        let binding_a = make_binding(BTreeSet::from([Key::ControlLeft, Key::A]), "toggle");
-        let binding_b = make_binding(BTreeSet::from([Key::ControlLeft, Key::B]), "hold");
-        let bindings = vec![binding_a.clone(), binding_b];
-
-        let held: HashSet<Key> = [Key::ControlLeft, Key::A].into_iter().collect();
-        assert_eq!(find_matching_binding(&held, &bindings), Some(0));
-
-        let held: HashSet<Key> = [Key::ControlLeft, Key::B].into_iter().collect();
-        assert_eq!(find_matching_binding(&held, &bindings), Some(1));
-    }
-
-    #[test]
-    fn find_matching_requires_all_keys() {
-        let binding = make_binding(
-            BTreeSet::from([Key::ControlLeft, Key::ShiftLeft, Key::A]),
-            "toggle",
-        );
-        let bindings = vec![binding];
-
-        let held: HashSet<Key> = [Key::ControlLeft, Key::A].into_iter().collect();
-        assert_eq!(find_matching_binding(&held, &bindings), None);
-
-        let held: HashSet<Key> = [Key::ControlLeft, Key::ShiftLeft, Key::A]
-            .into_iter()
-            .collect();
-        assert_eq!(find_matching_binding(&held, &bindings), Some(0));
-    }
-
-    #[test]
-    fn find_matching_extra_keys_held_ok() {
-        let binding = make_binding(BTreeSet::from([Key::ControlLeft, Key::A]), "toggle");
-        let bindings = vec![binding];
-
-        let held: HashSet<Key> = [Key::ControlLeft, Key::A, Key::ShiftLeft]
-            .into_iter()
-            .collect();
-        assert_eq!(find_matching_binding(&held, &bindings), Some(0));
-    }
-
-    #[test]
-    fn find_matching_empty_bindings() {
-        let held: HashSet<Key> = [Key::ControlLeft, Key::A].into_iter().collect();
-        assert_eq!(find_matching_binding(&held, &[]), None);
-    }
-
-    #[test]
-    fn find_matching_empty_held() {
-        let binding = make_binding(BTreeSet::from([Key::A]), "toggle");
-        let bindings = vec![binding];
-        let held = HashSet::new();
-        assert_eq!(find_matching_binding(&held, &bindings), None);
     }
 
     // ── build_initial_bindings / reload_bindings tests ─────────────────────

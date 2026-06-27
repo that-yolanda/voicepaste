@@ -867,51 +867,49 @@ struct HotkeyMode(std::sync::Mutex<String>);
 /// `None` means the main hotkey was used (not a prompt-specific hotkey).
 struct ActivePromptId(std::sync::Mutex<Option<String>>);
 
-/// Handle hotkey press event. In toggle mode, toggles recording. In hold mode, starts recording.
-/// `prompt_id` is `Some(id)` when a prompt-template hotkey was triggered, `None` for the main hotkey.
-async fn on_hotkey_pressed(app_handle: AppHandle, mode: &str, prompt_id: Option<String>) {
-    // Keyboard-driven retry: while a retryable failure is shown (idle, retry button
-    // visible), the main hotkey triggers the retry instead of a new recording, so
-    // the user can retry without reaching for the mouse.
-    if prompt_id.is_none() {
+/// Begin a neutral recording triggered by the hotkey matcher — the prompt is
+/// decided later, on stop. If the main hotkey was used while a retryable
+/// failure is shown, retry that failure instead of starting a new recording.
+pub(crate) async fn on_recording_start(app_handle: AppHandle, is_main: bool) {
+    if is_main {
         let app_inner = app_handle.state::<Arc<app_state::AppInner>>();
         let can_retry = matches!(*app_inner.state.lock().await, app_state::AppState::Idle)
             && app_inner.current_failure_ts.lock().await.is_some();
         if can_retry {
             let _ = retry_latest_failed_transcription(app_handle.clone()).await;
+            // Retry did not start a recording — resync the matcher so it does
+            // not believe one is active.
+            reset_matcher_recording(&app_handle);
             return;
         }
     }
 
-    // Store the active prompt ID for the recording session
-    if let Some(active) = app_handle.try_state::<ActivePromptId>() {
-        *active.0.lock().unwrap() = prompt_id;
-    }
+    start_recording(app_handle.clone()).await;
 
-    if mode == "hold" {
-        // Hold mode: press starts recording (only if not already recording)
-        let recording_state = app_handle.state::<RecordingState>();
-        let is_recording = *recording_state.0.lock().unwrap();
-        if !is_recording {
-            start_recording(app_handle).await;
-        }
-    } else {
-        // Toggle mode: press toggles recording state
-        toggle_recording(app_handle).await;
+    // If the start aborted (config/audio failure), resync the matcher so it
+    // doesn't think it's still recording.
+    if !is_recording(&app_handle) {
+        reset_matcher_recording(&app_handle);
     }
 }
 
-/// Handle hotkey release event. In hold mode, stops recording. In toggle mode, does nothing.
-async fn on_hotkey_released(app_handle: AppHandle, mode: &str) {
-    if mode == "hold" {
-        // Hold mode: release stops recording
-        let recording_state = app_handle.state::<RecordingState>();
-        let is_recording = *recording_state.0.lock().unwrap();
-        if is_recording {
-            stop_recording(app_handle).await;
-        }
+/// End the active recording and finalize with the prompt resolved from the
+/// stop chord. Sets ActivePromptId just before stopping so the finishing
+/// pipeline knows whether to polish.
+pub(crate) async fn on_recording_stop(app_handle: AppHandle, prompt_id: Option<String>) {
+    if let Some(active) = app_handle.try_state::<ActivePromptId>() {
+        *active.0.lock().unwrap() = prompt_id;
     }
-    // Toggle mode: release is ignored
+    stop_recording(app_handle).await;
+}
+
+/// Reset the hotkey matcher's recording tracking, e.g. after a recording is
+/// cancelled or a start is diverted to retry / fails. No-op if the hotkey
+/// state isn't managed yet.
+fn reset_matcher_recording(app_handle: &AppHandle) {
+    if let Some(hc) = app_handle.try_state::<hotkey::HotkeyConfig>() {
+        hotkey::reset_recording(&hc);
+    }
 }
 
 /// Start recording from idle state. Used by both toggle and hold modes.
@@ -936,49 +934,9 @@ async fn start_recording(app_handle: AppHandle) {
         }
     };
 
-    // 1b. Pre-validate LLM config when a prompt-specific hotkey was used.
-    //     Aborts early with an error hint instead of recording silently and
-    //     producing no output.
-    let active_prompt_id = app_handle
-        .try_state::<ActivePromptId>()
-        .and_then(|s| s.0.lock().unwrap().clone());
-
-    if active_prompt_id.is_some() {
-        if let Err(e) = crate::llm::validate_llm_config(&config.llm) {
-            log_rec!(warn, "LLM pre-validation failed: {}", e);
-            *recording_state.0.lock().unwrap() = false;
-            // Show overlay with error, auto-hide after delay
-            let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
-            position_overlay(&app_handle);
-            if let Some(overlay) = app_handle.get_window("overlay") {
-                let _ = overlay.show();
-            }
-            set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-            let _ = app_handle.emit(
-                "overlay:event",
-                serde_json::json!({
-                    "type": "hint",
-                    "payload": { "text": e, "level": "error", "variant": "text" }
-                }),
-            );
-            // Auto-hide overlay after delay so user can read the error
-            let delayed_handle = app_handle.clone();
-            let delayed_inner: Arc<app_state::AppInner> = Arc::clone(&*app_inner);
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(Duration::from_secs(3)).await;
-                let still_idle = {
-                    let s = delayed_inner.state.lock().await;
-                    matches!(*s, app_state::AppState::Idle)
-                };
-                if still_idle {
-                    if let Some(overlay) = delayed_handle.get_window("overlay") {
-                        let _ = overlay.hide();
-                    }
-                }
-            });
-            return;
-        }
-    }
+    // Prompt-specific LLM validation is deferred to finalize_and_paste: the
+    // prompt is resolved from the stop chord (not known at start), and a bad
+    // LLM config surfaces there as "文本润色失败，已输出原文" with the raw text.
 
     *app_inner.latest_transcript.lock().await = (String::new(), String::new());
     app_inner.recording_audio.lock().await.clear();
@@ -1649,23 +1607,6 @@ async fn stop_recording(app_handle: AppHandle) {
     set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
 }
 
-/// Toggle the recording state: if idle, start recording; if recording, stop.
-/// Used by toggle-mode hotkey handlers.
-pub async fn toggle_recording(app_handle: AppHandle) {
-    let recording_state = app_handle.state::<RecordingState>();
-    let is_recording = {
-        let mut recording = recording_state.0.lock().unwrap();
-        *recording = !*recording;
-        *recording
-    };
-
-    if is_recording {
-        start_recording(app_handle).await;
-    } else {
-        stop_recording(app_handle).await;
-    }
-}
-
 /// Cancel the active recording without committing or pasting text.
 /// Directly toggle the ESC-cancel shortcut, independent of the recording state
 /// machine. Used to keep ESC live while a retryable failure is shown (idle).
@@ -1760,6 +1701,10 @@ async fn cancel_recording(app_handle: AppHandle) {
         let _ = overlay.hide();
     }
     set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
+
+    // Resync the hotkey matcher: the recording was cancelled out-of-band
+    // (ESC), so it must not still believe a session is active.
+    reset_matcher_recording(&app_handle);
 }
 
 /// Default system prompt for LLM text structuring.
@@ -2074,7 +2019,7 @@ async fn finalize_and_paste(
     let trimmed = raw_text.trim().to_string();
 
     // Always clear the active prompt ID once a recording concludes.
-    let active_prompt_id = app_handle
+    let mut active_prompt_id = app_handle
         .try_state::<ActivePromptId>()
         .and_then(|s| s.0.lock().unwrap().clone());
     if let Some(active) = app_handle.try_state::<ActivePromptId>() {
@@ -2099,6 +2044,25 @@ async fn finalize_and_paste(
 
     // Load config + model registry for LLM / behavior settings.
     let config = app_inner.config_manager.load_config().ok();
+
+    // When a prompt-specific stop chord was used, validate the LLM config up
+    // front: a missing key/URL/model would otherwise surface as a generic
+    // "润色失败" after a failed call. Downgrade to raw text on error.
+    if active_prompt_id.is_some() {
+        if let Some(ref cfg) = config {
+            if let Err(e) = crate::llm::validate_llm_config(&cfg.llm) {
+                log_rec!(warn, "LLM config invalid, skipping polish: {}", e);
+                let _ = app_handle.emit(
+                    "overlay:event",
+                    serde_json::json!({
+                        "type": "hint",
+                        "payload": { "text": e, "level": "warn", "variant": "text" }
+                    }),
+                );
+                active_prompt_id = None;
+            }
+        }
+    }
     let resource_dir = app_handle
         .path()
         .resource_dir()
