@@ -1427,6 +1427,7 @@ async fn connect_and_attach(
                 return;
             }
             *app_handle.state::<RecordingState>().0.lock().unwrap() = false;
+            reset_matcher_recording(&app_handle);
             app_inner.pending_audio.lock().await.clear();
             stop_audio_capture(&app_handle, &app_inner, 1200).await;
             save_recording_wav(&app_handle, &app_inner).await;
@@ -1959,6 +1960,7 @@ async fn finalize_on_failure(app: &AppHandle, app_inner: &Arc<app_state::AppInne
     if let Some(state) = app.try_state::<RecordingState>() {
         *state.0.lock().unwrap() = false;
     }
+    reset_matcher_recording(app);
 
     // Gather salvageable text: accumulated prefix + the dying session's text.
     let session_text = current_session_text(app_inner).await;

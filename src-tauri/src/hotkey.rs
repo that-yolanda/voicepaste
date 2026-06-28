@@ -441,8 +441,9 @@ impl MatcherState {
         Self::default()
     }
 
-    /// Clear the recording-side tracking (physical `held` keys are untouched).
+    /// Clear all matcher-side state after the app ended a recording out-of-band.
     pub fn reset_recording(&mut self) {
+        self.held.clear();
         self.recording = None;
         self.cycle_best = None;
         self.active_hold = None;
@@ -1590,9 +1591,17 @@ mod tests {
     /// Drive the matcher through an event sequence, collecting emitted actions.
     fn run_matcher(bindings: &[HotkeyBinding], events: &[EventKind]) -> Vec<HotkeyAction> {
         let mut m = MatcherState::new();
+        run_matcher_from(&mut m, bindings, events)
+    }
+
+    fn run_matcher_from(
+        matcher: &mut MatcherState,
+        bindings: &[HotkeyBinding],
+        events: &[EventKind],
+    ) -> Vec<HotkeyAction> {
         let mut out = Vec::new();
         for e in events {
-            out.extend(m.process(e.clone(), bindings));
+            out.extend(matcher.process(e.clone(), bindings));
         }
         out
     }
@@ -1836,6 +1845,29 @@ mod tests {
         // (the session was cancelled out-of-band).
         let actions = m.process(up(Key::F13), &bindings);
         assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn reset_recording_clears_stale_held_keys() {
+        let bindings = [binding(&[Key::F13], "toggle", None)];
+        let mut m = MatcherState::new();
+
+        // Simulate a lost keyup for an unrelated key. If reset leaves physical
+        // held state behind, the next toggle cycle never sees held.is_empty().
+        assert!(m.process(down(Key::Space), &bindings).is_empty());
+        assert!(m
+            .process(down(Key::F13), &bindings)
+            .into_iter()
+            .chain(m.process(up(Key::F13), &bindings))
+            .collect::<Vec<_>>()
+            .is_empty());
+
+        m.reset_recording();
+        let actions = run_matcher_from(&mut m, &bindings, &[down(Key::F13), up(Key::F13)]);
+        assert_eq!(
+            actions,
+            vec![HotkeyAction::StartRecording { is_main: true }]
+        );
     }
 
     // ── find_matching_binding tests ────────────────────────────────────────
