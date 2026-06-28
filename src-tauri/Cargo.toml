@@ -1,6 +1,6 @@
 [package]
 name = "voicepaste"
-version = "2.0.0"
+version = "2.1.0"
 description = "Voice-to-text input tool — press a hotkey, speak, auto-paste."
 authors = ["that-yolanda"]
 license = "MIT"
