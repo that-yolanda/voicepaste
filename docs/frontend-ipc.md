@@ -6,67 +6,52 @@ The frontend has two entry points, built by Vite as separate pages:
 
 ```
 web/
-├── index.html                    # Overlay window entry (Windows)
-│   └── src/ui/Overlay.tsx        #   React 19 + TypeScript (macOS renders natively)
+├── index.html                    # Overlay window entry (Windows only)
+│   └── src/overlay/index.tsx     #   React 19 + TypeScript (macOS renders natively)
 ├── settings.html                 # Settings window entry
-│   └── src/ui/SettingsApp.tsx    #   React 19 + TypeScript
+│   └── src/settings/index.tsx    #   React 19 + TypeScript
 ├── src/
-│   ├── bridge/                   # Tauri IPC layer
-│   │   ├── index.ts              #   Re-exports overlay + settings
-│   │   ├── overlay.ts            #   Overlay IPC wrappers
-│   │   └── settings.ts           #   Settings IPC wrappers
-│   ├── lib/                      # Pure utilities (no DOM/side-effects)
-│   │   ├── format.ts             #   Text formatting
-│   │   ├── hotkey.ts             #   Hotkey display/parse
-│   │   ├── model.ts              #   Model registry helpers
-│   │   └── sound.ts              #   Sound playback
-│   ├── types/                    # TypeScript type definitions
-│   │   ├── config.ts
-│   │   ├── hotwords.ts
-│   │   ├── models.ts
-│   │   ├── stats.ts
-│   │   └── update.ts
-│   └── ui/
-│       ├── Overlay.tsx            # Overlay root (Windows): React entry
-│       ├── overlay/               # Overlay React app
-│       │   ├── OverlayApp.tsx     #   stage + pill composition
-│       │   ├── useOverlayState.ts #   overlay:event → state reducer
-│       │   ├── useWaveform.ts     #   RAF waveform from audio:level
-│       │   ├── useOverlayLayout.ts#   measureText pill sizing
-│       │   ├── overlayText.ts     #   i18n hint/retry labels
-│       │   └── components/        #   Indicator/Transcript/Waveform/Hint/RetryButton
-│       ├── SettingsApp.tsx       # Settings root: sidebar + page routing
-│       ├── SettingsProvider.tsx  # Shared state context
-│       ├── components/           # Reusable UI primitives
-│       │   ├── Button.tsx
-│       │   ├── Heatmap.tsx       #   Calendar heatmap (stats)
-│       │   ├── Input.tsx
-│       │   ├── KeyCap.tsx        #   Keyboard key display
-│       │   ├── Modal.tsx
-│       │   ├── SegmentedControl.tsx
-│       │   ├── ThemeSelector.tsx
-│       │   └── Toggle.tsx
-│       ├── layout/
-│       │   ├── PageLayout.tsx    #   Page wrapper
-│       │   └── Sidebar.tsx       #   Navigation sidebar
-│       └── pages/                # Settings pages (9 tabs)
-│           ├── HomePage.tsx      #   Stats + heatmap
-│           ├── AudioModelPage.tsx #  ASR provider + model management
-│           ├── HotkeyPage.tsx    #   Hotkey configuration + recording
-│           ├── LLMPage.tsx       #   LLM provider + prompt config
-│           ├── AppSettingsPage.tsx #  Theme, overlay style, sounds
-│           ├── HotwordsPage.tsx  #   Hotword library management
-│           ├── PermissionsPage.tsx #  Mic + accessibility checks
-│           ├── AboutPage.tsx     #   Version, links
-│           └── FeedbackPage.tsx  #   User feedback
+│   ├── overlay/                  # Overlay React app (Windows only)
+│   │   ├── index.tsx             #   OverlayApp root: state + layout + pill
+│   │   ├── bridge.ts             #   Overlay IPC wrappers (events + retry)
+│   │   ├── types.ts              #   OverlayState / AppState / HintLevel
+│   │   ├── useOverlayState.ts    #   overlay:event → reducer; audio:level → bars
+│   │   ├── useOverlayLayout.ts   #   measureText → pill width + wrap
+│   │   └── overlay.css           #   Overlay-only styles (spin/ring/pulse)
+│   ├── settings/                 # Settings React app
+│   │   ├── index.tsx             #   Root mount (createRoot)
+│   │   ├── SettingsApp.tsx       #   Sidebar + page routing
+│   │   ├── SettingsProvider.tsx  #   Shared config + state context
+│   │   ├── bridge.ts             #   Settings IPC wrappers
+│   │   ├── components/           #   Reusable UI primitives
+│   │   │   ├── Button.tsx · Input.tsx · Textarea.tsx · Toggle.tsx
+│   │   │   ├── Modal.tsx · SegmentedControl.tsx · Badge.tsx
+│   │   │   ├── Heatmap.tsx       #   Calendar heatmap (stats)
+│   │   │   ├── KeyCap.tsx        #   Keyboard key display (native modifier glyphs)
+│   │   │   └── ModelCard.tsx · ThemeSelector.tsx
+│   │   ├── layout/
+│   │   │   ├── PageLayout.tsx    #   Page wrapper
+│   │   │   └── Sidebar.tsx       #   Navigation sidebar
+│   │   ├── lib/                  #   Pure utilities (format, hotkey, hotwords, model, sound, clone)
+│   │   ├── pages/                #   Settings pages (9 tabs)
+│   │   │   ├── HomePage.tsx      #   Stats + heatmap
+│   │   │   ├── AudioModelPage.tsx #  ASR provider + model management
+│   │   │   ├── HotkeyPage.tsx    #   Hotkey configuration + recording
+│   │   │   ├── LLMPage.tsx       #   LLM provider + prompt config
+│   │   │   ├── AppSettingsPage.tsx #  Theme, overlay style, sounds
+│   │   │   ├── HotwordsPage.tsx  #   Hotword library management
+│   │   │   ├── PermissionsPage.tsx #  Mic + accessibility checks
+│   │   │   ├── AboutPage.tsx     #   Version, links
+│   │   │   └── FeedbackPage.tsx  #   User feedback
+│   │   └── types/                #   TypeScript types (config, hotwords, models, update)
+│   └── styles/
+│       └── app.css               #   Shared global styles
 └── tests/                        # Frontend tests (Vitest + jsdom)
     ├── bridge/
     │   ├── overlay.test.ts
     │   └── settings.test.ts
     └── lib/
-        ├── format.test.ts
-        ├── hotkey.test.ts
-        └── model.test.ts
+        ├── format.test.ts · hotkey.test.ts · hotwords.test.ts · model.test.ts
 ```
 
 ### React Component Tree (Settings Window)
@@ -90,21 +75,20 @@ SettingsApp
 
 ### Overlay Window (React, Windows only)
 
-The overlay is a React app (`web/src/ui/Overlay.tsx` → `OverlayApp`), used only on Windows. On macOS the overlay is a WebView-less native Window whose pill is rendered by `overlay.rs` (see [Architecture](./architecture.md)). Audio is captured in the backend (cpal), so the renderer only paints text, the retry affordance, and a waveform driven by the backend `audio:level` event.
+The overlay is a React app rooted at `web/src/overlay/index.tsx` (`OverlayApp`), used only on Windows. On macOS the overlay is a WebView-less native Window whose pill is rendered by `overlay/macos.rs` (see [Architecture](./architecture.md)). Audio is captured in the backend (cpal); the renderer only paints text, the retry affordance, and a waveform whose per-bar heights the backend pre-computes and ships inside the `audio:level` event.
 
 ```
-OverlayApp
-├── useOverlayState   (overlay:event → state reducer; audio level via ref)
+OverlayApp  (web/src/overlay/index.tsx)
+├── useOverlayState   (overlay:event reducer: reset/state/transcript/hint;
+│                      audio:level → waveHeights[]; retry auto-hide 5s)
 ├── useOverlayLayout  (measureText → pill width + single/multi wrap)
-├── useWaveform       (RAF: audio level → 4-bar scaleY)
-└── stage
-    └── pill
-        ├── Indicator   (dot + spinner, state-driven via data-*)
-        ├── body
-        │   ├── Transcript (final + partial text)
-        │   └── Hint        (status/error message)
-        ├── Waveform     (4 bars)
-        └── RetryButton  (failed-state retry, 5s auto-hide)
+├── getOverlayLayoutMetrics()  (fetch shared::LayoutMetrics from backend on mount)
+└── pill  (data-wrap drives single-line vs multi-line CSS)
+    ├── indicator   (spinner while connecting/finishing; red dot on error;
+    │                ripple ring while recording)
+    ├── waveform    (4 fixed bars, scaleY from backend heights)
+    ├── body        (transcript final+partial OR hint text — mutually exclusive)
+    └── retry button (error + retryable only; calls retryLatestFailedTranscription)
 ```
 
 ## IPC Bridge Design
@@ -118,11 +102,12 @@ Frontend calls typed async wrappers that map to `#[tauri::command]` functions in
 ```
 Frontend                          Backend
 ───────                          ───────
-bridge/overlay.ts                  commands.rs
+overlay/bridge.ts                  commands.rs
   getConfig() ───────────────────▶ get_app_config()
+  getOverlayLayoutMetrics() ─────▶ get_overlay_layout_metrics()
   retryLatestFailedTranscription() ─▶ retry_latest_failed_transcription()
 
-bridge/settings.ts               commands.rs
+settings/bridge.ts                commands.rs
   getData() ───────────────────▶ get_settings_data()
   saveConfigObject() ──────────▶ save_config_object()
   getStats() ──────────────────▶ get_stats()
@@ -196,7 +181,7 @@ The frontend no longer ships PCM helpers — `web/src/lib/audio.ts` was removed 
 
 ### macOS — native Liquid Glass (no WebView)
 
-The overlay is a WebView-less native `Window`. `overlay.rs` paints an AppKit pill inside an `NSGlassEffectView`, driven by the same `overlay:event` stream tapped via `app.listen_any`:
+The overlay is a WebView-less native `Window`. `overlay/macos.rs` paints an AppKit pill inside an `NSGlassEffectView`, driven by the same `overlay:event` stream tapped via `app.listen_any`:
 
 ```
 overlay:event ──▶ NSGlassEffectView (visible, native Liquid Glass)
@@ -209,7 +194,7 @@ The `NSWindow` is reached via `raw-window-handle` (`AppKit.ns_view` → `[ns_vie
 
 ### Windows — React overlay
 
-The overlay is a `WebviewWindow` running the React app above. `overlay:event`s drive React state → the pill's `data-*` attributes (state/mode/level/retry), with CSS doing the visual switching. Layout: pill auto-sizes — single-line for short text, up to 3 lines for longer content. Max width 520px.
+The overlay is a `WebviewWindow` running the React app above. `overlay:event`s drive React state → the pill's `data-wrap` attribute (single- vs multi-line), with CSS doing the visual switching. Layout constants (padding, indicator/wave/retry sizes, max widths) come from the backend `get_overlay_layout_metrics` command (`overlay/shared.rs::LayoutMetrics`) — the same struct the macOS renderer consumes, so both platforms share one source of truth. The pill auto-sizes: single-line for short text, up to 3 lines for longer content.
 
 ## Paste Mechanism
 

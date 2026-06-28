@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.1.0 (2026-06-27)
+
+This release focuses on performance and stability: the recording path is fully off WebView (audio capture and cues moved into the Rust backend), the macOS overlay no longer depends on a WebView, and the settings window loads on demand — cutting idle memory by ~80MB. It also adds transcription-failure retry and backend hotkey recording.
+
+### New Features
+
+- **Native Audio Capture** — Microphone capture moved entirely to the backend cpal (CoreAudio on macOS, WASAPI on Windows), replacing WebView getUserMedia. Fixes the quiet-then-loud volume ramp that hurt early-word recognition, and removes the browser audio settle delay for a snappier start.
+- **Cue Playback** — Start/end cues now play via backend rodio, on a separate channel from mic capture. Native capture has no echo cancellation, so the start cue bleeds into the mic — the leading window is skipped so the cue is never mistaken for speech. Playback is also more stable and on-time, immune to WebView teardown.
+- **Backend Hotkey Recording** — Hotkeys are recorded via the backend keytap instead of the DOM, so hardware-level keys the DOM can't see (e.g. macOS Fn) can now be bound.
+- **Memory** — The settings WebView is now lazy (destroyed on close, not hidden) and the macOS overlay dropped its WebView, cutting idle memory by ~80MB.
+- **Optional Recording Retention** — New "Keep Recordings" option in Settings → App Settings; recordings can be played back from the home history, and failed attempts are kept automatically for retry.
+- **Transcription Failure Retry** — On online-ASR connect failure / timeout / empty result, retry by pressing the hotkey again or clicking retry — it re-transcribes the saved audio without re-recording. Commit timeout now returns an error instead of falling back to partial text, so incomplete results are never pasted as success.
+- **Overlay UI Polish** — Refined the recording overlay's status hints; the pill now eases open with a transition and hint text breathes, making input feedback feel smoother.
+
+### Fixed
+
+- **Waveform** — Smoother waveform (per-bar frequency bands + asymmetric envelope), with macOS / Windows height computation unified.
+- **Settings Always-on-Top** — Fixed the settings window not staying on top when shown at launch or reopened mid-session.
+- **Hotkey Symbols** — Fixed Windows showing macOS keyboard symbols; keycaps now render per-platform native glyphs.
+- **Hotkey Conflicts & Races** — Reworked into a chord state machine: toggle fires on keyup cycles, hold on keydown, finalizing with the longest chord held during recording; resolves prefix conflicts (e.g. bare Ctrl stealing Ctrl+Shift) and rapid-press races.
+
 ## v2.0.0 (2026-06-17)
 
 > **⚠️ BREAKING CHANGE**: VoicePaste has been completely rewritten from Electron to Tauri v2 (Rust backend). This is a major architecture change. Config from 1.x is automatically migrated on first launch.

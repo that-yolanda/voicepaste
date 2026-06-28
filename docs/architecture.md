@@ -7,11 +7,11 @@
 │                        FRONTEND (WebView)                        │
 │  ┌──────────────────────┐  ┌──────────────────────────────────┐ │
 │  │   Overlay Window      │  │   Settings Window                │ │
-│  │   (vanilla TS)        │  │   (React 19 + TypeScript)        │ │
+│  │   React + AppKit      │  │   (React 19 + TypeScript)        │ │
 │  │                       │  │                                  │ │
-│  │  • Audio capture      │  │  • Config pages (9 tabs)         │ │
-│  │  • Transcript display │  │  • Model management              │ │
-│  │  • Waveform           │  │  • Hotkey recording              │ │
+│  │  • Transcript display │  │  • Config pages (9 tabs)         │ │
+│  │  • Waveform           │  │  • Model management              │ │
+│  │  • Retry affordance   │  │  • Hotkey recording              │ │
 │  └──────────┬───────────┘  └────────────┬─────────────────────┘ │
 │             │          Tauri IPC          │                      │
 │             │   invoke() + listen()       │                      │
@@ -89,25 +89,25 @@ sequenceDiagram
     actor User
     participant Hotkey as Hotkey (keytap)
     participant SM as State Machine (lib.rs)
-    participant FE as Frontend (WebView)
+    participant Mic as Mic (cpal, backend)
     participant ASR as ASR Engine
     participant LLM as LLM Module
     participant OS as OS Clipboard
+    participant FE as Overlay renderer
 
     User->>Hotkey: press hotkey
     Hotkey->>SM: trigger start
     SM->>SM: Idle → Connecting
     SM->>FE: overlay:event (state: connecting)
-    SM->>FE: overlay:event (audio:warmup)
-    FE->>FE: getUserMedia(), downsample to 16kHz
-    FE->>SM: audio_warmup_ready
+    SM->>Mic: start cpal input stream (16kHz mono)
     SM->>ASR: engine.create_session(hotwords)
     ASR-->>SM: (session, event_receiver)
     SM->>SM: Connecting → Recording
     SM->>FE: overlay:event (state: recording)
 
-    loop Audio streaming
-        FE->>SM: send_audio_chunk(base64 PCM)
+    loop Audio streaming (~100ms chunks)
+        Mic->>SM: f32 samples
+        SM->>SM: compute audio level → emit overlay:event (audio:level)
         SM->>ASR: session.append_audio(samples)
         ASR-->>SM: AsrEvent::Transcript { final, partial }
         SM->>FE: overlay:event (transcript update)
@@ -117,8 +117,7 @@ sequenceDiagram
     User->>Hotkey: press again (or release in hold mode)
     Hotkey->>SM: trigger stop
     SM->>SM: Recording → Finishing
-    SM->>FE: overlay:event (audio:stop)
-    FE->>FE: stop audio capture
+    SM->>Mic: stop cpal stream
 
     SM->>ASR: session.commit_and_await_final()
     ASR-->>SM: final text
@@ -143,8 +142,8 @@ The app has three window-like surfaces:
 - Positioned at bottom-center of the primary monitor's work area (720×300, 48px above bottom)
 - Repositioned on every show to follow display changes (external monitor plug/unplug)
 - Created in code (`setup_overlay_window` in `lib.rs`; tauri.conf.json declares it with `create: false`). Audio is captured in the backend (cpal), so the overlay only renders
-- **macOS**: a WebView-less native `Window` (`tauri::window::WindowBuilder`, requires the `unstable` feature) — the pill is painted natively by `overlay.rs` as an `NSGlassEffectView` (Liquid Glass). No resident WKWebView, saving ~30–80MB
-- **Windows**: a `WebviewWindow` hosting the React overlay (`web/src/ui/Overlay.tsx`); the native renderer in `overlay.rs` is a no-op here
+- **macOS**: a WebView-less native `Window` (`tauri::window::WindowBuilder`, requires the `unstable` feature) — the pill is painted natively by `overlay/macos.rs` as an `NSGlassEffectView` (Liquid Glass). No resident WKWebView, saving ~30–80MB
+- **Windows**: a `WebviewWindow` hosting the React overlay (`web/src/overlay/index.tsx`); the native renderer in `overlay/macos.rs` is a no-op here
 
 ### Settings Window
 - Standard window hosting the React settings app; shown on launch (update/stats indicator + launch affordance)
@@ -184,8 +183,8 @@ The app has three window-like surfaces:
 │  (transparent, always-on-top, no cursor)      │
 │  ┌────────────────────────────────────────┐  │
 │  │  macOS: NSGlassEffectView native pill   │  │
-│  │         (WebView-less Window, overlay.rs)│  │
-│  │  Windows: React overlay (Overlay.tsx)   │  │
+│  │         (WebView-less native Window)    │  │
+│  │  Windows: React overlay (WebviewWindow) │  │
 │  │  ┌──────────────────────────────────┐  │  │
 │  │  │  ●   Transcript text...           │  │  │
 │  │  └──────────────────────────────────┘  │  │
@@ -199,7 +198,8 @@ The app has three window-like surfaces:
 |----------|-----------|
 | **keytap** over `tauri-plugin-global-shortcut` | Supports modifier-only hotkeys and left/right modifier distinction; lower latency via raw keyboard event stream |
 | **Trait-based ASR** (`AsrEngine` / `AsrSession`) | Enables swapping between cloud (Doubao) and local (sherpa-onnx) engines without changing the recording loop |
-| **Native overlay on macOS, React on Windows** | macOS renders the pill in a WebView-less native `Window` (`NSGlassEffectView` via `overlay.rs`) for OS-grade Liquid Glass legibility and zero resident WKWebView; Windows renders the React overlay in a `WebviewWindow`. Audio is captured in the backend (cpal), so no WebView is needed for `getUserMedia` |
+| **Native overlay on macOS, React on Windows** | macOS renders the pill in a WebView-less native `Window` (`NSGlassEffectView` via `overlay/macos.rs`) for OS-grade Liquid Glass legibility and zero resident WKWebView; Windows renders the React overlay in a `WebviewWindow`. Audio is captured in the backend (cpal), so the macOS overlay needs no WebView at all |
+| **Shared overlay layout** (`overlay/shared.rs`) | One `LayoutMetrics` struct drives both the macOS native pill and the Windows React pill (the latter fetches it via `get_overlay_layout_metrics`), keeping the two renderers pixel-aligned without duplicating constants |
 | **serde_norway** for YAML | Preserves YAML structure and comments better than serde_yaml; important for user-editable config files |
 | **gzip-compressed binary frames** for Doubao | Reduces WebSocket bandwidth for JSON-heavy protocol headers; matches ByteDance's proprietary wire format |
 | **Feature-gated integration tests** | ASR and LLM integration tests require external resources (model files, API keys); gating them lets `cargo test` run fast in CI |

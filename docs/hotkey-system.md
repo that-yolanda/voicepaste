@@ -16,8 +16,10 @@ VoicePaste uses the `keytap` crate for global hotkey registration, replacing `ta
 │         HotkeyConfig (Arc<RwLock<...>>)          │
 │  ┌────────────────────────────────────────────┐  │
 │  │  bindings: Vec<HotkeyBinding>               │  │
+│  │  matcher: MatcherState   (chord state machine)│
 │  │  escape_enabled: bool                       │  │
 │  │  tap_active: bool                           │  │
+│  │  recording / record_tx   (UI recorder relay) │  │
 │  └────────────────────────────────────────────┘  │
 └────────────────────┬────────────────────────────┘
                      │ shared with listener thread
@@ -29,9 +31,10 @@ VoicePaste uses the `keytap` crate for global hotkey registration, replacing `ta
 │  │                                            │  │
 │  │  loop {                                    │  │
 │  │    tap.recv_timeout(100ms)                 │  │
-│  │    → track held keys (HashSet<Key>)        │  │
-│  │    → match against bindings                │  │
-│  │    → dispatch press/release to async rt    │  │
+│  │    → forward to recorder if recording      │  │
+│  │    → handle Escape cancellation            │  │
+│  │    → matcher.process(event) → HotkeyAction │  │
+│  │    → dispatch Start/StopRecording to async │  │
 │  │  }                                         │  │
 │  └────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
@@ -54,38 +57,61 @@ stateDiagram-v2
     [*] --> Idle
 
     state "Toggle Mode" as Toggle {
-        Idle --> Recording : press (any matching binding)
-        Recording --> Idle : press (same binding)
+        Idle --> Recording : keyup cycle completes (start)
+        Recording --> Idle : keyup cycle completes (stop)
         Recording --> Idle : escape
     }
 
     state "Hold Mode" as Hold {
-        Idle --> Recording : press and hold (any matching binding)
-        Recording --> Idle : release
+        Idle --> Recording : keydown (hold chord completes)
+        Recording --> Idle : release (any chord key)
         Recording --> Idle : escape
     }
 ```
 
+In both modes recording starts **neutral** — the prompt is decided when the
+recording ends, from the longest chord held at that point (see below).
+
 ### How Mode Dispatch Works
 
-The listener thread tracks all currently held keys via a `HashSet<Key>`. On each key down/up event:
+A pure state machine, `MatcherState` (held under `HotkeyConfig`), consumes every
+keytap event and emits zero or more `HotkeyAction`s:
 
-1. Update `held` set
-2. Find first matching binding: `find_matching_binding(&held, &bindings)` → `Option<usize>`
-3. Compare with `active_binding`:
-   - **No match → match** (press): `spawn_hotkey_pressed(mode, prompt_id)`
-   - **Match → no match** (release): `spawn_hotkey_released(mode)`
-   - **Match A → Match B** (transition): release A, then press B
+- `StartRecording { is_main }` — begin a **neutral** recording (prompt undecided)
+- `StopRecording { prompt_id }` — end the recording; finalize with this prompt
 
-The actual start/stop logic in `lib.rs`:
-- `on_hotkey_pressed`: if idle → `start_recording(prompt_id)`; if recording in toggle mode → `stop_recording()`
-- `on_hotkey_released`: if recording in hold mode → `stop_recording()`
+`longest_match(held, bindings)` resolves chord conflicts: of all bindings whose
+keys are a subset of the currently held keys, the one with the most keys wins;
+ties break by registration order (main hotkey first). This replaces the old
+first-subset match that let a bare `Ctrl` steal `Ctrl+Shift`.
+
+**Hold**: the moment a hold chord's keys are all pressed (keydown), recording
+starts — zero latency, prompt undecided. It ends when any of those keys is
+released; the prompt is the longest chord reached during the hold (the peak).
+
+**Toggle**: a press cycle is the span from the first keydown to the held set
+emptying at keyup. Recording starts when the start cycle completes (if it
+reached a toggle chord), and stops when the next cycle completes. The prompt is
+the longest chord reached during the **stop** cycle — so starting with
+`Ctrl+Shift` but stopping with plain `Ctrl` yields raw output, and vice versa.
+
+Because the chord is fully known at the stop/peak moment, prefix conflicts
+resolve correctly with **no timeout and no pending**.
+
+The start/stop logic in `lib.rs`:
+- `on_recording_start(is_main)`: if the main hotkey was used while a retryable
+  failure is shown, retry it instead; otherwise `start_recording()`. If the
+  start is diverted to retry or fails, the matcher is reset so it doesn't think
+  a session is active.
+- `on_recording_stop(prompt_id)`: set `ActivePromptId`, then `stop_recording()`.
 
 ### Escape Cancellation
 
 When the state machine is in Connecting, Recording, or Finishing state, pressing Escape triggers `cancel_recording()`. The `escape_enabled` flag on `HotkeyConfig` is toggled by `sync_escape_shortcut()` during state transitions.
 
 Escape uses a `was_pressed` guard to prevent key-repeat from triggering multiple cancellations.
+
+Because ESC cancels out-of-band (not via a stop chord), `cancel_recording()` also calls `reset_recording()` to clear the matcher's session tracking, so the next keypress isn't mistaken for a stop.
 
 ## Hotkey Parsing
 
@@ -131,7 +157,15 @@ Each prompt in `prompts.json` can have its own hotkey and mode:
 }
 ```
 
-When triggered, the recording uses the prompt's system prompt for LLM polishing, instead of bypassing LLM like the main hotkey does. The `active_prompt_id` is set to `Some("polish-en")` and checked in `stop_recording()`.
+Recording always starts **neutral** — the prompt is decided by the stop chord
+(the longest chord held when the recording ends), not by the key that started
+it. When a prompt-specific stop chord is used, `on_recording_stop` sets
+`active_prompt_id` to `Some("polish-en")` and `finalize_and_paste` runs the LLM
+polish; a main-hotkey stop (`active_prompt_id = None`) pastes raw text.
+
+Before polishing, `finalize_and_paste` validates the LLM config — if it's
+incomplete (missing key/URL/model), it downgrades to raw text with a warning
+instead of letting the call fail.
 
 ## Frontend Hotkey Recording
 
@@ -149,13 +183,23 @@ Key behaviors:
 - 300ms timeout after last keydown before auto-finalizing
 - Left/right modifier distinction is preserved
 
+### Display: native modifier glyphs
+
+Recorded combinations render through the `KeyCap` component (`settings/components/KeyCap.tsx`), which shows platform-native modifier symbols instead of generic text:
+
+- **macOS**: ⌘ (Cmd), ⌃ (Control), ⇧ (Shift), ⌥ (Option/Alt)
+- **Windows**: Ctrl, Alt, Shift, Win (Super)
+
+The symbol set is chosen per-platform so the on-screen keycaps match the user's physical keyboard labels.
+
 ## Hot Reload
 
 When the user saves settings:
 1. `save_config_object()` writes `config.yaml`
 2. `reload_hotkey_bindings()` is called, which rebuilds the binding list from the new config
 3. The listener thread picks up the new bindings on its next iteration (no restart needed)
-4. If bindings haven't changed, the reload is a no-op
+4. `MatcherState` is preserved across reloads (an in-flight session keeps its tracking); reload mid-recording is not expected
+5. If bindings haven't changed, the reload is a no-op
 
 ### Permission Recovery
 

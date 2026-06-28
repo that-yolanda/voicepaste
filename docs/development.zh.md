@@ -78,25 +78,19 @@ voicepaste/
 │   │   ├── stats.rs     #   使用统计与热力图数据
 │   │   ├── app_state.rs #   共享应用状态
 │   │   ├── model.rs     #   模型注册表
-│   │   ├── overlay.rs   #   macOS Liquid Glass 原生渲染
+│   │   ├── overlay/     #   覆盖窗渲染器（mod.rs / shared.rs / macos.rs）
 │   │   └── tests/       #   集成测试（Cargo feature gated）
 │   ├── icons/           #   应用与托盘图标（`tauri icon` 生成）
 │   ├── capabilities/    #   Tauri 权限配置
 │   ├── Cargo.toml       #   Rust 依赖
 │   └── tauri.conf.json  #   Tauri 配置
 ├── web/                 # 前端（React + TypeScript + Vite + Tailwind）
-│   ├── index.html       #   浮动覆盖窗口入口
+│   ├── index.html       #   浮动覆盖窗口入口（仅 Windows）
 │   ├── settings.html    #   设置页面入口
-│   ├── styles.css       #   全局样式（Tailwind 指令）
 │   ├── src/
-│   │   ├── bridge/      #     Tauri IPC 桥接（overlay.ts, settings.ts）
-│   │   ├── lib/         #     纯工具函数（audio, format, hotkey, model, sound）
-│   │   ├── types/       #     TypeScript 类型定义
-│   │   ├── styles/      #     共享 CSS
-│   │   └── ui/          #     React 组件
-│   │       ├── components/ #   UI 基础组件（Button, Input, Toggle, Modal 等）
-│   │       ├── layout/  #     PageLayout, Sidebar
-│   │       └── pages/   #     设置页面（AudioModel, Hotkey, LLM 等）
+│   │   ├── overlay/     #     覆盖窗 React 应用（index.tsx + 状态/布局 hooks）
+│   │   ├── settings/    #     设置 React 应用（components/、pages/、lib/、types/）
+│   │   └── styles/      #     共享 CSS（app.css）
 │   └── tests/           #   前端单元测试（Vitest，按 bridge/ + lib/ 组织）
 ├── schemas/             #   JSON Schema 文件（hotwords, prompts, registry）
 ├── docs/                #   文档
