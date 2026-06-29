@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.1 (2026-06-29)
+
+Hotfix release for hotkey reliability.
+
+### Fixed
+
+- **Hotkey Stops Responding** — Fixed the toggle hotkey silently failing when keys like CapsLock or NumLock stayed "held" (their keyup is often dropped by the OS). Non-hotkey keys are now ignored at the source so they can't jam the matcher, and any stuck key is reclaimed automatically after a few seconds idle.
+
 ## v2.1.0 (2026-06-27)
 
 This release focuses on performance and stability: the recording path is fully off WebView (audio capture and cues moved into the Rust backend), the macOS overlay no longer depends on a WebView, and the settings window loads on demand — cutting idle memory by ~80MB. It also adds transcription-failure retry and backend hotkey recording.
