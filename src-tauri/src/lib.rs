@@ -27,13 +27,6 @@ use tauri::{
     image::Image, tray::TrayIconBuilder, App, AppHandle, Emitter, Listener, Manager, RunEvent,
 };
 
-/// Delay after the mic stream is ready, before entering Recording / playing the
-/// start cue. Capture is native cpal on every platform (CoreAudio/WASAPI), which
-/// does no AEC/AGC warmup, so no settle is needed — the cue plays the instant the
-/// stream is ready. (The old 350ms value was for the renderer getUserMedia path,
-/// which has been removed.)
-const AUDIO_SETTLE_MS: u64 = 0;
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -193,6 +186,15 @@ pub fn run() {
                 // Position the overlay after the event loop is fully initialized,
                 // avoiding "Window move completed without beginning" on macOS.
                 position_overlay(app);
+                // Bring the auto-shown settings window to the front on launch.
+                show_settings(app);
+            }
+            // macOS: dock icon click while the app is already running — re-show
+            // and activate settings (restoring it from minimize, or rebuilding it
+            // if the user had closed the window).
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => {
+                show_settings(app);
             }
             RunEvent::WindowEvent {
                 label,
@@ -757,12 +759,40 @@ fn set_dock_visible(visible: bool) {
 #[cfg(not(target_os = "macos"))]
 fn set_dock_visible(_visible: bool) {}
 
+/// Bring the app to the foreground on macOS. After switching an accessory-policy
+/// app back to Regular via `set_dock_visible(true)`, its windows still will not
+/// reliably raise above other apps' windows without an explicit activate call.
+///
+/// Uses the legacy `-activateIgnoringOtherApps:` deliberately: its replacement
+/// `-[NSApplication activate]` only exists on macOS 14+, while this app targets
+/// 10.15 (`minimumSystemVersion`), where the new selector is absent and would
+/// crash at runtime. The `#[allow(deprecated)]` silences the SDK deprecation
+/// notice for this compatibility requirement.
+#[cfg(target_os = "macos")]
+fn activate_app() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    if let Some(mtm) = MainThreadMarker::new() {
+        let app = NSApplication::sharedApplication(mtm);
+        #[allow(deprecated)]
+        app.activateIgnoringOtherApps(true);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn activate_app() {}
+
 /// Bring the settings window to front and show it in the Dock. If it was closed
 /// (lazy lifecycle: closing destroys it to free the WebView), rebuild it from the
 /// bundled window config before showing.
 fn show_settings(app: &tauri::AppHandle) {
+    // Switch back to Regular (show Dock) BEFORE showing/focusing the window: an
+    // accessory-policy app cannot reliably raise its window above other apps, so
+    // the policy flip must come first, and the foreground activation comes last.
+    set_dock_visible(true);
+
     if let Some(window) = app.get_webview_window("settings") {
-        let _ = window.set_always_on_top(true);
+        let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
     } else if let Some(cfg) = app
@@ -774,14 +804,20 @@ fn show_settings(app: &tauri::AppHandle) {
     {
         match tauri::WebviewWindowBuilder::from_config(app, cfg) {
             Ok(builder) => {
-                if let Err(e) = builder.always_on_top(true).build() {
+                if let Err(e) = builder.build() {
                     log_tray!(error, "failed to rebuild settings window: {e}");
                 }
             }
             Err(e) => log_tray!(error, "failed to create settings window builder: {e}"),
         }
+        // The rebuilt window has no implicit focus, so focus it explicitly.
+        if let Some(window) = app.get_webview_window("settings") {
+            let _ = window.set_focus();
+        }
     }
-    set_dock_visible(true);
+
+    // Bring the app itself to the foreground so the window actually lands in front.
+    activate_app();
 }
 
 /// Setup the system tray icon with menu items.
@@ -976,23 +1012,6 @@ async fn start_recording(app_handle: AppHandle) {
     // Check if recording was cancelled during warmup (hold mode: quick press-release)
     if !*recording_state.0.lock().unwrap() {
         log_rec!(warn, "Cancelled during warmup, aborting start");
-        stop_audio_capture(&app_handle, &app_inner, 1200).await;
-        set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-        if let Some(overlay) = app_handle.get_window("overlay") {
-            let _ = overlay.hide();
-        }
-        return;
-    }
-
-    // Settle delay before the cue: the selected capture backend is live during
-    // this wait (audio stays gated off until Recording), while the renderer's cue
-    // keep-alive holds the output device warm so the start cue plays smoothly.
-    // The cue is the user's "go" signal, so it lands after capture warmup.
-    tokio::time::sleep(std::time::Duration::from_millis(AUDIO_SETTLE_MS)).await;
-
-    // Re-check cancellation: the user may have released during the settle delay.
-    if !*recording_state.0.lock().unwrap() {
-        log_rec!(warn, "Cancelled during settle, aborting start");
         stop_audio_capture(&app_handle, &app_inner, 1200).await;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
         if let Some(overlay) = app_handle.get_window("overlay") {
