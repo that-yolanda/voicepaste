@@ -13,22 +13,6 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "label": "overlay",
-        "create": false,
-        "url": "index.html",
-        "title": "VoicePaste",
-        "width": 720,
-        "height": 300,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "resizable": false,
-        "visible": false,
-        "skipTaskbar": true,
-        "focusable": false,
-        "shadow": false
-      },
-      {
         "label": "settings",
         "url": "settings.html",
         "title": "VoicePaste 配置",
