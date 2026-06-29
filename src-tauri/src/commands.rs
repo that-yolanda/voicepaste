@@ -1,9 +1,9 @@
 use crate::app_state::AppHandle as AppState;
+use crate::app_state::HotkeyMode;
 use crate::config::{AsrDefaults, PromptItem};
 use crate::hotword::HotwordData;
 use crate::model;
 use crate::paste;
-use crate::HotkeyMode;
 use tauri::{utils::Theme, AppHandle, Emitter, Manager, State};
 
 #[cfg(target_os = "windows")]

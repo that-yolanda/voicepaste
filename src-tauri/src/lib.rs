@@ -13,10 +13,13 @@ mod model;
 mod native_audio;
 mod overlay;
 mod paste;
+mod platform;
+mod recordings;
 mod stats;
 #[cfg(test)]
 mod tests;
 mod updater;
+mod wav;
 
 use app_state::*;
 use asr::AsrEngine;
@@ -121,7 +124,7 @@ pub fn run() {
             log_app!(debug, "resource_dir: {:?}", resource_dir);
 
             // Setup overlay window properties
-            setup_overlay_window(app);
+            overlay::setup_overlay_window(app);
 
             // Mirror every overlay:event to the native macOS renderer (no-op on Windows).
             // The backend already emits these for the WebView; we tap the same stream so
@@ -185,16 +188,16 @@ pub fn run() {
             RunEvent::Ready => {
                 // Position the overlay after the event loop is fully initialized,
                 // avoiding "Window move completed without beginning" on macOS.
-                position_overlay(app);
+                overlay::position_overlay(app);
                 // Bring the auto-shown settings window to the front on launch.
-                show_settings(app);
+                platform::show_settings(app);
             }
             // macOS: dock icon click while the app is already running — re-show
             // and activate settings (restoring it from minimize, or rebuilding it
             // if the user had closed the window).
             #[cfg(target_os = "macos")]
             RunEvent::Reopen { .. } => {
-                show_settings(app);
+                platform::show_settings(app);
             }
             RunEvent::WindowEvent {
                 label,
@@ -203,8 +206,8 @@ pub fn run() {
             } if label == "settings" => {
                 // Let the settings window close for real so its WebView memory is
                 // released. The app stays alive via the tray + ExitRequested below;
-                // show_settings() rebuilds the window on the next "设置" click.
-                set_dock_visible(false);
+                // platform::show_settings() rebuilds the window on the next "设置" click.
+                platform::set_dock_visible(false);
             }
             RunEvent::ExitRequested { code, api, .. }
                 // Keep the app running in the tray for user-initiated window closes,
@@ -215,609 +218,6 @@ pub fn run() {
             }
             _ => {}
         });
-}
-
-/// Create the overlay window in code. tauri.conf.json declares it with
-/// `create: false`; macOS builds a WebView-less native Window (the pill is
-/// rendered natively by overlay.rs), while Windows builds a WebviewWindow that
-/// hosts the React overlay. Window properties (cursor_events,
-/// visible_on_all_workspaces, position) are still applied in position_overlay()
-/// at RunEvent::Ready to avoid "Window move completed without beginning" on macOS.
-fn setup_overlay_window(app: &App) {
-    #[cfg(target_os = "macos")]
-    {
-        use tauri::window::WindowBuilder;
-        let _ = WindowBuilder::new(app, "overlay")
-            .title("VoicePaste")
-            .inner_size(720.0, 300.0)
-            .decorations(false)
-            .transparent(true)
-            .always_on_top(true)
-            .resizable(false)
-            .visible(false)
-            .skip_taskbar(true)
-            .shadow(false)
-            .build();
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        use tauri::{WebviewUrl, WebviewWindowBuilder};
-        let _ = WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("index.html".into()))
-            .title("VoicePaste")
-            .inner_size(720.0, 300.0)
-            .decorations(false)
-            .transparent(true)
-            .always_on_top(true)
-            .resizable(false)
-            .visible(false)
-            .skip_taskbar(true)
-            .shadow(false)
-            .focusable(false)
-            .build();
-    }
-}
-
-/// Position the overlay at bottom-center of the primary screen.
-///
-/// Called from RunEvent::Ready (to avoid macOS window server timing warnings) and
-/// again every time the overlay is about to be shown. Re-running it on each show is
-/// what lets the overlay follow display changes: when an external monitor is plugged
-/// in or unplugged the primary monitor (and its work area) changes, but the window
-/// keeps its old frame until repositioned — which previously required an app restart.
-fn position_overlay(app_handle: &AppHandle) {
-    if let Some(overlay) = app_handle.get_window("overlay") {
-        // Set window properties here (RunEvent::Ready) rather than during setup()
-        // to avoid macOS window server timing issues.
-        let _ = overlay.set_ignore_cursor_events(true);
-        let _ = overlay.set_visible_on_all_workspaces(true);
-
-        // Use the PRIMARY monitor's WORK AREA in LOGICAL units. The previous code
-        // used physical pixels, which on a Retina (2x) display shrank the window to
-        // half size and mispositioned it, and it measured from the full screen
-        // height instead of the work area (ignoring the Dock / menu bar).
-        if let Ok(Some(monitor)) = overlay.primary_monitor() {
-            let scale = monitor.scale_factor();
-            let work_area = monitor.work_area();
-            let wa_x = work_area.position.x as f64 / scale;
-            let wa_y = work_area.position.y as f64 / scale;
-            let wa_w = work_area.size.width as f64 / scale;
-            let wa_h = work_area.size.height as f64 / scale;
-
-            let overlay_width = 720.0f64;
-            let overlay_height = 300.0f64;
-            let x = wa_x + (wa_w - overlay_width) / 2.0;
-            let y = wa_y + wa_h - overlay_height - 48.0;
-
-            let _ = overlay.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
-                overlay_width,
-                overlay_height,
-            )));
-            let _ =
-                overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
-        }
-    }
-}
-
-fn set_overlay_retry_interaction(app_handle: &AppHandle, enabled: bool) {
-    if let Some(overlay) = app_handle.get_window("overlay") {
-        let _ = overlay.set_ignore_cursor_events(!enabled);
-    }
-    if enabled {
-        // The user's app is still frontmost here; remember it so a successful retry
-        // can return focus before pasting (clicking the retry button activates the
-        // overlay otherwise). Self-capture is filtered out inside the helper.
-        overlay::capture_foreground_app(app_handle);
-    }
-}
-
-/// Map one accelerator token to the display label the settings UI shows.
-/// Mirrors the frontend `normalizeHotkeyLabel` so the overlay label matches
-/// system settings. Compiled per target OS: macOS renders Apple symbols
-/// (⌃ ⇧ ⌥ ⌘), Windows renders its native labels (Ctrl / Shift / Alt / Win).
-fn normalize_hotkey_key(key: &str) -> &str {
-    // [windows_label, macos_symbol], indexed by the compiled target OS.
-    let idx = cfg!(target_os = "macos") as usize;
-    match key {
-        // CmdOrCtrl resolves to Ctrl on Windows (accelerator convention).
-        "CmdOrCtrl" | "CommandOrControl" | "Command" | "Cmd" | "Meta" => ["Ctrl", "⌘"][idx],
-        "Control" | "Ctrl" => ["Ctrl", "⌃"][idx],
-        "Shift" => ["Shift", "⇧"][idx],
-        "Alt" | "Option" => ["Alt", "⌥"][idx],
-        "Space" => "␣",
-        "ControlLeft" => ["L Ctrl", "L ⌃"][idx],
-        "ControlRight" => ["R Ctrl", "R ⌃"][idx],
-        "ShiftLeft" => ["L Shift", "L ⇧"][idx],
-        "ShiftRight" => ["R Shift", "R ⇧"][idx],
-        "AltLeft" => ["L Alt", "L ⌥"][idx],
-        "AltRight" => ["R Alt", "R ⌥"][idx],
-        "MetaLeft" => ["L Win", "L ⌘"][idx],
-        "MetaRight" => ["R Win", "R ⌘"][idx],
-        other => other,
-    }
-}
-
-/// Format an accelerator string ("AltRight", "Control+Space") into the display
-/// label shown in settings. Per-platform via `normalize_hotkey_key`: macOS
-/// ("R ⌥", "⌃ ␣"), Windows ("R Alt", "Ctrl ␣").
-fn format_hotkey_label(hotkey: &str) -> String {
-    hotkey
-        .split('+')
-        .map(|k| normalize_hotkey_key(k.trim()))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-/// The configured main hotkey, formatted for display. Empty for recorded keycode
-/// sequences (which have no stable accelerator string).
-async fn current_hotkey_label(app_inner: &Arc<app_state::AppInner>) -> String {
-    let Ok(config) = app_inner.config_manager.load_config() else {
-        return String::new();
-    };
-    match &config.app.hotkey {
-        serde_norway::Value::String(s) => format_hotkey_label(s),
-        _ => String::new(),
-    }
-}
-
-/// Emit a retryable error hint, tagged with the main hotkey label so the overlay
-/// can show which key (also) triggers the retry. Centralizes every failure path.
-async fn emit_retryable_error_hint(
-    app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    text: &str,
-) {
-    let hotkey = current_hotkey_label(app_inner).await;
-    let _ = app.emit(
-        "overlay:event",
-        serde_json::json!({
-            "type": "hint",
-            "payload": {
-                "text": text,
-                "level": "error",
-                "variant": "text",
-                "retryable": true,
-                "hotkey": hotkey
-            }
-        }),
-    );
-}
-
-fn schedule_retry_overlay_hide(app_handle: AppHandle, app_inner: Arc<app_state::AppInner>) {
-    // While the retry is shown (idle), keep ESC live so it can dismiss the failure.
-    // set_app_state(Idle) just disabled it, so re-enable it here.
-    set_escape_enabled_now(&app_handle, true);
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        let still_idle = {
-            let s = app_inner.state.lock().await;
-            matches!(*s, app_state::AppState::Idle)
-        };
-        if still_idle {
-            // The retry affordance is gone once the overlay hides, so drop the
-            // pending failure: the hotkey reverts to starting a new recording.
-            *app_inner.current_failure_ts.lock().await = None;
-            set_escape_enabled_now(&app_handle, false);
-            set_overlay_retry_interaction(&app_handle, false);
-            if let Some(overlay) = app_handle.get_window("overlay") {
-                let _ = overlay.hide();
-            }
-        }
-    });
-}
-
-fn app_state_name(state: &app_state::AppState) -> &'static str {
-    match state {
-        app_state::AppState::Idle => "idle",
-        app_state::AppState::Connecting => "connecting",
-        app_state::AppState::Recording => "recording",
-        app_state::AppState::Finishing => "finishing",
-    }
-}
-
-fn should_enable_escape_shortcut(state: &app_state::AppState) -> bool {
-    matches!(
-        state,
-        app_state::AppState::Connecting
-            | app_state::AppState::Recording
-            | app_state::AppState::Finishing
-    )
-}
-
-fn sync_escape_shortcut(app: &AppHandle, state: &app_state::AppState) {
-    if let Some(hc) = app.try_state::<hotkey::HotkeyConfig>() {
-        hotkey::set_escape_enabled(&hc, should_enable_escape_shortcut(state));
-    }
-}
-
-async fn set_app_state(
-    app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    next_state: app_state::AppState,
-) {
-    *app_inner.state.lock().await = next_state.clone();
-    // Reset the waveform smoothing whenever we leave Recording, so the next
-    // session's bars don't start from a stale loudness tail.
-    if next_state != app_state::AppState::Recording {
-        *app_inner.wave_smoothed.lock().await = 0.0;
-    }
-    sync_escape_shortcut(app, &next_state);
-
-    let _ = app.emit(
-        "overlay:event",
-        serde_json::json!({
-            "type": "state",
-            "payload": { "state": app_state_name(&next_state) }
-        }),
-    );
-    log_rec!(info, "State → {}", app_state_name(&next_state));
-}
-
-fn resolve_default_sound_path(app: &AppHandle, filename: &str) -> PathBuf {
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        let packaged = resource_dir.join("sounds").join(filename);
-        if packaged.exists() {
-            return packaged;
-        }
-    }
-
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("assets")
-        .join("sounds")
-        .join(filename)
-}
-
-/// Resolve the configured sound file path for `name` ("start" / "end").
-/// Returns `None` when sounds are disabled or the config cannot be loaded.
-fn resolve_configured_sound_path(
-    app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    name: &str,
-) -> Option<String> {
-    let config = match app_inner.config_manager.load_config() {
-        Ok(config) => config,
-        Err(error) => {
-            log_app!(warn, "Sound config load failed: {}", error);
-            return None;
-        }
-    };
-
-    let sound_config = config.app.sound.as_ref();
-    if sound_config.map(|sound| !sound.enabled).unwrap_or(false) {
-        return None;
-    }
-
-    let custom_path = match name {
-        "start" => sound_config
-            .map(|sound| sound.start_sound.trim())
-            .unwrap_or(""),
-        "end" => sound_config
-            .map(|sound| sound.end_sound.trim())
-            .unwrap_or(""),
-        _ => "",
-    };
-    let file_path = if custom_path.is_empty() {
-        let filename = if name == "start" {
-            "start.mp3"
-        } else {
-            "end.mp3"
-        };
-        resolve_default_sound_path(app, filename)
-            .to_string_lossy()
-            .to_string()
-    } else {
-        custom_path.to_string()
-    };
-
-    Some(file_path)
-}
-
-/// Play a cue (`name` = "start" / "end") through rodio in the backend process.
-/// Playing in-process (instead of spawning `afplay`/PowerShell or routing through
-/// the renderer's AudioContext) keeps the cue full-volume, immune to the overlay
-/// WebView being torn down mid-playback, and free of decode/keep-alive jank.
-fn emit_cue(app: &AppHandle, app_inner: &Arc<app_state::AppInner>, name: &str) {
-    let Some(file_path) = resolve_configured_sound_path(app, app_inner, name) else {
-        return;
-    };
-    cue::play_cue_file(&file_path);
-}
-
-async fn stop_audio_capture(
-    _app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    _timeout_ms: u64,
-) {
-    // Audio capture is native (cpal); the renderer no longer owns a getUserMedia
-    // stream, so there is nothing to flush or await.
-    native_audio::stop_capture(app_inner).await;
-}
-
-async fn save_recording_wav(
-    app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-) -> Option<PathBuf> {
-    let samples = {
-        let mut audio = app_inner.recording_audio.lock().await;
-        if audio.is_empty() {
-            return app_inner.current_recording_wav.lock().await.clone();
-        }
-        std::mem::take(&mut *audio)
-    };
-
-    let data_dir = match app.path().app_data_dir() {
-        Ok(dir) => dir,
-        Err(error) => {
-            log_audio!(
-                warn,
-                "Resolve app data dir for recording WAV failed: {}",
-                error
-            );
-            return None;
-        }
-    };
-    let output_dir = data_dir.join("recordings");
-    if let Err(error) = std::fs::create_dir_all(&output_dir) {
-        log_audio!(
-            warn,
-            "Create recording WAV directory failed ({}): {}",
-            output_dir.display(),
-            error
-        );
-        return None;
-    }
-
-    let ts = chrono::Local::now().format("%Y%m%d-%H%M%S%.3f");
-    let path = output_dir.join(format!("voicepaste-{ts}.wav"));
-    match write_wav_16k_mono(&path, &samples) {
-        Ok(()) => {
-            log_audio!(info, "Recording WAV saved: {}", path.display());
-            *app_inner.current_recording_wav.lock().await = Some(path.clone());
-            Some(path)
-        }
-        Err(error) => {
-            log_audio!(
-                warn,
-                "Write recording WAV failed ({}): {}",
-                path.display(),
-                error
-            );
-            None
-        }
-    }
-}
-
-fn write_wav_16k_mono(path: &std::path::Path, samples: &[f32]) -> Result<(), String> {
-    const SAMPLE_RATE: u32 = 16_000;
-    const CHANNELS: u16 = 1;
-    const BYTES_PER_SAMPLE: u16 = 2;
-
-    let data_bytes = samples.len() * BYTES_PER_SAMPLE as usize;
-    let riff_size = 36usize
-        .checked_add(data_bytes)
-        .ok_or_else(|| "WAV too large".to_string())?;
-    let mut wav = Vec::with_capacity(44 + data_bytes);
-    wav.extend_from_slice(b"RIFF");
-    wav.extend_from_slice(&(riff_size as u32).to_le_bytes());
-    wav.extend_from_slice(b"WAVE");
-    wav.extend_from_slice(b"fmt ");
-    wav.extend_from_slice(&16u32.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&CHANNELS.to_le_bytes());
-    wav.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
-    wav.extend_from_slice(&(SAMPLE_RATE * CHANNELS as u32 * BYTES_PER_SAMPLE as u32).to_le_bytes());
-    wav.extend_from_slice(&(CHANNELS * BYTES_PER_SAMPLE).to_le_bytes());
-    wav.extend_from_slice(&(BYTES_PER_SAMPLE * 8).to_le_bytes());
-    wav.extend_from_slice(b"data");
-    wav.extend_from_slice(&(data_bytes as u32).to_le_bytes());
-    for &sample in samples {
-        let pcm = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-        wav.extend_from_slice(&pcm.to_le_bytes());
-    }
-
-    std::fs::write(path, wav).map_err(|e| e.to_string())
-}
-
-async fn current_recording_wav_string(app_inner: &Arc<app_state::AppInner>) -> Option<String> {
-    app_inner
-        .current_recording_wav
-        .lock()
-        .await
-        .as_ref()
-        .map(|path| path.to_string_lossy().to_string())
-}
-
-async fn record_transcription_failure(
-    app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    message: &str,
-) -> String {
-    let audio_path = current_recording_wav_string(app_inner).await;
-    let retry_of = app_inner.current_retry_of.lock().await.clone();
-    let ts = app_inner
-        .stats
-        .lock()
-        .await
-        .record_failure(message, audio_path, retry_of);
-    *app_inner.current_failure_ts.lock().await = Some(ts.clone());
-    set_overlay_retry_interaction(app, true);
-    ts
-}
-
-fn prune_old_recordings(app: &AppHandle) {
-    let Ok(data_dir) = app.path().app_data_dir() else {
-        return;
-    };
-    let recordings_dir = data_dir.join("recordings");
-    let Ok(entries) = std::fs::read_dir(recordings_dir) else {
-        return;
-    };
-    let cutoff = std::time::SystemTime::now()
-        .checked_sub(std::time::Duration::from_secs(31 * 24 * 60 * 60))
-        .unwrap_or(std::time::UNIX_EPOCH);
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("wav") {
-            continue;
-        }
-        let Ok(metadata) = entry.metadata() else {
-            continue;
-        };
-        let Ok(modified) = metadata.modified() else {
-            continue;
-        };
-        if modified < cutoff {
-            let _ = std::fs::remove_file(path);
-        }
-    }
-}
-
-/// Heuristic: did this recording capture actual sound (speech) rather than
-/// silence? Used to tell a genuine no-speech stop (end immediately) apart from
-/// speech whose transcript was lost to a slow/failed network (keep commit +
-/// retry). Biased toward "has sound" so real speech is never silently dropped.
-fn recording_has_audio_signal(samples: &[f32]) -> bool {
-    // 16k mono. Native capture has no AEC, so the start cue bleeds into the mic
-    // at the very beginning; skip that leading window so the cue is never mistaken
-    // for speech. Anything the user actually says runs past it (and if they spoke
-    // inside it, a transcript would have arrived, short-circuiting this check).
-    const CUE_SKIP: usize = 11_200; // ~0.7s at 16k covers the start cue + echo tail
-    const MIN_VOICE: usize = 1_600; // need ~100ms of real audio after the cue
-    if samples.len() < CUE_SKIP + MIN_VOICE {
-        return false;
-    }
-    let tail = &samples[CUE_SKIP..];
-    let peak = tail.iter().fold(0.0f32, |m, &s| m.max(s.abs()));
-    let rms = (tail.iter().map(|&s| s * s).sum::<f32>() / tail.len() as f32).sqrt();
-    // A quiet mic noise floor sits well below these; speech clears both easily.
-    peak >= 0.02 && rms >= 0.004
-}
-
-/// Drop the WAV and recording bookkeeping for a recording that produced nothing
-/// worth keeping (e.g. the user stopped without speaking). Nothing to retry.
-async fn discard_recording_artifacts(app_inner: &Arc<app_state::AppInner>) {
-    if let Some(path) = app_inner.current_recording_wav.lock().await.take() {
-        let _ = std::fs::remove_file(path);
-    }
-    *app_inner.current_retry_of.lock().await = None;
-    *app_inner.current_failure_ts.lock().await = None;
-    app_inner.recording_audio.lock().await.clear();
-}
-
-async fn record_success_and_apply_retention(
-    app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    text: &str,
-    keep_recordings: bool,
-) {
-    let wav_path = app_inner.current_recording_wav.lock().await.take();
-    let retry_of = app_inner.current_retry_of.lock().await.take();
-    let audio_path = if keep_recordings {
-        wav_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().to_string())
-    } else {
-        if let Some(path) = wav_path {
-            let _ = std::fs::remove_file(path);
-        }
-        None
-    };
-    let mut stats = app_inner.stats.lock().await;
-    if let Some(retry_ts) = retry_of.as_ref() {
-        if stats.replace_history_with_success(retry_ts, text, audio_path.clone()) {
-            drop(stats);
-            // Always prune: a never-retried failure recording is only deleted on a
-            // later success, otherwise it is reclaimed by the 31-day retention sweep,
-            // even when keep_recordings is off (only failure WAVs persist then).
-            prune_old_recordings(app);
-            return;
-        }
-    }
-    stats.record_session_with_audio(text, audio_path, retry_of);
-    drop(stats);
-
-    prune_old_recordings(app);
-}
-
-/// Show or hide the app in the macOS Dock.
-#[cfg(target_os = "macos")]
-fn set_dock_visible(visible: bool) {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
-    if let Some(mtm) = MainThreadMarker::new() {
-        let app = NSApplication::sharedApplication(mtm);
-        let policy = if visible {
-            NSApplicationActivationPolicy::Regular
-        } else {
-            NSApplicationActivationPolicy::Accessory
-        };
-        app.setActivationPolicy(policy);
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn set_dock_visible(_visible: bool) {}
-
-/// Bring the app to the foreground on macOS. After switching an accessory-policy
-/// app back to Regular via `set_dock_visible(true)`, its windows still will not
-/// reliably raise above other apps' windows without an explicit activate call.
-///
-/// Uses the legacy `-activateIgnoringOtherApps:` deliberately: its replacement
-/// `-[NSApplication activate]` only exists on macOS 14+, while this app targets
-/// 10.15 (`minimumSystemVersion`), where the new selector is absent and would
-/// crash at runtime. The `#[allow(deprecated)]` silences the SDK deprecation
-/// notice for this compatibility requirement.
-#[cfg(target_os = "macos")]
-fn activate_app() {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::NSApplication;
-    if let Some(mtm) = MainThreadMarker::new() {
-        let app = NSApplication::sharedApplication(mtm);
-        #[allow(deprecated)]
-        app.activateIgnoringOtherApps(true);
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn activate_app() {}
-
-/// Bring the settings window to front and show it in the Dock. If it was closed
-/// (lazy lifecycle: closing destroys it to free the WebView), rebuild it from the
-/// bundled window config before showing.
-fn show_settings(app: &tauri::AppHandle) {
-    // Switch back to Regular (show Dock) BEFORE showing/focusing the window: an
-    // accessory-policy app cannot reliably raise its window above other apps, so
-    // the policy flip must come first, and the foreground activation comes last.
-    set_dock_visible(true);
-
-    if let Some(window) = app.get_webview_window("settings") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    } else if let Some(cfg) = app
-        .config()
-        .app
-        .windows
-        .iter()
-        .find(|w| w.label == "settings")
-    {
-        match tauri::WebviewWindowBuilder::from_config(app, cfg) {
-            Ok(builder) => {
-                if let Err(e) = builder.build() {
-                    log_tray!(error, "failed to rebuild settings window: {e}");
-                }
-            }
-            Err(e) => log_tray!(error, "failed to create settings window builder: {e}"),
-        }
-        // The rebuilt window has no implicit focus, so focus it explicitly.
-        if let Some(window) = app.get_webview_window("settings") {
-            let _ = window.set_focus();
-        }
-    }
-
-    // Bring the app itself to the foreground so the window actually lands in front.
-    activate_app();
 }
 
 /// Setup the system tray icon with menu items.
@@ -839,7 +239,7 @@ fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "settings" => {
                 log_tray!(debug, "Settings clicked");
-                show_settings(app);
+                platform::show_settings(app);
             }
             "quit" => {
                 log_tray!(debug, "Quit clicked");
@@ -885,23 +285,6 @@ fn setup_keytap_hotkeys(app: &mut App) -> Result<(), Box<dyn std::error::Error>>
 
     Ok(())
 }
-
-/// Wrapper to keep the HotkeyManager alive as Tauri managed state.
-/// The `_inner` field is intentionally never read — its purpose is to hold
-/// ownership of the HotkeyManager so its Drop stops the keytap listener.
-struct HotkeyManagerState {
-    _inner: std::sync::Mutex<hotkey::HotkeyManager>,
-}
-
-/// Simple recording toggle state managed by Tauri.
-struct RecordingState(std::sync::Mutex<bool>);
-
-/// Hotkey mode: "toggle" (press once to start, press again to stop) or "hold" (hold to speak).
-struct HotkeyMode(std::sync::Mutex<String>);
-
-/// Tracks which prompt template triggered the current recording session.
-/// `None` means the main hotkey was used (not a prompt-specific hotkey).
-struct ActivePromptId(std::sync::Mutex<Option<String>>);
 
 /// Begin a neutral recording triggered by the hotkey matcher — the prompt is
 /// decided later, on stop. If the main hotkey was used while a retryable
@@ -979,11 +362,11 @@ async fn start_recording(app_handle: AppHandle) {
     *app_inner.current_recording_wav.lock().await = None;
     *app_inner.current_retry_of.lock().await = None;
     *app_inner.current_failure_ts.lock().await = None;
-    set_overlay_retry_interaction(&app_handle, false);
+    overlay::set_overlay_retry_interaction(&app_handle, false);
     let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
     // Re-position before showing so the overlay follows the current display layout
     // (e.g. after an external monitor was connected/disconnected).
-    position_overlay(&app_handle);
+    overlay::position_overlay(&app_handle);
     if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.show();
     }
@@ -1012,7 +395,7 @@ async fn start_recording(app_handle: AppHandle) {
     // Check if recording was cancelled during warmup (hold mode: quick press-release)
     if !*recording_state.0.lock().unwrap() {
         log_rec!(warn, "Cancelled during warmup, aborting start");
-        stop_audio_capture(&app_handle, &app_inner, 1200).await;
+        native_audio::stop_audio_capture(&app_handle, &app_inner, 1200).await;
         set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
         if let Some(overlay) = app_handle.get_window("overlay") {
             let _ = overlay.hide();
@@ -1047,7 +430,7 @@ async fn start_recording(app_handle: AppHandle) {
     let (connect_tx, connect_rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
     *app_inner.connect_rx.lock().await = Some(connect_rx);
 
-    emit_cue(&app_handle, &app_inner, "start");
+    cue::emit_cue(&app_handle, &app_inner, "start");
     set_app_state(&app_handle, &app_inner, app_state::AppState::Recording).await;
 
     // 5. Connect the ASR session in the background; attach it once ready.
@@ -1162,14 +545,14 @@ async fn fail_retry(
 ) {
     let failure_ts = app_inner.stats.lock().await.record_failure(
         message,
-        current_recording_wav_string(app_inner).await,
+        recordings::current_recording_wav_string(app_inner).await,
         Some(ts.to_string()),
     );
     *app_inner.current_failure_ts.lock().await = Some(failure_ts);
-    emit_retryable_error_hint(app_handle, app_inner, message).await;
-    set_overlay_retry_interaction(app_handle, true);
+    overlay::emit_retryable_error_hint(app_handle, app_inner, message).await;
+    overlay::set_overlay_retry_interaction(app_handle, true);
     set_app_state(app_handle, app_inner, app_state::AppState::Idle).await;
-    schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(app_inner));
+    overlay::schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(app_inner));
 }
 
 async fn retry_history_transcription_inner(
@@ -1189,12 +572,12 @@ async fn retry_history_transcription_inner(
         .clone()
         .ok_or_else(|| "这条记录没有可重试的录音".to_string())?;
     let path = PathBuf::from(&audio_path);
-    let samples = read_wav_16k_mono(&path)?;
+    let samples = wav::read_wav_16k_mono(&path)?;
     if samples.is_empty() {
         return Err("录音文件为空，无法重试".to_string());
     }
 
-    set_overlay_retry_interaction(&app_handle, false);
+    overlay::set_overlay_retry_interaction(&app_handle, false);
     set_app_state(&app_handle, &app_inner, app_state::AppState::Finishing).await;
     // Clear the stale failure hint + old transcript, then show a "retrying"
     // placeholder while the connection is established. The overlay yields this
@@ -1294,47 +677,6 @@ pub(crate) async fn retry_latest_failed_transcription(
         .clone()
         .ok_or_else(|| "没有可重试的失败录音".to_string())?;
     retry_history_transcription(app_handle, ts).await
-}
-
-fn read_wav_16k_mono(path: &std::path::Path) -> Result<Vec<f32>, String> {
-    let data = std::fs::read(path).map_err(|e| format!("读取录音文件失败: {e}"))?;
-    if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
-        return Err("录音文件不是有效 WAV".to_string());
-    }
-    let mut pos = 12usize;
-    let mut channels = 0u16;
-    let mut sample_rate = 0u32;
-    let mut bits = 0u16;
-    let mut data_range = None;
-    while pos + 8 <= data.len() {
-        let id = &data[pos..pos + 4];
-        let size = u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]])
-            as usize;
-        let start = pos + 8;
-        let end = start.saturating_add(size).min(data.len());
-        if id == b"fmt " && size >= 16 && end <= data.len() {
-            channels = u16::from_le_bytes([data[start + 2], data[start + 3]]);
-            sample_rate = u32::from_le_bytes([
-                data[start + 4],
-                data[start + 5],
-                data[start + 6],
-                data[start + 7],
-            ]);
-            bits = u16::from_le_bytes([data[start + 14], data[start + 15]]);
-        } else if id == b"data" {
-            data_range = Some(start..end);
-            break;
-        }
-        pos = start + size + (size % 2);
-    }
-    if channels != 1 || sample_rate != 16_000 || bits != 16 {
-        return Err("仅支持 16kHz mono 16-bit WAV 重试".to_string());
-    }
-    let range = data_range.ok_or_else(|| "WAV 缺少 data chunk".to_string())?;
-    Ok(data[range]
-        .chunks_exact(2)
-        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
-        .collect())
 }
 
 /// Connect the ASR session in the background (one retry), then attach it: flush
@@ -1448,16 +790,16 @@ async fn connect_and_attach(
             *app_handle.state::<RecordingState>().0.lock().unwrap() = false;
             reset_matcher_recording(&app_handle);
             app_inner.pending_audio.lock().await.clear();
-            stop_audio_capture(&app_handle, &app_inner, 1200).await;
-            save_recording_wav(&app_handle, &app_inner).await;
+            native_audio::stop_audio_capture(&app_handle, &app_inner, 1200).await;
+            recordings::save_recording_wav(&app_handle, &app_inner).await;
             let message = format!("ASR 连接失败: {}，请检查网络连接", e);
-            record_transcription_failure(&app_handle, &app_inner, &message).await;
+            recordings::record_transcription_failure(&app_handle, &app_inner, &message).await;
             // Emit error hint BEFORE setting idle so the overlay shows it: the
             // frontend's idle handler only clears "info"-level hints.
-            emit_retryable_error_hint(&app_handle, &app_inner, &message).await;
+            overlay::emit_retryable_error_hint(&app_handle, &app_inner, &message).await;
             set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
             // Auto-hide after a delay so the user can read it; guard: still idle.
-            schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(&app_inner));
+            overlay::schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(&app_inner));
         }
     }
 }
@@ -1474,15 +816,15 @@ async fn stop_recording(app_handle: AppHandle) {
     set_app_state(&app_handle, &app_inner, app_state::AppState::Finishing).await;
 
     // 2. Stop renderer audio first so the final buffered chunk is flushed.
-    stop_audio_capture(&app_handle, &app_inner, 1200).await;
+    native_audio::stop_audio_capture(&app_handle, &app_inner, 1200).await;
     // Snapshot whether real sound was captured before save_recording_wav drains
     // the buffer: a silent stop ends immediately, but speech whose transcript was
     // lost (slow/failed network) must keep the retry path even with no result yet.
     let captured_audio_signal = {
         let audio = app_inner.recording_audio.lock().await;
-        recording_has_audio_signal(&audio)
+        wav::recording_has_audio_signal(&audio)
     };
-    save_recording_wav(&app_handle, &app_inner).await;
+    recordings::save_recording_wav(&app_handle, &app_inner).await;
 
     // 3. Acquire the ready ASR session. If the background connect hasn't finished
     //    (user stopped before it was ready), wait for it to resolve so the buffered
@@ -1506,8 +848,8 @@ async fn stop_recording(app_handle: AppHandle) {
                         .session_epoch
                         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     app_inner.pending_audio.lock().await.clear();
-                    discard_recording_artifacts(&app_inner).await;
-                    set_overlay_retry_interaction(&app_handle, false);
+                    recordings::discard_recording_artifacts(&app_inner).await;
+                    overlay::set_overlay_retry_interaction(&app_handle, false);
                     if let Some(overlay) = app_handle.get_window("overlay") {
                         let _ = overlay.hide();
                     }
@@ -1547,8 +889,8 @@ async fn stop_recording(app_handle: AppHandle) {
             session.close();
             app_inner.pending_audio.lock().await.clear();
             *app_inner.accumulated_text.lock().await = String::new();
-            discard_recording_artifacts(&app_inner).await;
-            set_overlay_retry_interaction(&app_handle, false);
+            recordings::discard_recording_artifacts(&app_inner).await;
+            overlay::set_overlay_retry_interaction(&app_handle, false);
             if let Some(overlay) = app_handle.get_window("overlay") {
                 let _ = overlay.hide();
             }
@@ -1564,10 +906,10 @@ async fn stop_recording(app_handle: AppHandle) {
                 session.close();
                 app_inner.pending_audio.lock().await.clear();
                 *app_inner.accumulated_text.lock().await = String::new();
-                record_transcription_failure(&app_handle, &app_inner, &e).await;
-                emit_retryable_error_hint(&app_handle, &app_inner, &e).await;
+                recordings::record_transcription_failure(&app_handle, &app_inner, &e).await;
+                overlay::emit_retryable_error_hint(&app_handle, &app_inner, &e).await;
                 set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-                schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(&app_inner));
+                overlay::schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(&app_inner));
                 return;
             }
         };
@@ -1605,11 +947,11 @@ async fn stop_recording(app_handle: AppHandle) {
                 "Stop with no ready ASR session; discarding buffered audio"
             );
             let message = "语音服务连接失败，请检查网络连接";
-            record_transcription_failure(&app_handle, &app_inner, message).await;
-            emit_retryable_error_hint(&app_handle, &app_inner, message).await;
+            recordings::record_transcription_failure(&app_handle, &app_inner, message).await;
+            overlay::emit_retryable_error_hint(&app_handle, &app_inner, message).await;
             *app_inner.accumulated_text.lock().await = String::new();
             set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-            schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(&app_inner));
+            overlay::schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(&app_inner));
             return;
         }
     }
@@ -1618,22 +960,13 @@ async fn stop_recording(app_handle: AppHandle) {
     *app_inner.accumulated_text.lock().await = String::new();
 
     // 12. Hide overlay
-    set_overlay_retry_interaction(&app_handle, false);
+    overlay::set_overlay_retry_interaction(&app_handle, false);
     if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.hide();
     }
 
     // 13. Set state back to idle
     set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
-}
-
-/// Cancel the active recording without committing or pasting text.
-/// Directly toggle the ESC-cancel shortcut, independent of the recording state
-/// machine. Used to keep ESC live while a retryable failure is shown (idle).
-fn set_escape_enabled_now(app: &AppHandle, enabled: bool) {
-    if let Some(hc) = app.try_state::<hotkey::HotkeyConfig>() {
-        hotkey::set_escape_enabled(&hc, enabled);
-    }
 }
 
 /// ESC handler. Routes to the right teardown for whatever is on screen:
@@ -1668,7 +1001,7 @@ async fn abort_retry_or_failure(app_handle: &AppHandle, app_inner: &Arc<app_stat
     *app_inner.current_failure_ts.lock().await = None;
     *app_inner.latest_transcript.lock().await = (String::new(), String::new());
     *app_inner.accumulated_text.lock().await = String::new();
-    set_overlay_retry_interaction(app_handle, false);
+    overlay::set_overlay_retry_interaction(app_handle, false);
     let _ = app_handle.emit("overlay:event", serde_json::json!({ "type": "reset" }));
     if let Some(overlay) = app_handle.get_window("overlay") {
         let _ = overlay.hide();
@@ -1707,7 +1040,7 @@ async fn cancel_recording(app_handle: AppHandle) {
         *active.0.lock().unwrap() = None;
     }
 
-    stop_audio_capture(&app_handle, &app_inner, 1200).await;
+    native_audio::stop_audio_capture(&app_handle, &app_inner, 1200).await;
 
     if let Some(session) = app_inner.asr_session.lock().await.take() {
         session.close();
@@ -1896,7 +1229,7 @@ async fn try_reconnect_asr(
     // Play the end cue on the first reconnect attempt so the user audibly knows
     // recording was interrupted and can stop talking until they hear it resume.
     if *attempts == 1 {
-        emit_cue(app, app_inner, "end");
+        cue::emit_cue(app, app_inner, "end");
     }
 
     // Carry the dying session's recognized text into the accumulated prefix, and
@@ -1961,7 +1294,7 @@ async fn try_reconnect_asr(
                 }),
             );
             // Play the start cue so the user audibly knows recording resumed.
-            emit_cue(app, app_inner, "start");
+            cue::emit_cue(app, app_inner, "start");
             Some(event_rx)
         }
         Err(e) => {
@@ -1996,19 +1329,19 @@ async fn finalize_on_failure(app: &AppHandle, app_inner: &Arc<app_state::AppInne
     *app_inner.asr_events.lock().await = None;
     app_inner.pending_audio.lock().await.clear();
 
-    stop_audio_capture(app, app_inner, 1200).await;
-    save_recording_wav(app, app_inner).await;
+    native_audio::stop_audio_capture(app, app_inner, 1200).await;
+    recordings::save_recording_wav(app, app_inner).await;
 
     if combined.trim().is_empty() {
-        record_transcription_failure(app, app_inner, message).await;
+        recordings::record_transcription_failure(app, app_inner, message).await;
         // Nothing to salvage: surface the error so the user understands the abort.
         log_events!(warn, "ASR failed with no recognized text: {}", message);
-        emit_retryable_error_hint(app, app_inner, message).await;
+        overlay::emit_retryable_error_hint(app, app_inner, message).await;
         if let Some(active) = app.try_state::<ActivePromptId>() {
             *active.0.lock().unwrap() = None;
         }
         set_app_state(app, app_inner, app_state::AppState::Idle).await;
-        schedule_retry_overlay_hide(app.clone(), Arc::clone(app_inner));
+        overlay::schedule_retry_overlay_hide(app.clone(), Arc::clone(app_inner));
         return;
     }
 
@@ -2245,8 +1578,14 @@ async fn finalize_and_paste(
         .as_ref()
         .map(|c| c.app.keep_recordings)
         .unwrap_or(false);
-    record_success_and_apply_retention(app_handle, app_inner, &final_text, keep_recordings).await;
-    emit_cue(app_handle, app_inner, "end");
+    recordings::record_success_and_apply_retention(
+        app_handle,
+        app_inner,
+        &final_text,
+        keep_recordings,
+    )
+    .await;
+    cue::emit_cue(app_handle, app_inner, "end");
 }
 
 /// Reload all hotkey bindings from the current config and prompts.
@@ -2278,85 +1617,4 @@ pub fn reload_hotkey_bindings(app: &AppHandle) {
 
     let prompts = app_inner.config_manager.load_prompts();
     hotkey::reload_bindings(&hc, &hotkey_str, &mode, &prompts);
-}
-
-#[cfg(test)]
-mod audio_signal_tests {
-    use super::recording_has_audio_signal;
-
-    #[test]
-    fn silence_is_not_treated_as_speech() {
-        let silence = vec![0.0f32; 16_000];
-        assert!(!recording_has_audio_signal(&silence));
-    }
-
-    #[test]
-    fn quiet_noise_floor_is_not_treated_as_speech() {
-        // ~ -54 dBFS hum: below both gates, must not look like speech.
-        let noise: Vec<f32> = (0..16_000)
-            .map(|i| if i % 2 == 0 { 0.002 } else { -0.002 })
-            .collect();
-        assert!(!recording_has_audio_signal(&noise));
-    }
-
-    #[test]
-    fn very_short_clip_is_not_treated_as_speech() {
-        // Under 100ms even at full amplitude is an accidental tap, not speech.
-        let blip = vec![0.5f32; 800];
-        assert!(!recording_has_audio_signal(&blip));
-    }
-
-    #[test]
-    fn loud_sustained_signal_is_treated_as_speech() {
-        // A 0.3-amplitude tone clears both the peak and RMS gates.
-        let tone: Vec<f32> = (0..16_000).map(|i| 0.3 * (i as f32 * 0.2).sin()).collect();
-        assert!(recording_has_audio_signal(&tone));
-    }
-
-    #[test]
-    fn start_cue_bleed_then_silence_is_not_treated_as_speech() {
-        // Loud cue in the first ~0.5s, silence afterward: must be skipped, not
-        // mistaken for the user speaking (no AEC in native capture).
-        let mut samples = vec![0.0f32; 16_000];
-        for (i, s) in samples.iter_mut().enumerate().take(8_000) {
-            *s = 0.4 * (i as f32 * 0.3).sin();
-        }
-        assert!(!recording_has_audio_signal(&samples));
-    }
-}
-
-#[cfg(test)]
-mod hotkey_label_tests {
-    use super::format_hotkey_label;
-
-    #[test]
-    fn function_key_passes_through() {
-        assert_eq!(format_hotkey_label("F13"), "F13");
-    }
-
-    #[test]
-    fn sided_modifier_matches_settings_symbol() {
-        // Mirrors the frontend normalizeHotkeyLabel.
-        if cfg!(target_os = "macos") {
-            assert_eq!(format_hotkey_label("AltRight"), "R ⌥");
-        } else {
-            assert_eq!(format_hotkey_label("AltRight"), "R Alt");
-        }
-    }
-
-    #[test]
-    fn combo_is_symbolized_and_joined() {
-        if cfg!(target_os = "macos") {
-            assert_eq!(format_hotkey_label("Control+Space"), "⌃ ␣");
-            assert_eq!(format_hotkey_label("CmdOrCtrl+Shift+A"), "⌘ ⇧ A");
-        } else {
-            assert_eq!(format_hotkey_label("Control+Space"), "Ctrl ␣");
-            assert_eq!(format_hotkey_label("CmdOrCtrl+Shift+A"), "Ctrl Shift A");
-        }
-    }
-
-    #[test]
-    fn empty_stays_empty() {
-        assert_eq!(format_hotkey_label(""), "");
-    }
 }

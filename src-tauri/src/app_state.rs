@@ -1,8 +1,10 @@
 use std::sync::Arc;
+use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
 use crate::asr::{AsrEvent, AsrSession};
 use crate::config::ConfigManager;
+use crate::hotkey;
 use crate::hotword::HotwordManager;
 use crate::stats::StatsService;
 
@@ -90,3 +92,79 @@ pub fn create_app_state(
         wave_smoothed: Mutex::new(0.0),
     })
 }
+
+// ---------------------------------------------------------------------------
+// Recording state machine helpers
+// ---------------------------------------------------------------------------
+
+/// Map an [`AppState`] to the string label emitted to the overlay and logged.
+pub(crate) fn app_state_name(state: &AppState) -> &'static str {
+    match state {
+        AppState::Idle => "idle",
+        AppState::Connecting => "connecting",
+        AppState::Recording => "recording",
+        AppState::Finishing => "finishing",
+    }
+}
+
+/// ESC-cancel is only meaningful while a recording is in flight (or being
+/// finalized). Idle keeps ESC off so it doesn't swallow ordinary key events.
+pub(crate) fn should_enable_escape_shortcut(state: &AppState) -> bool {
+    matches!(
+        state,
+        AppState::Connecting | AppState::Recording | AppState::Finishing
+    )
+}
+
+/// Enable/disable the global ESC shortcut to match the new recording state.
+pub(crate) fn sync_escape_shortcut(app: &tauri::AppHandle, state: &AppState) {
+    if let Some(hc) = app.try_state::<hotkey::HotkeyConfig>() {
+        hotkey::set_escape_enabled(&hc, should_enable_escape_shortcut(state));
+    }
+}
+
+/// Transition to `next_state`: persist it, reset waveform smoothing when leaving
+/// Recording, sync the ESC shortcut, and broadcast the change to the overlay.
+pub(crate) async fn set_app_state(
+    app: &tauri::AppHandle,
+    app_inner: &Arc<AppInner>,
+    next_state: AppState,
+) {
+    *app_inner.state.lock().await = next_state.clone();
+    // Reset the waveform smoothing whenever we leave Recording, so the next
+    // session's bars don't start from a stale loudness tail.
+    if next_state != AppState::Recording {
+        *app_inner.wave_smoothed.lock().await = 0.0;
+    }
+    sync_escape_shortcut(app, &next_state);
+
+    let _ = app.emit(
+        "overlay:event",
+        serde_json::json!({
+            "type": "state",
+            "payload": { "state": app_state_name(&next_state) }
+        }),
+    );
+    log_rec!(info, "State → {}", app_state_name(&next_state));
+}
+
+// ---------------------------------------------------------------------------
+// Tauri managed-state wrappers
+// ---------------------------------------------------------------------------
+
+/// Wrapper to keep the HotkeyManager alive as Tauri managed state.
+/// The `_inner` field is intentionally never read — its purpose is to hold
+/// ownership of the HotkeyManager so its Drop stops the keytap listener.
+pub struct HotkeyManagerState {
+    pub _inner: std::sync::Mutex<hotkey::HotkeyManager>,
+}
+
+/// Simple recording toggle state managed by Tauri.
+pub struct RecordingState(pub std::sync::Mutex<bool>);
+
+/// Hotkey mode: "toggle" (press once to start, press again to stop) or "hold" (hold to speak).
+pub struct HotkeyMode(pub std::sync::Mutex<String>);
+
+/// Tracks which prompt template triggered the current recording session.
+/// `None` means the main hotkey was used (not a prompt-specific hotkey).
+pub struct ActivePromptId(pub std::sync::Mutex<Option<String>>);
