@@ -450,6 +450,10 @@ impl MatcherState {
     }
 
     /// Advance the machine one event. Returns the actions to dispatch.
+    ///
+    /// The caller (the listener) filters out events for keys that are not part
+    /// of any binding via [`is_relevant_hotkey_event`], so `held` only ever
+    /// tracks hotkey-relevant keys.
     pub fn process(&mut self, kind: EventKind, bindings: &[HotkeyBinding]) -> Vec<HotkeyAction> {
         let mut actions = Vec::new();
         match kind {
@@ -536,6 +540,17 @@ impl MatcherState {
             }
         }
     }
+
+    /// Reclaim `held` keys stuck down by a lost keyup. The listener calls this
+    /// from its idle tick, and only while idle (`recording` is None), so it
+    /// never interferes with an active recording — hold-to-talk or a toggle
+    /// session mid-pause are both left untouched.
+    pub fn clear_stale_held(&mut self) {
+        if self.recording.is_none() && !self.held.is_empty() {
+            self.held.clear();
+            self.cycle_best = None;
+        }
+    }
 }
 
 /// Longest-match resolution: of all bindings whose keys are a subset of `held`,
@@ -557,6 +572,26 @@ pub fn longest_match(held: &HashSet<Key>, bindings: &[HotkeyBinding]) -> Option<
         }
     }
     best.map(|(i, _)| i)
+}
+
+fn hotkey_event_key(kind: EventKind) -> Option<Key> {
+    match kind {
+        EventKind::KeyDown(key) | EventKind::KeyUp(key) | EventKind::KeyRepeat(key) => Some(key),
+    }
+}
+
+fn key_is_registered_hotkey_part(key: Key, bindings: &[HotkeyBinding]) -> bool {
+    bindings.iter().any(|binding| binding.keys.contains(&key))
+}
+
+/// Whether an event concerns a key that is part of some registered hotkey
+/// binding. The listener drops everything else at the boundary so keys like
+/// CapsLock or NumLock — whose keyup the OS often fails to deliver — can never
+/// enter the matcher's `held` set and jam the toggle cycle.
+fn is_relevant_hotkey_event(kind: EventKind, bindings: &[HotkeyBinding]) -> bool {
+    hotkey_event_key(kind)
+        .map(|k| key_is_registered_hotkey_part(k, bindings))
+        .unwrap_or(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -653,10 +688,18 @@ pub fn ensure_hotkey_active(config: &HotkeyConfig, app_handle: &tauri::AppHandle
 /// matching.
 fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHandle) {
     let mut escape_was_pressed = false;
+    // Timestamp of the last received keytap event (any event, even filtered
+    // ones — they still prove the user is at the keyboard). When no event has
+    // arrived for [`STALE_QUIESCENCE`] yet `held` still holds keys, those keys
+    // are stuck (lost keyup) and get reclaimed.
+    let mut last_event_at = Instant::now();
+    /// How long with zero keyboard activity before stuck `held` keys are reclaimed.
+    const STALE_QUIESCENCE: Duration = Duration::from_secs(2);
 
     loop {
         match tap.recv_timeout(std::time::Duration::from_millis(100)) {
             Ok(event) => {
+                last_event_at = Instant::now();
                 // While the UI hotkey recorder is capturing a combination,
                 // forward every event to it via the relay channel instead of
                 // matching bindings. This avoids a second WH_KEYBOARD_LL hook
@@ -690,6 +733,18 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                     });
                 }
 
+                // Allowlist: drop events for keys that are not part of any
+                // registered binding (CapsLock, NumLock, ordinary typing, …).
+                // Such keys can jam the matcher's `held` set when their keyup
+                // goes undelivered, so they never enter it.
+                let relevant = {
+                    let cfg = config.read().unwrap();
+                    is_relevant_hotkey_event(event_kind, &cfg.bindings)
+                };
+                if !relevant {
+                    continue;
+                }
+
                 // Drive the state machine under the config lock, then dispatch
                 // the emitted actions without holding the lock.
                 let actions = {
@@ -712,7 +767,15 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                     }
                 }
             }
-            Err(keytap::RecvTimeoutError::Timeout) => continue,
+            Err(keytap::RecvTimeoutError::Timeout) => {
+                // Idle reclaim: with no keyboard activity for a while, any keys
+                // still in `held` are stuck (lost keyup). Reclaim them, but
+                // only while idle — never during an active recording.
+                if Instant::now().duration_since(last_event_at) >= STALE_QUIESCENCE {
+                    config.write().unwrap().matcher.clear_stale_held();
+                }
+                continue;
+            }
             Err(keytap::RecvTimeoutError::Disconnected) => {
                 log_hotkey!(debug, "Tap disconnected, listener thread exiting");
                 break;
@@ -1601,7 +1664,7 @@ mod tests {
     ) -> Vec<HotkeyAction> {
         let mut out = Vec::new();
         for e in events {
-            out.extend(matcher.process(e.clone(), bindings));
+            out.extend(matcher.process(*e, bindings));
         }
         out
     }
@@ -1868,6 +1931,42 @@ mod tests {
             actions,
             vec![HotkeyAction::StartRecording { is_main: true }]
         );
+    }
+
+    #[test]
+    fn allowlist_drops_events_for_unregistered_keys() {
+        // Only keys that are part of a registered binding are relevant; anything
+        // else (CapsLock, NumLock, plain typing) is dropped at the listener
+        // boundary so it can never jam the matcher's held set.
+        let bindings = [binding(&[Key::Function], "toggle", None)];
+        assert!(!is_relevant_hotkey_event(down(Key::CapsLock), &bindings));
+        assert!(!is_relevant_hotkey_event(down(Key::NumLock), &bindings));
+        assert!(!is_relevant_hotkey_event(down(Key::Space), &bindings));
+        assert!(is_relevant_hotkey_event(down(Key::Function), &bindings));
+        assert!(is_relevant_hotkey_event(up(Key::Function), &bindings));
+    }
+
+    #[test]
+    fn clear_stale_held_only_while_idle() {
+        let bindings = [binding(&[Key::Function], "hold", None)];
+        let mut m = MatcherState::new();
+
+        // Start a hold session: Function is held and the matcher is recording.
+        assert_eq!(
+            m.process(down(Key::Function), &bindings),
+            vec![HotkeyAction::StartRecording { is_main: true }]
+        );
+        // While recording, stale reclaim must NOT touch held.
+        m.clear_stale_held();
+        assert_eq!(
+            m.process(up(Key::Function), &bindings),
+            vec![HotkeyAction::StopRecording { prompt_id: None }]
+        );
+
+        // Idle again with a stuck key (a lost keyup): reclaim clears it.
+        m.held.insert(Key::Function);
+        m.clear_stale_held();
+        assert!(m.held.is_empty());
     }
 
     // ── find_matching_binding tests ────────────────────────────────────────
