@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
-import { checkForUpdates } from "@/settings/bridge";
+import { useState } from "react";
 import { type SectionId, Sidebar } from "@/settings/layout/Sidebar";
 import { AboutPage } from "@/settings/pages/AboutPage";
 import { AppSettingsPage } from "@/settings/pages/AppSettingsPage";
@@ -14,30 +13,11 @@ import { SettingsProvider } from "@/settings/SettingsProvider";
 
 export function SettingsApp() {
   const [section, setSection] = useState<SectionId>("home");
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-
-  // Check for updates on mount (for sidebar badge)
-  useEffect(() => {
-    checkForUpdates()
-      .then((result) => {
-        if (result.available) setUpdateAvailable(true);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleCheckUpdate = useCallback(() => {
-    setSection("about");
-  }, []);
 
   return (
     <SettingsProvider>
       <div className="flex h-screen overflow-hidden font-ui text-text text-sm leading-relaxed antialiased">
-        <Sidebar
-          active={section}
-          onNavigate={setSection}
-          updateAvailable={updateAvailable}
-          onCheckUpdate={handleCheckUpdate}
-        />
+        <Sidebar active={section} onNavigate={setSection} />
         <main className="flex-1 overflow-y-auto relative rounded-tl-xl border-l border-border bg-surface-main ">
           <div className="max-w-[640px] mx-auto py-7 px-9">
             {section === "home" && <HomePage />}

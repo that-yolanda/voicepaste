@@ -10,14 +10,3 @@ export type UpdateState =
   | "installing"
   | "error"
   | "disabled";
-
-export interface UpdateProgress {
-  total?: number;
-  downloaded?: number;
-}
-
-export interface UpdateResult {
-  available: boolean;
-  version?: string;
-  body?: string;
-}

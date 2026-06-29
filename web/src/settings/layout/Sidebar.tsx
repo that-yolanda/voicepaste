@@ -2,7 +2,6 @@ import {
   AudioLines,
   BookOpen,
   Bot,
-  CircleArrowUp,
   Home,
   Info,
   Keyboard,
@@ -11,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { ThemeSelector } from "@/settings/components/ThemeSelector";
+import { UpdateButton } from "@/settings/components/UpdateButton";
 
 export type SectionId =
   | "home"
@@ -41,16 +41,9 @@ const BOTTOM_ITEMS: { id: SectionId; icon: typeof Home; label: string }[] = [
 interface SidebarProps {
   active: SectionId;
   onNavigate: (id: SectionId) => void;
-  updateAvailable?: boolean;
-  onCheckUpdate?: () => void;
 }
 
-export function Sidebar({
-  active,
-  onNavigate,
-  updateAvailable = false,
-  onCheckUpdate,
-}: SidebarProps) {
+export function Sidebar({ active, onNavigate }: SidebarProps) {
   const navBtn = (id: SectionId, Icon: typeof Home, label: string) => (
     <button
       key={id}
@@ -72,20 +65,10 @@ export function Sidebar({
       {/* Header: icon + title + update button */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border-subtle">
         <img src="./icon.png" alt="VoicePaste" className="w-7 h-7 rounded-md shrink-0" />
-        <span className="flex-1 text-sm font-semibold text-text tracking-[-0.01em]">
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text tracking-[-0.01em]">
           VoicePaste
         </span>
-        {updateAvailable && onCheckUpdate && (
-          <button
-            type="button"
-            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-accent hover:bg-accent-soft transition-colors border-0 bg-transparent cursor-pointer"
-            onClick={onCheckUpdate}
-            title="更新"
-          >
-            <CircleArrowUp size={14} />
-            <span>更新</span>
-          </button>
-        )}
+        <UpdateButton compact />
       </div>
 
       {/* Navigation */}
