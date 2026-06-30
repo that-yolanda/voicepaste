@@ -15,7 +15,7 @@ use super::{HotkeyConfig, HotkeyManager};
 /// When accessibility/input-monitoring permission is not granted (macOS/Linux),
 /// logs a warning and returns a manager *without* an active listener so the
 /// app can still start. The user can grant permission later and restart.
-pub fn start_hotkey_listener(
+pub(crate) fn start_hotkey_listener(
     config: HotkeyConfig,
     app_handle: tauri::AppHandle,
 ) -> Result<HotkeyManager, keytap::Error> {

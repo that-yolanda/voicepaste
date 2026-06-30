@@ -20,7 +20,7 @@ mod tests;
 mod updater;
 
 use app_state::*;
-use tauri::{image::Image, tray::TrayIconBuilder, App, AppHandle, Listener, Manager, RunEvent};
+use tauri::{image::Image, tray::TrayIconBuilder, App, Listener, Manager, RunEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -133,7 +133,7 @@ pub fn run() {
 
             // Setup global hotkeys via keytap
             log_app!(debug, "Setting up global hotkeys (keytap)...");
-            setup_keytap_hotkeys(app)?;
+            hotkey::setup_keytap_hotkeys(app.handle())?;
             log_app!(info, "Global hotkeys ready");
 
             Ok(())
@@ -245,66 +245,4 @@ fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(tray);
 
     Ok(())
-}
-
-/// Initialize keytap-based global hotkey listener.
-fn setup_keytap_hotkeys(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
-    let app_inner: std::sync::Arc<app_state::AppInner> =
-        (*app.state::<std::sync::Arc<app_state::AppInner>>()).clone();
-
-    let config = app_inner
-        .config_manager
-        .load_config()
-        .map_err(|e| e.to_string())?;
-    let hotkey_str = match &config.app.hotkey {
-        serde_norway::Value::String(s) => s.clone(),
-        _ => String::new(),
-    };
-    let hotkey_mode = config.app.hotkey_mode.as_str();
-
-    let prompts = app_inner.config_manager.load_prompts();
-    let bindings = hotkey::build_initial_bindings(&hotkey_str, hotkey_mode, &prompts);
-
-    let hotkey_config = hotkey::create_config(bindings);
-    let hotkey_manager = hotkey::start_hotkey_listener(hotkey_config.clone(), app.handle().clone())
-        .map_err(|e| format!("keytap init failed: {:?}", e))?;
-
-    app.manage(hotkey_config);
-    // Keep the manager alive for the app lifetime (its Drop stops the tap)
-    app.manage(HotkeyManagerState {
-        _inner: std::sync::Mutex::new(hotkey_manager),
-    });
-
-    Ok(())
-}
-
-/// Reload all hotkey bindings from the current config and prompts.
-/// Called after saving config or prompts so changes take effect immediately.
-pub fn reload_hotkey_bindings(app: &AppHandle) {
-    let Some(hc) = app.try_state::<hotkey::HotkeyConfig>() else {
-        log_hotkey!(error, "HotkeyConfig not in managed state");
-        return;
-    };
-
-    let app_inner = app.state::<std::sync::Arc<app_state::AppInner>>();
-    let config = match app_inner.config_manager.load_config() {
-        Ok(c) => c,
-        Err(e) => {
-            log_hotkey!(error, "Failed to load config for reload: {}", e);
-            return;
-        }
-    };
-
-    let hotkey_str = match &config.app.hotkey {
-        serde_norway::Value::String(s) => s.clone(),
-        _ => String::new(),
-    };
-
-    let mode = app
-        .try_state::<HotkeyMode>()
-        .map(|m| m.0.lock().unwrap().clone())
-        .unwrap_or_else(|| "toggle".to_string());
-
-    let prompts = app_inner.config_manager.load_prompts();
-    hotkey::reload_bindings(&hc, &hotkey_str, &mode, &prompts);
 }

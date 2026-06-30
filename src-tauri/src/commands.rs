@@ -186,7 +186,7 @@ pub async fn save_config_object(
     }
 
     // Re-register shortcuts with the new hotkey from the config object
-    crate::reload_hotkey_bindings(&app);
+    crate::hotkey::reload_hotkey_bindings(&app);
 
     // Notify the overlay so it can re-apply the glass appearance live.
     let _ = app.emit(
@@ -246,7 +246,7 @@ pub async fn save_prompts(
     state.config_manager.save_prompts(&prompts)?;
 
     // Reload shortcuts so changed prompt hotkeys take effect immediately
-    crate::reload_hotkey_bindings(&app);
+    crate::hotkey::reload_hotkey_bindings(&app);
 
     Ok(serde_json::json!({ "ok": true }))
 }

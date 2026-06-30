@@ -17,12 +17,13 @@ use std::sync::{Arc, RwLock};
 
 use crossbeam_channel::Sender as CrossbeamSender;
 use keytap::Key;
+use tauri::{AppHandle, Manager};
 
 use crate::config::PromptItem;
 
 // Re-export the public API so callers keep using `crate::hotkey::xxx`.
 pub use label::current_hotkey_label;
-pub use listener::{ensure_hotkey_active, reset_recording, start_hotkey_listener};
+pub use listener::{ensure_hotkey_active, reset_recording};
 pub use matcher::MatcherState;
 pub use parse::{parse_hotkey_string, parse_prompt_hotkey_to_keys};
 pub(crate) use recorder::record_combination;
@@ -104,7 +105,7 @@ pub struct HotkeyManager {
 // ---------------------------------------------------------------------------
 
 /// Create a new `HotkeyConfig` with the given initial bindings.
-pub fn create_config(bindings: Vec<HotkeyBinding>) -> HotkeyConfig {
+fn create_config(bindings: Vec<HotkeyBinding>) -> HotkeyConfig {
     Arc::new(RwLock::new(HotkeyConfigInner {
         bindings,
         escape_enabled: false,
@@ -171,6 +172,73 @@ pub fn reload_bindings(
     cfg.bindings = new_bindings;
 }
 
+/// Reload all hotkey bindings from the current config and prompts.
+/// Called after saving config or prompts so changes take effect immediately.
+pub fn reload_hotkey_bindings(app: &AppHandle) {
+    use crate::app_state::{AppInner, HotkeyMode as HotkeyModeState};
+
+    let Some(hc) = app.try_state::<HotkeyConfig>() else {
+        log_hotkey!(error, "HotkeyConfig not in managed state");
+        return;
+    };
+
+    let app_inner = app.state::<Arc<AppInner>>();
+    let config = match app_inner.config_manager.load_config() {
+        Ok(c) => c,
+        Err(e) => {
+            log_hotkey!(error, "Failed to load config for reload: {}", e);
+            return;
+        }
+    };
+
+    let hotkey_str = match &config.app.hotkey {
+        serde_norway::Value::String(s) => s.clone(),
+        _ => String::new(),
+    };
+
+    let mode = app
+        .try_state::<HotkeyModeState>()
+        .map(|m| m.0.lock().unwrap().clone())
+        .unwrap_or_else(|| "toggle".to_string());
+
+    let prompts = app_inner.config_manager.load_prompts();
+    reload_bindings(&hc, &hotkey_str, &mode, &prompts);
+}
+
+/// Initialize the keytap-based global hotkey listener from the current config.
+/// Reads config + prompts, builds the initial bindings, starts the resident
+/// listener thread, and registers the shared config + manager into Tauri state
+/// (the manager's Drop stops the tap, so it must stay alive for the app lifetime).
+pub fn setup_keytap_hotkeys(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::app_state::{AppInner, HotkeyManagerState};
+
+    let app_inner = app.state::<Arc<AppInner>>();
+
+    let config = app_inner
+        .config_manager
+        .load_config()
+        .map_err(|e| e.to_string())?;
+    let hotkey_str = match &config.app.hotkey {
+        serde_norway::Value::String(s) => s.clone(),
+        _ => String::new(),
+    };
+    let hotkey_mode = config.app.hotkey_mode.as_str();
+
+    let prompts = app_inner.config_manager.load_prompts();
+    let bindings = build_initial_bindings(&hotkey_str, hotkey_mode, &prompts);
+
+    let hotkey_config = create_config(bindings);
+    let hotkey_manager = listener::start_hotkey_listener(hotkey_config.clone(), app.clone())
+        .map_err(|e| format!("keytap init failed: {:?}", e))?;
+
+    app.manage(hotkey_config);
+    app.manage(HotkeyManagerState {
+        _inner: std::sync::Mutex::new(hotkey_manager),
+    });
+
+    Ok(())
+}
+
 /// Toggle escape-key cancellation on or off.
 pub fn set_escape_enabled(config: &HotkeyConfig, enabled: bool) {
     let mut cfg = config.write().unwrap();
@@ -178,7 +246,7 @@ pub fn set_escape_enabled(config: &HotkeyConfig, enabled: bool) {
 }
 
 /// Build initial bindings from the current config and prompts.
-pub fn build_initial_bindings(
+fn build_initial_bindings(
     main_hotkey_str: &str,
     main_mode: &str,
     prompts: &[PromptItem],
