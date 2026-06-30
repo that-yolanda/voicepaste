@@ -8,7 +8,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::app_state;
 use crate::overlay;
-use crate::wav;
+
+use super::wav;
 
 /// Save the captured session PCM as a 16k mono WAV under `<data>/recordings/`.
 /// Returns the existing path when no new samples were captured. Stores the path

@@ -4,23 +4,19 @@ mod app_state;
 mod asr;
 mod commands;
 mod config;
-mod cue;
 mod hotkey;
 mod hotword;
 mod llm;
 mod migration;
 mod model;
-mod native_audio;
 mod overlay;
 mod paste;
 mod platform;
 mod recording;
-mod recordings;
 mod stats;
 #[cfg(test)]
 mod tests;
 mod updater;
-mod wav;
 
 use app_state::*;
 use tauri::{image::Image, tray::TrayIconBuilder, App, AppHandle, Listener, Manager, RunEvent};

@@ -6,10 +6,6 @@
 //! torn down, and there is no decode/keep-alive jank. rodio decodes via symphonia
 //! (mp3 out of the box) and handles resampling internally, so no sample-rate
 //! matching is needed.
-//!
-//! The whole module is `cfg(any(macos, windows))` (see `lib.rs`): rodio/cpal are
-//! not built on Linux (no alsa-sys in CI), and cues only ever play on the two
-//! supported desktop platforms.
 
 use crate::app_state::AppInner;
 use std::path::PathBuf;

@@ -91,17 +91,6 @@ pub async fn stop_capture(app_inner: &Arc<app_state::AppInner>) {
     }
 }
 
-/// Stop native audio capture. `_app`/`_timeout_ms` are retained for signature
-/// compatibility with call sites; native cpal capture has no renderer stream to
-/// flush or await.
-pub(crate) async fn stop_audio_capture(
-    _app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    _timeout_ms: u64,
-) {
-    stop_capture(app_inner).await;
-}
-
 fn run_input_thread(
     tx: tokio::sync::mpsc::UnboundedSender<Vec<f32>>,
     stop_rx: std::sync::mpsc::Receiver<()>,

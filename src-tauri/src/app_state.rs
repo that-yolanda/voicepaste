@@ -55,7 +55,7 @@ pub struct AppInner {
     pub accumulated_text: Mutex<String>,
     /// Native microphone capture (cpal — CoreAudio on macOS, WASAPI on Windows,
     /// ALSA on Linux). The overlay renderer no longer captures audio.
-    pub native_audio: Mutex<Option<crate::native_audio::NativeAudioCapture>>,
+    pub native_audio: Mutex<Option<crate::recording::NativeAudioCapture>>,
     /// Smoothed mic level feeding the overlay waveform. Updated by the audio
     /// emitter and consumed by `shared::wave_heights`, so both renderers share one
     /// smoothing state. Reset to 0 whenever the app leaves the Recording state.

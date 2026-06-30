@@ -171,6 +171,24 @@ pub fn strip_weight(entry: &str) -> &str {
     entry.split('|').next().unwrap_or(entry).trim()
 }
 
+/// Build the proper-noun hint suffix to append to an LLM system prompt, from
+/// the active hotwords (weights stripped). Returns `None` when empty so callers
+/// can skip the append entirely.
+pub fn build_llm_hint_suffix(hotwords: &[String]) -> Option<String> {
+    let hw: Vec<String> = hotwords
+        .iter()
+        .map(|w| strip_weight(w).to_string())
+        .collect();
+    if hw.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "\n\n需要注意以下专有名词的准确拼写：{}",
+            hw.join("、")
+        ))
+    }
+}
+
 /// Parse a hotword entry in "word" or "word|weight" format.
 /// Weight defaults to 4.0 and is clamped to [1.0, 10.0].
 pub fn parse_hotword_entry(entry: &str) -> (String, f32) {
