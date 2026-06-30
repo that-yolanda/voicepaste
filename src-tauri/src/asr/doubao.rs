@@ -22,10 +22,21 @@ use crate::config::{AudioConfig, ConnectionConfig, RequestConfig};
 // Binary protocol helpers
 // ---------------------------------------------------------------------------
 
+/// Doubao ASR binary framing protocol byte (always 0x11).
+const PROTOCOL_BYTE: u8 = 0x11;
+/// Message type 0x01: full client request (initial JSON config, gzip-compressed).
+const MSG_TYPE_FULL_REQUEST: u8 = 0x01;
+/// Message type 0x02: audio-only chunk (raw PCM, no compression).
+const MSG_TYPE_AUDIO_ONLY: u8 = 0x02;
+/// Message type 0x09: server acknowledgment.
+const MSG_TYPE_ACK: u8 = 0x09;
+/// Message type 0x0f: server error.
+const MSG_TYPE_ERROR: u8 = 0x0f;
+
 /// Build the 4-byte binary header for the Doubao ASR protocol.
 fn build_header(message_type: u8, flags: u8, serialization: u8, compression: u8) -> [u8; 4] {
     [
-        0x11,
+        PROTOCOL_BYTE,
         (message_type << 4) | (flags & 0x0f),
         (serialization << 4) | (compression & 0x0f),
         0x00,
@@ -34,15 +45,30 @@ fn build_header(message_type: u8, flags: u8, serialization: u8, compression: u8)
 
 /// Encode a full client request (initial message with JSON payload, gzip compressed).
 fn encode_full_client_request(payload: &Value) -> Vec<u8> {
-    let json_str = serde_json::to_string(payload).unwrap_or_default();
+    let json_str = match serde_json::to_string(payload) {
+        Ok(s) => s,
+        Err(e) => {
+            log_asr!(error, "encode_full_client_request: JSON serialize failed: {}", e);
+            return Vec::new();
+        }
+    };
     let payload_bytes = json_str.as_bytes();
 
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     use std::io::Write;
-    encoder.write_all(payload_bytes).unwrap();
-    let gzipped = encoder.finish().unwrap_or_default();
+    if let Err(e) = encoder.write_all(payload_bytes) {
+        log_asr!(error, "encode_full_client_request: gzip write failed: {}", e);
+        return Vec::new();
+    }
+    let gzipped = match encoder.finish() {
+        Ok(v) => v,
+        Err(e) => {
+            log_asr!(error, "encode_full_client_request: gzip finish failed: {}", e);
+            return Vec::new();
+        }
+    };
 
-    let header = build_header(0x01, 0x00, 0x01, 0x01);
+    let header = build_header(MSG_TYPE_FULL_REQUEST, 0x00, 0x01, 0x01);
     let payload_size = (gzipped.len() as u32).to_be_bytes();
 
     let mut result = Vec::with_capacity(4 + 4 + gzipped.len());
@@ -55,7 +81,7 @@ fn encode_full_client_request(payload: &Value) -> Vec<u8> {
 /// Encode an audio-only request (raw PCM data, no compression).
 fn encode_audio_only_request(audio: &[u8], is_last: bool) -> Vec<u8> {
     let flags: u8 = if is_last { 0x02 } else { 0x00 };
-    let header = build_header(0x02, flags, 0x00, 0x00);
+    let header = build_header(MSG_TYPE_AUDIO_ONLY, flags, 0x00, 0x00);
     let payload_size = (audio.len() as u32).to_be_bytes();
 
     let mut result = Vec::with_capacity(4 + 4 + audio.len());
@@ -79,7 +105,7 @@ pub(crate) fn parse_server_response(buffer: &[u8]) -> Option<Value> {
     let mut offset = ((header_byte0 & 0x0f) as usize) * 4;
 
     // Error message type
-    if message_type == 0x0f {
+    if message_type == MSG_TYPE_ERROR {
         if buffer.len() < offset + 8 {
             return None;
         }
@@ -122,7 +148,7 @@ pub(crate) fn parse_server_response(buffer: &[u8]) -> Option<Value> {
     }
 
     // Ack message type and message flags both skip 4 bytes
-    if message_type == 0x09 || message_flags == 0x01 || message_flags == 0x03 {
+    if message_type == MSG_TYPE_ACK || message_flags == 0x01 || message_flags == 0x03 {
         offset += 4;
     }
 
