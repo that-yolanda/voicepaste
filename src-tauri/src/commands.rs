@@ -594,7 +594,7 @@ pub async fn select_sound_file(app: AppHandle) -> Result<Option<String>, String>
 /// Play a sound.
 #[tauri::command]
 pub async fn play_sound_file(file_path: String) -> Result<(), String> {
-    paste::play_sound(&file_path);
+    crate::sound::play_audio_file(&file_path);
     Ok(())
 }
 

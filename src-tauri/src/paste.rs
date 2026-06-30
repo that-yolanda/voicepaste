@@ -118,32 +118,6 @@ fn simulate_paste_windows() -> Result<(), String> {
     Ok(())
 }
 
-/// Play a sound file using the system's native audio player.
-pub fn play_sound(file_path: &str) {
-    if file_path.is_empty() {
-        return;
-    }
-
-    if cfg!(target_os = "macos") {
-        if let Ok(mut child) = Command::new("afplay").arg(file_path).spawn() {
-            thread::spawn(move || {
-                let _ = child.wait();
-            });
-        }
-    } else {
-        let escaped = file_path.replace('\'', "''");
-        let script = format!("(New-Object Media.SoundPlayer '{}').PlaySync()", escaped);
-        let mut cmd = Command::new("powershell.exe");
-        cmd.args(["-NoProfile", "-Command", &script]);
-        hide_console(&mut cmd);
-        if let Ok(mut child) = cmd.spawn() {
-            thread::spawn(move || {
-                let _ = child.wait();
-            });
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -194,11 +168,5 @@ mod tests {
             permission_error: None,
         };
         assert!(result.permission_error.is_none());
-    }
-
-    #[test]
-    fn play_sound_empty_path_returns_early() {
-        // Should not panic on empty path
-        play_sound("");
     }
 }

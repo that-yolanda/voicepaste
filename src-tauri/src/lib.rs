@@ -13,6 +13,7 @@ mod overlay;
 mod paste;
 mod platform;
 mod recording;
+mod sound;
 mod stats;
 #[cfg(test)]
 mod tests;
