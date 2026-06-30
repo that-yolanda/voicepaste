@@ -83,6 +83,23 @@ pub(crate) fn json_string(config: &serde_json::Value, key: &str) -> Option<Strin
         .map(ToString::to_string)
 }
 
+/// Resolve a model file path: look up `key` in the entry's `model_files`, join
+/// it under `model_dir`, and return the string only if the file exists. Shared
+/// by every sherpa-onnx model builder so they don't each repeat the
+/// lookup → join → exists → to_string dance.
+pub(crate) fn build_model_path(
+    model_dir: &std::path::Path,
+    entry: &model::ModelEntry,
+    key: &str,
+) -> Option<String> {
+    let filename = entry.model_files.get(key)?;
+    let path = model_dir.join(filename);
+    if !path.exists() {
+        return None;
+    }
+    path.to_str().map(|s| s.to_string())
+}
+
 pub(crate) fn json_choice(
     config: &serde_json::Value,
     key: &str,

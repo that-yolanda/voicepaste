@@ -48,7 +48,11 @@ fn encode_full_client_request(payload: &Value) -> Vec<u8> {
     let json_str = match serde_json::to_string(payload) {
         Ok(s) => s,
         Err(e) => {
-            log_asr!(error, "encode_full_client_request: JSON serialize failed: {}", e);
+            log_asr!(
+                error,
+                "encode_full_client_request: JSON serialize failed: {}",
+                e
+            );
             return Vec::new();
         }
     };
@@ -57,13 +61,21 @@ fn encode_full_client_request(payload: &Value) -> Vec<u8> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     use std::io::Write;
     if let Err(e) = encoder.write_all(payload_bytes) {
-        log_asr!(error, "encode_full_client_request: gzip write failed: {}", e);
+        log_asr!(
+            error,
+            "encode_full_client_request: gzip write failed: {}",
+            e
+        );
         return Vec::new();
     }
     let gzipped = match encoder.finish() {
         Ok(v) => v,
         Err(e) => {
-            log_asr!(error, "encode_full_client_request: gzip finish failed: {}", e);
+            log_asr!(
+                error,
+                "encode_full_client_request: gzip finish failed: {}",
+                e
+            );
             return Vec::new();
         }
     };

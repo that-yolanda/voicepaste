@@ -10,7 +10,10 @@ use tokio::sync::mpsc;
 
 use super::punct::PunctuationProcessor;
 use super::vad::VadProcessor;
-use super::{append_text, send_transcript, AsrEvent, AsrSession, WorkerCommand, SAMPLE_RATE};
+use super::{
+    append_text, build_model_path, send_transcript, AsrEvent, AsrSession, WorkerCommand,
+    SAMPLE_RATE,
+};
 use crate::model::ModelEntry;
 
 use super::{json_bool, json_f32, json_string, json_u32};
@@ -29,20 +32,11 @@ pub(crate) fn build_online_recognizer(
     model_config: &serde_json::Value,
     hotwords_buf: Option<Vec<u8>>,
 ) -> Result<OnlineRecognizer, String> {
-    let p = |key: &str| -> Option<String> {
-        let filename = entry.model_files.get(key)?;
-        let path = model_dir.join(filename);
-        if !path.exists() {
-            return None;
-        }
-        path.to_str().map(|s| s.to_string())
-    };
-
     let mut config = OnlineRecognizerConfig::default();
-    config.model_config.transducer.encoder = p("encoder");
-    config.model_config.transducer.decoder = p("decoder");
-    config.model_config.transducer.joiner = p("joiner");
-    config.model_config.tokens = p("tokens");
+    config.model_config.transducer.encoder = build_model_path(model_dir, entry, "encoder");
+    config.model_config.transducer.decoder = build_model_path(model_dir, entry, "decoder");
+    config.model_config.transducer.joiner = build_model_path(model_dir, entry, "joiner");
+    config.model_config.tokens = build_model_path(model_dir, entry, "tokens");
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
     config.model_config.provider = json_string(model_config, "provider");
@@ -66,7 +60,7 @@ pub(crate) fn build_online_recognizer(
         // Set bpe_vocab for bpe or cjkchar+bpe models. Only cjkchar+bpe models
         // declare "bpe_vocab" in model_files; for plain cjkchar models p() returns
         // None and hotwords fall back to CJK-only handling.
-        config.model_config.bpe_vocab = p("bpe_vocab");
+        config.model_config.bpe_vocab = build_model_path(model_dir, entry, "bpe_vocab");
     } else {
         config.decoding_method = Some("greedy_search".to_string());
     }

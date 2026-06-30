@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::model::ModelEntry;
 
-use super::{json_f32, json_i32, json_string};
+use super::{build_model_path, json_f32, json_i32, json_string};
 
 /// Build a Qwen3 ASR OfflineRecognizer from a registry entry.
 ///
@@ -17,26 +17,19 @@ pub(crate) fn build_qwen3_asr_recognizer(
     model_config: &serde_json::Value,
     hotwords_str: Option<&str>,
 ) -> Result<OfflineRecognizer, String> {
-    let p = |key: &str| -> Option<String> {
-        let filename = entry.model_files.get(key)?;
-        let path = model_dir.join(filename);
-        if !path.exists() {
-            return None;
-        }
-        path.to_str().map(|s| s.to_string())
-    };
-
     let mut config = OfflineRecognizerConfig::default();
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
     config.model_config.provider = json_string(model_config, "provider");
 
-    let conv_frontend =
-        p("conv_frontend").ok_or_else(|| format!("模型 {} 缺少 conv_frontend 文件", entry.id))?;
-    let encoder = p("encoder").ok_or_else(|| format!("模型 {} 缺少 encoder 文件", entry.id))?;
-    let decoder = p("decoder").ok_or_else(|| format!("模型 {} 缺少 decoder 文件", entry.id))?;
-    let tokenizer =
-        p("tokenizer").ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
+    let conv_frontend = build_model_path(model_dir, entry, "conv_frontend")
+        .ok_or_else(|| format!("模型 {} 缺少 conv_frontend 文件", entry.id))?;
+    let encoder = build_model_path(model_dir, entry, "encoder")
+        .ok_or_else(|| format!("模型 {} 缺少 encoder 文件", entry.id))?;
+    let decoder = build_model_path(model_dir, entry, "decoder")
+        .ok_or_else(|| format!("模型 {} 缺少 decoder 文件", entry.id))?;
+    let tokenizer = build_model_path(model_dir, entry, "tokenizer")
+        .ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
 
     config.model_config.qwen3_asr = OfflineQwen3ASRModelConfig {
         conv_frontend: Some(conv_frontend),

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::model::ModelEntry;
 
-use super::{json_bool, json_f32, json_i32, json_string};
+use super::{build_model_path, json_bool, json_f32, json_i32, json_string};
 
 /// Build a comma-separated hotwords string for FunASR-Nano models.
 ///
@@ -35,27 +35,19 @@ pub(crate) fn build_funasr_nano_recognizer(
     model_config: &serde_json::Value,
     funasr_hotwords: Option<&str>,
 ) -> Result<OfflineRecognizer, String> {
-    let p = |key: &str| -> Option<String> {
-        let filename = entry.model_files.get(key)?;
-        let path = model_dir.join(filename);
-        if !path.exists() {
-            return None;
-        }
-        path.to_str().map(|s| s.to_string())
-    };
-
     let mut config = OfflineRecognizerConfig::default();
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
     config.model_config.provider = json_string(model_config, "provider");
 
-    let encoder_adaptor = p("encoder_adaptor")
+    let encoder_adaptor = build_model_path(model_dir, entry, "encoder_adaptor")
         .ok_or_else(|| format!("模型 {} 缺少 encoder_adaptor 文件", entry.id))?;
-    let llm = p("llm").ok_or_else(|| format!("模型 {} 缺少 llm 文件", entry.id))?;
-    let embedding =
-        p("embedding").ok_or_else(|| format!("模型 {} 缺少 embedding 文件", entry.id))?;
-    let tokenizer =
-        p("tokenizer").ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
+    let llm = build_model_path(model_dir, entry, "llm")
+        .ok_or_else(|| format!("模型 {} 缺少 llm 文件", entry.id))?;
+    let embedding = build_model_path(model_dir, entry, "embedding")
+        .ok_or_else(|| format!("模型 {} 缺少 embedding 文件", entry.id))?;
+    let tokenizer = build_model_path(model_dir, entry, "tokenizer")
+        .ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
     config.model_config.funasr_nano = OfflineFunASRNanoModelConfig {
         encoder_adaptor: Some(encoder_adaptor),
         llm: Some(llm),
