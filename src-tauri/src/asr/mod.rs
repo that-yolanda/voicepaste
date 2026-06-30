@@ -107,25 +107,12 @@ pub async fn create_engine_session(
     result.map(|(session, event_rx)| (session, event_rx, show_recording_hint))
 }
 
-/// Apply engine-specific post-ASR text corrections. sherpa-onnx lowercases
-/// proper nouns recognized via its hotword list, so their original casing is
-/// restored here; other engines need no correction. Keeps the recording layer
-/// from reaching into a specific engine's internals.
-pub fn apply_post_asr_corrections(
-    text: &str,
-    hotwords: &[String],
-    registry: &crate::model::ModelRegistry,
-    model_id: &str,
-) -> String {
-    let is_sherpa = registry
-        .models
-        .iter()
-        .find(|m| m.id == model_id)
-        .map(|m| m.engine == "sherpa-onnx")
-        .unwrap_or(false);
-    if is_sherpa {
-        sherpa_onnx::online::restore_hotword_case(text, hotwords)
-    } else {
-        text.to_string()
-    }
+/// Apply post-ASR text corrections: restore proper-noun casing that engines
+/// (notably sherpa-onnx) may have lowercased, using the active hotword list.
+/// Engine-agnostic and safe for every engine — engines that already preserve
+/// casing have no variants to replace. `config.hotword_replace` decides whether
+/// the caller invokes this at all. Keeps the recording layer out of hotword
+/// text-processing internals.
+pub fn apply_post_asr_corrections(text: &str, hotwords: &[String]) -> String {
+    crate::hotword::restore_hotword_case(text, hotwords)
 }

@@ -144,9 +144,7 @@ pub(super) async fn finalize_and_paste(
         if config.hotword_replace(model_id, &registry) {
             let hotwords = app_inner.hotword_manager.active_words();
             if !hotwords.is_empty() {
-                trimmed = crate::asr::apply_post_asr_corrections(
-                    &trimmed, &hotwords, &registry, model_id,
-                );
+                trimmed = crate::asr::apply_post_asr_corrections(&trimmed, &hotwords);
             }
         }
     }

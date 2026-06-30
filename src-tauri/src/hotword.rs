@@ -202,9 +202,209 @@ pub fn parse_hotword_entry(entry: &str) -> (String, f32) {
     }
 }
 
+/// Restore proper-noun casing that ASR engines (notably sherpa-onnx online
+/// transducers) lowercase when recognizing via their hotword list. Walks the
+/// text and replaces any case/space/punctuation variant of each hotword with
+/// its original spelling.
+///
+/// Engine-agnostic: engines that already preserve casing (e.g. Doubao) simply
+/// have no variants to replace, so this is safe to call for every engine —
+/// `config.hotword_replace` gates whether to call it at all. Lives in the
+/// hotword domain (alongside `build_llm_hint_suffix`) since it is pure
+/// hotword-driven text processing with no ASR dependency.
+///
+/// Uses two matching strategies:
+///   1. Space-aware: for multi-word hotwords like "Claude Code" → the engine
+///      preserves spaces, so we normalize with spaces.
+///   2. Alphanumeric-only: for hotwords with punctuation like "AGENTS.md" →
+///      the engine strips punctuation, so we match purely on alphanumerics.
+pub(crate) fn restore_hotword_case(text: &str, hotwords: &[String]) -> String {
+    // Strategy A: normalize keeping single spaces (collapsed).
+    fn normalize_spaces(s: &str) -> (String, Vec<usize>) {
+        let mut norm = String::new();
+        let mut positions = Vec::new();
+        let mut last_was_space = true; // skip leading spaces
+        for (i, c) in s.char_indices() {
+            if c.is_alphanumeric() {
+                norm.push_str(&c.to_uppercase().to_string());
+                positions.push(i);
+                last_was_space = false;
+            } else if !last_was_space {
+                norm.push(' ');
+                positions.push(i);
+                last_was_space = true;
+            }
+        }
+        if norm.ends_with(' ') {
+            norm.pop();
+            positions.pop();
+        }
+        (norm, positions)
+    }
+
+    // Strategy B: normalize to alphanumeric only (no spaces, no punctuation).
+    fn normalize_alpha(s: &str) -> (String, Vec<usize>) {
+        let mut norm = String::new();
+        let mut positions = Vec::new();
+        for (i, c) in s.char_indices() {
+            if c.is_alphanumeric() {
+                norm.push_str(&c.to_uppercase().to_string());
+                positions.push(i);
+            }
+        }
+        (norm, positions)
+    }
+
+    let mut result = text.to_string();
+
+    // Build (needle, original_word, use_spaces) tuples, longest first.
+    let mut replacements: Vec<(String, String, bool)> = hotwords
+        .iter()
+        .filter_map(|hw| {
+            let (original_word, _weight) = parse_hotword_entry(hw);
+
+            // Determine which strategy to use based on whether the hotword
+            // contains spaces (space-aware) or only punctuation (alpha-only).
+            let has_space = original_word.contains(' ');
+            let (needle, _) = if has_space {
+                normalize_spaces(&original_word)
+            } else {
+                normalize_alpha(&original_word)
+            };
+
+            if needle.is_empty() {
+                return None;
+            }
+            // Skip no-ops: already uppercase and matches its normalized form.
+            if !has_space
+                && original_word == original_word.to_uppercase()
+                && original_word.chars().all(|c| c.is_alphanumeric())
+            {
+                return None;
+            }
+            Some((needle, original_word, has_space))
+        })
+        .collect();
+
+    if replacements.is_empty() {
+        return result;
+    }
+
+    replacements.sort_by_key(|b| std::cmp::Reverse(b.0.len()));
+
+    for (needle, original, use_spaces) in &replacements {
+        let needle_chars: Vec<char> = needle.chars().collect();
+        let mut search_start = 0;
+
+        loop {
+            let (haystack_str, pos_map) = if *use_spaces {
+                normalize_spaces(&result)
+            } else {
+                normalize_alpha(&result)
+            };
+            let haystack_chars: Vec<char> = haystack_str.chars().collect();
+            if search_start >= haystack_chars.len() {
+                break;
+            }
+            // Character-level search to avoid byte-offset issues with CJK.
+            let pos = haystack_chars[search_start..]
+                .windows(needle_chars.len())
+                .position(|w| w == needle_chars.as_slice());
+            let Some(pos) = pos else {
+                break;
+            };
+            let norm_start = search_start + pos;
+            let norm_end = norm_start + needle_chars.len();
+            if norm_end > pos_map.len() {
+                break;
+            }
+
+            let mut byte_start = pos_map[norm_start];
+            let mut byte_end = if norm_end < pos_map.len() {
+                pos_map[norm_end]
+            } else {
+                result.len()
+            };
+            // Trim surrounding spaces from the matched range.
+            let result_bytes = result.as_bytes();
+            while byte_start < byte_end && result_bytes[byte_start] == b' ' {
+                byte_start += 1;
+            }
+            while byte_end > byte_start && result_bytes[byte_end - 1] == b' ' {
+                byte_end -= 1;
+            }
+
+            // Skip if already the original text (prevents infinite loop).
+            if &result[byte_start..byte_end] == original.as_str() {
+                search_start = norm_start + 1;
+                continue;
+            }
+
+            result.replace_range(byte_start..byte_end, original);
+            search_start = 0;
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::{HotwordData, HotwordGroup, HotwordManager};
+
+    // ── restore_hotword_case tests ───────────────────────────────────────
+
+    #[test]
+    fn restore_case_mixed() {
+        let r = super::restore_hotword_case("CLAUDE CODE", &["Claude Code".to_string()]);
+        assert_eq!(r, "Claude Code");
+    }
+
+    #[test]
+    fn restore_case_lowercase_model_output() {
+        let r = super::restore_hotword_case("claude code", &["Claude Code".to_string()]);
+        assert_eq!(r, "Claude Code");
+    }
+
+    #[test]
+    fn restore_punctuation_stripped() {
+        let r = super::restore_hotword_case("AGENTSMD", &["AGENTS.md".to_string()]);
+        assert_eq!(r, "AGENTS.md");
+    }
+
+    #[test]
+    fn restore_punctuation_with_space() {
+        let r = super::restore_hotword_case("AGENTS MD", &["AGENTS.md".to_string()]);
+        assert_eq!(r, "AGENTS.md");
+    }
+
+    #[test]
+    fn no_change_for_chinese() {
+        let r = super::restore_hotword_case("流式输出", &["流式输出".to_string()]);
+        assert_eq!(r, "流式输出");
+    }
+
+    #[test]
+    fn restore_with_weight_format() {
+        let r = super::restore_hotword_case("CLAUDE CODE", &["Claude Code|10".to_string()]);
+        assert_eq!(r, "Claude Code");
+    }
+
+    #[test]
+    fn restore_single_hotword() {
+        let r =
+            super::restore_hotword_case("使用 CLAUDE CODE 和 OPENAI", &["Claude Code".to_string()]);
+        assert_eq!(r, "使用 Claude Code 和 OPENAI");
+    }
+
+    #[test]
+    fn restore_multiple_in_sentence() {
+        let r = super::restore_hotword_case(
+            "使用 CLAUDE CODE 和 OPENAI",
+            &["Claude Code".to_string(), "OpenAI".to_string()],
+        );
+        assert_eq!(r, "使用 Claude Code 和 OpenAI");
+    }
 
     #[test]
     fn merge_defaults_adds_missing_words_without_duplicates() {
