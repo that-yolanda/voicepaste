@@ -187,7 +187,6 @@ fn migrate_app_section(legacy_app: Option<&Mapping>, app: &mut Mapping) {
     copy_str(legacy_app, app, "hotkey_mode");
     copy_str(legacy_app, app, "theme");
     copy_str(legacy_app, app, "overlay_style");
-    copy_str(legacy_app, app, "overlay_glass_mode");
     copy_bool(legacy_app, app, "remove_trailing_period");
     copy_bool(legacy_app, app, "keep_clipboard");
 
@@ -560,7 +559,6 @@ app:
   theme: light
   hotkey_mode: toggle
   overlay_style: liquid
-  overlay_glass_mode: auto
   sound:
     enabled: true
     start_sound: \"\"

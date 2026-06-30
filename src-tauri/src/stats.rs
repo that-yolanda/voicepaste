@@ -430,6 +430,29 @@ mod tests {
     }
 
     #[test]
+    fn prune_daily_counts_drops_old_entries() {
+        let (mut svc, _dir) = new_stats_service();
+        // An entry far outside the retention window, plus today's, both seeded
+        // directly so we don't depend on record_session's "today" stamping.
+        svc.stats.daily_counts.insert("2000-01-01".to_string(), 5);
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        svc.stats.daily_counts.insert(today.clone(), 3);
+        svc.prune_daily_counts();
+        let stats = svc.get_stats();
+        assert!(!stats.daily_counts.contains_key("2000-01-01"));
+        assert!(stats.daily_counts.contains_key(&today));
+    }
+
+    #[test]
+    fn is_date_key_validates_yyyy_mm_dd() {
+        assert!(is_date_key("2025-01-01"));
+        assert!(is_date_key("1999-12-31"));
+        assert!(!is_date_key("2025-13-01")); // invalid month
+        assert!(!is_date_key("not-a-date"));
+        assert!(!is_date_key(""));
+    }
+
+    #[test]
     fn get_history_empty() {
         let (svc, _dir) = new_stats_service();
         let history = svc.get_history(7);
