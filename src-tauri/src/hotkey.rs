@@ -730,7 +730,7 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
                     escape_was_pressed = true;
                     let handle = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        crate::on_escape(handle).await;
+                        crate::recording::on_escape(handle).await;
                     });
                 }
 
@@ -789,7 +789,7 @@ fn run_listener_loop(tap: &Tap, config: &HotkeyConfig, app_handle: &tauri::AppHa
 fn spawn_recording_start(app_handle: &tauri::AppHandle, is_main: bool) {
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        crate::on_recording_start(handle, is_main).await;
+        crate::recording::on_recording_start(handle, is_main).await;
     });
 }
 
@@ -798,7 +798,7 @@ fn spawn_recording_start(app_handle: &tauri::AppHandle, is_main: bool) {
 fn spawn_recording_stop(app_handle: &tauri::AppHandle, prompt_id: Option<String>) {
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        crate::on_recording_stop(handle, prompt_id).await;
+        crate::recording::on_recording_stop(handle, prompt_id).await;
     });
 }
 

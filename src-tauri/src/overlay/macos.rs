@@ -143,7 +143,7 @@ extern "C" fn retry_clicked(_this: *mut AnyObject, _sel: Sel, _sender: *mut AnyO
         return;
     };
     tauri::async_runtime::spawn(async move {
-        let _ = crate::retry_latest_failed_transcription(app).await;
+        let _ = crate::recording::retry_latest_failed_transcription(app).await;
     });
 }
 

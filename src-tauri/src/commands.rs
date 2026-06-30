@@ -285,7 +285,7 @@ pub async fn retry_history_transcription(
     app: AppHandle,
     ts: String,
 ) -> Result<serde_json::Value, String> {
-    crate::retry_history_transcription(app, ts).await
+    crate::recording::retry_history_transcription(app, ts).await
 }
 
 /// Retry the latest failed recording from the overlay retry button.
@@ -293,7 +293,7 @@ pub async fn retry_history_transcription(
 pub async fn retry_latest_failed_transcription(
     app: AppHandle,
 ) -> Result<serde_json::Value, String> {
-    crate::retry_latest_failed_transcription(app).await
+    crate::recording::retry_latest_failed_transcription(app).await
 }
 
 /// Compute a 0..1 loudness level from f32 PCM samples for the overlay waveform
