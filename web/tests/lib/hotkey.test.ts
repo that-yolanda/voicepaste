@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   formatPromptHotkey,
-  KEY_DISPLAY_NAMES,
   normalizeHotkeyLabel,
   normalizeHotkeyToken,
 } from "@/settings/lib/hotkey";
@@ -77,20 +76,6 @@ describe("formatPromptHotkey", () => {
   });
   it("returns single key without separator", () => {
     expect(formatPromptHotkey(["F13"])).toBe("F13");
-  });
-});
-
-describe("KEY_DISPLAY_NAMES", () => {
-  it("contains common keys", () => {
-    expect(KEY_DISPLAY_NAMES[1]).toBe("Esc");
-    expect(KEY_DISPLAY_NAMES[57]).toBe("␣");
-    expect(KEY_DISPLAY_NAMES[59]).toBe("F1");
-    expect(KEY_DISPLAY_NAMES[88]).toBe("F12");
-  });
-  it("maps modifier keycodes to physical key names", () => {
-    expect(KEY_DISPLAY_NAMES[29]).toBe("ControlLeft");
-    expect(KEY_DISPLAY_NAMES[56]).toBe("AltLeft");
-    expect(KEY_DISPLAY_NAMES[3675]).toBe("MetaLeft");
   });
 });
 

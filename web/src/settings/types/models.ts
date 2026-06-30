@@ -15,9 +15,3 @@ export interface RegistryModel {
   architecture?: string;
   streaming?: boolean;
 }
-
-export interface ModelRegistry extends Array<RegistryModel> {}
-
-export interface DownloadedModel {
-  id: string;
-}

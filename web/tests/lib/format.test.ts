@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeHtml, formatCompact, formatDuration } from "@/settings/lib/format";
+import { formatCompact, formatDuration } from "@/settings/lib/format";
 
 describe("formatCompact", () => {
   it("formats numbers < 1000 as-is", () => {
@@ -38,26 +38,5 @@ describe("formatDuration", () => {
   it("formats >= 10 hours as integer", () => {
     expect(formatDuration(36000)).toBe("10h");
     expect(formatDuration(72000)).toBe("20h");
-  });
-});
-
-describe("escapeHtml", () => {
-  it("escapes ampersand", () => {
-    expect(escapeHtml("a & b")).toBe("a &amp; b");
-  });
-  it("escapes less than", () => {
-    expect(escapeHtml("<script>")).toBe("&lt;script&gt;");
-  });
-  it("escapes greater than", () => {
-    expect(escapeHtml("5 > 3")).toBe("5 &gt; 3");
-  });
-  it("escapes double quote", () => {
-    expect(escapeHtml('"hello"')).toBe("&quot;hello&quot;");
-  });
-  it("escapes all special chars together", () => {
-    expect(escapeHtml('<a href="url">&</a>')).toBe("&lt;a href=&quot;url&quot;&gt;&amp;&lt;/a&gt;");
-  });
-  it("returns empty string unchanged", () => {
-    expect(escapeHtml("")).toBe("");
   });
 });

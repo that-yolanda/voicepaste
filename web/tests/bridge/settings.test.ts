@@ -97,8 +97,8 @@ describe("settings bridge — data methods", () => {
   });
 
   it("deleteHistory invokes delete_history", async () => {
-    await deleteHistory(12345);
-    expect(invoke).toHaveBeenCalledWith("delete_history", { ts: 12345 });
+    await deleteHistory("12345");
+    expect(invoke).toHaveBeenCalledWith("delete_history", { ts: "12345" });
   });
 
   it("loadPrompts invokes load_prompts", async () => {

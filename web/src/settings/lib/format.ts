@@ -18,12 +18,3 @@ export function formatDuration(totalSeconds: number): string {
   const h = s / 3600;
   return h < 10 ? `${h.toFixed(1)}h` : `${Math.round(h)}h`;
 }
-
-/** Escape HTML special characters. */
-export function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
