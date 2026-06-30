@@ -85,7 +85,7 @@ OverlayApp  (web/src/overlay/index.tsx)
 ├── getOverlayLayoutMetrics()  (fetch shared::LayoutMetrics from backend on mount)
 └── pill  (data-wrap drives single-line vs multi-line CSS)
     ├── indicator   (spinner while connecting/finishing; red dot on error;
-    │                ripple ring while recording)
+    │                hidden while recording — the waveform takes its slot)
     ├── waveform    (4 fixed bars, scaleY from backend heights)
     ├── body        (transcript final+partial OR hint text — mutually exclusive)
     └── retry button (error + retryable only; calls retryLatestFailedTranscription)
@@ -103,7 +103,6 @@ Frontend calls typed async wrappers that map to `#[tauri::command]` functions in
 Frontend                          Backend
 ───────                          ───────
 overlay/bridge.ts                  commands.rs
-  getConfig() ───────────────────▶ get_app_config()
   getOverlayLayoutMetrics() ─────▶ get_overlay_layout_metrics()
   retryLatestFailedTranscription() ─▶ retry_latest_failed_transcription()
 
@@ -222,8 +221,7 @@ Command::new("powershell")
 
 ### Sound Playback
 
-Sound files (start.mp3, end.mp3) are played asynchronously:
-- macOS: `afplay <file>`
-- Windows: `powershell -Command (New-Object Media.SoundPlayer <file>).Play()`
+Sound files (start.mp3, end.mp3) are played via `rodio` in `sound.rs`
+(cross-platform; replaces the former per-platform `afplay` / PowerShell paths).
 
-Sound plays at Recording start and optionally after paste completion.
+Sound plays at recording start and optionally after paste completion.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The LLM module (`llm.rs`) provides AI-powered text polishing after ASR recognition. It is a standalone module with a single public function `call_llm_api`. All providers are accessed via OpenAI-compatible `/chat/completions` endpoints.
+The LLM module (`llm.rs`) provides AI-powered text polishing after ASR recognition. The recording pipeline calls `polish_transcript`, which resolves the active prompt template (and optional hotword hint) and returns a `PolishOutcome` (`NotPolished` / `Polished(text)` / `Failed(error)`); it internally calls the lower-level `call_llm_api`. All providers are accessed via OpenAI-compatible `/chat/completions` endpoints.
 
 ## Provider System
 
@@ -45,33 +45,29 @@ Empty strings count as "not set" and fall through to the next level.
 
 ```mermaid
 sequenceDiagram
-    participant SM as State Machine
-    participant LLM as llm::call_llm_api
+    participant SM as Recording finalize
+    participant LLM as llm::polish_transcript
     participant API as LLM API
 
     SM->>SM: stop_recording()
     SM->>SM: session.commit_and_await_final()
-    SM->>SM: Check active_prompt_id
+    SM->>LLM: polish_transcript(config, prompts, active_prompt_id, hotwords, raw_text)
 
-    alt Prompt-specific hotkey (active_prompt_id is Some)
-        SM->>SM: Load prompt from prompts.json
-        SM->>SM: If hotword_llm_mode != "disabled" → append hotwords to prompt
-        SM->>LLM: call_llm_api(config, text, system_prompt)
-        LLM->>LLM: get_active_provider_config() → (url, api_key, model)
-        LLM->>LLM: normalize_base_url(url)
-        LLM->>LLM: Prepend VOICE_TRANSCRIPT_GUARD_PROMPT
-        LLM->>LLM: Build OpenAI-compat JSON body
-        LLM->>API: POST {url}/chat/completions (15s timeout)
+    alt Main hotkey (active_prompt_id is None)
+        LLM-->>SM: NotPolished → paste raw text
+    else Prompt-specific hotkey
+        LLM->>LLM: Resolve prompt template (or DEFAULT_STRUCTURE_PROMPT)
+        LLM->>LLM: If hotword_llm_mode != "disabled" → append hotword hint
+        LLM->>LLM: call_llm_api → resolve provider config + prepend guard prompt
+        LLM->>API: POST {url}/chat/completions (30s timeout)
         API-->>LLM: JSON response
         LLM->>LLM: Extract choices[0].message.content
-        LLM-->>SM: polished text
-    else Main hotkey (active_prompt_id is None)
-        SM->>SM: Skip LLM, use raw ASR text
+        LLM-->>SM: Polished(text)
     end
 
     alt LLM call failed
-        SM->>SM: Fallback to raw ASR text
-        SM->>SM: Show warning hint
+        LLM-->>SM: Failed(error)
+        SM->>SM: Fallback to raw ASR text + warning hint
     end
 
     SM->>SM: clipboard.write_text(final_text)

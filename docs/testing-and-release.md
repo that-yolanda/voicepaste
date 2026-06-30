@@ -71,9 +71,9 @@ web/tests/
 │   ├── overlay.test.ts
 │   └── settings.test.ts
 └── lib/
-    ├── audio.test.ts
     ├── format.test.ts
     ├── hotkey.test.ts
+    ├── hotwords.test.ts
     └── model.test.ts
 ```
 

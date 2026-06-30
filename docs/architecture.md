@@ -52,7 +52,7 @@
 
 ## State Machine
 
-The recording lifecycle is a 4-state machine defined in `app_state.rs`.
+The recording lifecycle is a 4-state machine; the transitions live in `recording/lifecycle.rs` (the `AppState` enum itself is defined in `app_state.rs`).
 
 ```mermaid
 stateDiagram-v2

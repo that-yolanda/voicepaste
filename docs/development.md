@@ -54,8 +54,9 @@ voicepaste/
 │   └── validate-json.ts #   Schema validation for JSON configs
 ├── src-tauri/           # Rust backend (Tauri v2)
 │   ├── src/
-│   │   ├── lib.rs       #   App entry, state machine & hotkey management
-│   │   ├── hotkey.rs    #   Global hotkey parsing & listener (keytap)
+│   │   ├── lib.rs       #   App entry: plugin/tray/overlay setup + hotkey wiring
+│   │   ├── recording/   #   Recording state machine & session (mod/session/capture/finalize/lifecycle/retry/history/cue/wav)
+│   │   ├── hotkey/      #   Global hotkey parsing & keytap listener (mod/label/listener/matcher/parse/recorder)
 │   │   ├── asr/         #   ASR engine implementations
 │   │   │   ├── mod.rs               #   AsrEngine / AsrSession / AsrEvent traits
 │   │   │   ├── doubao.rs            #   Doubao streaming ASR (WebSocket binary protocol)
@@ -69,8 +70,12 @@ voicepaste/
 │   │   │       ├── qwen3_asr.rs     #     Qwen3-ASR model config builder
 │   │   │       ├── punct.rs         #     Punctuation restoration
 │   │   │       └── vad.rs           #     Silero VAD processor
-│   │   ├── paste.rs     #   Clipboard write + simulated paste + sound
+│   │   ├── hotword.rs   #   Hotword manager + restore_hotword_case (all engines)
+│   │   ├── paste.rs     #   Clipboard write + simulated paste
+│   │   ├── sound.rs     #   Sound playback (rodio)
 │   │   ├── config.rs    #   Config loading, prompts & YAML handling
+│   │   ├── migration.rs #   One-time 1.x → 2.x config migration
+│   │   ├── platform.rs  #   macOS Dock visibility + app activation + settings window
 │   │   ├── commands.rs  #   Tauri IPC command handlers
 │   │   ├── updater.rs   #   Auto-update check & download/install
 │   │   ├── llm.rs       #   LLM text polishing integration
@@ -126,11 +131,11 @@ All logging uses the `log` crate with custom macros defined in `src-tauri/src/lo
 
 | Macro | Module | Used in |
 |-------|--------|---------|
-| `log_app!` | App | lib.rs (init, config, sound) |
-| `log_rec!` | Recording | lib.rs (recording state machine) |
+| `log_app!` | App | lib.rs (init, config) |
+| `log_rec!` | Recording | recording/ (state machine, session) |
 | `log_asr!` | ASR | asr/ (doubao.rs, sherpa_onnx/) |
 | `log_audio!` | Audio | commands.rs (audio chunks) |
-| `log_hotkey!` | Hotkey | hotkey.rs |
+| `log_hotkey!` | Hotkey | hotkey/ |
 | `log_events!` | Events | lib.rs (event forwarding) |
 | `log_tray!` | Tray | lib.rs (tray menu) |
 | `log_update!` | Update | updater.rs |

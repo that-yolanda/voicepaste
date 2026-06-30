@@ -129,20 +129,6 @@ The `parse_hotkey_string()` function converts human-readable hotkey strings into
 Supported modifier aliases: `Ctrl`/`Control`, `Shift`, `Alt`/`Option`, `Cmd`/`Super`/`Meta`/`Command`.
 For side-specific modifiers: `ControlLeft`, `ShiftRight`, `AltLeft`, `CmdRight`, etc.
 
-### Legacy Format Support
-
-Prompt hotkeys can also use the legacy uIOhook keycode format (integer array):
-
-```yaml
-# New format (preferred)
-hotkey: ["Control+Shift+A"]
-
-# Legacy format (still supported)
-hotkey: [29, 46, 4]  # Control, Shift, A
-```
-
-`parse_prompt_hotkey_to_keys()` tries string format first, then falls back to keycode mapping.
-
 ## Per-Prompt Hotkeys
 
 Each prompt in `prompts.json` can have its own hotkey and mode:

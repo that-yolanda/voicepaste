@@ -46,7 +46,7 @@ Represents a single recording session lifecycle:
 
 ### AsrEvent
 
-Unified event type emitted by all engines. The `forward_asr_events` task in `lib.rs` converts these into `overlay:event` emissions for the frontend.
+Unified event type emitted by all engines. The `manage_asr_session` task in `recording/session.rs` converts these into `overlay:event` emissions for the frontend.
 
 ## Engine Dispatch Flow
 

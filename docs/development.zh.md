@@ -54,8 +54,9 @@ voicepaste/
 │   └── validate-json.ts #   JSON 配置文件 schema 校验
 ├── src-tauri/           # Rust 后端（Tauri v2）
 │   ├── src/
-│   │   ├── lib.rs       #   应用入口、状态机与快捷键管理
-│   │   ├── hotkey.rs    #   全局快捷键解析与监听（keytap）
+│   │   ├── lib.rs       #   应用入口：插件/托盘/覆盖窗装配 + 快捷键接线
+│   │   ├── recording/   #   录音状态机与会话（mod/session/capture/finalize/lifecycle/retry/history/cue/wav）
+│   │   ├── hotkey/      #   全局快捷键解析与 keytap 监听（mod/label/listener/matcher/parse/recorder）
 │   │   ├── asr/         #   ASR 引擎实现
 │   │   │   ├── mod.rs               #   AsrEngine / AsrSession / AsrEvent 特质
 │   │   │   ├── doubao.rs            #   豆包流式 ASR（WebSocket 二进制协议）
@@ -69,8 +70,12 @@ voicepaste/
 │   │   │       ├── qwen3_asr.rs     #     Qwen3-ASR 模型 config
 │   │   │       ├── punct.rs         #     标点恢复
 │   │   │       └── vad.rs           #     Silero VAD 处理器
-│   │   ├── paste.rs     #   剪贴板写入、模拟粘贴与音效播放
+│   │   ├── hotword.rs   #   热词管理 + restore_hotword_case（所有引擎通用）
+│   │   ├── paste.rs     #   剪贴板写入与模拟粘贴
+│   │   ├── sound.rs     #   音效播放（rodio）
 │   │   ├── config.rs    #   配置加载、模板与 YAML 处理
+│   │   ├── migration.rs #   一次性 1.x → 2.x 配置迁移
+│   │   ├── platform.rs  #   macOS Dock 可见性 + 应用激活 + 设置窗口
 │   │   ├── commands.rs  #   Tauri IPC 命令处理
 │   │   ├── updater.rs   #   自动更新检查与下载安装
 │   │   ├── llm.rs       #   LLM 文本润色集成
@@ -126,11 +131,11 @@ voicepaste/
 
 | 宏 | 模块 | 使用位置 |
 |-----|------|---------|
-| `log_app!` | App | lib.rs（初始化、配置、音效） |
-| `log_rec!` | Recording | lib.rs（录音状态机） |
+| `log_app!` | App | lib.rs（初始化、配置） |
+| `log_rec!` | Recording | recording/（状态机、会话） |
 | `log_asr!` | ASR | asr/（doubao.rs、sherpa_onnx/） |
 | `log_audio!` | Audio | commands.rs（音频块） |
-| `log_hotkey!` | Hotkey | hotkey.rs |
+| `log_hotkey!` | Hotkey | hotkey/ |
 | `log_events!` | Events | lib.rs（事件转发） |
 | `log_tray!` | Tray | lib.rs（托盘菜单） |
 | `log_update!` | Update | updater.rs |
