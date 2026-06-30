@@ -113,12 +113,11 @@ struct Views {
     retry_view: Retained<NSView>,
     retry_button: Retained<NSButton>,
     _retry_target: Retained<AnyObject>,
-    dot_layer: Retained<AnyObject>,    // CALayer for the indicator dot
-    ripple_layer: Retained<AnyObject>, // CALayer halo behind the dot (recording ripple)
+    dot_layer: Retained<AnyObject>, // CALayer for the indicator dot
     retry_track_layer: Retained<AnyObject>, // CALayer for the retry ring track
     retry_progress_layer: Retained<AnyObject>, // CALayer for the retry countdown ring
-    fade_mask: Retained<AnyObject>,    // CAGradientLayer for the multi-line top fade
-    applied_variant: String,           // "" (auto/inherit) | "light" | "dark"
+    fade_mask: Retained<AnyObject>, // CAGradientLayer for the multi-line top fade
+    applied_variant: String,        // "" (auto/inherit) | "light" | "dark"
     /// Previous pill width; `f64::NAN` until the first frame. Drives the
     /// grow-only animation decision in `render`.
     last_pill_w: f64,
@@ -402,15 +401,11 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
 
         let indicator = NSView::new(mtm);
         indicator.setWantsLayer(true);
-        let ripple_layer = make_dot_layer();
         let dot_layer = make_dot_layer();
         unsafe {
-            // Ripple starts invisible (its animation drives opacity when recording).
-            let _: () = msg_send![&*ripple_layer, setOpacity: 0.0f32];
             let ind_layer: *mut AnyObject = msg_send![&*indicator, layer];
             if !ind_layer.is_null() {
-                let _: () = msg_send![ind_layer, addSublayer: &*ripple_layer]; // behind
-                let _: () = msg_send![ind_layer, addSublayer: &*dot_layer]; // in front
+                let _: () = msg_send![ind_layer, addSublayer: &*dot_layer];
             }
         }
 
@@ -518,7 +513,6 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
             retry_button,
             _retry_target: retry_target,
             dot_layer,
-            ripple_layer,
             retry_track_layer,
             retry_progress_layer,
             fade_mask: make_fade_mask(),
@@ -560,8 +554,8 @@ fn apply_variant(window: &AnyObject, variant: &str) {
     }
 }
 
-/// Create the indicator dot as a standalone CALayer (anchor at its center so it can
-/// scale/"breathe"). Color + position are set per render.
+/// Create the indicator dot as a standalone CALayer. Color + position are set
+/// per render; the corner radius set here makes it a circle.
 fn make_dot_layer() -> Retained<AnyObject> {
     unsafe {
         let cls = objc2::runtime::AnyClass::get(c"CALayer").expect("CALayer");
@@ -667,50 +661,6 @@ fn set_retry_countdown(layer: &AnyObject, on: bool) {
     }
 }
 
-/// Add or remove the recording dot's expanding-ring "ripple" on a halo layer,
-/// faithfully matching the web `vp-ring` keyframes: the dot itself stays fixed
-/// while a ring scales out from it and fades, looping every 1.6s (ease-out).
-fn set_ripple(layer: &AnyObject, on: bool) {
-    unsafe {
-        let key = NSString::from_str("ripple");
-        if on {
-            let existing: *mut AnyObject = msg_send![layer, animationForKey: &*key];
-            if !existing.is_null() {
-                return; // already rippling
-            }
-            let anim_cls =
-                objc2::runtime::AnyClass::get(c"CABasicAnimation").expect("CABasicAnimation");
-            // Ring grows from the dot edge to +8px: (7+8)/7 ≈ 2.14×.
-            let scale_path = NSString::from_str("transform.scale");
-            let scale: *mut AnyObject = msg_send![anim_cls, animationWithKeyPath: &*scale_path];
-            let _: () = msg_send![scale, setFromValue: &*NSNumber::numberWithDouble(1.0)];
-            let _: () = msg_send![scale, setToValue: &*NSNumber::numberWithDouble(2.14)];
-            // Fades from a soft accent alpha to fully transparent.
-            let op_path = NSString::from_str("opacity");
-            let fade: *mut AnyObject = msg_send![anim_cls, animationWithKeyPath: &*op_path];
-            let _: () = msg_send![fade, setFromValue: &*NSNumber::numberWithDouble(0.45)];
-            let _: () = msg_send![fade, setToValue: &*NSNumber::numberWithDouble(0.0)];
-
-            let group_cls =
-                objc2::runtime::AnyClass::get(c"CAAnimationGroup").expect("CAAnimationGroup");
-            let group: *mut AnyObject = msg_send![group_cls, animation];
-            let anims = NSArray::from_slice(&[&*scale, &*fade]);
-            let _: () = msg_send![group, setAnimations: &*anims];
-            let _: () = msg_send![group, setDuration: 1.6f64];
-            let _: () = msg_send![group, setRepeatCount: f32::INFINITY];
-            let _: () = msg_send![group, setRemovedOnCompletion: false];
-            let tcls = objc2::runtime::AnyClass::get(c"CAMediaTimingFunction")
-                .expect("CAMediaTimingFunction");
-            let tname = NSString::from_str("easeOut");
-            let tf: *mut AnyObject = msg_send![tcls, functionWithName: &*tname];
-            let _: () = msg_send![group, setTimingFunction: tf];
-            let _: () = msg_send![layer, addAnimation: group, forKey: &*key];
-        } else {
-            let _: () = msg_send![layer, removeAnimationForKey: &*key];
-        }
-    }
-}
-
 fn set_layer_color(view: &NSView, color: &NSColor, corner: f64) {
     unsafe {
         let layer: *mut AnyObject = msg_send![view, layer];
@@ -755,7 +705,7 @@ fn make_fade_mask() -> Retained<AnyObject> {
 /// Pulse the hint label's opacity — a gentle breathing load indicator that
 /// stays clean on Liquid Glass (it's the text itself fading, not an overlay on
 /// the glass surface). `on` adds a reversing opacity animation; `off` removes
-/// it. Reuses the "skip if key exists" pattern from `set_ripple`.
+/// it. Reuses the "skip if key exists" pattern.
 fn set_label_pulse(label: &NSTextField, on: bool) {
     unsafe {
         let ll: *mut AnyObject = msg_send![label, layer];
@@ -914,7 +864,6 @@ pub fn set_wave_heights(app: &AppHandle, heights: &[f64; WAVE_N]) {
 
 /// Build the transcript attributed string: final (labelColor) + partial (secondary).
 fn transcript_attr(model: &Model) -> Retained<NSAttributedString> {
-    let mtm = MainThreadMarker::new().unwrap();
     let final_s = &model.final_text;
     let partial_s = &model.partial_text;
     let combined = format!("{final_s}{partial_s}");
@@ -940,7 +889,6 @@ fn transcript_attr(model: &Model) -> Retained<NSAttributedString> {
             );
         }
     }
-    let _ = mtm;
     Retained::into_super(attr)
 }
 
@@ -979,9 +927,6 @@ fn render(app: &AppHandle, model: &mut Model) {
     let Some(ptr) = make_window_ptr(app) else {
         return;
     };
-    if ptr.is_null() {
-        return;
-    }
     // SAFETY: ptr is the overlay window's live NSWindow for the app lifetime.
     let ns_window: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
     let Some(content) = ns_window.contentView() else {
@@ -1204,23 +1149,13 @@ fn render(app: &AppHandle, model: &mut Model) {
             x: INDICATOR_W / 2.0,
             y: INDICATOR_W / 2.0,
         };
-        let is_recording = false; // recording uses the waveform, never the dot/ripple
         unsafe {
             let dl = &*views.dot_layer;
             let _: () = msg_send![dl, setBounds: dot_bounds];
             let _: () = msg_send![dl, setPosition: dot_center];
             let cg: *mut AnyObject = msg_send![&*dot_color, CGColor];
             let _: () = msg_send![dl, setBackgroundColor: cg];
-
-            // The ripple halo shares the dot's geometry and the accent (green) color.
-            let rl = &*views.ripple_layer;
-            let _: () = msg_send![rl, setBounds: dot_bounds];
-            let _: () = msg_send![rl, setPosition: dot_center];
-            let green: *mut AnyObject = msg_send![&*NSColor::systemGreenColor(), CGColor];
-            let _: () = msg_send![rl, setBackgroundColor: green];
-            let _: () = msg_send![rl, setHidden: !is_recording];
         }
-        set_ripple(&views.ripple_layer, is_recording);
 
         // Label, right of the indicator slot. The slot holds spinner/dot/waveform
         // (all INDICATOR_W wide), so label_x is constant regardless of state.
