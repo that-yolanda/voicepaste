@@ -12,12 +12,6 @@ export interface OverlayEvent {
   payload: Record<string, unknown>;
 }
 
-export interface OverlayAppConfig {
-  platform?: string;
-  overlayStyle?: string;
-  theme?: string;
-}
-
 /**
  * Listen for overlay events from the backend.
  * Returns a cleanup function that unregisters the listener.
@@ -33,11 +27,6 @@ export function onOverlayEvent(listener: (event: OverlayEvent) => void): () => v
     active = false;
     unlisten.then((fn) => fn());
   };
-}
-
-/** Get the current app configuration. */
-export async function getConfig(): Promise<OverlayAppConfig> {
-  return invoke("get_app_config");
 }
 
 /** Retry the latest failed recording directly from the overlay. */

@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getConfig, onOverlayEvent, retryLatestFailedTranscription } from "@/overlay/bridge";
+import { onOverlayEvent, retryLatestFailedTranscription } from "@/overlay/bridge";
 
 describe("overlay bridge", () => {
   describe("onOverlayEvent", () => {
@@ -38,13 +38,6 @@ describe("overlay bridge", () => {
       await vi.waitFor(() => {
         expect(unlistenFn).toHaveBeenCalled();
       });
-    });
-  });
-
-  describe("getConfig", () => {
-    it("invokes get_app_config", async () => {
-      await getConfig();
-      expect(invoke).toHaveBeenCalledWith("get_app_config");
     });
   });
 

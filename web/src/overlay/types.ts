@@ -1,5 +1,3 @@
-import type { OverlayEvent } from "@/overlay/bridge";
-
 export type AppState = "idle" | "connecting" | "recording" | "finishing";
 export type HintLevel = "info" | "error" | "warn";
 
@@ -29,5 +27,3 @@ export const INITIAL_OVERLAY_STATE: OverlayState = {
   retryVisible: false,
   retrying: false,
 };
-
-export type { OverlayEvent };
