@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type SectionId, Sidebar } from "@/settings/layout/Sidebar";
 import { AboutPage } from "@/settings/pages/AboutPage";
 import { AppSettingsPage } from "@/settings/pages/AppSettingsPage";
@@ -13,6 +13,19 @@ import { SettingsProvider } from "@/settings/SettingsProvider";
 
 export function SettingsApp() {
   const [section, setSection] = useState<SectionId>("home");
+
+  // Prevent Alt and F10 from activating the WebView2 menu bar, which
+  // would pause JavaScript execution and block IPC promise resolution
+  // (e.g. `await recordHotkey()` never resolves after an Alt-only press).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Alt" || e.key === "F10") {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   return (
     <SettingsProvider>
