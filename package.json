@@ -1,6 +1,6 @@
 {
   "name": "voicepaste",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Privacy-first voice input for macOS & Windows — global hotkey, speak, auto-paste. Your data stays local. Works offline with on-device ASR & LLM. Lightweight, open source, fully customizable.",
   "author": "that-yolanda",
   "license": "MIT",

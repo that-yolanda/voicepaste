@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.1.2 (2026-07-02)
+
+Hotfix release focused on Windows hotkey recording reliability.
+
+### Fixed
+
+- **Windows Hotkey Recording** — Fixed hotkey recording intermittently failing on Windows. When the settings window had focus, WebView2 blocked the system keyboard hook so key events never reached the recorder; Windows now polls the physical keyboard state directly, bypassing the issue entirely. Alt / F10 are also blocked from activating the WebView2 menu bar, which otherwise paused page scripts and stalled the recording callback.
+- **macOS Settings Window** — The settings window now comes to the front reliably on launch and when clicking the Dock icon.
+- **Doubao ASR** — Switched the default to non-streaming mode for more stable recognition.
+
+### Under the Hood
+
+- Reorganized the backend into focused modules (recording / hotkey / overlay, …) and removed dead code. No behavior changes.
+
 ## v2.1.1 (2026-06-29)
 
 Hotfix release for hotkey reliability.
