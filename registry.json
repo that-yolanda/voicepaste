@@ -54,7 +54,7 @@
         "language": "",
         "enable_ddc": true,
         "enable_itn": true,
-        "enable_nonstream": false,
+        "enable_nonstream": true,
         "enable_punc": true,
         "show_utterances": true,
         "result_type": "full",
