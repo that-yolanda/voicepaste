@@ -10,6 +10,7 @@ app:
   remove_trailing_period: true    # 自动删除识别结果末尾的句号
   keep_clipboard: true            # 保留识别结果在剪贴板
   keep_recordings: false          # 是否保留成功录音；关闭时仅保留失败录音用于重试
+  prompt_hotkeys_stop_only: false # 润色快捷键在点击切换模式下仅用于结束录音
   theme: system                   # dark / light / system
   overlay_style: liquid           # macOS 悬浮窗外观（仅 macOS 生效）
   sound:

@@ -128,9 +128,11 @@ impl MatcherState {
                                 .cycle_best
                                 .filter(|&i| bindings[i].mode == HotkeyMode::Toggle)
                             {
-                                let is_main = bindings[i].prompt_id.is_none();
-                                self.recording = Some(HotkeyMode::Toggle);
-                                actions.push(HotkeyAction::StartRecording { is_main });
+                                if !bindings[i].stop_only_when_idle {
+                                    let is_main = bindings[i].prompt_id.is_none();
+                                    self.recording = Some(HotkeyMode::Toggle);
+                                    actions.push(HotkeyAction::StartRecording { is_main });
+                                }
                             }
                             self.cycle_best = None;
                         }
@@ -244,6 +246,16 @@ mod tests {
             keys: keys.iter().copied().collect(),
             mode: HotkeyMode::from_str(mode),
             prompt_id: prompt_id.map(str::to_string),
+            stop_only_when_idle: false,
+        }
+    }
+
+    fn stop_only_binding(keys: &[Key], prompt_id: &str) -> HotkeyBinding {
+        HotkeyBinding {
+            keys: keys.iter().copied().collect(),
+            mode: HotkeyMode::Toggle,
+            prompt_id: Some(prompt_id.to_string()),
+            stop_only_when_idle: true,
         }
     }
 
@@ -404,6 +416,39 @@ mod tests {
             actions,
             vec![
                 HotkeyAction::StartRecording { is_main: false },
+                HotkeyAction::StopRecording {
+                    prompt_id: Some("polish".to_string())
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn stop_only_prompt_toggle_is_ignored_while_idle() {
+        let bindings = [stop_only_binding(&[Key::Function], "polish")];
+        let actions = run_matcher(&bindings, &[down(Key::Function), up(Key::Function)]);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn stop_only_prompt_toggle_can_stop_active_recording() {
+        let bindings = [
+            binding(&[Key::F13], "toggle", None),
+            stop_only_binding(&[Key::Function], "polish"),
+        ];
+        let actions = run_matcher(
+            &bindings,
+            &[
+                down(Key::F13),
+                up(Key::F13),
+                down(Key::Function),
+                up(Key::Function),
+            ],
+        );
+        assert_eq!(
+            actions,
+            vec![
+                HotkeyAction::StartRecording { is_main: true },
                 HotkeyAction::StopRecording {
                     prompt_id: Some("polish".to_string())
                 },

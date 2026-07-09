@@ -62,6 +62,9 @@ pub struct HotkeyBinding {
     pub mode: HotkeyMode,
     /// `None` for the main hotkey, `Some(id)` for prompt hotkeys.
     pub prompt_id: Option<String>,
+    /// When true, this prompt toggle binding is ignored while idle and only
+    /// participates in stop cycles during an active recording.
+    pub stop_only_when_idle: bool,
 }
 
 /// Shared hotkey configuration, updatable without restarting the tap.
@@ -124,6 +127,7 @@ pub fn reload_bindings(
     config: &HotkeyConfig,
     main_hotkey_str: &str,
     main_mode: &str,
+    prompt_hotkeys_stop_only: bool,
     prompts: &[PromptItem],
 ) {
     let mut new_bindings = Vec::new();
@@ -135,6 +139,7 @@ pub fn reload_bindings(
                 keys,
                 mode: HotkeyMode::from_str(main_mode),
                 prompt_id: None,
+                stop_only_when_idle: false,
             });
         } else {
             log_hotkey!(warn, "Failed to parse main hotkey: '{}'", main_hotkey_str);
@@ -148,6 +153,7 @@ pub fn reload_bindings(
                 keys,
                 mode: HotkeyMode::from_str(&prompt.hotkey_mode),
                 prompt_id: Some(prompt.id.clone()),
+                stop_only_when_idle: prompt_hotkeys_stop_only,
             });
         } else if !prompt.hotkey.is_empty() {
             log_hotkey!(
@@ -202,7 +208,13 @@ pub fn reload_hotkey_bindings(app: &AppHandle) {
         .unwrap_or_else(|| "toggle".to_string());
 
     let prompts = app_inner.config_manager.load_prompts();
-    reload_bindings(&hc, &hotkey_str, &mode, &prompts);
+    reload_bindings(
+        &hc,
+        &hotkey_str,
+        &mode,
+        config.app.prompt_hotkeys_stop_only,
+        &prompts,
+    );
 }
 
 /// Initialize the keytap-based global hotkey listener from the current config.
@@ -225,7 +237,12 @@ pub fn setup_keytap_hotkeys(app: &AppHandle) -> Result<(), Box<dyn std::error::E
     let hotkey_mode = config.app.hotkey_mode.as_str();
 
     let prompts = app_inner.config_manager.load_prompts();
-    let bindings = build_initial_bindings(&hotkey_str, hotkey_mode, &prompts);
+    let bindings = build_initial_bindings(
+        &hotkey_str,
+        hotkey_mode,
+        config.app.prompt_hotkeys_stop_only,
+        &prompts,
+    );
 
     let hotkey_config = create_config(bindings);
     let hotkey_manager = listener::start_hotkey_listener(hotkey_config.clone(), app.clone())
@@ -249,6 +266,7 @@ pub fn set_escape_enabled(config: &HotkeyConfig, enabled: bool) {
 fn build_initial_bindings(
     main_hotkey_str: &str,
     main_mode: &str,
+    prompt_hotkeys_stop_only: bool,
     prompts: &[PromptItem],
 ) -> Vec<HotkeyBinding> {
     let mut bindings = Vec::new();
@@ -259,6 +277,7 @@ fn build_initial_bindings(
                 keys,
                 mode: HotkeyMode::from_str(main_mode),
                 prompt_id: None,
+                stop_only_when_idle: false,
             });
         }
     }
@@ -269,6 +288,7 @@ fn build_initial_bindings(
                 keys,
                 mode: HotkeyMode::from_str(&prompt.hotkey_mode),
                 prompt_id: Some(prompt.id.clone()),
+                stop_only_when_idle: prompt_hotkeys_stop_only,
             });
         }
     }
@@ -287,6 +307,7 @@ mod tests {
             keys,
             mode: HotkeyMode::from_str(mode),
             prompt_id: None,
+            stop_only_when_idle: false,
         }
     }
 
@@ -305,13 +326,13 @@ mod tests {
 
     #[test]
     fn build_empty_when_main_hotkey_empty() {
-        let bindings = build_initial_bindings("", "toggle", &[]);
+        let bindings = build_initial_bindings("", "toggle", false, &[]);
         assert!(bindings.is_empty());
     }
 
     #[test]
     fn build_main_hotkey_only() {
-        let bindings = build_initial_bindings("Control+Space", "toggle", &[]);
+        let bindings = build_initial_bindings("Control+Space", "toggle", false, &[]);
         assert_eq!(bindings.len(), 1);
         assert_eq!(bindings[0].mode, HotkeyMode::Toggle);
         assert_eq!(bindings[0].prompt_id, None);
@@ -324,23 +345,24 @@ mod tests {
     #[test]
     fn build_main_plus_prompts() {
         let prompt = make_prompt_item("p1", "Control+Shift+P");
-        let bindings = build_initial_bindings("F13", "toggle", &[prompt]);
+        let bindings = build_initial_bindings("F13", "toggle", true, &[prompt]);
         assert_eq!(bindings.len(), 2);
         assert_eq!(bindings[0].prompt_id, None);
         assert_eq!(bindings[1].prompt_id, Some("p1".to_string()));
         assert_eq!(bindings[1].mode, HotkeyMode::Hold);
+        assert!(bindings[1].stop_only_when_idle);
     }
 
     #[test]
     fn build_skips_prompt_with_empty_hotkey() {
         let prompt = make_prompt_item("p1", "");
-        let bindings = build_initial_bindings("F13", "toggle", &[prompt]);
+        let bindings = build_initial_bindings("F13", "toggle", false, &[prompt]);
         assert_eq!(bindings.len(), 1);
     }
 
     #[test]
     fn build_skips_invalid_main_hotkey() {
-        let bindings = build_initial_bindings("InvalidZZZ", "toggle", &[]);
+        let bindings = build_initial_bindings("InvalidZZZ", "toggle", false, &[]);
         assert!(bindings.is_empty());
     }
 
@@ -415,7 +437,7 @@ mod tests {
             assert!(cfg.bindings.is_empty());
         }
 
-        reload_bindings(&config, "Control+A", "hold", &[]);
+        reload_bindings(&config, "Control+A", "hold", false, &[]);
         {
             let cfg = config.read().unwrap();
             assert_eq!(cfg.bindings.len(), 1);
@@ -429,7 +451,7 @@ mod tests {
         let config = create_config(vec![binding.clone()]);
 
         let cfg_before = config.read().unwrap().bindings.clone();
-        reload_bindings(&config, "Control+A", "toggle", &[]);
+        reload_bindings(&config, "Control+A", "toggle", false, &[]);
         let cfg_after = config.read().unwrap().bindings.clone();
         assert_eq!(cfg_before, cfg_after);
     }
@@ -439,11 +461,12 @@ mod tests {
         let config = create_config(vec![]);
         let prompt = make_prompt_item("p1", "Control+Shift+P");
 
-        reload_bindings(&config, "F13", "toggle", &[prompt]);
+        reload_bindings(&config, "F13", "toggle", true, &[prompt]);
         {
             let cfg = config.read().unwrap();
             assert_eq!(cfg.bindings.len(), 2);
             assert_eq!(cfg.bindings[1].prompt_id, Some("p1".to_string()));
+            assert!(cfg.bindings[1].stop_only_when_idle);
         }
     }
 }

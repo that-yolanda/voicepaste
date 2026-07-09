@@ -4,11 +4,13 @@ import { loadPrompts, recordHotkey, savePrompts } from "@/settings/bridge";
 import { Button } from "@/settings/components/Button";
 import { KeyCap } from "@/settings/components/KeyCap";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
+import { Toggle } from "@/settings/components/Toggle";
 import {
   PageHeader,
   PageLayout,
   Section,
   SectionContent,
+  SectionHeader,
   SectionItem,
   SectionItemList,
 } from "@/settings/layout/PageLayout";
@@ -19,9 +21,10 @@ import type { PromptItem } from "@/settings/types/prompts";
 export function HotkeyPage() {
   const { settings, scheduleSave } = useSettings();
   const cfg = settings?.parsedConfig || ({} as Record<string, unknown>);
-  const app = (cfg.app || {}) as Record<string, string | undefined>;
-  const hotkeyStr = app.hotkey || "F13";
+  const app = (cfg.app || {}) as Record<string, unknown>;
+  const hotkeyStr = (app.hotkey as string) || "F13";
   const hotkeyMode = (app.hotkey_mode as string) || "toggle";
+  const promptHotkeysStopOnly = app.prompt_hotkeys_stop_only === true;
   // Show Apple symbols on macOS, native labels (Ctrl/Alt/Win/Shift) on Windows.
   const isMac = settings?.runtime?.platform === "macos";
 
@@ -86,10 +89,12 @@ export function HotkeyPage() {
         </div>
       </PageHeader>
       <Section>
+        <SectionHeader title="默认快捷键" />
         <SectionContent>
           <SectionItemList>
             <SectionItem
               title="快捷键 - 默认"
+              last
               action={
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 flex-wrap border border-border px-2 py-1 rounded-md h-full">
@@ -112,8 +117,14 @@ export function HotkeyPage() {
                 </div>
               }
             />
+          </SectionItemList>
+        </SectionContent>
+      </Section>
 
-            {/* Prompt hotkeys */}
+      <Section>
+        <SectionHeader title="文本润色快捷键" />
+        <SectionContent>
+          <SectionItemList>
             {prompts.map((item, idx) => (
               <SectionItem
                 key={item.id}
@@ -142,7 +153,10 @@ export function HotkeyPage() {
                     </Button>
                     <SegmentedControl
                       options={[
-                        { value: "toggle", label: "点击切换" },
+                        {
+                          value: "toggle",
+                          label: promptHotkeysStopOnly ? "点击结束" : "点击切换",
+                        },
                         { value: "hold", label: "按住说话" },
                       ]}
                       value={item.hotkey_mode || "toggle"}
@@ -157,6 +171,20 @@ export function HotkeyPage() {
                 }
               />
             ))}
+
+            {prompts.length > 0 && <div className="border-t border-border-subtle" />}
+
+            <SectionItem
+              title="润色快捷键仅结束"
+              description="开启后，文本润色快捷键仅用于结束语音转文字，减少未开始转文字时的误触发"
+              last
+              action={
+                <Toggle
+                  checked={promptHotkeysStopOnly}
+                  onChange={(v) => scheduleSave({ app: { prompt_hotkeys_stop_only: v } })}
+                />
+              }
+            />
           </SectionItemList>
         </SectionContent>
       </Section>
