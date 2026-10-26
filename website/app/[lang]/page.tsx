@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { ViewTransition } from "react"
 import { isLocale } from "@/lib/i18n"
 import { pageMetadata, siteUrl } from "@/lib/seo"
 import { HomeContent } from "@/components/home-content"
@@ -54,7 +55,9 @@ export default async function Home({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
-      <HomeContent locale={lang} />
+      <ViewTransition enter="page-fade" exit="page-fade" default="none">
+        <HomeContent locale={lang} />
+      </ViewTransition>
     </>
   )
 }

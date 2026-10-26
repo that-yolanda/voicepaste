@@ -240,3 +240,42 @@
 #nd-sidebar-mobile {
   --color-fd-primary: var(--foreground);
 }
+
+::view-transition {
+  pointer-events: none;
+}
+
+/* Only page content fades; the shared navigation stays visible. */
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-old(.page-fade) {
+  animation: page-fade 200ms ease-in-out both reverse;
+}
+
+::view-transition-new(.page-fade) {
+  animation: page-fade 200ms ease-in-out both;
+}
+
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}

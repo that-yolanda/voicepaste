@@ -1,5 +1,6 @@
 import { source } from "@/lib/source"
 import { notFound } from "next/navigation"
+import { ViewTransition } from "react"
 import { isLocale } from "@/lib/i18n"
 import { pageMetadata } from "@/lib/seo"
 import { DocsBody, DocsPage, DocsTitle } from "fumadocs-ui/page"
@@ -26,11 +27,22 @@ export default async function Page({ params }: Props) {
   if (!page) notFound()
   const MDX = page.data.body
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full} className="max-w-none">
-      <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsBody>
-        <MDX components={defaultMdxComponents} />
-      </DocsBody>
-    </DocsPage>
+    <ViewTransition
+      key={page.url}
+      enter="page-fade"
+      exit="page-fade"
+      default="none"
+    >
+      <DocsPage
+        toc={page.data.toc}
+        full={page.data.full}
+        className="max-w-none"
+      >
+        <DocsTitle>{page.data.title}</DocsTitle>
+        <DocsBody>
+          <MDX components={defaultMdxComponents} />
+        </DocsBody>
+      </DocsPage>
+    </ViewTransition>
   )
 }
