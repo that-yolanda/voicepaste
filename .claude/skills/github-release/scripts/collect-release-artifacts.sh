@@ -2,19 +2,29 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <version> [--platforms apple_aarch64,apple_x64,win_x64]" >&2
+  echo "Usage: $0 <version> [--beta] [--platforms apple_aarch64,apple_x64,win_x64]" >&2
   exit 1
 fi
 
-version="$1"
+version="${1#v}"
 shift
 
 platforms=""
+beta=false
+[[ "$version" == *-beta* ]] && beta=true
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --platforms)
+      if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
+        echo "Error: --platforms requires a comma-separated platform list" >&2
+        exit 1
+      fi
       platforms="$2"
       shift 2
+      ;;
+    --beta)
+      beta=true
+      shift
       ;;
     *)
       echo "Unknown argument: $1" >&2
@@ -23,16 +33,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$beta" == true && "$version" != *-beta* ]]; then
+  echo "Error: --beta requires a version with a -beta suffix" >&2
+  exit 1
+fi
+
 root_dir="$(git rev-parse --show-toplevel)"
 dist_dir="$root_dir/dist"
-
-# Check for --beta flag
-beta=false
-for arg in "$@"; do
-  case "$arg" in
-    --beta) beta=true ;;
-  esac
-done
 
 # Build artifact lists based on requested platforms
 required=()

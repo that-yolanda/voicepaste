@@ -5,7 +5,7 @@ description: Publish validated VoicePaste releases from this repository. Use whe
 
 # GitHub Release
 
-Use this skill for project-specific GitHub release work in this repository. Follow the release gates in `AGENTS.md` and keep the process explicit: do not push, publish, or upload artifacts until the user confirms validation is complete.
+Use this skill for project-specific GitHub release work in this repository. Follow the release gates in `AGENTS.md`. Prepare and validate local changes before any external action. Honor authorization already given in the conversation; request confirmation only for push, publication, uploads, or deployment that the user has not authorized.
 
 ## Options
 
@@ -100,7 +100,18 @@ If any file is missing the new version entry, flag this to the user before conti
 
 ### Step 5: Quality Gate
 
-Run `pnpm check` — this project requires Biome lint + format to pass before any commit. Fix all errors and warnings before proceeding.
+Run the desktop checks required by `AGENTS.md`, including `pnpm lint:ci` and relevant tests. Prefer read-only checks; `pnpm check` rewrites files, so inspect and scope any resulting edits.
+
+The independent website also needs validation after its release data is updated:
+
+```bash
+pnpm --dir website lint
+pnpm --dir website typecheck
+pnpm --dir website test
+pnpm --dir website build
+```
+
+Website test/build check existing notes against both changelogs, but **do not detect a new version missing from the JSON**. Run the target-version check in Step 11 as well.
 
 ### Step 6: Build Artifacts (cross-machine)
 
@@ -140,17 +151,20 @@ Before pushing or publishing, present a summary:
 - Version change: `X.Y.Z → A.B.C`
 - Categorized changes grouped by type
 - Artifacts that will be uploaded
-- Commits to be pushed
+- Commits and the verified release branch to be pushed
+- Website synchronization and deployment planned after the GitHub assets are available
 
-Require explicit user confirmation ("yes" / "go ahead") before any push or publish action.
+If push/publication is not already authorized, obtain confirmation for the concrete summary before proceeding. Do not repeat an approval already supplied for the same actions.
 
 ### Step 8: Commit, Tag, Push
+
+Inspect the current branch and remote tracking branch; this checkout currently uses `master`. Substitute the verified branch below rather than assuming `main`. Stage only release-related changes, including any version files actually changed by the pack script. Preserve unrelated worktree changes.
 
 ```bash
 git add package.json CHANGELOG.md CHANGELOG.zh.md
 git commit -m "chore: release v<version>"
 git tag -a v<version> -m "Release v<version>"
-git push origin main
+git push origin <verified-release-branch>
 git push origin v<version>
 ```
 
@@ -167,7 +181,7 @@ gh release create v<version> --title "v<version>" --notes-file <temp>
 gh release create v<version> --prerelease --title "v<version>" --notes-file <temp>
 ```
 
-Consider using `--draft` first for safety, then publish after the user approves the release notes.
+A draft can be used to upload and verify artifacts before publication. Publishing still follows the authorization established in Step 7; a draft is not required when the authorized workflow already covers publication.
 
 ### Beta Release Flow
 
@@ -195,6 +209,51 @@ Upload all validated artifacts to the GitHub Release:
 ```bash
 gh release upload v<version> <artifact-files...>
 ```
+
+### Step 11: Synchronize the Website Release
+
+For each new stable release, the website must include the new version and its four installers. Run this **after the GitHub Release is published and its artifacts have been uploaded and verified**, so a website deployment never advertises missing downloads. When publishing a beta, sync its record too, but preserve `latest` as the existing stable version.
+
+Data ownership:
+
+| Source | Purpose |
+|--------|---------|
+| `CHANGELOG.md`, `CHANGELOG.zh.md` | Manually maintained release-note sources; also used for GitHub Release notes |
+| `website/config/releases.json` | Website installer metadata and generated `notes.en` / `notes.zh` |
+| `latest.json`, `latest-beta.json` | Existing desktop updater manifests; continue generating and uploading them |
+
+Do not manually copy notes into JSON, invent installer sizes, or replace the desktop update endpoint. The helper reads the exact published GitHub tag, requires four uploaded installers, uses their byte sizes/download URLs and UTC publication date, and reuses `website/scripts/sync-releases.mts` to populate bilingual Markdown. Release dates can differ from dates written in changelog headings.
+
+From the repository root:
+
+```bash
+# Read-only GitHub request; prints the proposed config without writing it.
+pnpm --dir website exec tsx ../.claude/skills/github-release/scripts/sync-website-release.mts <version> --dry-run
+
+# Update or insert the version locally; reruns do not duplicate it.
+pnpm --dir website exec tsx ../.claude/skills/github-release/scripts/sync-website-release.mts <version>
+
+# Offline gate: the exact target version must exist, notes must match,
+# and four installer names, versioned URLs, and byte sizes must be valid.
+pnpm --dir website exec tsx ../.claude/skills/github-release/scripts/sync-website-release.mts <version> --check
+```
+
+Both `2.1.5` and `v2.1.5` are accepted. A draft, mismatched prerelease flag, missing installer, or missing translation fails before writing the config. Normal synchronization verifies remote metadata; `--check` only validates local data and does not prove current download availability.
+
+Run the website checks from Step 5 and review `git diff -- website/config/releases.json`. For later edits to an already recorded version's prose, `pnpm --dir website releases:sync` remains the local notes-only command; it does not add a release or update assets.
+
+Commit the website data as a follow-up to the release, together with any source-note corrections. This does not require moving or amending the published release tag. Push/deploy only within the user's authorization. Do not introduce `channel`, `notesFormat`, or `schemaVersion` fields for this workflow.
+
+### Step 12: Verify and Report Completion
+
+Report these outcomes separately:
+
+- GitHub Release publication and uploaded artifacts.
+- Stable/beta updater manifest validation and upload.
+- Website target-version validation and local commit/push status.
+- Website deployment and live verification: `/zh/downloads`, `/en/downloads`, and `/api/releases?version=<version>&lang=zh` (also `lang=en`). Check the expected notes and installer links after cache refresh; successful local checks do not prove deployment.
+
+If website deployment is not authorized or has not completed, report that it remains pending. Do not mark the whole release synchronized merely because the local JSON changed.
 
 ## Release Notes Style
 
@@ -258,7 +317,7 @@ Both URLs resolve from the **stable release** because `/releases/latest/` skips 
 
 ### Why This Approach
 
-- GitHub has no static URL for "latest prerelease" — must use REST API (requires auth, not suitable for desktop apps)
+- GitHub has no static URL for "latest prerelease"; this project uses a beta manifest attached to the stable release rather than discovering prereleases through the API
 - Tauri has no native multi-channel updater support ([tauri-apps/tauri#2595](https://github.com/tauri-apps/tauri/issues/2595))
 - `--prerelease` keeps the beta off `/releases/latest/`, so stable users (who fetch `latest.json`) never resolve it; beta users fetch `latest-beta.json` instead
 - SemVer guarantees `1.3.1-beta < 1.3.1`, so stable users are never offered beta updates
@@ -298,11 +357,11 @@ Always upload the platform installers and update metadata files required by `tau
 ## Commands
 
 ```bash
-pnpm check
+pnpm lint:ci
 pnpm run pack -s
 git status --short
 git log --oneline origin/master..HEAD
-git push origin main
+git push origin <verified-release-branch>
 git tag -a v<version> -m "Release v<version>"
 git push origin v<version>
 gh release view v<version>
@@ -313,7 +372,7 @@ For artifact validation:
 
 ```bash
 .claude/skills/github-release/scripts/collect-release-artifacts.sh <version>
-.claude/skills/github-release/scripts/collect-release-artifacts.sh <version> --platforms mac-arm64,win-x64
+.claude/skills/github-release/scripts/collect-release-artifacts.sh <version> --platforms apple_aarch64,win_x64
 ```
 
 For release-notes draft:
@@ -343,4 +402,8 @@ For release-notes draft:
 - `render-release-notes.sh`
   - Produces a release-notes draft in the preferred VoicePaste GitHub Release format
   - Auto-detects previous version from git tags
-  - Groups commits by conventional commit type
+  - Reads the exact version entry from `CHANGELOG.md`, preserving Markdown paragraphs
+- `sync-website-release.mts`
+  - Imports installer metadata from the exact published GitHub Release
+  - Syncs bilingual notes from the source changelogs without changing App update endpoints
+  - Supports `--dry-run` and an offline target-version `--check`

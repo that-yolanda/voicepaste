@@ -6,10 +6,11 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
-version="$1"
+version="${1#v}"
 shift
 
 previous="${1:-}"
+previous="${previous#v}"
 
 # Auto-detect previous version from git tags if not provided.
 # Skip beta/RC/prerelease tags and the version currently being released.
@@ -30,10 +31,16 @@ if [[ ! -f CHANGELOG.md ]]; then
 fi
 
 section=$(awk -v ver="$version" '
-  tolower($0) ~ "##.*" ver { found=1; next }
-  found && tolower($0) ~ /^## / { exit }
+  { sub(/\r$/, "") }
+  /^## / {
+    if (found) exit
+    heading=$2
+    sub(/^v/, "", heading)
+    if (heading == ver) found=1
+    next
+  }
   found { print }
-' CHANGELOG.md | sed '/^$/d')
+' CHANGELOG.md)
 
 if [[ -z "$section" ]]; then
   echo "Error: CHANGELOG.md has no entry for version ${version}" >&2
