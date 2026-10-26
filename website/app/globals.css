@@ -11,6 +11,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --site-max-width: 1440px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.153 0.006 107.1);
   --card: oklch(1 0 0);
@@ -127,7 +128,7 @@
 @utility wrap {
   margin-inline: auto;
   width: calc(100% - 64px);
-  max-width: 1200px;
+  max-width: var(--site-max-width);
 
   @media (max-width: 640px) {
     width: calc(100% - 40px);
@@ -231,7 +232,7 @@
 
 /* Keep documentation selection readable on the shared page background. */
 #nd-docs-layout {
-  --fd-layout-width: 100%;
+  --fd-layout-width: min(100%, var(--site-max-width));
   --color-fd-primary: var(--foreground);
 }
 

@@ -27,7 +27,7 @@ export function SiteHeader({ locale }: { locale: Locale }) {
       >
         {en ? "Skip to content" : "跳至正文"}
       </a>
-      <header className="flex min-h-24 w-full items-center justify-between gap-4 px-4 max-sm:min-h-20">
+      <header className="wrap flex min-h-24 items-center justify-between gap-4 max-sm:min-h-20">
         <Link
           className="brand inline-flex shrink-0 items-center gap-2"
           href={`/${locale}`}

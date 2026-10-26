@@ -4,7 +4,7 @@ import type { Locale } from "@/lib/i18n"
 export function SiteFooter({ locale }: { locale: Locale }) {
   const en = locale === "en"
   return (
-    <footer className="w-full px-4 py-12">
+    <footer className="wrap py-12">
       <div className="flex flex-wrap items-center justify-between gap-7">
         <Link
           className="brand inline-flex items-center gap-2"
