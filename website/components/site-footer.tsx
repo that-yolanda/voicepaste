@@ -33,23 +33,9 @@ export function SiteFooter({ locale }: { locale: Locale }) {
           >
             {en ? "Feedback" : "用户反馈"}
           </a>
-          <a
-            href="https://github.com/that-yolanda/voicepaste/releases"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {en ? "Changelog" : "更新日志"}
-          </a>
           <Link href={`/${locale}/docs/privacy`}>
             {en ? "Data & privacy" : "数据与隐私"}
           </Link>
-          <a
-            href="https://github.com/that-yolanda/voicepaste/blob/master/LICENSE"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {en ? "License" : "开源协议"} ↗
-          </a>
         </nav>
       </div>
       <p className="mt-8 text-sm text-muted-foreground">

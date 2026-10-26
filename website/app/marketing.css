@@ -168,13 +168,64 @@
   .marketing .history-release summary::-webkit-details-marker {
     display: none;
   }
-  .marketing .history-plus {
-    transition: transform 200ms;
+  .marketing .release-timeline > details::before {
+    content: "";
+    position: absolute;
+    inset: 20px auto 0 4px;
+    width: 2px;
+    background: var(--muted);
   }
-  .marketing .history-release[open] .history-plus {
-    transform: rotate(45deg);
+  .marketing .release-timeline > details:last-child::before {
+    display: none;
+  }
+  .marketing .release-timeline > details::after {
+    content: "";
+    position: absolute;
+    top: 20px;
+    left: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--muted-foreground);
+  }
+  .marketing .release-timeline > details[open]::after {
+    background: var(--primary);
   }
   @media (prefers-reduced-motion: no-preference) {
+    .marketing .history-release[open] > .release-body {
+      animation: release-reveal 180ms ease-out;
+    }
+    @keyframes release-reveal {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @supports (interpolate-size: allow-keywords) and selector(::details-content) {
+      .marketing .history-release {
+        interpolate-size: allow-keywords;
+      }
+      .marketing .history-release::details-content {
+        block-size: 0;
+        overflow: clip;
+        opacity: 0;
+        transition:
+          block-size 240ms ease-in-out,
+          opacity 180ms ease-out,
+          content-visibility 240ms allow-discrete;
+      }
+      .marketing .history-release[open]::details-content {
+        block-size: auto;
+        opacity: 1;
+      }
+      .marketing .history-release[open] > .release-body {
+        animation: none;
+      }
+    }
     .marketing .reveal.arrived {
       animation: arrive 750ms var(--ease) both;
     }

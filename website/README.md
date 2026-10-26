@@ -57,12 +57,25 @@ pnpm --dir website start
 | `lib/scenarios.ts`、`lib/faq.json` | 场景与常见问题双语文案 |
 | `content/docs/*.mdx` | 英文文档；对应 `*.zh.mdx` 为中文 |
 | `content/docs/meta*.json` | 各语言目录顺序 |
-| `config/releases.json` | 最新版本标记、历史版本、各平台安装包地址 |
+| `config/releases.json` | 最新版本标记、历史版本、各平台安装包地址及自动同步的双语日志 |
 | `app/globals.css` | shadcn 预设与全站主题 |
 | `app/marketing.css` | 首页布局、产品浮层与动效 |
 | `lib/seo.ts` | SEO 元数据规则 |
 
-发布新版本时，在 `config/releases.json` 添加记录，再更新 `latest`。首页和下载页共同使用这一份配置，浏览页面时不依赖 GitHub API。现有记录是 UI 阶段核对的发布快照，上线前应再次确认。
+发布新版本时：
+
+1. 在根目录 `CHANGELOG.md`、`CHANGELOG.zh.md` 编写对应版本的日志，GitHub Release 正文也以此为源。
+2. 上传并核对安装包后，在 `config/releases.json` 添加版本、实际发布日期及文件信息，再更新 `latest`。日志日期与实际发布日期可以不同。
+3. 运行 `pnpm --dir website releases:sync`，按版本提取双语 Markdown 到 `notes.en` / `notes.zh`。不要手工编辑这些字段，换行和引号由脚本转义。
+4. 将日志与同步后的 JSON 一并发布网站。`test` 和 `build` 会检查是否同步；缺失翻译、重复版本或正文过期会报错。
+
+首页、下载与更新日志页面共用这一份配置，浏览时不依赖 GitHub API。当前仅展示 JSON 已收录的版本，源文件中更早的日志继续保留。
+
+### 发布信息接口
+
+`GET /api/releases` 默认返回英文；`?lang=zh` 返回中文，`?version=2.1.5&lang=zh` 查询单个版本（版本号允许带 `v`）。返回 `{ "releases": [...] }`，每条记录包含 `version`、`date`、`releaseUrl`、`files` 和当前语言的 Markdown `notes`。
+
+不支持的语言返回 400，不存在的版本返回 404。成功响应缓存 5 分钟；数据随网站部署更新。接口公开，无需鉴权，目前不分页。未来 App 可按需读取；本次未修改 App 的更新检测、签名验证或安装流程。
 
 新增控件在 `website/` 内运行 shadcn 命令，避免 CLI 识别到根目录的 Vite 桌面项目：
 
