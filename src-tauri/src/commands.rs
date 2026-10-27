@@ -429,14 +429,29 @@ pub(crate) async fn append_audio_samples(
     true
 }
 
+/// Cap the renderer diagnostic preview so a large payload (stack trace with
+/// context) cannot flood the log file.
+const RENDERER_DIAGNOSTIC_PREVIEW_CHARS: usize = 500;
+
 /// Send diagnostic info from renderer.
 #[tauri::command]
 pub async fn send_diagnostic(
     _state: State<'_, AppState>,
     payload: serde_json::Value,
 ) -> Result<(), String> {
+    // Redact credential-shaped pairs: the payload may carry provider error
+    // text that echoes credentials, and this channel is the only way to
+    // debug renderer issues from a submitted log file.
     let msg = serde_json::to_string(&payload).unwrap_or_default();
-    log_app!(info, "Renderer diagnostic: {}", msg);
+    let preview: String = msg
+        .chars()
+        .take(RENDERER_DIAGNOSTIC_PREVIEW_CHARS)
+        .collect();
+    log_app!(
+        info,
+        "Renderer diagnostic: {}",
+        crate::logger::redact_credentials(&preview, &[])
+    );
     Ok(())
 }
 

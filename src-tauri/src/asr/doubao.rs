@@ -557,6 +557,23 @@ impl AsrEngine for DoubaoEngine {
             );
         }
 
+        let credentials = [
+            self.connection.api_key.clone(),
+            self.connection.access_token.clone(),
+            self.connection.app_id.clone(),
+            self.connection.url.clone(),
+        ];
+        let safe_detail = move |text: &str| {
+            crate::logger::redact_credentials(
+                text,
+                &[
+                    &credentials[0],
+                    &credentials[1],
+                    &credentials[2],
+                    &credentials[3],
+                ],
+            )
+        };
         let connect_id = Uuid::new_v4().to_string();
 
         // Build URL with request_id
@@ -565,10 +582,12 @@ impl AsrEngine for DoubaoEngine {
         url.query_pairs_mut().append_pair("request_id", &connect_id);
 
         // Build request with custom headers
-        let mut request = url
-            .as_str()
-            .into_client_request()
-            .map_err(|e| format!("Failed to create WebSocket request: {}", e))?;
+        let mut request = url.as_str().into_client_request().map_err(|e| {
+            format!(
+                "Failed to create WebSocket request: {}",
+                safe_detail(&e.to_string())
+            )
+        })?;
 
         let headers = request.headers_mut();
         // Common headers for both auth modes.
@@ -601,7 +620,12 @@ impl AsrEngine for DoubaoEngine {
                 .await
             {
                 Ok(Ok(pair)) => pair,
-                Ok(Err(e)) => return Err(format!("ASR WebSocket connection failed: {}", e)),
+                Ok(Err(e)) => {
+                    return Err(format!(
+                        "ASR WebSocket connection failed: {}",
+                        safe_detail(&e.to_string())
+                    ))
+                }
                 Err(_) => return Err("ASR WebSocket 连接超时".to_string()),
             };
 
@@ -619,7 +643,12 @@ impl AsrEngine for DoubaoEngine {
         let mut sink = sink;
         sink.send(Message::Binary(init_frame.into()))
             .await
-            .map_err(|e| format!("Failed to send ASR init request: {}", e))?;
+            .map_err(|e| {
+                format!(
+                    "Failed to send ASR init request: {}",
+                    safe_detail(&e.to_string())
+                )
+            })?;
 
         // Create session state
         let is_ready = Arc::new(AtomicBool::new(true));
@@ -684,7 +713,9 @@ impl AsrEngine for DoubaoEngine {
                                 log_asr!(
                                     debug,
                                     "Server response: {}",
-                                    serde_json::to_string(&payload).unwrap_or_default()
+                                    safe_detail(
+                                        &serde_json::to_string(&payload).unwrap_or_default()
+                                    )
                                 );
                             }
 
@@ -729,11 +760,7 @@ impl AsrEngine for DoubaoEngine {
                             // Error response
                             if let Some(code) = payload.get("code").and_then(|v| v.as_u64()) {
                                 if code != 20000000 {
-                                    log_asr!(
-                                        warn,
-                                        "Binary response payload: {}",
-                                        serde_json::to_string(&payload).unwrap_or_default()
-                                    );
+                                    log_asr!(warn, "Binary response error code: {}", code);
                                     let message = payload
                                         .get("message")
                                         .or_else(|| payload.get("msg"))
@@ -742,7 +769,7 @@ impl AsrEngine for DoubaoEngine {
                                         .map(|m| format!("ASR error {}: {}", code, m))
                                         .unwrap_or_else(|| format!("ASR error code {}", code));
                                     let _ = event_tx_clone.send(AsrEvent::Error {
-                                        message: message.to_string(),
+                                        message: safe_detail(&message),
                                         fatal: is_fatal_asr_code(code),
                                     });
                                     // If a commit is waiting, resolve it now with the
@@ -889,7 +916,7 @@ impl AsrEngine for DoubaoEngine {
                     }
                     Ok(Message::Text(text)) => {
                         // Handle text messages (error responses)
-                        log_asr!(error, "Text message: {}", text);
+                        log_asr!(error, "ASR text message received ({} bytes)", text.len());
                         if let Ok(payload) = serde_json::from_str::<Value>(&text) {
                             if payload.get("type").and_then(|v| v.as_str()) == Some("error") {
                                 let message = payload
@@ -899,10 +926,15 @@ impl AsrEngine for DoubaoEngine {
                                     .unwrap_or("ASR 服务异常");
                                 // Unknown text-protocol error: attempt reconnect before giving up.
                                 let _ = event_tx_clone.send(AsrEvent::Error {
-                                    message: message.to_string(),
+                                    message: safe_detail(message),
                                     fatal: false,
                                 });
                             }
+                        } else {
+                            // Protocol-level notices that are not JSON would
+                            // otherwise leave no trace at any level; debug stays
+                            // out of the persisted log and is redacted anyway.
+                            log_asr!(debug, "Non-JSON ASR text frame: {}", safe_detail(&text));
                         }
                     }
                     Ok(Message::Close(frame)) => {
@@ -913,7 +945,7 @@ impl AsrEngine for DoubaoEngine {
                         let code: Option<u16> = frame.as_ref().map(|f| f.code.into());
                         let reason = frame
                             .as_ref()
-                            .map(|f| f.reason.to_string())
+                            .map(|f| safe_detail(&f.reason))
                             .unwrap_or_default();
 
                         // Resolve pending commit on close
@@ -931,7 +963,7 @@ impl AsrEngine for DoubaoEngine {
                     }
                     Err(e) => {
                         is_ready.store(false, Ordering::SeqCst);
-                        let msg = normalize_error_message(&e.to_string());
+                        let msg = normalize_error_message(&safe_detail(&e.to_string()));
                         // Connection reset without a clean Close: resolve any pending
                         // commit so the caller doesn't wait the full 5s timeout.
                         if is_committed.load(Ordering::SeqCst) {
@@ -1033,6 +1065,56 @@ impl AsrSession for DoubaoSession {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn provider_error_events_do_not_expose_credentials() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("ws://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            socket.next().await.unwrap().unwrap();
+            socket
+                .send(Message::Text(
+                    json!({
+                        "type": "error",
+                        "message": "Rejected private-api-key and private-access-token"
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await
+                .unwrap();
+            socket.close(None).await.unwrap();
+        });
+        let engine = DoubaoEngine::new(
+            ConnectionConfig {
+                url: endpoint,
+                auth_mode: "v2".into(),
+                app_id: "private-app-id".into(),
+                access_token: "private-access-token".into(),
+                resource_id: "test-resource".into(),
+                api_key: "private-api-key".into(),
+            },
+            serde_json::from_value(json!({})).unwrap(),
+            serde_json::from_value(json!({})).unwrap(),
+        );
+        let (session, mut events) = engine.create_session(&[]).await.unwrap();
+        let message = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                match events.recv().await {
+                    Some(AsrEvent::Error { message, .. }) => break message,
+                    Some(_) => {}
+                    None => panic!("missing provider error"),
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(message, "Rejected [REDACTED] and [REDACTED]");
+        session.close();
+        server.await.unwrap();
+    }
 
     // ── build_header tests ────────────────────────────────────────────────
 

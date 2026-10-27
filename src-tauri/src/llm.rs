@@ -550,10 +550,14 @@ fn extract_message_content(message: &serde_json::Value) -> String {
 
 /// Turn a successful (HTTP 200) completion body into polished text, or into a
 /// classified failure that explains why no text came back.
-fn parse_completion(response: &serde_json::Value) -> Result<String, PolishError> {
+fn parse_completion(
+    response: &serde_json::Value,
+    credentials: &[&str],
+) -> Result<String, PolishError> {
     // Some gateways answer 200 with an error envelope instead of a status code.
     if response.get("choices").is_none() {
-        let detail = extract_api_error_message(&response.to_string());
+        let safe_response = crate::logger::redact_credentials(&response.to_string(), credentials);
+        let detail = extract_api_error_message(&safe_response);
         return Err(PolishError::new(PolishErrorKind::Parse, detail));
     }
     let Some(choice) = response.pointer("/choices/0") else {
@@ -664,7 +668,12 @@ async fn call_llm_once(
 
     // Verbose request logging so the exact payload can be replayed in Postman
     // to distinguish model-capability issues from wiring bugs.
-    crate::log_rec!(debug, "LLM request → model={}, url={}", model, url);
+    crate::log_rec!(
+        debug,
+        "LLM request → provider={}, model={}",
+        provider_id,
+        model
+    );
     crate::log_rec!(
         debug,
         "LLM system prompt ({} chars): {:?}",
@@ -691,27 +700,30 @@ async fn call_llm_once(
         }
     }
 
-    let response = request
-        .send()
-        .await
-        .map_err(|e| PolishError::new(classify_transport_error(&e), e.to_string()))?;
+    let response = request.send().await.map_err(|e| {
+        let kind = classify_transport_error(&e);
+        let detail = crate::logger::redact_credentials(&e.without_url().to_string(), &[&api_key]);
+        PolishError::new(kind, detail)
+    })?;
 
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
+        let body = crate::logger::redact_credentials(&body, &[&api_key, &url]);
         let error = classify_http_error(status.as_u16(), &body);
         crate::log_rec!(warn, "LLM HTTP {} → {}", status.as_u16(), error);
         return Err(error);
     }
 
-    let raw = response
-        .text()
-        .await
-        .map_err(|e| PolishError::new(classify_transport_error(&e), e.to_string()))?;
+    let raw = response.text().await.map_err(|e| {
+        let kind = classify_transport_error(&e);
+        let detail = crate::logger::redact_credentials(&e.without_url().to_string(), &[&api_key]);
+        PolishError::new(kind, detail)
+    })?;
     let response_json: serde_json::Value = serde_json::from_str(&raw)
         .map_err(|e| PolishError::new(PolishErrorKind::Parse, e.to_string()))?;
 
-    parse_completion(&response_json)
+    parse_completion(&response_json, &[&api_key, &url])
 }
 
 // ---------------------------------------------------------------------------
@@ -946,7 +958,7 @@ mod tests {
     fn parse_plain_string_content() {
         let body =
             json!({"choices":[{"message":{"content":"  整理后的文本  "},"finish_reason":"stop"}]});
-        assert_eq!(parse_completion(&body).unwrap(), "整理后的文本");
+        assert_eq!(parse_completion(&body, &[]).unwrap(), "整理后的文本");
     }
 
     #[test]
@@ -957,7 +969,7 @@ mod tests {
             {"type":"text","text":"整理后的"},
             {"type":"text","text":"文本"}
         ]},"finish_reason":"stop"}]});
-        assert_eq!(parse_completion(&body).unwrap(), "整理后的文本");
+        assert_eq!(parse_completion(&body, &[]).unwrap(), "整理后的文本");
     }
 
     #[test]
@@ -968,7 +980,7 @@ mod tests {
             "message":{"content":"","reasoning_content":"嗯，用户想让我整理这段话……"},
             "finish_reason":"length"
         }]});
-        let error = parse_completion(&body).unwrap_err();
+        let error = parse_completion(&body, &[]).unwrap_err();
         assert_eq!(error.kind, PolishErrorKind::Truncated);
         // Not retried automatically: the retry sends a byte-identical request
         // (reasoning was already disabled), so it would truncate the same way.
@@ -983,7 +995,7 @@ mod tests {
             "finish_reason":"stop"
         }]});
         assert_eq!(
-            parse_completion(&body).unwrap_err().kind,
+            parse_completion(&body, &[]).unwrap_err().kind,
             PolishErrorKind::Truncated
         );
     }
@@ -991,7 +1003,7 @@ mod tests {
     #[test]
     fn empty_content_without_reasoning_keeps_finish_reason() {
         let body = json!({"choices":[{"message":{"content":""},"finish_reason":"content_filter"}]});
-        let error = parse_completion(&body).unwrap_err();
+        let error = parse_completion(&body, &[]).unwrap_err();
         assert_eq!(error.kind, PolishErrorKind::EmptyContent);
         assert!(error.detail.contains("content_filter"));
     }
@@ -999,16 +1011,62 @@ mod tests {
     #[test]
     fn error_envelope_returned_with_http_200() {
         let body = json!({"error":{"message":"bad gateway"}});
-        let error = parse_completion(&body).unwrap_err();
+        let error = parse_completion(&body, &[]).unwrap_err();
         assert_eq!(error.kind, PolishErrorKind::Parse);
         assert_eq!(error.detail, "bad gateway");
+    }
+
+    #[test]
+    fn error_credentials_are_removed_before_detail_is_truncated() {
+        let api_key = "private-credential-".repeat(30);
+        let body = json!({"error":{"message":format!("Rejected {api_key}")}});
+        let error = parse_completion(&body, &[&api_key]).unwrap_err();
+        assert_eq!(error.detail, "Rejected [REDACTED]");
+    }
+
+    #[tokio::test]
+    async fn http_error_does_not_expose_the_sent_api_key() {
+        use wiremock::{matchers::method, Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let api_key = "private-provider-credential";
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(json!({
+                "error": {"message": format!("Invalid API key: {api_key}")}
+            })))
+            .mount(&server)
+            .await;
+        let mut config = make_llm_config("openai");
+        config.url = Some(server.uri());
+        config.api_key = Some(api_key.into());
+        let error = call_llm_once(&config, "text", "prompt").await.unwrap_err();
+        assert_eq!(error.kind, PolishErrorKind::Auth);
+        assert_eq!(error.detail, "Invalid API key: [REDACTED]");
+        assert!(!error.to_string().contains(api_key));
+    }
+
+    #[tokio::test]
+    async fn gemini_transport_error_does_not_expose_url_credentials() {
+        let server = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!(
+            "http://{}/chat?key=private-url-credential",
+            server.local_addr().unwrap()
+        );
+        drop(server);
+        let mut config = make_llm_config("gemini");
+        config.url = Some(endpoint);
+        config.api_key = Some("private-gemini-credential".into());
+        let error = call_llm_once(&config, "text", "prompt").await.unwrap_err();
+        assert_eq!(error.kind, PolishErrorKind::Network);
+        assert!(!error.detail.contains("private-"));
+        assert!(!error.detail.contains("/chat"));
     }
 
     #[test]
     fn missing_choices_entry_is_empty_content() {
         let body = json!({"choices":[]});
         assert_eq!(
-            parse_completion(&body).unwrap_err().kind,
+            parse_completion(&body, &[]).unwrap_err().kind,
             PolishErrorKind::EmptyContent
         );
     }

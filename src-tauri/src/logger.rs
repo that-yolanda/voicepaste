@@ -14,6 +14,33 @@ use std::sync::Mutex;
 
 const MAX_LOG_SIZE: u64 = 300 * 1024; // 300KB
 
+/// Remove credentials from provider errors before they reach logs or the UI.
+///
+/// Longest values are replaced first so a short secret that is a substring of
+/// a longer one cannot pre-empt it. A pattern pass then redacts
+/// credential-shaped `key=value` pairs even when the value is not one of the
+/// configured secrets (e.g. a gateway echoing a header the caller never
+/// configured).
+pub(crate) fn redact_credentials(text: &str, credentials: &[&str]) -> String {
+    static CREDENTIAL_PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let mut credentials: Vec<_> = credentials
+        .iter()
+        .copied()
+        .filter(|value| !value.is_empty())
+        .collect();
+    credentials.sort_by_key(|value| std::cmp::Reverse(value.len()));
+    let text = credentials.iter().fold(text.to_string(), |text, value| {
+        text.replace(value, "[REDACTED]")
+    });
+    let pattern = CREDENTIAL_PATTERN.get_or_init(|| {
+        regex::Regex::new(
+            r#"(?i)(xi-api-key|api[_-]?key|authorization|(?:access_)?token)[\s"']*[:=][\s"']*(?:bearer\s+)?[^\s,;"'}]+"#,
+        )
+        .expect("credential redaction pattern must compile")
+    });
+    pattern.replace_all(&text, "$1=[REDACTED]").into_owned()
+}
+
 /// Structured logger implementing `log::Log`.
 ///
 /// Writes formatted log lines to both stderr and a rotating log file.
@@ -160,6 +187,48 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::tempdir;
+
+    #[test]
+    fn provider_errors_do_not_expose_configured_credentials() {
+        let message = redact_credentials(
+            "Rejected credential-short-long; token=other-private-value; HTTP 401",
+            &[
+                "credential-short",
+                "credential-short-long",
+                "other-private-value",
+                "",
+            ],
+        );
+        assert_eq!(message, "Rejected [REDACTED]; token=[REDACTED]; HTTP 401");
+    }
+
+    #[test]
+    fn credential_shaped_pairs_are_redacted_even_when_not_configured() {
+        // A gateway echoing a header the caller never configured: the exact
+        // values are unknown here, the pattern pass must still catch them.
+        let message = redact_credentials(
+            "Rejected Authorization: Bearer sk-proxy-123 and api_key=abcdef",
+            &[],
+        );
+        assert_eq!(
+            message,
+            "Rejected Authorization=[REDACTED] and api_key=[REDACTED]"
+        );
+    }
+
+    #[test]
+    fn ordinary_words_with_credential_names_stay_readable() {
+        // Words like "Token" or "max_tokens" that are not key=value pairs must
+        // not be mangled.
+        let message = redact_credentials(
+            "ASR 鉴权失败，请检查 AppID / Token / Resource ID; max_tokens: 100",
+            &[],
+        );
+        assert_eq!(
+            message,
+            "ASR 鉴权失败，请检查 AppID / Token / Resource ID; max_tokens: 100"
+        );
+    }
 
     #[test]
     fn voice_logger_new_creates_file() {

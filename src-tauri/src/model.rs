@@ -315,6 +315,8 @@ async fn download_model_entry(
     let model_dir = dir.join(&entry.id);
     fs::create_dir_all(&model_dir).map_err(|e| format!("创建模型目录失败: {}", e))?;
 
+    // Registry URLs are public release addresses (no credentials), and the
+    // failure error itself carries no URL — keep it as the download source.
     log_app!(info, "Downloading model {} from {}", entry.id, url);
 
     let _ = app.emit(

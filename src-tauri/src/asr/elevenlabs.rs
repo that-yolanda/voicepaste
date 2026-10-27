@@ -227,17 +227,10 @@ fn server_error(value: &Value, api_key: &str) -> Option<(String, bool)> {
 }
 
 fn safe_detail(text: &str, api_key: &str) -> String {
-    static CREDENTIAL: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let text = if api_key.trim().is_empty() {
-        text.to_string()
-    } else {
-        text.replace(api_key.trim(), "[REDACTED]")
-    };
-    let pattern = CREDENTIAL.get_or_init(|| regex::Regex::new(
-        r#"(?i)(xi-api-key|api[_-]?key|authorization|(?:access_)?token)[\s"']*[:=][\s"']*(?:bearer\s+)?[^\s,;"'}]+"#
-    ).unwrap());
-    pattern
-        .replace_all(&text, "$1=[REDACTED]")
+    // Exact-value and credential-shaped redaction live in the shared helper;
+    // ElevenLabs messages surface in the overlay, so additionally collapse
+    // whitespace (one log line per message) and cap the length.
+    crate::logger::redact_credentials(text, &[api_key.trim()])
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
