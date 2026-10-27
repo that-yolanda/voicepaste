@@ -10,7 +10,11 @@ use flate2::Compression;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use crossbeam_channel::{bounded, Receiver, Sender};
 
 const MAX_LOG_SIZE: u64 = 300 * 1024; // 300KB
 
@@ -41,66 +45,194 @@ pub(crate) fn redact_credentials(text: &str, credentials: &[&str]) -> String {
     pattern.replace_all(&text, "$1=[REDACTED]").into_owned()
 }
 
-/// Structured logger implementing `log::Log`.
-///
-/// Writes formatted log lines to both stderr and a rotating log file.
-/// Module names are specified via `log::target()` using the `log_*!` macros below.
+const QUEUE_CAPACITY: usize = 256;
+const MAX_LINE_BYTES: usize = 16 * 1024;
+const FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
+
+enum Message {
+    Line(log::Level, String),
+    Flush(Sender<()>),
+}
+
+/// A bounded queue keeps filesystem and terminal I/O off caller threads.
 pub struct VoiceLogger {
-    log_path: PathBuf,
-    file: Mutex<Option<File>>,
+    sender: Sender<Message>,
+    dropped: Arc<AtomicU64>,
 }
 
 impl VoiceLogger {
     pub fn new(log_path: PathBuf) -> Self {
-        let logger = Self {
-            log_path,
-            file: Mutex::new(None),
-        };
-        logger.rotate_if_needed();
-        logger
+        let (sender, receiver) = bounded(QUEUE_CAPACITY);
+        let dropped = Arc::new(AtomicU64::new(0));
+        let worker_dropped = Arc::clone(&dropped);
+        // A failed logging worker must not prevent voice input from starting.
+        let _ = std::thread::Builder::new()
+            .name("voicepaste-logger".into())
+            .spawn(move || run_writer(receiver, worker_dropped, log_path));
+        Self { sender, dropped }
     }
 
-    /// If the log file exceeds `MAX_LOG_SIZE`, gzip it to `.log.gz` (overwriting
-    /// any previous backup) and start a fresh log file.
-    fn rotate_if_needed(&self) {
-        if !self.log_path.exists() {
-            return;
+    fn enqueue(&self, level: log::Level, args: std::fmt::Arguments<'_>) {
+        let line = bounded_line(args);
+        if self.sender.try_send(Message::Line(level, line)).is_err() {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
         }
-        let Ok(meta) = fs::metadata(&self.log_path) else {
-            return;
-        };
-        if meta.len() < MAX_LOG_SIZE {
-            return;
-        }
-
-        // Close current file handle so we can safely manipulate the file.
-        *self.file.lock().unwrap() = None;
-
-        let gz_path = self.log_path.with_extension("log.gz");
-        if let Ok(content) = fs::read(&self.log_path) {
-            let mut encoder = GzEncoder::new(
-                File::create(&gz_path)
-                    .unwrap_or_else(|e| panic!("Failed to create {}: {}", gz_path.display(), e)),
-                Compression::fast(),
-            );
-            let _ = encoder.write_all(&content);
-            let _ = encoder.finish();
-        }
-        let _ = fs::remove_file(&self.log_path);
     }
 
-    fn write_to_file(&self, line: &str) {
-        let mut guard = self.file.lock().unwrap();
-        if guard.is_none() {
-            self.rotate_if_needed();
-            *guard = OpenOptions::new()
+    fn flush_pending(&self) {
+        let (sender, receiver) = bounded(1);
+        if self
+            .sender
+            .send_timeout(Message::Flush(sender), FLUSH_TIMEOUT)
+            .is_ok()
+        {
+            let _ = receiver.recv_timeout(FLUSH_TIMEOUT);
+        }
+    }
+}
+
+struct BoundedLine(String);
+
+impl std::fmt::Write for BoundedLine {
+    fn write_str(&mut self, text: &str) -> std::fmt::Result {
+        let remaining = MAX_LINE_BYTES - " [truncated]".len() - self.0.len();
+        let mut end = remaining.min(text.len());
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        self.0.push_str(&text[..end]);
+        if end < text.len() {
+            Err(std::fmt::Error)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+fn bounded_line(args: std::fmt::Arguments<'_>) -> String {
+    let mut line = BoundedLine(String::with_capacity(MAX_LINE_BYTES));
+    if std::fmt::write(&mut line, args).is_err() {
+        line.0.push_str(" [truncated]");
+    }
+    line.0
+}
+
+struct LogFile {
+    path: PathBuf,
+    file: Option<File>,
+    written: u64,
+    retry_rotation: Option<Instant>,
+}
+
+impl LogFile {
+    fn open(&mut self) -> std::io::Result<()> {
+        if self.file.is_none() {
+            let file = OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(&self.log_path)
-                .ok();
+                .open(&self.path)?;
+            self.written = file.metadata()?.len();
+            self.file = Some(file);
         }
-        if let Some(ref mut f) = *guard {
-            let _ = writeln!(f, "{}", line);
+        Ok(())
+    }
+
+    fn rotate(&mut self) -> std::io::Result<()> {
+        self.file.take();
+        let backup = self.path.with_extension("log.gz");
+        let temporary = self.path.with_extension("log.gz.tmp");
+        let mut source = File::open(&self.path)?;
+        let mut encoder = GzEncoder::new(File::create(&temporary)?, Compression::fast());
+        std::io::copy(&mut source, &mut encoder)?;
+        encoder.finish()?;
+        drop(source);
+        // Keep the source until a complete backup has been installed.
+        if backup.exists() {
+            fs::remove_file(&backup)?;
+        }
+        fs::rename(&temporary, &backup)?;
+        fs::remove_file(&self.path)?;
+        self.written = 0;
+        Ok(())
+    }
+
+    fn write(&mut self, line: &str) -> std::io::Result<()> {
+        self.open()?;
+        let bytes = line.len() as u64 + 1;
+        if self.written + bytes > MAX_LOG_SIZE
+            && self
+                .retry_rotation
+                .is_none_or(|deadline| Instant::now() >= deadline)
+        {
+            if let Err(error) = self.rotate() {
+                self.retry_rotation = Some(Instant::now() + Duration::from_secs(60));
+                self.open()?;
+                let notice = format!(
+                    "[App][WARN] Log rotation failed: {}; retrying in 60s",
+                    error
+                );
+                if self.written + (notice.len() as u64) < 2 * MAX_LOG_SIZE {
+                    writeln!(self.file.as_mut().expect("log file opened"), "{}", notice)?;
+                    self.written += notice.len() as u64 + 1;
+                }
+            } else {
+                self.retry_rotation = None;
+                self.open()?;
+            }
+        }
+        // Bound degraded-mode growth while retaining recent diagnostics and the source.
+        if self.written + bytes > 2 * MAX_LOG_SIZE {
+            return Err(std::io::Error::other("log full while rotation unavailable"));
+        }
+        let file = self.file.as_mut().expect("log file opened");
+        if let Err(error) = writeln!(file, "{}", line) {
+            self.file.take();
+            return Err(error);
+        }
+        self.written += bytes;
+        Ok(())
+    }
+}
+
+fn run_writer(receiver: Receiver<Message>, dropped: Arc<AtomicU64>, path: PathBuf) {
+    let mut output = LogFile {
+        path,
+        file: None,
+        written: 0,
+        retry_rotation: None,
+    };
+    let (terminal, terminal_lines) = bounded::<String>(32);
+    let _ = std::thread::Builder::new()
+        .name("voicepaste-log-terminal".into())
+        .spawn(move || {
+            for line in terminal_lines {
+                let _ = writeln!(std::io::stderr(), "{}", line);
+            }
+        });
+    while let Ok(message) = receiver.recv() {
+        match message {
+            Message::Line(level, line) => {
+                let count = dropped.swap(0, Ordering::Relaxed);
+                if count > 0 {
+                    let notice = format!(
+                        "{} [App][WARN] Logging queue dropped {} messages",
+                        Utc::now().to_rfc3339(),
+                        count
+                    );
+                    let _ = terminal.try_send(notice.clone());
+                    let _ = output.write(&notice);
+                }
+                let _ = terminal.try_send(line.clone());
+                if level <= log::Level::Info {
+                    let _ = output.write(&line);
+                }
+            }
+            Message::Flush(done) => {
+                if let Some(file) = &output.file {
+                    let _ = file.sync_all();
+                }
+                let _ = done.send(());
+            }
         }
     }
 }
@@ -111,27 +243,22 @@ impl log::Log for VoiceLogger {
     }
 
     fn log(&self, record: &log::Record) {
-        if !self.enabled(record.metadata()) {
-            return;
-        }
-        let formatted = format!(
-            "{} [{}][{}] {}",
-            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-            record.target(),
-            record.level(),
-            record.args(),
-        );
-        eprintln!("{}", formatted);
-        // INFO and above are persisted to the log file.
-        if record.level() <= log::Level::Info {
-            self.write_to_file(&formatted);
+        if self.enabled(record.metadata()) {
+            self.enqueue(
+                record.level(),
+                format_args!(
+                    "{} [{}][{}] {}",
+                    Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                    record.target(),
+                    record.level(),
+                    record.args(),
+                ),
+            );
         }
     }
 
     fn flush(&self) {
-        if let Some(ref f) = *self.file.lock().unwrap() {
-            let _ = f.sync_all();
-        }
+        self.flush_pending();
     }
 }
 
@@ -185,7 +312,6 @@ macro_rules! log_migration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use tempfile::tempdir;
 
     #[test]
@@ -231,85 +357,121 @@ mod tests {
     }
 
     #[test]
-    fn voice_logger_new_creates_file() {
+    fn background_writer_appends_and_flushes() {
         let dir = tempdir().unwrap();
-        let log_path = dir.path().join("test.log");
-        let _logger = VoiceLogger::new(log_path.clone());
-        // The logger should be constructable without errors
-        // File is created lazily on first write, so just verify no panic
+        let path = dir.path().join("voicepaste.log");
+        let logger = VoiceLogger::new(path.clone());
+        logger.enqueue(log::Level::Info, format_args!("first"));
+        logger.enqueue(log::Level::Debug, format_args!("debug-only"));
+        logger.enqueue(log::Level::Info, format_args!("second"));
+        logger.flush_pending();
+        assert_eq!(fs::read_to_string(path).unwrap(), "first\nsecond\n");
     }
 
     #[test]
-    fn voice_logger_log_level_filtering() {
+    fn long_running_writer_rotates_without_restarting() {
+        use std::io::Read;
         let dir = tempdir().unwrap();
-        let log_path = dir.path().join("test.log");
-        let logger = VoiceLogger::new(log_path.clone());
-
-        // Write an info-level log line directly to file
-        logger.write_to_file("[App][INFO] test message");
-
-        // Verify file was written
-        let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("test message"));
-    }
-
-    #[test]
-    fn write_to_file_appends() {
-        let dir = tempdir().unwrap();
-        let log_path = dir.path().join("test.log");
-        let logger = VoiceLogger::new(log_path.clone());
-
-        logger.write_to_file("line 1");
-        logger.write_to_file("line 2");
-
-        let content = std::fs::read_to_string(&log_path).unwrap();
-        let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 2);
-        assert!(lines[0].contains("line 1"));
-        assert!(lines[1].contains("line 2"));
-    }
-
-    #[test]
-    fn log_rotation_writes_gz() {
-        let dir = tempdir().unwrap();
-        let log_path = dir.path().join("test.log");
-        let gz_path = dir.path().join("test.log.gz");
-
-        // Create a log file that's over the size limit
-        let big_line = "x".repeat(1000);
-        {
-            let mut file = std::fs::File::create(&log_path).unwrap();
-            for _ in 0..400 {
-                // 400 * 1000 = 400KB > 300KB limit
-                writeln!(file, "{}", big_line).unwrap();
-            }
+        let path = dir.path().join("voicepaste.log");
+        let mut output = LogFile {
+            path: path.clone(),
+            file: None,
+            written: 0,
+            retry_rotation: None,
+        };
+        for _ in 0..80 {
+            output.write(&"x".repeat(8192)).unwrap();
         }
-
-        // Create logger — should trigger rotation
-        let _logger = VoiceLogger::new(log_path.clone());
-
-        // After rotation, the .gz file should exist
-        assert!(gz_path.exists(), "Rotated .gz file should exist");
+        output.write("latest message").unwrap();
+        assert!(fs::metadata(&path).unwrap().len() <= MAX_LOG_SIZE);
+        assert!(fs::read_to_string(&path)
+            .unwrap()
+            .ends_with("latest message\n"));
+        let mut backup = String::new();
+        flate2::read::GzDecoder::new(File::open(path.with_extension("log.gz")).unwrap())
+            .read_to_string(&mut backup)
+            .unwrap();
+        assert!(!backup.is_empty());
+        assert!(backup.len() as u64 <= MAX_LOG_SIZE);
     }
 
     #[test]
-    fn no_rotation_under_limit() {
+    fn existing_oversized_log_is_preserved_in_backup() {
+        use std::io::Read;
         let dir = tempdir().unwrap();
-        let log_path = dir.path().join("test.log");
-        let gz_path = dir.path().join("test.log.gz");
+        let path = dir.path().join("voicepaste.log");
+        let old = "x".repeat(MAX_LOG_SIZE as usize + 100);
+        fs::write(&path, &old).unwrap();
+        let logger = VoiceLogger::new(path.clone());
+        logger.enqueue(log::Level::Info, format_args!("new session"));
+        logger.flush_pending();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new session\n");
+        let mut backup = String::new();
+        flate2::read::GzDecoder::new(File::open(path.with_extension("log.gz")).unwrap())
+            .read_to_string(&mut backup)
+            .unwrap();
+        assert_eq!(backup, old);
+    }
 
-        // Create a small log file
-        {
-            let mut file = std::fs::File::create(&log_path).unwrap();
-            writeln!(file, "small log").unwrap();
+    #[test]
+    fn failed_backup_does_not_delete_source() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("voicepaste.log");
+        fs::write(&path, "original").unwrap();
+        fs::create_dir(path.with_extension("log.gz")).unwrap();
+        let mut output = LogFile {
+            path: path.clone(),
+            file: None,
+            written: 0,
+            retry_rotation: None,
+        };
+        assert!(output.rotate().is_err());
+        assert_eq!(fs::read_to_string(path).unwrap(), "original");
+    }
+
+    #[test]
+    fn failed_rotation_keeps_new_logs_and_retries_after_cooldown() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("voicepaste.log");
+        fs::write(&path, "x".repeat(MAX_LOG_SIZE as usize)).unwrap();
+        let temporary = path.with_extension("log.gz.tmp");
+        fs::create_dir(&temporary).unwrap();
+        let mut output = LogFile {
+            path: path.clone(),
+            file: None,
+            written: 0,
+            retry_rotation: None,
+        };
+        for _ in 0..5 {
+            output.write("new message").unwrap();
         }
+        let content = fs::read_to_string(&path).unwrap();
+        assert_eq!(content.matches("Log rotation failed").count(), 1);
+        assert_eq!(content.matches("new message").count(), 5);
+        fs::remove_dir(temporary).unwrap();
+        output.retry_rotation = Some(Instant::now());
+        output.write("recovered").unwrap();
+        assert_eq!(fs::read_to_string(path).unwrap(), "recovered\n");
+    }
 
-        let _logger = VoiceLogger::new(log_path.clone());
-
-        // No rotation should happen for small files
-        assert!(
-            !gz_path.exists(),
-            "No .gz file should be created for small logs"
+    #[test]
+    fn full_queue_drops_instead_of_waiting_and_bounds_unicode_lines() {
+        let (sender, receiver) = bounded(1);
+        let logger = VoiceLogger {
+            sender,
+            dropped: Arc::new(AtomicU64::new(0)),
+        };
+        logger.enqueue(
+            log::Level::Info,
+            format_args!("{}", "测试".repeat(MAX_LINE_BYTES)),
         );
+        logger.enqueue(log::Level::Info, format_args!("overflow"));
+        assert_eq!(logger.dropped.load(Ordering::Relaxed), 1);
+        let Message::Line(_, line) = receiver.recv().unwrap() else {
+            panic!("expected log line")
+        };
+        assert!(line.len() <= MAX_LINE_BYTES);
+        assert!(line.capacity() <= MAX_LINE_BYTES);
+        assert!(line.ends_with(" [truncated]"));
     }
 }

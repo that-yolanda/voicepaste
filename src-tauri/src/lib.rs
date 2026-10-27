@@ -192,6 +192,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| match event {
+            RunEvent::Exit => log::logger().flush(),
             RunEvent::Ready => {
                 // Position the overlay after the event loop is fully initialized,
                 // avoiding "Window move completed without beginning" on macOS.
