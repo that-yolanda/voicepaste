@@ -1,0 +1,5 @@
+/* Native CSS Highlight API; served directly to bypass the CSS optimizer. */
+::highlight(fd-search) {
+  color: var(--color-fd-primary);
+  text-decoration: underline;
+}

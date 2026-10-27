@@ -28,7 +28,7 @@ export default async function Downloads({ params }: Props) {
     <ViewTransition enter="page-fade" exit="page-fade" default="none">
       <main id="main" className="marketing wrap py-10 md:py-14">
         <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-5">
-          <h1 className="text-4xl md:text-6xl">
+          <h1 className="page-title">
             {en ? "Download VoicePaste" : "下载 VoicePaste"}
           </h1>
           <p className="text-sm text-muted-foreground">

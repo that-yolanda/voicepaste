@@ -8,6 +8,9 @@
 @import "@fontsource-variable/sora";
 @import "./marketing.css";
 
+/* Loaded separately in search-highlights.css until the optimizer supports ::highlight(). */
+@source not inline("[&_::highlight(fd-search)]:text-fd-primary [&_::highlight(fd-search)]:underline");
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -144,6 +147,18 @@
 
   @media (max-width: 640px) {
     margin-top: 80px;
+  }
+}
+
+@utility page-title {
+  font-family: var(--font-heading);
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.045em;
+
+  @media (min-width: 768px) {
+    font-size: 3rem;
   }
 }
 

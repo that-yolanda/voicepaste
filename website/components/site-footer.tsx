@@ -26,13 +26,9 @@ export function SiteFooter({ locale }: { locale: Locale }) {
           <Link href={`/${locale}/docs`}>
             {en ? "Documentation" : "配置文档"}
           </Link>
-          <a
-            href="https://github.com/that-yolanda/voicepaste/issues"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <Link href={`/${locale}/feedback`}>
             {en ? "Feedback" : "用户反馈"}
-          </a>
+          </Link>
           <Link href={`/${locale}/docs/privacy`}>
             {en ? "Data & privacy" : "数据与隐私"}
           </Link>

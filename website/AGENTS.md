@@ -32,7 +32,7 @@ Preserve the shadcn theme, brand-only Sora, and default dark mode. Run component
 
 Maintain `/en` and `/zh`, canonical/hreflang metadata, and manual language preference. Detection applies only to unprefixed entry URLs. Update both languages together. Keep downloads sourced from `config/releases.json`.
 
-Pause offscreen animations, honor reduced motion, and require explicit opt-in for sound. Feedback forms and email delivery remain outside phase one.
+Pause offscreen animations, honor reduced motion, and require explicit opt-in for sound. Feedback delivery uses server-side Resend REST calls; keep credentials and the fixed recipient server-only. Configure feedback rate limiting in Vercel, not with an in-memory counter.
 
 ## Tests & Contributions
 

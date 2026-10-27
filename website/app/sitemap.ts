@@ -5,6 +5,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const paths = [
     "",
     "/downloads",
+    "/feedback",
     ...source
       .getPages("en")
       .map((p) => "/docs" + (p.slugs.length ? "/" + p.slugs.join("/") : "")),

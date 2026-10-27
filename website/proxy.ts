@@ -12,4 +12,6 @@ export function proxy(request: NextRequest) {
   response.headers.set("Cache-Control", "private, no-store")
   return response
 }
-export const config = { matcher: ["/", "/docs/:path*", "/downloads"] }
+export const config = {
+  matcher: ["/", "/docs/:path*", "/downloads", "/feedback"],
+}

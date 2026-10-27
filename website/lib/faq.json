@@ -52,14 +52,14 @@
       "zh": "遇到问题或想提建议？"
     },
     "answer": {
-      "en": "Questions, feature requests and suggestions are welcome. Share them on GitHub Issues; every piece of feedback will be read and carefully considered.",
-      "zh": "欢迎提出问题、功能需求或改进建议。你可以通过 GitHub Issues 告诉我们，每一条反馈都会被认真阅读和考虑。"
+      "en": "Questions, feature requests and suggestions are welcome. Use our feedback form to share details and optional logs or screenshots. Leave a contact email if you would like a reply.",
+      "zh": "欢迎提出问题、功能需求或改进建议。你可以通过反馈页面提交详细说明，并按需附上日志或截图。如需回复，请留下邮箱或微信号。"
     },
     "link": {
-      "path": "https://github.com/that-yolanda/voicepaste/issues",
+      "path": "/feedback",
       "label": {
-        "en": "Share feedback on GitHub Issues",
-        "zh": "前往 GitHub Issues 反馈"
+        "en": "Share feedback",
+        "zh": "前往反馈页面"
       }
     }
   }
