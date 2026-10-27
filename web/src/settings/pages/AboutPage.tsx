@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ReleaseNotes } from "@/settings/components/ReleaseNotes";
 import { Toggle } from "@/settings/components/Toggle";
 import { UpdateButton } from "@/settings/components/UpdateButton";
 import {
@@ -55,6 +56,8 @@ export function AboutPage() {
           </SectionItemList>
         </SectionContent>
       </Section>
+
+      <ReleaseNotes />
     </PageLayout>
   );
 }

@@ -23,6 +23,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+import { readChangelogNotes } from "./changelog-notes.js";
+
 // ---------------------------------------------------------------------------
 // Platform definitions
 // ---------------------------------------------------------------------------
@@ -343,18 +345,10 @@ function generateUpdaterArtifacts(version: string, beta: boolean): void {
 
   console.log("\n=== Generating updater metadata ===");
 
-  // Only `notes` is carried over; the platform map is rebuilt from dist/ so the
-  // manifest always reflects the artifacts that actually exist (no stale entries).
-  let notes = "";
-  if (fs.existsSync(jsonPath)) {
-    try {
-      const existing = JSON.parse(fs.readFileSync(jsonPath, "utf8")) as { notes?: string };
-      notes = typeof existing.notes === "string" ? existing.notes : "";
-      console.log(`  Preserving notes from existing ${jsonName}`);
-    } catch {
-      // Ignore malformed manifests; start fresh.
-    }
-  }
+  // Release notes are JSON-encoded from both changelogs' entries for this
+  // version; the platform map is rebuilt from dist/ so the manifest always
+  // reflects the artifacts that actually exist (no stale entries).
+  const notes = readChangelogNotes(version);
 
   const platforms: Record<string, { url: string; signature: string }> = {};
 

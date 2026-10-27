@@ -14,6 +14,7 @@ type UpdateButtonVariant = "default" | "accent" | "danger" | "ghost";
 interface UpdateSnapshot {
   state: UpdateState;
   version: string;
+  notes: string;
   statusText: string;
   progress: number | null;
 }
@@ -21,6 +22,7 @@ interface UpdateSnapshot {
 const initialSnapshot: UpdateSnapshot = {
   state: "idle",
   version: "",
+  notes: "",
   statusText: "-",
   progress: null,
 };
@@ -57,12 +59,14 @@ function checkUpdate(force = false) {
         setSnapshot({
           state: "available",
           version,
+          notes: result.notes || "",
           statusText: version ? `新版本 ${version} 可用` : "新版本可用",
         });
       } else {
         setSnapshot({
           state: "not-available",
           version: "",
+          notes: "",
           statusText: "已是最新版本",
         });
       }
@@ -133,7 +137,7 @@ async function relaunchToInstall() {
   }
 }
 
-function useUpdateSnapshot() {
+export function useUpdateSnapshot() {
   const [current, setCurrent] = useState(snapshot);
 
   useEffect(() => {

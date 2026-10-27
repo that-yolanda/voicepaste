@@ -59,7 +59,7 @@ describe("ElevenLabs model settings", () => {
     expect(screen.getByText(/基础转写费用增加 20%/)).toBeVisible();
     expect(screen.getByText("如何获取 API 凭据？")).toHaveAttribute(
       "href",
-      "https://elevenlabs.io/app/settings/api-keys",
+      "https://voicepaste.dev/docs/api/elevenlabs",
     );
     fireEvent.click(screen.getByText("更多参数"));
     expect(screen.getByText("语义顺滑")).toBeVisible();
@@ -107,7 +107,7 @@ describe("ElevenLabs model settings", () => {
     expect(screen.queryByText("语言")).not.toBeInTheDocument();
     expect(screen.getByText("如何获取 API 凭据？")).toHaveAttribute(
       "href",
-      "https://console.volcengine.com/speech/app",
+      "https://voicepaste.dev/docs/api/volcengine",
     );
     fireEvent.click(screen.getByText("更多参数"));
     expect(screen.getByText("语言")).toBeVisible();

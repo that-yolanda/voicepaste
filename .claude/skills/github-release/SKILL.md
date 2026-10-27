@@ -96,7 +96,7 @@ Check that the following files reference the correct version number:
 - `README.md`
 - `README.zh.md`
 
-If any file is missing the new version entry, flag this to the user before continuing.
+Both changelogs are also the source of the `notes` field in `latest.json` / `latest-beta.json`: `pack.ts` extracts the `## v<version>` section from each and JSON-encodes them as `{"zh": "...", "en": "..."}` inside the single `notes` string (the desktop updater only exposes that one string). The desktop app decodes it and shows the user's language in Settings → About when an update is available. If any file is missing the new version entry, flag this to the user before continuing.
 
 ### Step 5: Quality Gate
 
@@ -190,7 +190,7 @@ A draft can be used to upload and verify artifacts before publication. Publishin
 1. Set version in `package.json` to `x.y.z-beta` (e.g., `1.3.1-beta`). Each beta increments the patch version — `1.3.1-beta`, `1.3.2-beta`, etc.
 2. Pack script auto-syncs version to `Cargo.toml` (`version = "..."`). `tauri.conf.json` omits the `version` field entirely.
 3. Build: `pnpm run pack -s --beta -p apple_aarch64`
-4. Artifacts in `dist/` will contain `latest-beta.json` (multi-platform JSON with `platforms` map)
+4. Artifacts in `dist/` will contain `latest-beta.json` (multi-platform JSON with `platforms` map). Its `notes` are JSON-encoded bilingual changelog sections; beta versions without a changelog entry ship an empty note body (the About panel then hides the notes section)
 5. Create prerelease: `gh release create vx.y.z-beta --prerelease`
 6. Upload beta artifacts (installers + tar.gz + sig) to the prerelease release
 7. **Upload `latest-beta.json` to the latest stable release** (so beta users can discover the update via `/releases/latest/download/latest-beta.json`):
@@ -218,9 +218,9 @@ Data ownership:
 
 | Source | Purpose |
 |--------|---------|
-| `CHANGELOG.md`, `CHANGELOG.zh.md` | Manually maintained release-note sources; also used for GitHub Release notes |
+| `CHANGELOG.md`, `CHANGELOG.zh.md` | Manually maintained release-note sources; `CHANGELOG.md` feeds GitHub Release notes, both changelogs feed the bilingual updater manifest `notes` (in-app About panel) |
 | `website/config/releases.json` | Website installer metadata and generated `notes.en` / `notes.zh` |
-| `latest.json`, `latest-beta.json` | Existing desktop updater manifests; continue generating and uploading them |
+| `latest.json`, `latest-beta.json` | Existing desktop updater manifests; bilingual `notes` (JSON-encoded `{"zh","en"}`) auto-extracted from both changelogs by `pack.ts`, continue generating and uploading them |
 
 Do not manually copy notes into JSON, invent installer sizes, or replace the desktop update endpoint. The helper reads the exact published GitHub tag, requires four uploaded installers, uses their byte sizes/download URLs and UTC publication date, and reuses `website/scripts/sync-releases.mts` to populate bilingual Markdown. Release dates can differ from dates written in changelog headings.
 
@@ -249,7 +249,10 @@ Commit the website data as a follow-up to the release, together with any source-
 Report these outcomes separately:
 
 - GitHub Release publication and uploaded artifacts.
-- Stable/beta updater manifest validation and upload.
+- Stable/beta updater manifest validation and upload, including a non-empty `notes` in the live manifest (empty only if the version has no changelog entry, e.g. some betas). `notes` is a JSON-encoded `{"zh","en"}` payload:
+  ```bash
+  curl -sL https://github.com/that-yolanda/voicepaste/releases/latest/download/latest.json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);const n=JSON.parse(j.notes||'{}');console.log(j.version,'zh:',(n.zh||'').slice(0,40),'| en:',(n.en||'').slice(0,40))})"
+  ```
 - Website target-version validation and local commit/push status.
 - Website deployment and live verification: `/zh/downloads`, `/en/downloads`, and `/api/releases?version=<version>&lang=zh` (also `lang=en`). Check the expected notes and installer links after cache refresh; successful local checks do not prove deployment.
 
@@ -332,7 +335,7 @@ Because macOS and Windows are built on different hosts, neither host sees the ot
 pnpm run pack --gen-json
 ```
 
-`--gen-json` skips the build entirely and rebuilds the manifest from whatever currently lives in `dist/` — each `platforms` entry's URL and signature are derived from the actual artifact files, so it can never point at a missing file or a wrong signature. **This step is mandatory** in the cross-machine workflow; without it the published manifest will be missing platforms or carry stale/incorrect signatures.
+`--gen-json` skips the build entirely and rebuilds the manifest from whatever currently lives in `dist/` — each `platforms` entry's URL and signature are derived from the actual artifact files, so it can never point at a missing file or a wrong signature. The bilingual `notes` field is re-extracted from both changelogs for the version in `package.json` on every run. **This step is mandatory** in the cross-machine workflow; without it the published manifest will be missing platforms or carry stale/incorrect signatures.
 
 ## Artifact Rules
 
