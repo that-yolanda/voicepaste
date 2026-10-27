@@ -10,14 +10,33 @@ The LLM module (`llm.rs`) provides AI-powered text polishing after ASR recogniti
 
 | Provider | Default URL | Default Model | Auth Method |
 |----------|-------------|---------------|-------------|
-| `deepseek` | `https://api.deepseek.com/v1` | `deepseek-v4-flash` | Bearer token |
-| `openai` | `https://api.openai.com/v1` | `gpt-4.1-mini` | Bearer token |
-| `anthropic` | `https://api.anthropic.com/v1` | `claude-3-5-haiku-latest` | `x-api-key` + `anthropic-version` |
-| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash-lite` | Query param `?key=` |
-| `openrouter` | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini` | Bearer token |
-| `siliconflow` | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V3` | Bearer token |
-| `ollama` | `http://localhost:11434/api` | `llama3.1` | None (local) |
+| `deepseek` | `https://api.deepseek.com/v1` | `deepseek-flash` | Bearer token |
+| `openai` | `https://api.openai.com/v1` | `gpt-6-luna` | Bearer token |
+| `anthropic` | `https://api.anthropic.com/v1` | `claude-haiku-5-5` | `x-api-key` + `anthropic-version` |
+| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.5-flash-lite` | Query param `?key=` |
+| `openrouter` | `https://openrouter.ai/api/v1` | `openai/gpt-6-luna` | Bearer token |
+| `siliconflow` | `https://api.siliconflow.cn/v1` | `Qwen/Qwen3.5-4B` | Bearer token |
+| `ollama` | `http://localhost:11434/v1` | `qwen3.5:4b` | None (local) |
 | `openai_compatible` | _(user-configured)_ | _(user-configured)_ | Bearer token |
+
+Defaults favor low-cost translation and transcript polishing. Saved model names take
+priority and are not automatically migrated. Ollama users must first download the
+default model with `ollama pull qwen3.5:4b`.
+
+`build_request_body` handles the new defaults' API requirements:
+
+- OpenAI Luna uses `reasoning_effort: "none"` and `max_completion_tokens`.
+- OpenRouter Luna uses `reasoning.effort: "none"`.
+- Anthropic Haiku 5.5 uses `thinking: { "type": "disabled" }`.
+- SiliconFlow Qwen3.5 uses `enable_thinking: false`.
+- Gemini 3.5 Flash-Lite keeps its default minimal thinking level.
+- Luna, Haiku 5.5, and Gemini 3.5 Flash-Lite requests omit `temperature`.
+
+References: [OpenAI](https://developers.openai.com/api/docs/models/gpt-6-luna),
+[OpenRouter](https://openrouter.ai/openai/gpt-6-luna),
+[Claude thinking](https://platform.claude.com/docs/en/build-with-claude/thinking),
+[SiliconFlow](https://api-docs.siliconflow.cn/docs/api/chat-completions-post),
+[Gemini](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite).
 
 ## Configuration Layering
 

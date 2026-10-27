@@ -19,31 +19,31 @@ fn get_provider_defaults(provider: &str) -> ProviderDefaults {
     match provider {
         "deepseek" => ProviderDefaults {
             default_url: "https://api.deepseek.com/v1/chat/completions",
-            default_model: "deepseek-v4-flash",
+            default_model: "deepseek-flash",
         },
         "openai" => ProviderDefaults {
             default_url: "https://api.openai.com/v1/chat/completions",
-            default_model: "gpt-4.1-mini",
+            default_model: "gpt-6-luna",
         },
         "anthropic" => ProviderDefaults {
             default_url: "https://api.anthropic.com/v1/chat/completions",
-            default_model: "claude-3-5-haiku-latest",
+            default_model: "claude-haiku-5-5",
         },
         "gemini" => ProviderDefaults {
             default_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-            default_model: "gemini-2.5-flash-lite",
+            default_model: "gemini-3.5-flash-lite",
         },
         "openrouter" => ProviderDefaults {
             default_url: "https://openrouter.ai/api/v1/chat/completions",
-            default_model: "openai/gpt-4o-mini",
+            default_model: "openai/gpt-6-luna",
         },
         "siliconflow" => ProviderDefaults {
             default_url: "https://api.siliconflow.cn/v1/chat/completions",
-            default_model: "deepseek-ai/DeepSeek-V3",
+            default_model: "Qwen/Qwen3.5-4B",
         },
         "ollama" => ProviderDefaults {
             default_url: "http://localhost:11434/v1/chat/completions",
-            default_model: "llama3.1",
+            default_model: "qwen3.5:4b",
         },
         _ => ProviderDefaults {
             default_url: "",
@@ -423,10 +423,31 @@ fn build_request_body(
     });
 
     match provider_id {
+        // Luna supports no-thinking mode; use the current completion budget field.
+        "openai" if model.starts_with("gpt-6-luna") => {
+            body["reasoning_effort"] = json!("none");
+            body.as_object_mut().unwrap().remove("temperature");
+            body.as_object_mut().unwrap().remove("max_tokens");
+            body["max_completion_tokens"] = json!(LLM_MAX_TOKENS);
+        }
+        "anthropic" if model.starts_with("claude-haiku-5-5") => {
+            body.as_object_mut().unwrap().remove("temperature");
+            body["thinking"] = json!({ "type": "disabled" });
+        }
+        "siliconflow" if model.starts_with("Qwen/Qwen3.5-") => {
+            body["enable_thinking"] = json!(false);
+        }
+        // Flash-Lite defaults to minimal thinking and ignores custom sampling.
+        "gemini" if model.starts_with("gemini-3.5-flash-lite") => {
+            body.as_object_mut().unwrap().remove("temperature");
+        }
         // openrouter: `reasoning.effort` is tolerated — it disables thinking on
         // reasoning models and is ignored by the rest.
         "openrouter" => {
             body["reasoning"] = json!({ "effort": "none" });
+            if model.starts_with("openai/gpt-6-luna") {
+                body.as_object_mut().unwrap().remove("temperature");
+            }
         }
         // deepseek: the current models (deepseek-flash / deepseek-v4-pro) are
         // reasoning models that think by default. `reasoning_effort: "none"` is
@@ -726,7 +747,7 @@ mod tests {
             provider: "deepseek".to_string(),
             url: Some("https://api.deepseek.com/v1".to_string()),
             api_key: Some("sk-test".to_string()),
-            model: Some("deepseek-v4-flash".to_string()),
+            model: Some("deepseek-flash".to_string()),
             base_url: None,
             deepseek: Some(ProviderConfig {
                 url: "".to_string(),
@@ -993,6 +1014,56 @@ mod tests {
     }
 
     // ── request body tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn luna_requests_disable_thinking_without_legacy_parameters() {
+        let body = build_request_body("openai", "gpt-6-luna", "sys", "hi");
+        assert_eq!(body["reasoning_effort"], json!("none"));
+        assert_eq!(body["max_completion_tokens"], json!(LLM_MAX_TOKENS));
+        assert!(body.get("max_tokens").is_none());
+        assert!(body.get("temperature").is_none());
+
+        let body = build_request_body("openrouter", "openai/gpt-6-luna", "sys", "hi");
+        assert_eq!(body["reasoning"]["effort"], json!("none"));
+        assert_eq!(body["max_tokens"], json!(LLM_MAX_TOKENS));
+        assert!(body.get("temperature").is_none());
+    }
+
+    #[test]
+    fn haiku_requests_disable_thinking_and_omit_rejected_temperature() {
+        let body = build_request_body("anthropic", "claude-haiku-5-5", "sys", "hi");
+        assert_eq!(body["thinking"]["type"], json!("disabled"));
+        assert!(body.get("temperature").is_none());
+        assert_eq!(body["messages"][0]["content"], json!("sys"));
+    }
+
+    #[test]
+    fn lightweight_defaults_avoid_unnecessary_reasoning() {
+        let body = build_request_body("siliconflow", "Qwen/Qwen3.5-4B", "sys", "hi");
+        assert_eq!(body["enable_thinking"], json!(false));
+        let body = build_request_body("gemini", "gemini-3.5-flash-lite", "sys", "hi");
+        assert!(body.get("temperature").is_none());
+        assert_eq!(body["max_tokens"], json!(LLM_MAX_TOKENS));
+    }
+
+    #[test]
+    fn new_defaults_preserve_saved_models_and_legacy_request_parameters() {
+        let config = make_openai_config();
+        assert_eq!(resolve_endpoint(&config).unwrap().2, "gpt-4.1-mini");
+        for (provider, model) in [
+            ("openai", "gpt-4.1-mini"),
+            ("openrouter", "openai/gpt-4o-mini"),
+            ("anthropic", "claude-haiku-4-5"),
+            ("siliconflow", "deepseek-ai/DeepSeek-V3"),
+            ("gemini", "gemini-2.5-flash-lite"),
+        ] {
+            let body = build_request_body(provider, model, "sys", "hi");
+            assert_eq!(body["temperature"], json!(0.3));
+            assert_eq!(body["max_tokens"], json!(LLM_MAX_TOKENS));
+            assert!(body.get("thinking").is_none());
+            assert!(body.get("enable_thinking").is_none());
+        }
+    }
 
     #[test]
     fn deepseek_request_disables_reasoning() {

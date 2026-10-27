@@ -29,4 +29,4 @@ llm:
   provider: deepseek
   deepseek:
     api_key: ""
-    model: deepseek-v4-flash
+    model: deepseek-flash
