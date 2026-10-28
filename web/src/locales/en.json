@@ -1,0 +1,33 @@
+{
+  "errors": {
+    "common": {
+      "unexpected": "Something went wrong",
+      "invalid_config": "Invalid configuration",
+      "with_detail": "{{headline}}: {{detail}}"
+    },
+    "feedback": {
+      "invalid_fields": "Complete the required fields and check your contact info.",
+      "invalid_files": "Choose up to 4 PNG/JPEG screenshots.",
+      "too_large": "Attachments too large: log limit 512 KiB, screenshot limit 2 MiB, total limit 3 MiB.",
+      "forbidden": "The feedback endpoint is unavailable. Please submit via the website.",
+      "unavailable": "The feedback service is not configured yet. Please try again later.",
+      "send_failed": "Could not confirm the submission. Your content is kept — please retry.",
+      "rate_limited": "Submitting too often. Please wait 10 minutes and retry.",
+      "log_unavailable": "Cannot read the app log. Uncheck “attach log” and retry."
+    }
+  },
+  "ui": {
+    "overlay": {
+      "preparing": "Preparing…",
+      "recognizing": "Recognizing…",
+      "polishing": "Polishing…",
+      "retrying": "Retrying…"
+    },
+    "settings": {
+      "language": "Language",
+      "language_auto": "System",
+      "language_zh": "简体中文",
+      "language_en": "English"
+    }
+  }
+}

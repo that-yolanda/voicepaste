@@ -1,17 +1,11 @@
 import { memo, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useUpdateSnapshot } from "@/settings/components/UpdateButton";
 import { Section, SectionContent, SectionHeader } from "@/settings/layout/PageLayout";
 import type { MarkdownBlock } from "@/settings/lib/markdown";
 import { parseInlineTokens, parseMarkdownBlocks } from "@/settings/lib/markdown";
 import { pickNotesLanguage } from "@/settings/lib/notes";
 import type { UpdateState } from "@/settings/types/update";
-
-/**
- * Notes language shown in the About panel. The manifest carries both `zh` and
- * `en`; switch this constant (or wire it to an app-language setting) once the
- * bilingual UI lands.
- */
-const NOTES_LANGUAGE = "zh" as const;
 
 /** Once an update body is known, keep it visible through the download flow. */
 const NOTE_VISIBLE_STATES = new Set<UpdateState>([
@@ -85,12 +79,16 @@ const Block = memo(function Block({ block }: { block: MarkdownBlock }) {
  * its full height — the settings page itself scrolls.
  */
 export function ReleaseNotes() {
+  const { i18n } = useTranslation();
   const current = useUpdateSnapshot();
+  // The release-notes manifest carries both `zh` and `en`; follow the app
+  // language resolved by i18next.
+  const notesLanguage = i18n.language.startsWith("zh") ? "zh" : "en";
   // current.notes keeps a stable reference between snapshots, so the parse
   // (and every Block) is skipped while unrelated snapshot fields change.
   const blocks = useMemo(
-    () => parseMarkdownBlocks(pickNotesLanguage(current.notes, NOTES_LANGUAGE).trim()),
-    [current.notes],
+    () => parseMarkdownBlocks(pickNotesLanguage(current.notes, notesLanguage).trim()),
+    [current.notes, notesLanguage],
   );
 
   if (!NOTE_VISIBLE_STATES.has(current.state) || blocks.length === 0) return null;

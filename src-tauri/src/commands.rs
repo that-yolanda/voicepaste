@@ -75,6 +75,13 @@ pub(crate) fn apply_app_theme(app: &AppHandle, preference: &str) {
     app.set_theme(theme);
 }
 
+/// Current UI language (already resolved, so `auto` reflects the OS locale)
+/// for frontend i18n bootstrapping.
+#[tauri::command]
+pub fn get_app_language(state: State<'_, AppState>) -> String {
+    state.language.read().unwrap().code().to_string()
+}
+
 /// Get app configuration for the overlay.
 #[tauri::command]
 pub async fn get_app_config(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
@@ -178,6 +185,14 @@ pub async fn save_config_object(
     let updated_config = state.config_manager.load_config()?;
     apply_app_theme(&app, &updated_config.app.theme);
 
+    // Sync UI language: update shared state, rebuild the tray, and let both
+    // overlay renderers re-render through the appearance event below.
+    let new_language = crate::lang::Language::resolve(&updated_config.app.language);
+    if *state.language.read().unwrap() != new_language {
+        *state.language.write().unwrap() = new_language;
+        crate::rebuild_tray_menu(&app, new_language);
+    }
+
     if let Some(hotkey_mode) = app.try_state::<HotkeyMode>() {
         *hotkey_mode.0.lock().unwrap() = updated_config.app.hotkey_mode.clone();
     }
@@ -194,6 +209,7 @@ pub async fn save_config_object(
                 "platform": std::env::consts::OS,
                 "overlayStyle": updated_config.app.overlay_style,
                 "theme": updated_config.app.theme,
+                "language": new_language.code(),
             }
         }),
     );

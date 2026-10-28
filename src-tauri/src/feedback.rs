@@ -8,6 +8,7 @@ use std::time::Duration;
 use tauri::State;
 
 use crate::app_state::AppHandle as AppState;
+use crate::errors::{AppError, AppErrorCode};
 
 const ENDPOINT: &str = "https://voicepaste.dev/api/feedback/app";
 const LOG_LIMIT: usize = 512 * 1024;
@@ -67,39 +68,40 @@ pub async fn get_feedback_environment() -> FeedbackEnvironment {
     }
 }
 
-fn read_log(path: &Path) -> Result<String, String> {
-    let mut file = std::fs::File::open(path).map_err(|_| "log_unavailable")?;
-    let size = file.metadata().map_err(|_| "log_unavailable")?.len();
+fn read_log(path: &Path) -> Result<String, AppError> {
+    let unavailable = || AppError::new(AppErrorCode::FeedbackLogUnavailable);
+    let mut file = std::fs::File::open(path).map_err(|_| unavailable())?;
+    let size = file.metadata().map_err(|_| unavailable())?.len();
     let start = size.saturating_sub(LOG_LIMIT as u64);
     file.seek(SeekFrom::Start(start))
-        .map_err(|_| "log_unavailable")?;
+        .map_err(|_| unavailable())?;
     let mut bytes = Vec::new();
     file.take(LOG_LIMIT as u64)
         .read_to_end(&mut bytes)
-        .map_err(|_| "log_unavailable")?;
+        .map_err(|_| unavailable())?;
     // The tail may begin inside a UTF-8 character or an unfinished line.
     if start > 0 {
         let first_line = bytes
             .iter()
             .position(|byte| *byte == b'\n')
-            .ok_or("log_unavailable")?;
+            .ok_or_else(unavailable)?;
         bytes.drain(..=first_line);
     }
     if bytes.is_empty() {
-        return Err("log_unavailable".into());
+        return Err(unavailable());
     }
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 #[tauri::command]
-pub async fn get_feedback_log(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn get_feedback_log(state: State<'_, AppState>) -> Result<String, AppError> {
     let path = state.log_path.clone();
     tokio::task::spawn_blocking(move || {
         log::logger().flush();
         read_log(&path)
     })
     .await
-    .map_err(|_| "log_unavailable".to_string())?
+    .map_err(|_| AppError::new(AppErrorCode::FeedbackLogUnavailable))?
 }
 
 #[derive(Deserialize)]
@@ -132,10 +134,11 @@ pub struct FeedbackReceipt {
     submission_id: String,
 }
 
-fn prepare_form(payload: &FeedbackPayload) -> Result<Form, String> {
-    let id = uuid::Uuid::parse_str(&payload.submission_id).map_err(|_| "invalid_fields")?;
+fn prepare_form(payload: &FeedbackPayload) -> Result<Form, AppError> {
+    let invalid_fields = || AppError::new(AppErrorCode::FeedbackInvalidFields);
+    let id = uuid::Uuid::parse_str(&payload.submission_id).map_err(|_| invalid_fields())?;
     if id.get_version_num() != 4 || !["bug", "feature", "other"].contains(&payload.kind.as_str()) {
-        return Err("invalid_fields".into());
+        return Err(invalid_fields());
     }
     for (value, limit, required) in [
         (&payload.title, 120, true),
@@ -147,11 +150,11 @@ fn prepare_form(payload: &FeedbackPayload) -> Result<Form, String> {
         (&payload.wechat, 254, false),
     ] {
         if (required && value.trim().is_empty()) || value.encode_utf16().count() > limit {
-            return Err("invalid_fields".into());
+            return Err(invalid_fields());
         }
     }
     if payload.screenshots.len() > 4 {
-        return Err("invalid_files".into());
+        return Err(AppError::new(AppErrorCode::FeedbackInvalidFiles));
     }
     let mut form = Form::new()
         .text("type", payload.kind.clone())
@@ -166,10 +169,10 @@ fn prepare_form(payload: &FeedbackPayload) -> Result<Form, String> {
     let mut total = 0;
     if let Some(log) = &payload.log {
         if log.is_empty() {
-            return Err("invalid_files".into());
+            return Err(AppError::new(AppErrorCode::FeedbackInvalidFiles));
         }
         if log.len() > LOG_LIMIT {
-            return Err("too_large".into());
+            return Err(AppError::new(AppErrorCode::FeedbackTooLarge));
         }
         total += log.len();
         form = form.part(
@@ -179,17 +182,17 @@ fn prepare_form(payload: &FeedbackPayload) -> Result<Form, String> {
     }
     for (index, image) in payload.screenshots.iter().enumerate() {
         if image.content.len() > IMAGE_LIMIT.div_ceil(3) * 4 {
-            return Err("too_large".into());
+            return Err(AppError::new(AppErrorCode::FeedbackTooLarge));
         }
         let bytes = STANDARD
             .decode(&image.content)
-            .map_err(|_| "invalid_files")?;
+            .map_err(|_| AppError::new(AppErrorCode::FeedbackInvalidFiles))?;
         if bytes.len() > IMAGE_LIMIT {
-            return Err("too_large".into());
+            return Err(AppError::new(AppErrorCode::FeedbackTooLarge));
         }
         total += bytes.len();
         if total > ATTACHMENT_LIMIT {
-            return Err("too_large".into());
+            return Err(AppError::new(AppErrorCode::FeedbackTooLarge));
         }
         let name = image.name.to_ascii_lowercase();
         let extension = if name.ends_with(".png") && bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
@@ -199,7 +202,7 @@ fn prepare_form(payload: &FeedbackPayload) -> Result<Form, String> {
         {
             "jpg"
         } else {
-            return Err("invalid_files".into());
+            return Err(AppError::new(AppErrorCode::FeedbackInvalidFiles));
         };
         form = form.part(
             "screenshots",
@@ -209,16 +212,32 @@ fn prepare_form(payload: &FeedbackPayload) -> Result<Form, String> {
     Ok(form)
 }
 
+/// Map the shared API's error codes onto [`AppErrorCode`]. Only the whitelist
+/// crosses; everything else (including unexpected bodies) collapses to a
+/// generic send failure.
+fn platform_feedback_code(code: &str) -> AppErrorCode {
+    match code {
+        "invalid_fields" => AppErrorCode::FeedbackInvalidFields,
+        "invalid_files" => AppErrorCode::FeedbackInvalidFiles,
+        "too_large" => AppErrorCode::FeedbackTooLarge,
+        "forbidden" => AppErrorCode::FeedbackForbidden,
+        "unavailable" => AppErrorCode::FeedbackUnavailable,
+        "rate_limited" => AppErrorCode::FeedbackRateLimited,
+        _ => AppErrorCode::FeedbackSendFailed,
+    }
+}
+
 async fn send_feedback(
     payload: FeedbackPayload,
     endpoint: &str,
-) -> Result<FeedbackReceipt, String> {
+) -> Result<FeedbackReceipt, AppError> {
+    let send_failed = || AppError::new(AppErrorCode::FeedbackSendFailed);
     let form = prepare_form(&payload)?;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(60))
         .build()
-        .map_err(|_| "send_failed")?;
+        .map_err(|_| send_failed())?;
     let response = client
         .post(endpoint)
         .header(
@@ -228,39 +247,26 @@ async fn send_feedback(
         .multipart(form)
         .send()
         .await
-        .map_err(|_| "send_failed")?;
+        .map_err(|_| send_failed())?;
     match response.status().as_u16() {
-        413 => return Err("too_large".into()),
-        429 => return Err("rate_limited".into()),
+        413 => return Err(AppError::new(AppErrorCode::FeedbackTooLarge)),
+        429 => return Err(AppError::new(AppErrorCode::FeedbackRateLimited)),
         200..=299 => {}
         _ => {
             let body: serde_json::Value = response.json().await.unwrap_or_default();
             let code = body["error"].as_str().unwrap_or("send_failed");
-            return Err(
-                if [
-                    "invalid_fields",
-                    "invalid_files",
-                    "forbidden",
-                    "unavailable",
-                ]
-                .contains(&code)
-                {
-                    code.into()
-                } else {
-                    "send_failed".into()
-                },
-            );
+            return Err(AppError::new(platform_feedback_code(code)));
         }
     }
-    let receipt: FeedbackReceipt = response.json().await.map_err(|_| "send_failed")?;
+    let receipt: FeedbackReceipt = response.json().await.map_err(|_| send_failed())?;
     if !receipt.ok || receipt.submission_id != payload.submission_id {
-        return Err("send_failed".into());
+        return Err(send_failed());
     }
     Ok(receipt)
 }
 
 #[tauri::command]
-pub async fn submit_feedback(payload: FeedbackPayload) -> Result<FeedbackReceipt, String> {
+pub async fn submit_feedback(payload: FeedbackPayload) -> Result<FeedbackReceipt, AppError> {
     send_feedback(payload, ENDPOINT).await
 }
 
@@ -281,7 +287,10 @@ mod tests {
     fn attachment_count_and_size_are_bounded() {
         let mut report = payload();
         report.log = Some("x".repeat(LOG_LIMIT + 1));
-        assert_eq!(prepare_form(&report).err().unwrap(), "too_large");
+        assert_eq!(
+            prepare_form(&report).err().unwrap().code,
+            AppErrorCode::FeedbackTooLarge
+        );
         report.log = None;
         report.screenshots = (0..5)
             .map(|_| Screenshot {
@@ -289,12 +298,18 @@ mod tests {
                 content: STANDARD.encode(b"\x89PNG\r\n\x1a\n"),
             })
             .collect();
-        assert_eq!(prepare_form(&report).err().unwrap(), "invalid_files");
+        assert_eq!(
+            prepare_form(&report).err().unwrap().code,
+            AppErrorCode::FeedbackInvalidFiles
+        );
         report.screenshots = vec![Screenshot {
             name: "x.png".into(),
             content: STANDARD.encode("not an image"),
         }];
-        assert_eq!(prepare_form(&report).err().unwrap(), "invalid_files");
+        assert_eq!(
+            prepare_form(&report).err().unwrap().code,
+            AppErrorCode::FeedbackInvalidFiles
+        );
     }
 
     #[test]
@@ -343,7 +358,10 @@ mod tests {
     #[tokio::test]
     async fn platform_html_errors_are_mapped_without_json() {
         use wiremock::{Mock, MockServer, ResponseTemplate};
-        for (status, code) in [(413, "too_large"), (429, "rate_limited")] {
+        for (status, code) in [
+            (413, AppErrorCode::FeedbackTooLarge),
+            (429, AppErrorCode::FeedbackRateLimited),
+        ] {
             let server = MockServer::start().await;
             Mock::given(wiremock::matchers::method("POST"))
                 .respond_with(
@@ -352,7 +370,11 @@ mod tests {
                 .mount(&server)
                 .await;
             assert_eq!(
-                send_feedback(payload(), &server.uri()).await.err().unwrap(),
+                send_feedback(payload(), &server.uri())
+                    .await
+                    .err()
+                    .unwrap()
+                    .code,
                 code
             );
         }

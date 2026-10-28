@@ -65,8 +65,10 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
+    "i18next": "^26.5.11",
     "lucide-react": "^1.18.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "react-i18next": "^17.1.9"
   }
 }

@@ -239,6 +239,9 @@ pub struct AppSettings {
     /// When true, check for beta (prerelease) updates instead of stable only.
     #[serde(default)]
     pub beta_updates: bool,
+    /// UI language: `auto` (follow the OS locale), `zh-CN` or `en`.
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -422,6 +425,9 @@ fn default_theme() -> String {
 fn default_overlay_style() -> String {
     "liquid".to_string()
 }
+fn default_language() -> String {
+    "auto".to_string()
+}
 fn default_format() -> String {
     "pcm".to_string()
 }
@@ -512,6 +518,18 @@ fn normalize_choice(value: &str, allowed: &[&str], fallback: &str) -> String {
         normalized
     } else {
         fallback.to_string()
+    }
+}
+
+/// Canonicalize `app.language` to one of `auto | zh-CN | en`. Unlike
+/// [`normalize_choice`] this is case-preserving (`zh-CN` keeps its case) and
+/// folds common hand-written variants (`zh`, `ZH_CN`, …) onto the values the
+/// settings UI displays. Language *semantics* live in [`crate::lang`].
+fn normalize_language(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "zh" | "zh-cn" | "zh_cn" | "zh-hans" => "zh-CN".to_string(),
+        "en" => "en".to_string(),
+        _ => "auto".to_string(),
     }
 }
 
@@ -929,6 +947,7 @@ impl Default for AppConfig {
                 overlay_style: default_overlay_style(),
                 sound: None,
                 beta_updates: false,
+                language: default_language(),
             },
             audio: default_audio_settings(),
             llm: LlmConfig {
@@ -1176,8 +1195,13 @@ impl ConfigManager {
     /// Save config as a parsed YAML value, update memory cache and disk.
     pub fn save_config(&self, config: &serde_norway::Value) -> Result<(), String> {
         let _guard = self.hotkey_updates.lock().unwrap();
-        let candidate: AppConfig =
+        let mut candidate: AppConfig =
             serde_norway::from_value(config.clone()).map_err(|e| format!("配置格式错误：{e}"))?;
+        // Canonicalize app.language (auto | zh-CN | en) so hand-edited YAML
+        // variants round-trip to a value the settings UI can display.
+        candidate.app.language = normalize_language(&candidate.app.language);
+        let mut config = config.clone();
+        config["app"]["language"] = serde_norway::Value::String(candidate.app.language.clone());
         let prompts = self.load_prompts();
         crate::hotkey::validate_change(
             &candidate.app,
@@ -1193,7 +1217,7 @@ impl ConfigManager {
                 .map_err(|_| "ElevenLabs 参数格式错误，请检查模型配置".to_string())?;
             params.validate()?;
         }
-        let yaml = serde_norway::to_string(config)
+        let yaml = serde_norway::to_string(&config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
         fs::write(&self.config_path, yaml).map_err(|e| format!("Failed to write config: {}", e))?;
         // Re-read from disk to populate cache, avoiding JSON→YAML value round-trip

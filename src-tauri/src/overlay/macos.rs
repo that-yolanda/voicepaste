@@ -354,6 +354,12 @@ fn apply_event(app: &AppHandle, event: &serde_json::Value) {
                 {
                     model.theme = t.into();
                 }
+                if let Some(l) = payload
+                    .and_then(|p| p.get("language"))
+                    .and_then(|v| v.as_str())
+                {
+                    model.language = crate::lang::Language::from_pref(l);
+                }
             }
             _ => {}
         }
@@ -361,7 +367,8 @@ fn apply_event(app: &AppHandle, event: &serde_json::Value) {
     });
 }
 
-/// Load the initial appearance (style + glass mode) from config once.
+/// Load the initial appearance (style + glass mode + language) from the
+/// shared state once.
 fn ensure_loaded(app: &AppHandle, model: &mut Model) {
     if model.loaded {
         return;
@@ -377,6 +384,9 @@ fn ensure_loaded(app: &AppHandle, model: &mut Model) {
             if !config.app.theme.is_empty() {
                 model.theme = config.app.theme.clone();
             }
+        }
+        if let Ok(language) = inner.language.read() {
+            model.language = *language;
         }
     }
 }

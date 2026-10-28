@@ -44,6 +44,11 @@ pub struct AppInner {
     pub recording_hints: Mutex<Option<crate::overlay::shared::RecordingHints>>,
     pub recording_mode: Mutex<hotkey::HotkeyMode>,
     pub state: Mutex<AppState>,
+    /// Resolved UI language (from `app.language`; `auto` already reflects the
+    /// OS locale). Read on synchronous paths (tray rebuild, native overlay
+    /// rendering, event emits) which cannot await, hence a std RwLock holding
+    /// a Copy enum. Written once per language change.
+    pub language: std::sync::RwLock<crate::lang::Language>,
     pub config_manager: ConfigManager,
     pub hotword_manager: HotwordManager,
     pub log_path: std::path::PathBuf,
@@ -109,6 +114,7 @@ pub fn create_app_state(
     hotword_manager: HotwordManager,
     log_path: std::path::PathBuf,
     stats_service: StatsService,
+    language: crate::lang::Language,
 ) -> AppHandle {
     Arc::new(AppInner {
         overlay_epoch: std::sync::atomic::AtomicU64::new(0),
@@ -116,6 +122,7 @@ pub fn create_app_state(
         recording_hints: Mutex::new(None),
         recording_mode: Mutex::new(hotkey::HotkeyMode::Toggle),
         state: Mutex::new(AppState::Idle),
+        language: std::sync::RwLock::new(language),
         config_manager,
         hotword_manager,
         log_path,

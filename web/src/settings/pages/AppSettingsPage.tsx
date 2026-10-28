@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { syncLanguageFromBackend } from "@/i18n";
 import { selectSoundFile } from "@/settings/bridge";
 import { Button } from "@/settings/components/Button";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
@@ -15,6 +17,7 @@ import { soundFileName } from "@/settings/lib/sound";
 import { useSettings } from "@/settings/SettingsProvider";
 
 export function AppSettingsPage() {
+  const { t } = useTranslation();
   const { settings, scheduleSave } = useSettings();
   const cfg = settings?.parsedConfig || ({} as Record<string, unknown>);
   const app = (cfg.app || {}) as Record<string, unknown>;
@@ -64,6 +67,25 @@ export function AppSettingsPage() {
                 className="shrink-0"
               />
             )}
+
+            <SectionItem
+              title={t("ui.settings.language")}
+              action={
+                <SegmentedControl
+                  options={[
+                    { value: "auto", label: t("ui.settings.language_auto") },
+                    { value: "zh-CN", label: t("ui.settings.language_zh") },
+                    { value: "en", label: t("ui.settings.language_en") },
+                  ]}
+                  value={(app.language as string) || "auto"}
+                  onChange={(v) => {
+                    void scheduleSave({ app: { language: v } }).then(() =>
+                      syncLanguageFromBackend(),
+                    );
+                  }}
+                />
+              }
+            />
 
             <SectionItem last title="配置文件路径" description={configPath} />
           </SectionItemList>

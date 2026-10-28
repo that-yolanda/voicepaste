@@ -129,7 +129,7 @@ describe("App feedback", () => {
   });
 
   it("preserves the exact ID and log when retrying, even across navigation", async () => {
-    bridge.submitFeedback.mockRejectedValueOnce("send_failed");
+    bridge.submitFeedback.mockRejectedValueOnce({ code: "feedback.send_failed" });
     const view = render(<Harness />);
     await fillReport();
     fireEvent.click(screen.getByLabelText("附件运行日志"));
@@ -168,7 +168,7 @@ describe("App feedback", () => {
   });
 
   it("retains content and lets users opt out when log collection fails", async () => {
-    bridge.getFeedbackLog.mockRejectedValue("log_unavailable");
+    bridge.getFeedbackLog.mockRejectedValue({ code: "feedback.log_unavailable" });
     render(<Harness />);
     await fillReport();
     fireEvent.click(screen.getByLabelText("附件运行日志"));

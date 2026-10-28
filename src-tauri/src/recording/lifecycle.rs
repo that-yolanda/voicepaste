@@ -40,8 +40,9 @@ pub(super) async fn start_recording(app_handle: AppHandle) {
     // prompt is resolved from the stop chord (not known at start), and a bad
     // LLM config surfaces there with the provider's own reason plus a retry.
 
+    let appearance_language = *app_inner.language.read().unwrap();
     let _ = app_handle.emit("overlay:event", serde_json::json!({
-        "type": "appearance", "payload": { "theme": config.app.theme, "overlayStyle": config.app.overlay_style }
+        "type": "appearance", "payload": { "theme": config.app.theme, "overlayStyle": config.app.overlay_style, "language": appearance_language.code() }
     }));
 
     // Settle any parked polish before recording again. Otherwise its auto-paste

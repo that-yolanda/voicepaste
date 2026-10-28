@@ -115,6 +115,9 @@ pub struct Model {
     /// "appearance" events). Unused by the Windows WebView.
     pub style: String, // "liquid" | "liquid-standard" | "vibrancy"
     pub theme: String, // app.theme: "system" | "light" | "dark"
+    /// UI language for the state placeholders in [`visible_hint`] (loaded
+    /// from the shared language state, refreshed on "appearance" events).
+    pub language: crate::lang::Language,
     pub loaded: bool,
 }
 
@@ -127,7 +130,7 @@ pub fn visible_hint(model: &Model) -> String {
         return model.hint_text.clone();
     }
     let visual_state = model.app_state.as_str();
-    let zh = true; // app is Chinese-first; matches the WebView's isZhLocale default.
+    let zh = model.language == crate::lang::Language::ZhCn;
     if visual_state == "connecting" {
         return if zh {
             "准备中".into()
@@ -155,7 +158,11 @@ pub fn visible_hint(model: &Model) -> String {
         };
     }
     if visual_state == "finishing" && model.hint_text.is_empty() {
-        return "识别中".into();
+        return if zh {
+            "识别中".into()
+        } else {
+            "Recognizing…".into()
+        };
     }
     // Action shortcuts live above the pill; its body contains only the hint.
     model.hint_text.clone()
@@ -221,6 +228,7 @@ mod tests {
             app_state: state.into(),
             hint_text: hint.into(),
             hint_variant: variant.into(),
+            language: crate::lang::Language::ZhCn,
             ..Default::default()
         }
     }
@@ -235,6 +243,20 @@ mod tests {
         let mut m = model("finishing", "", "retry");
         m.final_text = "你好".into();
         assert_eq!(visible_hint(&m), "");
+    }
+
+    #[test]
+    fn visible_hint_state_placeholders_in_english() {
+        let mut m = Model::default(); // default language is English
+        m.app_state = "connecting".into();
+        assert_eq!(visible_hint(&m), "Preparing…");
+        m.app_state = "finishing".into();
+        m.hint_variant = "progress".into();
+        assert_eq!(visible_hint(&m), "Polishing…");
+        m.hint_variant = "retry".into();
+        assert_eq!(visible_hint(&m), "Retrying…");
+        m.hint_variant = "text".into();
+        assert_eq!(visible_hint(&m), "Recognizing…");
     }
 
     #[test]

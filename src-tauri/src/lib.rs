@@ -4,9 +4,11 @@ mod app_state;
 mod asr;
 mod commands;
 mod config;
+mod errors;
 mod feedback;
 mod hotkey;
 mod hotword;
+mod lang;
 mod llm;
 mod migration;
 mod model;
@@ -105,9 +107,18 @@ pub fn run() {
                 .map(|c| c.app.theme.as_str())
                 .unwrap_or("system")
                 .to_string();
+            let initial_language = startup_config
+                .as_ref()
+                .map(|c| lang::Language::resolve(&c.app.language))
+                .unwrap_or(lang::Language::En);
 
-            let app_state =
-                create_app_state(config_manager, hotword_manager, log_path, stats_service);
+            let app_state = create_app_state(
+                config_manager,
+                hotword_manager,
+                log_path,
+                stats_service,
+                initial_language,
+            );
             app.manage(app_state);
 
             // Recording state toggle (used by global shortcut handler)
@@ -139,7 +150,7 @@ pub fn run() {
             });
 
             // Setup system tray
-            setup_tray(app)?;
+            setup_tray(app, initial_language)?;
 
             // Setup global hotkeys via keytap
             log_app!(debug, "Setting up global hotkeys (keytap)...");
@@ -150,6 +161,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_config,
+            commands::get_app_language,
             commands::get_overlay_layout_metrics,
             commands::complete_overlay_hide,
             commands::get_audio_config_defaults,
@@ -239,14 +251,43 @@ pub fn run() {
         });
 }
 
-/// Setup the system tray icon with menu items.
-fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+/// Build the tray menu for a UI language. Kept separate so the menu can be
+/// rebuilt when the language changes (`rebuild_tray_menu`).
+fn build_tray_menu(
+    app: &tauri::AppHandle,
+    lang: crate::lang::Language,
+) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-
-    let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
+    let (settings_label, quit_label) = match lang {
+        crate::lang::Language::ZhCn => ("设置", "退出"),
+        crate::lang::Language::En => ("Settings", "Quit"),
+    };
+    let settings_item = MenuItem::with_id(app, "settings", settings_label, true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&settings_item, &separator, &quit_item])?;
+    let quit_item = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
+    Menu::with_items(app, &[&settings_item, &separator, &quit_item])
+}
+
+/// Rebuild the tray menu after a language change. Menu item ids are stable, so
+/// the existing `on_menu_event` handler keeps working untouched.
+pub(crate) fn rebuild_tray_menu(app: &tauri::AppHandle, lang: crate::lang::Language) {
+    let menu = match build_tray_menu(app, lang) {
+        Ok(menu) => menu,
+        Err(e) => {
+            log_tray!(error, "failed to rebuild tray menu: {e}");
+            return;
+        }
+    };
+    if let Some(tray) = app.try_state::<tauri::tray::TrayIcon<tauri::Wry>>() {
+        if let Err(e) = tray.set_menu(Some(menu)) {
+            log_tray!(error, "failed to apply tray menu: {e}");
+        }
+    }
+}
+
+/// Setup the system tray icon with menu items.
+fn setup_tray(app: &mut App, language: lang::Language) -> Result<(), Box<dyn std::error::Error>> {
+    let menu = build_tray_menu(app.handle(), language)?;
     let icon = Image::from_bytes(include_bytes!("../icons/trayTemplate.png"))?;
 
     let tray = TrayIconBuilder::with_id("main-tray")

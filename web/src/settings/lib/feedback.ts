@@ -45,17 +45,6 @@ export interface FeedbackPayload extends FeedbackDraft, FeedbackEnvironment {
   screenshots: { name: string; content: string }[];
 }
 
-export const feedbackErrors: Record<string, string> = {
-  invalid_fields: "请完成必填项，并检查联系方式。",
-  invalid_files: "请选择最多 4 张 PNG/JPEG 截图。",
-  too_large: "附件过大：日志上限 512 KiB，单张截图上限 2 MiB，附件合计上限 3 MiB。",
-  forbidden: "反馈接口暂不可用，请通过官网提交。",
-  unavailable: "反馈服务尚未配置完成，请稍后重试。",
-  send_failed: "暂时无法确认提交结果，内容已保留，请重试。",
-  rate_limited: "提交过于频繁，请等待 10 分钟后重试。",
-  log_unavailable: "无法读取运行日志，请取消附加日志后提交。",
-};
-
 export const feedbackFields = ["title", "description", "appVersion", "system", "email"] as const;
 export type FeedbackField = (typeof feedbackFields)[number];
 export type FeedbackFieldErrors = Partial<Record<FeedbackField, string>>;

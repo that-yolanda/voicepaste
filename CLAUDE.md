@@ -227,3 +227,14 @@ VoicePaste supports a beta update channel for prerelease testing. The architectu
 - Cross-platform: paste via AppleScript (macOS) / PowerShell (Windows)
 - Binary protocol in `asr.rs`: protocol byte `0x11`, message types `0x01` (full request), `0x02` (audio-only), `0x09` (server ack), `0x0f` (error)
 - Auto-updates via `tauri-plugin-updater` with GitHub Releases as endpoint
+
+## Error Codes & Localization
+
+- Errors cross the IPC boundary as `AppError { code, params, detail }` from `src-tauri/src/errors.rs`. `code` serializes to a dotted `domain.reason` string (e.g. `llm.auth_invalid`). Allowed domains: `llm` `asr` `config` `hotkey` `audio` `mic` `paste` `stats` `model` `feedback` `common`
+- Never return user-facing prose from commands or overlay events — return a code (+ `params` for interpolation) and let the receiving side render it. Log messages (`log_*!`) may stay free-form English and are not translated
+- `detail` carries provider/technical context. It may echo user transcripts, so it must never be written to logs or persisted to history; `Display for AppError` prints only the code
+- The single translation source is `web/src/locales/{zh-CN,en}.json` under `errors.*` (error codes) and `ui.*` (UI strings). The frontend renders via `errText(e)` from `web/src/i18n/errText.ts`; plain `String` rejections pass through unchanged (legacy domains / old history entries)
+- The native macOS overlay renders codes through a compile-time exhaustive `match` (`AppErrorCode::render_headline`) that duplicates the locale strings by design — keep it in sync with the JSON. Adding a code requires entries in BOTH locale files (the locale-coverage test in `errors.rs` enforces this)
+- Never rename or delete a code that may already be persisted in the history JSONL; add a new one instead
+- UI language comes from `app.language` (`auto | zh-CN | en`), resolved once at startup into the shared state (`AppInner.language`) and re-resolved on save (tray rebuild + `appearance` event carries `language`)
+

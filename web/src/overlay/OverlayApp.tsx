@@ -1,5 +1,7 @@
+import type { TFunction } from "i18next";
 import { Check, Info } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getOverlayLayoutMetrics, type OverlayLayoutMetrics } from "./bridge";
 import type { OverlayState } from "./types";
 import { useOverlayLayout } from "./useOverlayLayout";
@@ -32,21 +34,22 @@ const FALLBACK_METRICS: OverlayLayoutMetrics = {
 };
 
 // Visible hint text — aligned 1:1 with src-tauri/src/overlay/shared.rs::visible_hint.
-function visibleHintText(state: OverlayState): string {
+function visibleHintText(state: OverlayState, t: TFunction): string {
   if (state.hintVariant === "success") return state.hintText;
-  if (state.appState === "connecting") return "准备中";
+  if (state.appState === "connecting") return t("ui.overlay.preparing");
   if (state.appState === "finishing") {
     if (state.hintVariant === "retry") {
-      if (!state.finalText && !state.partialText) return "重试中";
+      if (!state.finalText && !state.partialText) return t("ui.overlay.retrying");
       return "";
     }
-    if (state.hintVariant === "progress") return "润色中";
-    if (!state.hintText) return "识别中";
+    if (state.hintVariant === "progress") return t("ui.overlay.polishing");
+    if (!state.hintText) return t("ui.overlay.recognizing");
   }
   return state.hintText;
 }
 
 export function OverlayApp() {
+  const { t } = useTranslation();
   const { state, waveActive } = useOverlayState();
   const [lastShortcuts, setLastShortcuts] = useState(state.shortcuts);
   useEffect(() => {
@@ -61,7 +64,7 @@ export function OverlayApp() {
       .catch(() => {});
   }, []);
 
-  const visibleHint = visibleHintText(state);
+  const visibleHint = visibleHintText(state, t);
   const hasHint = Boolean(visibleHint);
   const isError = state.hintLevel === "error";
   const success = state.hintVariant === "success";

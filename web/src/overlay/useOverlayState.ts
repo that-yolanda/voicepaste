@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { onOverlayEvent } from "@/overlay/bridge";
 import {
@@ -88,12 +89,19 @@ export function useOverlayState() {
         case "shortcuts":
           dispatch({ type: "shortcuts", shortcuts: (payload.shortcuts as Shortcut[]) || [] });
           break;
-        case "appearance":
+        case "appearance": {
           dispatch({
             type: "appearance",
             theme: (payload.theme as OverlayState["theme"]) || "system",
           });
+          // Language rides on the same event (set on save); switching here
+          // re-renders the translated state placeholders immediately.
+          const language = payload.language;
+          if (typeof language === "string" && language) {
+            void i18next.changeLanguage(language);
+          }
           break;
+        }
       }
     });
   }, []);

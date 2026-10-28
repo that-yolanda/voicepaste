@@ -1,4 +1,6 @@
+import i18next from "i18next";
 import { useEffect, useRef, useState } from "react";
+import { errText } from "@/i18n/errText";
 import {
   getFeedbackEnvironment,
   getFeedbackLog,
@@ -14,7 +16,6 @@ import {
   type FeedbackField,
   type FeedbackFieldErrors,
   type FeedbackPayload,
-  feedbackErrors,
   feedbackFields,
   validateFeedback,
 } from "@/settings/lib/feedback";
@@ -129,14 +130,14 @@ export function useFeedback(active: boolean) {
   function addScreenshots(files: File[]) {
     const next = [...screenshots.map((item) => item.file), ...files];
     if (next.length > 4 || next.some((file) => !/\.(png|jpe?g)$/i.test(file.name) || !file.size)) {
-      fail(feedbackErrors.invalid_files);
+      fail(i18next.t("errors.feedback.invalid_files"));
       return;
     }
     if (
       next.some((file) => file.size > 2 * 1024 * 1024) ||
       next.reduce((sum, file) => sum + file.size, 0) > 3 * 1024 * 1024
     ) {
-      fail(feedbackErrors.too_large);
+      fail(i18next.t("errors.feedback.too_large"));
       return;
     }
     changed();
@@ -160,7 +161,7 @@ export function useFeedback(active: boolean) {
       logSnapshot.current ??= await getFeedbackLog();
       setLogPreview(logSnapshot.current);
     } catch {
-      fail(feedbackErrors.log_unavailable);
+      fail(i18next.t("errors.feedback.log_unavailable"));
     } finally {
       setReadingLog(false);
     }
@@ -195,7 +196,7 @@ export function useFeedback(active: boolean) {
       clear();
       showToast("反馈已提交，感谢你的帮助！");
     } catch (reason) {
-      fail(feedbackErrors[String(reason)] ?? feedbackErrors.send_failed);
+      fail(errText(reason));
     } finally {
       busy.current = false;
       setPending(false);
