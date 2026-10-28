@@ -74,17 +74,21 @@ export function Section({ children, className = "" }: { children: ReactNode; cla
 export function SectionHeader({
   title,
   subtitle,
+  subtitleClassName = "text-sm",
   action,
 }: {
   title: string;
   subtitle?: string;
+  subtitleClassName?: string;
   action?: ReactNode;
 }) {
   return (
     <div className="px-4 pt-2 flex justify-between gap-2 w-full items-center">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">{title}</h2>
-        {subtitle && <p className="min-w-0 flex-1 text-sm text-text-muted mt-0.5 ">{subtitle}</p>}
+        {subtitle && (
+          <p className={`min-w-0 flex-1 text-text-muted mt-0.5 ${subtitleClassName}`}>{subtitle}</p>
+        )}
       </div>
 
       {action && (

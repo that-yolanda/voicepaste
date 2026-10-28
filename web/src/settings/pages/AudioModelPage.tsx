@@ -270,7 +270,7 @@ export function AudioModelPage() {
         title={t("ui.audio.title")}
         description={t("ui.audio.current", { name: currentName })}
       >
-        <div className="flex items-center gap-4 mt-2 text-text-muted">
+        <div className="flex items-center gap-4 mt-2 text-xs text-text-muted">
           <span className="flex items-center gap-1">
             <Badge variant="ghost">
               <CircleCheck size={16} className="fill-success text-surface" />

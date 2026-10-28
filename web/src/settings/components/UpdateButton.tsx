@@ -8,6 +8,7 @@ import {
   installUpdate,
   onUpdateProgress,
 } from "@/settings/bridge";
+import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
 import type { UpdateState } from "@/settings/types/update";
 
@@ -262,6 +263,14 @@ export function UpdateButton({ compact = false }: { compact?: boolean }) {
   const current = useUpdateSnapshot();
   const action = updateAction(current, t);
   const statusText = updateStatusText(current, t);
+  const statusVariant =
+    current.state === "error"
+      ? "danger"
+      : current.state === "not-available" || current.state === "downloaded"
+        ? "success"
+        : current.state === "checking"
+          ? "muted"
+          : "accent";
 
   if (compact) {
     if (!compactVisibleStates.has(current.state)) return null;
@@ -280,7 +289,11 @@ export function UpdateButton({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className="flex flex-row items-center gap-2">
-      <span className="text-xs text-text-muted">{statusText}</span>
+      {statusText && (
+        <Badge variant={statusVariant} size="xs">
+          {statusText}
+        </Badge>
+      )}
       <Button variant={action.variant} onClick={action.onClick} disabled={action.disabled}>
         <UpdateIcon state={current.state} />
         <span>{action.label}</span>

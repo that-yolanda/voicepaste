@@ -72,7 +72,7 @@
       },
       "name_en": "Volcano Engine — Doubao streaming ASR 2.0",
       "description_en": "¥1/hour, first choice for Chinese",
-      "tags_en": ["Streaming", "Free trial quota", "Hotword library", "Chinese + English, dialects"]
+      "tags_en": ["Streaming", "Free trial", "Hotwords", "Chinese + English, dialects"]
     },
     {
       "id": "elevenlabs-realtime",

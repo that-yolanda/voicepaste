@@ -270,7 +270,7 @@
     "heatmap": {
       "title": "使用统计",
       "range": "过去 26 周",
-      "total": "共输入 {{count}} 字",
+      "total": "共输入 <count>{{count}}</count> 字",
       "cell_title": "{{month}}月{{day}}日: {{count}} 字"
     },
     "app_settings": {
@@ -297,9 +297,9 @@
     },
     "hotwords": {
       "title": "热词库",
-      "description": "热词库用于提高特定词汇的识别准确率。开启开关的表为默认热词表，识别时自动传入；若模型不支持热词可追加到 LLM 文本润色，配置前往 音频模型 > 自定义配置 > 识别强化。内置热词表可在「常用热词表」中按需添加为自定义表。",
+      "description": "热词库用于提高特定词汇的识别准确率。开启开关的表为默认热词表，识别时自动传入；若模型不支持热词可追加到 LLM 文本润色，配置前往 音频模型 > 自定义配置 > 识别强化。内置热词表可在「常用热词」中按需添加为自定义表。",
       "add_group": "添加热词表",
-      "builtin": "常用热词表",
+      "builtin": "常用热词",
       "group_name": "热词组名称",
       "add_word": "添加热词",
       "add_word_placeholder": "逗号分隔批量添加，例如：Claude, Anthropic|8（默认权重 4）",
@@ -312,14 +312,14 @@
     "llm": {
       "title": "文本润色",
       "description": "用于语音识别后的文本润色与文本结构化，触发请前往「快捷键」页面配置对应提示词的快捷键",
-      "api_config": "API 配置",
+      "api_config": "供应商",
       "model": "模型",
       "url": "URL",
       "api_key": "API Key",
       "model_id": "模型ID",
       "prompts": "文本润色模板",
-      "add_template": "+ 添加模板",
-      "builtin_prompts": "常用润色提示词",
+      "add_template": "添加",
+      "builtin_prompts": "模板库",
       "new_template": "新建润色模板",
       "template_name": "模板名称",
       "template_name_placeholder": "模板名称",

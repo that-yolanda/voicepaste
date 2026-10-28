@@ -72,8 +72,10 @@ export function AppSettingsPage() {
 
             <SectionItem
               title={t("ui.settings.language")}
+              htmlFor="app-language"
               action={
                 <Select
+                  id="app-language"
                   className="max-w-40"
                   value={(app.language as string) || "auto"}
                   onChange={(v) => {

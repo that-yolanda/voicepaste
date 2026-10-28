@@ -1,4 +1,4 @@
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { Section, SectionContent, SectionHeader } from "@/settings/layout/PageLayout";
 
 /* ---------- constants ---------- */
@@ -94,7 +94,7 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
     <Section>
       <SectionHeader title={t("ui.heatmap.title")} />
       <SectionContent className="px-4 flex flex-col gap-1">
-        {/* Grid area — columns stretch to fill the section width */}
+        {/* Square cells scale with the available section width. */}
         <div className="w-full">
           {/* Month labels */}
           <div
@@ -113,20 +113,20 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
             {/* Day-of-week labels */}
             <div
               className="grid gap-0.75 text-[10px] text-text-muted w-3.5 shrink-0"
-              style={{ gridTemplateRows: "repeat(7, 11px)" }}
+              style={{ gridTemplateRows: "repeat(7, 1fr)" }}
             >
               {DAY_KEYS.map((day, index) => (
-                <span key={day} className="h-2.75 flex items-center justify-end leading-none">
+                <span key={day} className="flex items-center justify-end leading-none">
                   {DAY_SHOWN[index] ? weekdayFormat.format(new Date(2024, 0, 1 + (index - 1))) : ""}
                 </span>
               ))}
             </div>
 
-            {/* The 7×26 grid — cell width comes from the stretched columns */}
+            {/* Day labels stretch to match the seven square-cell rows. */}
             <div
               className="grid gap-0.75 w-full"
               style={{
-                gridTemplateRows: "repeat(7, 11px)",
+                gridTemplateRows: "repeat(7, 1fr)",
                 gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`,
                 gridAutoFlow: "column",
               }}
@@ -134,7 +134,7 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
               {cells.map((c) => (
                 <div
                   key={c.key}
-                  className={`h-2.75 rounded-xs ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
+                  className={`aspect-square rounded-xs ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
                   title={
                     c.future
                       ? ""
@@ -150,12 +150,14 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
           </div>
         </div>
 
-        {/* Summary — its own full-width line under the grid, so long English
-            text can never overlap the cells */}
-        <div className="flex justify-center items-baseline gap-2 whitespace-nowrap">
-          <span className="text-sm text-text-muted">{t("ui.heatmap.range")}</span>
-          <span className="text-sm text-text-dim">
-            {t("ui.heatmap.total", { count: total.toLocaleString() })}
+        <div className="flex justify-end items-baseline gap-2 whitespace-nowrap text-xs font-normal">
+          <span className="text-text-muted">{t("ui.heatmap.range")}</span>
+          <span className="text-text-dim">
+            <Trans
+              i18nKey="ui.heatmap.total"
+              values={{ count: total.toLocaleString() }}
+              components={{ count: <span className="font-medium" /> }}
+            />
           </span>
         </div>
       </SectionContent>

@@ -9,12 +9,12 @@ type SelectProps = Omit<ComponentPropsWithoutRef<"select">, "value" | "onChange"
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ value, onChange, options, className = "", ...props }, ref) => (
-    <div className="relative w-full">
+    <div className={`relative w-full ${className}`}>
       <select
         ref={ref}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`h-8.5 w-full appearance-none rounded-lg border border-border bg-input-bg pl-3 pr-9 text-sm text-text outline-none transition-colors focus:ring-1 focus:ring-accent-dim disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+        className="h-8.5 w-full appearance-none rounded-lg border border-border bg-input-bg pl-3 pr-9 text-sm text-text outline-none transition-colors focus:ring-1 focus:ring-accent-dim disabled:cursor-not-allowed disabled:opacity-50"
         {...props}
       >
         {options.map((option) => (

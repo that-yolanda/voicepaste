@@ -314,12 +314,17 @@ export function ModelCard({
 
   return (
     <Section>
-      <SectionHeader title={name} subtitle={description} action={renderHeaderAction()} />
+      <SectionHeader
+        title={name}
+        subtitle={description}
+        subtitleClassName="text-xs"
+        action={renderHeaderAction()}
+      />
       <SectionContent>
         {model.capabilities && (
           <div className="flex items-center gap-2 flex-wrap">
             {Object.entries(CAPABILITY_LABELS).map(([key, label]) => (
-              <Badge key={key} variant="ghost">
+              <Badge key={key} variant="ghost" size="xs">
                 <CircleCheck
                   size={16}
                   className={`text-surface ${model.capabilities?.[key] ? "fill-success" : "fill-text-muted"}`}
@@ -333,14 +338,14 @@ export function ModelCard({
         {/* Meta row: tags + capabilities + config toggle */}
         <div className="flex flex-wrap items-center gap-2">
           {tags.map((tag) => (
-            <Badge key={tag} variant="accent">
+            <Badge key={tag} variant="accent" size="xs">
               {tag}
             </Badge>
           ))}
           {memStr && model.category === "asr" && (
             <div className="flex gap-1 items-center text-text-muted">
               <ChartNoAxesCombined size={16} />
-              <span className="text-sm">{t("ui.model.memory_peak", { size: memStr })}</span>
+              <span className="text-xs">{t("ui.model.memory_peak", { size: memStr })}</span>
             </div>
           )}
 

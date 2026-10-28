@@ -29,8 +29,8 @@
       "reasoning_truncated": "The model spent its output budget thinking and wrote no text",
       "empty_response": "The model returned no content",
       "parse_failed": "Could not parse the model response",
-      "prompt_missing": "Choose a polish template first",
-      "prompt_unavailable": "Polish template unavailable. Check template settings"
+      "prompt_missing": "Choose a template first",
+      "prompt_unavailable": "Template unavailable. Check your templates in LLM settings"
     },
     "stats": {
       "entry_not_found": "History entry not found",
@@ -145,7 +145,7 @@
     "api_key": "API Key",
     "enable_nonstream": "Second-pass recognition",
     "enable_accelerate_text": "Fast first token",
-    "enable_ddc": "Semantic smoothing",
+    "enable_ddc": "Remove filler words",
     "enable_itn": "Number formatting",
     "enable_punc": "Auto punctuation",
     "corpus.boosting_table_id": "Hotword table ID",
@@ -154,7 +154,7 @@
     "rate": "Sample rate",
     "channel": "Channels",
     "format": "Audio format",
-    "bits": "Sample bits",
+    "bits": "Bit depth",
     "model_name": "Model name",
     "model_version": "Model version",
     "operation": "Operation",
@@ -163,7 +163,7 @@
     "result_type": "Result type",
     "accelerate_score": "First-token speed",
     "ssd_version": "SSD large-model version",
-    "output_zh_variant": "Traditional output",
+    "output_zh_variant": "Traditional Chinese",
     "end_window_size": "Force-stop window (ms)",
     "force_to_speech_time": "Min force-stop (ms)",
     "vad_segment_duration": "Semantic segmentation silence (ms)",
@@ -230,16 +230,16 @@
     "ssd_version.options.100": "100 (standard)",
     "output_zh_variant.options.off": "Off",
     "output_zh_variant.options.traditional": "Traditional (mainland)",
-    "output_zh_variant.options.tw": "Taiwan traditional",
-    "output_zh_variant.options.hk": "Hong Kong traditional",
+    "output_zh_variant.options.tw": "Traditional (Taiwan)",
+    "output_zh_variant.options.hk": "Traditional (Hong Kong)",
     "commit_strategy.options.manual": "Manual",
     "commit_strategy.options.vad": "VAD segments"
   },
   "ui": {
     "hotkey": {
-      "binding_main": "Global main key",
+      "binding_main": "Recording hotkey",
       "binding_voice": "Voice input",
-      "cleared_hint": "Cleared this hotkey. Please set it again",
+      "cleared_hint": "Hotkey cleared. Set a new one",
       "press_hint": "Press keys…",
       "unconfigured": "Not set",
       "press_hotkey": "Press a hotkey",
@@ -252,7 +252,7 @@
       "system": "System"
     },
     "sound": {
-      "default": "Built-in default"
+      "default": "Default"
     },
     "nav": {
       "home": "Home",
@@ -270,7 +270,7 @@
     "heatmap": {
       "title": "Usage",
       "range": "Past 26 weeks",
-      "total": "{{count}} characters entered",
+      "total": "<count>{{count}}</count> characters entered",
       "cell_title": "{{month}}/{{day}}: {{count}} chars"
     },
     "app_settings": {
@@ -282,49 +282,49 @@
       "overlay_liquid": "Clear",
       "overlay_standard": "Frosted",
       "overlay_follow_theme": "Follow theme",
-      "config_path": "Config file path",
+      "config_path": "Config file",
       "sound": "Sounds",
       "ready_sound": "Ready sound",
       "choose_file": "Choose file",
       "reset": "Reset",
-      "finish_sound": "Finish sound",
+      "finish_sound": "Completion sound",
       "remove_period": "Remove trailing period",
       "remove_period_tooltip": "Remove the trailing period from the result before pasting",
-      "keep_clipboard": "Keep clipboard",
-      "keep_clipboard_tooltip": "Keep the recognized text on the clipboard after pasting; when off, restore the previous clipboard content",
+      "keep_clipboard": "Keep text on clipboard",
+      "keep_clipboard_tooltip": "Keep the transcript on the clipboard after pasting. Turn off to restore the previous clipboard contents.",
       "keep_recordings": "Keep recordings",
-      "keep_recordings_tooltip": "Keep the last month of recordings; when off, keep only failed recordings for retry"
+      "keep_recordings_tooltip": "Keep recordings for one month. When off, only failed recordings are kept for retry."
     },
     "hotwords": {
       "title": "Hotwords",
-      "description": "Hotwords improve recognition of specific terms. The enabled table is the default and is passed in automatically; models that do not support hotwords can append them to LLM polishing (Audio models > Configuration > Recognition boost). Add built-in tables from \"Built-in hotword tables\" as custom tables.",
+      "description": "Hotwords help recognize specific terms. Enabled lists are included automatically. For models without native hotword support, use Audio models > Configuration > Recognition to add hotwords to text polishing. Add preset lists from Common hotwords.",
       "add_group": "Add",
-      "builtin": "Library",
-      "group_name": "Table name",
+      "builtin": "Common hotwords",
+      "group_name": "List name",
       "add_word": "Add hotwords",
       "add_word_placeholder": "Comma-separated, e.g. Claude, Anthropic|8 (default weight 4)",
       "word_list": "Hotwords",
-      "remove_word": "Click to remove",
-      "new_group": "New table",
-      "no_builtin": "No built-in hotword tables.",
+      "remove_word": "Remove hotword",
+      "new_group": "New list",
+      "no_builtin": "No preset hotword lists.",
       "add": "Add"
     },
     "llm": {
       "title": "Text polishing",
-      "description": "Polishes and structures speech recognition results. Configure the trigger hotkeys on the Hotkeys page.",
-      "api_config": "API configuration",
-      "model": "Model",
+      "description": "Refine and structure your transcript. Set template shortcuts in Hotkeys.",
+      "api_config": "Provider",
+      "model": "Provider",
       "url": "URL",
       "api_key": "API Key",
       "model_id": "Model ID",
-      "prompts": "Polish templates",
+      "prompts": "Templates",
       "add_template": "Add",
-      "builtin_prompts": "Library",
-      "new_template": "New polish template",
+      "builtin_prompts": "Template library",
+      "new_template": "New template",
       "template_name": "Template name",
       "template_name_placeholder": "Template name",
       "system_prompt_placeholder": "Enter the system prompt…",
-      "no_builtin": "No built-in polish templates.",
+      "no_builtin": "No preset templates.",
       "empty_content": "(Empty)",
       "untitled": "Untitled template",
       "add": "Add",
@@ -341,18 +341,18 @@
     },
     "hotkey_page": {
       "title": "Hotkeys",
-      "description": "Configure custom hotkeys for voice input.",
-      "mode_toggle": "Toggle",
+      "description": "Set shortcuts for voice input and text polishing.",
+      "mode_toggle": "Tap",
       "mode_hold": "Hold",
-      "toggle_hint": "Hands-free: press the global main key to start, and press the stop key of Voice input or a polish template to finish;",
-      "hold_hint": "Hold to talk: hold the hotkey for 500 ms to start and release to finish; after starting, other keys do not change this recording.",
-      "cancel_hint_prefix": "While recording a hotkey, press",
+      "toggle_hint": "Tap: press the recording hotkey to start, then the Voice input or template hotkey to finish.",
+      "hold_hint": "Hold: hold the shortcut for 500 ms to record, then release to finish. Other keys do not affect the recording.",
+      "cancel_hint_prefix": "When setting a shortcut, press",
       "cancel_hint_suffix": "to cancel",
-      "main_section": "Global voice main key",
-      "main_subtitle": "All hands-free modes start recording with this key; hold-to-talk needs its own hotkey. Use a key starting with a modifier (Ctrl, Shift, Tab, etc.) or a function key such as F1 as the main key.",
-      "wake": "Voice wake",
+      "main_section": "Recording hotkey",
+      "main_subtitle": "Starts recording in Tap mode. Hold mode uses a separate shortcut. Begin with a modifier key (such as Ctrl or Shift), Tab, or a function key such as F1.",
+      "wake": "Start recording",
       "hotkeys_section": "Hotkeys",
-      "hotkeys_subtitle": "Click a field to record → press the hotkey",
+      "hotkeys_subtitle": "Click a field, then press your shortcut",
       "voice_input": "Voice input"
     },
     "home": {
@@ -383,10 +383,10 @@
       "check_network": "Check the network connection",
       "toast_polish_done": "Polished",
       "toast_polish_failed": "Polishing failed",
-      "toast_retranscribe_done": "Transcription redone",
+      "toast_retranscribe_done": "Transcribed again",
       "toast_retranscribe_failed": "Re-transcription failed: {{message}}",
       "toast_regenerate_done": "Regenerated",
-      "toast_regenerate_failed": "Regenerate failed: {{message}}",
+      "toast_regenerate_failed": "Regeneration failed: {{message}}",
       "toast_copied": "Copied",
       "toast_copy_failed": "Copy failed",
       "toast_deleted": "Deleted",
@@ -401,7 +401,7 @@
       "load_more": "Load more"
     },
     "prompt": {
-      "select": "Choose a polish template",
+      "select": "Choose a template",
       "empty": "No templates yet. Add one in LLM settings"
     },
     "update": {
@@ -426,7 +426,7 @@
         "check": "Check for updates"
       },
       "notes_title": "What's new",
-      "notes_title_version": "v{{version}} what's new"
+      "notes_title_version": "What's new in v{{version}}"
     },
     "overlay": {
       "preparing": "Preparing…",
@@ -469,14 +469,14 @@
       "title": "Audio models",
       "current": "Current: {{name}}",
       "native": "Native support",
-      "other": "Other support",
+      "other": "Available via other methods",
       "online": "Online",
       "offline": "Local",
       "custom_config": "Configuration",
       "no_offline_models": "No local models available",
       "base_models": "Base models",
       "section_sample": "Audio sampling",
-      "section_enhance": "Recognition boost",
+      "section_enhance": "Recognition",
       "section_offline": "Offline inference"
     },
     "feedback": {
@@ -488,7 +488,7 @@
         "feature": "Suggestion",
         "other": "Other"
       },
-      "module": "Module",
+      "module": "Category",
       "module_none": "Not selected",
       "title_field": "Title *",
       "title_placeholder": "One-line summary",
@@ -512,13 +512,13 @@
       "clear": "Clear",
       "submit": "Submit",
       "submitting": "Submitting…",
-      "log_modal_title": "Log that will be sent",
+      "log_modal_title": "Attached log",
       "log_path_error": "Cannot read the log path",
       "submitted": "Feedback submitted. Thanks for your help!",
       "error": {
         "title_required": "Please enter a title.",
         "description_required": "Please describe the problem or suggestion.",
-        "app_version_required": "Please enter the App version.",
+        "app_version_required": "Please enter the app version.",
         "system_required": "Please enter the OS version.",
         "email_invalid": "Please enter a valid email address, or leave it blank."
       },

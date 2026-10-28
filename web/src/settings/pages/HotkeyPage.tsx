@@ -170,14 +170,12 @@ export function HotkeyPage() {
 
       {/* Section 1 — global main key (the hands-free wake key) */}
       <Section>
-        <SectionHeader
-          title={t("ui.hotkey_page.main_section")}
-          subtitle={t("ui.hotkey_page.main_subtitle")}
-        />
+        <SectionHeader title={t("ui.hotkey_page.main_section")} />
         <SectionContent>
           <SectionItemList>
             <SectionItem
               title={t("ui.hotkey_page.wake")}
+              tooltip={t("ui.hotkey_page.main_subtitle")}
               last
               action={
                 <HotkeyInput
