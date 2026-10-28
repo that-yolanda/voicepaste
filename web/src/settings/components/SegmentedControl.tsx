@@ -16,6 +16,7 @@ export function SegmentedControl({ options, value, onChange }: SegmentedControlP
         <button
           key={opt.value}
           type="button"
+          aria-pressed={value === opt.value}
           className={`px-4 py-1.5 text-sm font-medium transition-colors ${
             value === opt.value ? "bg-accent-soft text-accent" : "text-text-dim hover:bg-fill-hover"
           }`}

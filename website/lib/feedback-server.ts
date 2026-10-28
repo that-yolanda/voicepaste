@@ -12,6 +12,7 @@ type Config = {
   from?: string
   to?: string
   siteUrl?: string
+  source?: "website" | "app"
 }
 type Attachment = { filename: string; content: string }
 
@@ -146,11 +147,12 @@ export async function handleFeedback(
     } catch {
       throw new FeedbackError("unavailable", 503)
     }
-    if (
-      request.headers.get("origin") !== origin ||
-      request.headers.get("sec-fetch-site") === "cross-site"
-    )
-      throw new FeedbackError("forbidden", 403)
+    const forbiddenSource =
+      config.source === "app"
+        ? request.headers.has("origin") || request.headers.has("sec-fetch-site")
+        : request.headers.get("origin") !== origin ||
+          request.headers.get("sec-fetch-site") === "cross-site"
+    if (forbiddenSource) throw new FeedbackError("forbidden", 403)
 
     const form = await boundedFormData(request)
     const allowed = new Set([
@@ -227,6 +229,7 @@ export async function handleFeedback(
       ...(email ? { reply_to: email } : {}),
       text: [
         `Feedback ID: ${submissionId}`,
+        ...(config.source === "app" ? ["Source: VoicePaste desktop app"] : []),
         `Type: ${type}`,
         `Category: ${selectedCategory?.label.en ?? "Not specified"}`,
         `Email: ${email || "Not provided"}`,

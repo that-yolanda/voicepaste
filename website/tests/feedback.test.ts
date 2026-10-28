@@ -46,6 +46,35 @@ function mockSender() {
   }
   return { calls, send }
 }
+
+test("native App submissions reuse delivery without accepting browser origins", async () => {
+  const mock = mockSender()
+  const result = await handleFeedback(
+    request(form(), null),
+    { ...config, source: "app" },
+    mock.send
+  )
+  assert.equal(result.status, 202)
+  const payload = JSON.parse(mock.calls[0].options.body as string)
+  assert.match(payload.text, /Source: VoicePaste desktop app/)
+  assert.equal(payload.attachments, undefined)
+  for (const req of [
+    request(),
+    new Request(`${config.siteUrl}/api/feedback/app`, {
+      method: "POST",
+      body: form(),
+      headers: { "sec-fetch-site": "cross-site" },
+    }),
+  ]) {
+    const rejected = await handleFeedback(
+      req,
+      { ...config, source: "app" },
+      mock.send
+    )
+    assert.equal(rejected.status, 403)
+  }
+  assert.equal(mock.calls.length, 1)
+})
 async function rejected(data: FormData, status: number, code: string) {
   const mock = mockSender()
   const result = await handleFeedback(request(data), config, mock.send)

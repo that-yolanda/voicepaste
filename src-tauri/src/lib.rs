@@ -4,6 +4,7 @@ mod app_state;
 mod asr;
 mod commands;
 mod config;
+mod feedback;
 mod hotkey;
 mod hotword;
 mod llm;
@@ -42,6 +43,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            app.manage(feedback::FeedbackWindowState::default());
             // Register updater plugin
             #[cfg(desktop)]
             {
@@ -176,6 +178,10 @@ pub fn run() {
             commands::play_recording_preview,
             commands::stop_recording_preview,
             commands::get_log_path,
+            feedback::get_feedback_environment,
+            feedback::get_feedback_log,
+            feedback::submit_feedback,
+            feedback::set_feedback_draft_active,
             commands::get_config_path,
             commands::load_hotwords,
             commands::save_hotwords,
@@ -209,12 +215,17 @@ pub fn run() {
             }
             RunEvent::WindowEvent {
                 label,
-                event: tauri::WindowEvent::CloseRequested { .. },
+                event: tauri::WindowEvent::CloseRequested { api, .. },
                 ..
             } if label == "settings" => {
-                // Let the settings window close for real so its WebView memory is
-                // released. The app stays alive via the tray + ExitRequested below;
-                // platform::show_settings() rebuilds the window on the next "设置" click.
+                if app.state::<feedback::FeedbackWindowState>().0.load(std::sync::atomic::Ordering::Relaxed) {
+                    api.prevent_close();
+                    if let Some(window) = app.get_webview_window("settings") {
+                        let _ = window.hide();
+                    }
+                }
+                // Clean windows close to release WebView memory; feedback drafts stay
+                // hidden until the tray or dock reopens the existing settings window.
                 platform::set_dock_visible(false);
             }
             RunEvent::ExitRequested { code, api, .. }

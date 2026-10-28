@@ -5,6 +5,7 @@ import {
   Home,
   Info,
   Keyboard,
+  MessageSquare,
   NotebookText,
   Settings2,
   ShieldCheck,
@@ -22,6 +23,7 @@ export type SectionId =
   | "service"
   | "llm"
   | "hotwords"
+  | "feedback"
   | "about";
 
 const NAV_ITEMS: { id: SectionId; icon: typeof Home; label: string }[] = [
@@ -73,6 +75,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
       <nav className="flex-1 py-3 px-2 space-y-1">
         {NAV_ITEMS.map((item) => navBtn(item.id, item.icon, item.label))}
         <div className="my-2 border-t border-border-subtle" />
+        {navBtn("feedback", MessageSquare, "问题与建议")}
         <button
           type="button"
           onClick={() => {

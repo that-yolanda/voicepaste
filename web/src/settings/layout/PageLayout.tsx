@@ -123,6 +123,7 @@ export function SectionItemList({
 
 export function SectionItem({
   title,
+  htmlFor,
   description,
   tooltip,
   action,
@@ -131,6 +132,7 @@ export function SectionItem({
   className = "flex-1",
 }: {
   title: string;
+  htmlFor?: string;
   description?: ReactNode;
   tooltip?: ReactNode;
   action?: ReactNode;
@@ -147,7 +149,7 @@ export function SectionItem({
       <div className="flex justify-between w-full gap-2 items-center">
         <div>
           <div className="flex items-center gap-1">
-            <span>{title}</span>
+            {htmlFor ? <label htmlFor={htmlFor}>{title}</label> : <span>{title}</span>}
             {tooltip && (
               <Tooltip content={tooltip} label={`${title}说明`}>
                 <Info size={14} aria-hidden="true" />

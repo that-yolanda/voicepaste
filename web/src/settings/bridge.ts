@@ -11,8 +11,31 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { FeedbackEnvironment, FeedbackPayload } from "@/settings/lib/feedback";
 import type { HotwordData } from "@/settings/types/hotwords";
 import type { PromptItem } from "@/settings/types/prompts";
+
+export async function getFeedbackEnvironment(): Promise<FeedbackEnvironment> {
+  return invoke("get_feedback_environment");
+}
+
+export async function getFeedbackLog(): Promise<string> {
+  return invoke("get_feedback_log");
+}
+
+export async function getLogPath(): Promise<string> {
+  return invoke("get_log_path");
+}
+
+export async function setFeedbackDraftActive(active: boolean): Promise<void> {
+  return invoke("set_feedback_draft_active", { active });
+}
+
+export async function submitFeedback(
+  payload: FeedbackPayload,
+): Promise<{ ok: boolean; submissionId: string }> {
+  return invoke("submit_feedback", { payload });
+}
 
 // ---- Types ----
 

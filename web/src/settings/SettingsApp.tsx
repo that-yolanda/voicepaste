@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { Toast } from "@/settings/components/Toast";
+import { useFeedback } from "@/settings/hooks/useFeedback";
 import { type SectionId, Sidebar } from "@/settings/layout/Sidebar";
 import { AboutPage } from "@/settings/pages/AboutPage";
 import { AppSettingsPage } from "@/settings/pages/AppSettingsPage";
 import { AudioModelPage } from "@/settings/pages/AudioModelPage";
+import { FeedbackPage } from "@/settings/pages/FeedbackPage";
 import { HomePage } from "@/settings/pages/HomePage";
 import { HotkeyPage } from "@/settings/pages/HotkeyPage";
 import { HotwordsPage } from "@/settings/pages/HotwordsPage";
@@ -12,6 +15,7 @@ import { SettingsProvider } from "@/settings/SettingsProvider";
 
 export function SettingsApp() {
   const [section, setSection] = useState<SectionId>("home");
+  const feedback = useFeedback(section === "feedback");
 
   // Prevent Alt and F10 from activating the WebView2 menu bar, which
   // would pause JavaScript execution and block IPC promise resolution
@@ -40,8 +44,12 @@ export function SettingsApp() {
             {section === "llm" && <LLMPage />}
             {section === "hotwords" && <HotwordsPage />}
             {section === "about" && <AboutPage />}
+            {section === "feedback" && <FeedbackPage feedback={feedback} />}
           </div>
         </main>
+        <div role="status" aria-live="polite">
+          <Toast toast={feedback.toast} />
+        </div>
       </div>
     </SettingsProvider>
   );

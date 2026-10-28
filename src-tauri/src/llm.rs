@@ -227,7 +227,7 @@ impl PolishError {
     }
 
     /// The headline plus the provider's own wording. Used where there is room to
-    /// read and act on it — the settings history list and the log — never on the
+    /// read and act on it — the settings history list — never on the
     /// overlay pill.
     pub fn user_message(&self) -> String {
         if self.detail.is_empty() {
@@ -240,11 +240,8 @@ impl PolishError {
 
 impl std::fmt::Display for PolishError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.detail.is_empty() {
-            write!(f, "{:?}", self.kind)
-        } else {
-            write!(f, "{:?}: {}", self.kind, self.detail)
-        }
+        // Provider details can echo a transcript; keep them out of persisted logs.
+        write!(f, "{:?}", self.kind)
     }
 }
 
@@ -1014,6 +1011,16 @@ mod tests {
         let error = parse_completion(&body, &[]).unwrap_err();
         assert_eq!(error.kind, PolishErrorKind::Parse);
         assert_eq!(error.detail, "bad gateway");
+    }
+
+    #[test]
+    fn provider_echoed_transcript_stays_out_of_persisted_error_display() {
+        let error = classify_http_error(
+            400,
+            r#"{"error":{"message":"Rejected private transcript text"}}"#,
+        );
+        assert_eq!(error.to_string(), "BadRequest");
+        assert!(error.user_message().contains("private transcript text"));
     }
 
     #[test]

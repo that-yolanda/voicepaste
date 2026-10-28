@@ -90,11 +90,13 @@ pnpm dlx shadcn@latest add <component>
 
 1. 在 Resend 验证计划使用的发信域名，只启用 Sending，保持 Receiving 关闭；保留 Cloudflare 原有收信 MX 和转发规则。
 2. 在 Vercel 项目环境变量中设置 `RESEND_API_KEY`（仅发送权限）、`FEEDBACK_FROM`（已验证域名下的发件地址）、`FEEDBACK_TO`（约定的收件邮箱）。不要将真实密钥或私人收件地址提交到仓库。保持 `NEXT_PUBLIC_SITE_URL` 与表单访问的正式域名一致；别名域名应重定向到此域名。
-3. 发布前在 Vercel Firewall 配置限流：路径精确等于 `/api/feedback`、方法为 `POST`、按 IP 统计、每 10 分钟最多 5 次，超限返回 429，并发布规则。代码不自行计数，不使用 Turnstile。只有发布并验证规则后才能认为限流生效。
+3. 发布前在 Vercel Firewall 配置限流：路径精确匹配 `/api/feedback` 或 `/api/feedback/app`、方法为 `POST`、按 IP 统计、每 10 分钟最多 5 次，超限返回 429，并发布规则。代码不自行计数，不使用 Turnstile。只有发布并验证规则后才能认为限流生效。
 4. 开发／预览使用独立环境配置；未设置配置时接口返回 503，不会返回假成功。自动化测试使用 mock Resend；本地或预览接口若配置真实环境变量，提交时会调用真实 Resend。
 5. 另行进行真实收信验收：检查正文、日志脱敏、截图、Reply-To；再从其他邮箱测试 Cloudflare 转发。Resend 接受请求不代表邮件已进入收件箱。集中滥用仍可能消耗额度，出现持续垃圾反馈后再评估验证码。
 
 反馈页面为 `/zh/feedback` 和 `/en/feedback`。`POST /api/feedback` 接收 multipart 表单：`type`（bug/feature/other）、选填的 `category`（与类型对应的模块标识）、`title`、`description`、选填的 `email` 和 `wechat`、必填的 `appVersion` 和 `system`、`submissionId`（UUID v4）、可选 `log` 和最多四个 `screenshots` 文件。中文页提供邮箱和微信号，英文页仅显示邮箱：邮箱非空时校验格式，微信号不校验账号格式；两者均可留空。发件人与收件人不能由表单覆盖。
+
+`POST /api/feedback/app` 供桌面 App 的 Rust 客户端调用，使用相同字段、附件限制和邮件处理；此入口不要求官网 Origin，并拒绝带 Origin 或 Sec-Fetch-Site 的浏览器请求。来源检查不是身份验证，两个入口必须一并配置限流。App 自动填写版本和系统信息，仅在用户勾选时附加指定运行日志；截图由用户选择，不读取配置文件、录音或输入历史。先部署此接口及限流规则，再测试桌面提交。
 
 成功返回 202 `{ ok: true, submissionId }`；字段／文件错误返回 400，来源不符返回 403，请求过大返回 413，格式不支持返回 415，配置缺失返回 503，发信失败或无法确认结果返回 502。应用错误返回 `{ error: code }`；平台限流的 429 及平台大小限制错误可能不是 JSON，前端按状态码处理。
 
