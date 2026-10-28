@@ -1,4 +1,4 @@
-import { Trash } from "lucide-react";
+import { Library, Plus, Trash } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { loadBuiltinPrompts, loadPrompts, savePrompts } from "@/settings/bridge";
@@ -244,9 +244,11 @@ export function LLMPage() {
                   await savePromptsNow(updated);
                 }}
               >
+                <Plus size={14} aria-hidden="true" />
                 {t("ui.llm.add_template")}
               </Button>
               <Button variant="default" onClick={() => setBuiltinOpen(true)}>
+                <Library size={14} aria-hidden="true" />
                 {t("ui.llm.builtin_prompts")}
               </Button>
             </div>

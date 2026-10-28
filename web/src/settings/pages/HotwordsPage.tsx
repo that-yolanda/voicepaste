@@ -1,4 +1,4 @@
-import { Trash } from "lucide-react";
+import { Library, Plus, Trash } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { loadBuiltinHotwords, loadHotwords, saveHotwords } from "@/settings/bridge";
@@ -81,9 +81,11 @@ export function HotwordsPage() {
       <PageHeader title={t("ui.hotwords.title")} description={t("ui.hotwords.description")} />
       <div className="flex items-center justify-between">
         <Button variant="accent" onClick={addGroup}>
+          <Plus size={14} aria-hidden="true" />
           {t("ui.hotwords.add_group")}
         </Button>
         <Button variant="default" onClick={() => setBuiltinOpen(true)}>
+          <Library size={14} aria-hidden="true" />
           {t("ui.hotwords.builtin")}
         </Button>
       </div>

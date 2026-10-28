@@ -281,7 +281,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                   }
                 />
               </SectionItemList>
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-center gap-2">
                 {f.dirty && (
                   <Button variant="ghost" onClick={f.clear}>
                     {t("ui.feedback.clear")}

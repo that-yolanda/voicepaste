@@ -80,30 +80,30 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
     }
   }
 
+  // Month label spans: each label starts at its month's first week and runs
+  // until the next month begins, expressed on the same 26-column grid as the
+  // cells so labels stay aligned whatever the column width.
+  const monthEntries = Object.entries(mPos).sort((a, b) => a[1] - b[1]);
+  const monthSpans = monthEntries.map(([m, w], i) => ({
+    month: Number(m),
+    from: w,
+    span: (monthEntries[i + 1]?.[1] ?? WEEKS) - w,
+  }));
+
   return (
     <Section>
       <SectionHeader title={t("ui.heatmap.title")} />
       <SectionContent className="px-4 flex flex-col gap-1">
-        {/* Summary — its own full-width line under the header, so long English
-            text can never overlap the grid */}
-        <div className="flex justify-center items-baseline gap-2 whitespace-nowrap">
-          <span className="text-sm text-text-muted">{t("ui.heatmap.range")}</span>
-          <span className="text-sm text-text-dim">
-            {t("ui.heatmap.total", { count: total.toLocaleString() })}
-          </span>
-        </div>
-
-        {/* Grid area */}
-        <div className="self-center">
+        {/* Grid area — columns stretch to fill the section width */}
+        <div className="w-full">
           {/* Month labels */}
-          <div className="relative h-3.5 ml-5.5 mb-1">
-            {Object.entries(mPos).map(([m, w]) => (
-              <span
-                key={m}
-                className="absolute text-[10px] text-text-muted"
-                style={{ left: `${w * 14}px` }}
-              >
-                {monthFormat.format(new Date(2024, Number(m), 1))}
+          <div
+            className="grid gap-0.75 ml-5.5 mb-1 h-3.5 text-[10px] text-text-muted"
+            style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}
+          >
+            {monthSpans.map((m) => (
+              <span key={m.month} style={{ gridColumn: `${m.from + 1} / span ${m.span}` }}>
+                {monthFormat.format(new Date(2024, m.month, 1))}
               </span>
             ))}
           </div>
@@ -122,19 +122,19 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
               ))}
             </div>
 
-            {/* The 7×26 grid */}
+            {/* The 7×26 grid — cell width comes from the stretched columns */}
             <div
-              className="grid gap-0.75"
+              className="grid gap-0.75 w-full"
               style={{
                 gridTemplateRows: "repeat(7, 11px)",
+                gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`,
                 gridAutoFlow: "column",
-                gridAutoColumns: "11px",
               }}
             >
               {cells.map((c) => (
                 <div
                   key={c.key}
-                  className={`w-2.75 h-2.75 rounded-xs ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
+                  className={`h-2.75 rounded-xs ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
                   title={
                     c.future
                       ? ""
@@ -148,6 +148,15 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Summary — its own full-width line under the grid, so long English
+            text can never overlap the cells */}
+        <div className="flex justify-center items-baseline gap-2 whitespace-nowrap">
+          <span className="text-sm text-text-muted">{t("ui.heatmap.range")}</span>
+          <span className="text-sm text-text-dim">
+            {t("ui.heatmap.total", { count: total.toLocaleString() })}
+          </span>
         </div>
       </SectionContent>
     </Section>

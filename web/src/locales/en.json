@@ -409,7 +409,7 @@
         "checking": "Checking…",
         "available": "Version {{version}} is available",
         "available_generic": "New version available",
-        "not_available": "You're up to date",
+        "not_available": "Latest",
         "downloading": "Downloading…",
         "downloading_progress": "Downloading {{progress}}%",
         "downloaded": "Download complete",
@@ -552,7 +552,7 @@
       "description": "A voice input tool that turns speech into text and types it into any app",
       "current_version": "Current version",
       "check_update": "Check for updates",
-      "beta": "Try beta releases"
+      "beta": "Beta release"
     },
     "permissions": {
       "title": "Permissions",

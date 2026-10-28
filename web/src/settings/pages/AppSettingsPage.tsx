@@ -4,6 +4,7 @@ import { syncLanguageFromBackend } from "@/i18n";
 import { selectSoundFile } from "@/settings/bridge";
 import { Button } from "@/settings/components/Button";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
+import { Select } from "@/settings/components/Select";
 import { Toggle } from "@/settings/components/Toggle";
 import {
   PageHeader,
@@ -72,18 +73,18 @@ export function AppSettingsPage() {
             <SectionItem
               title={t("ui.settings.language")}
               action={
-                <SegmentedControl
-                  options={[
-                    { value: "auto", label: t("ui.settings.language_auto") },
-                    { value: "zh-CN", label: t("ui.settings.language_zh") },
-                    { value: "en", label: t("ui.settings.language_en") },
-                  ]}
+                <Select
                   value={(app.language as string) || "auto"}
                   onChange={(v) => {
                     void scheduleSave({ app: { language: v } }).then(() =>
                       syncLanguageFromBackend(),
                     );
                   }}
+                  options={[
+                    { value: "auto", label: t("ui.settings.language_auto") },
+                    { value: "zh-CN", label: t("ui.settings.language_zh") },
+                    { value: "en", label: t("ui.settings.language_en") },
+                  ]}
                 />
               }
             />
