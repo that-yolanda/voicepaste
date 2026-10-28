@@ -372,9 +372,6 @@
         "today": "今天",
         "yesterday": "昨天"
       },
-      "unit_days": "天",
-      "unit_sessions": "次",
-      "unit_chars": "字",
       "card_used": "已经使用",
       "card_sessions": "发起会话",
       "card_chars": "总输入字数",
@@ -549,6 +546,25 @@
           "other_suggestion": "其他建议"
         }
       }
+    },
+    "about": {
+      "title": "关于",
+      "description": "语音输入工具，将语音实时转为文字并输入到任意应用",
+      "current_version": "当前版本",
+      "check_update": "检查更新",
+      "beta": "体验 Beta 版本"
+    },
+    "permissions": {
+      "title": "系统权限",
+      "accessibility": "辅助功能",
+      "accessibility_tooltip": "用于将文字输入到其他应用",
+      "granted": "已授权",
+      "not_granted": "未授权",
+      "grant": "前往授权",
+      "microphone": "麦克风",
+      "denied": "已拒绝",
+      "check": "检测",
+      "macos_hint": "macOS 需要麦克风权限和辅助功能权限，可前往：系统设置 > 隐私与安全 > 麦克风 / 辅助功能"
     }
   }
 }

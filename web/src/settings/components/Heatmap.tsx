@@ -83,9 +83,18 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
   return (
     <Section>
       <SectionHeader title={t("ui.heatmap.title")} />
-      <SectionContent className="px-4 flex gap-4 items-end">
+      <SectionContent className="px-4 flex flex-col gap-1">
+        {/* Summary — its own full-width line under the header, so long English
+            text can never overlap the grid */}
+        <div className="flex justify-center items-baseline gap-2 whitespace-nowrap">
+          <span className="text-sm text-text-muted">{t("ui.heatmap.range")}</span>
+          <span className="text-sm text-text-dim">
+            {t("ui.heatmap.total", { count: total.toLocaleString() })}
+          </span>
+        </div>
+
         {/* Grid area */}
-        <div className="flex-1 min-w-0">
+        <div className="self-center">
           {/* Month labels */}
           <div className="relative h-3.5 ml-5.5 mb-1">
             {Object.entries(mPos).map(([m, w]) => (
@@ -139,14 +148,6 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
               ))}
             </div>
           </div>
-        </div>
-
-        {/* Stats */}
-        <div className="flex flex-col items-end gap-0.5 pb-0.5 shrink-0 whitespace-nowrap">
-          <span className="text-sm text-text-muted">{t("ui.heatmap.range")}</span>
-          <span className="text-sm text-text-dim">
-            {t("ui.heatmap.total", { count: total.toLocaleString() })}
-          </span>
         </div>
       </SectionContent>
     </Section>

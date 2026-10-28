@@ -181,18 +181,18 @@ export function HomePage() {
   /* —— achievements —— */
   const charTotal = stats?.totalCharacters || 0;
   const saved = formatDurationParts(Math.round(charTotal * 0.67), t);
+  // Only the "time saved" card carries a unit — bare numbers read cleaner on
+  // the first three, and days/sessions/chars are already in the card labels.
   const cards = [
     {
       v: formatCompact(Object.keys(stats?.dailyCounts || {}).length),
-      u: t("ui.home.unit_days"),
       label: t("ui.home.card_used"),
     },
     {
       v: formatCompact(stats?.totalSessions || 0),
-      u: t("ui.home.unit_sessions"),
       label: t("ui.home.card_sessions"),
     },
-    { v: formatCompact(charTotal), u: t("ui.home.unit_chars"), label: t("ui.home.card_chars") },
+    { v: formatCompact(charTotal), label: t("ui.home.card_chars") },
     { v: saved.value, u: saved.unit, label: t("ui.home.card_saved") },
   ];
 
@@ -220,7 +220,9 @@ export function HomePage() {
                 <span className="text-xl font-bold leading-[1.05] text-text tracking-normal whitespace-nowrap">
                   {c.v}
                 </span>
-                <span className="text-sm font-medium text-text whitespace-nowrap">{c.u}</span>
+                {c.u && (
+                  <span className="text-sm font-medium text-text whitespace-nowrap">{c.u}</span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-text whitespace-nowrap leading-none">

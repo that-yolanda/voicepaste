@@ -298,8 +298,8 @@
     "hotwords": {
       "title": "Hotwords",
       "description": "Hotwords improve recognition of specific terms. The enabled table is the default and is passed in automatically; models that do not support hotwords can append them to LLM polishing (Audio models > Custom configuration > Recognition boost). Add built-in tables from \"Built-in hotword tables\" as custom tables.",
-      "add_group": "Add hotword table",
-      "builtin": "Built-in hotword tables",
+      "add_group": "Add",
+      "builtin": "Library",
       "group_name": "Table name",
       "add_word": "Add hotwords",
       "add_word_placeholder": "Comma-separated, e.g. Claude, Anthropic|8 (default weight 4)",
@@ -318,8 +318,8 @@
       "api_key": "API Key",
       "model_id": "Model ID",
       "prompts": "Polish templates",
-      "add_template": "+ Add template",
-      "builtin_prompts": "Common polish prompts",
+      "add_template": "Add",
+      "builtin_prompts": "Library",
       "new_template": "New polish template",
       "template_name": "Template name",
       "template_name_placeholder": "Template name",
@@ -372,9 +372,6 @@
         "today": "Today",
         "yesterday": "Yesterday"
       },
-      "unit_days": "days",
-      "unit_sessions": "sessions",
-      "unit_chars": "chars",
       "card_used": "Days used",
       "card_sessions": "Sessions",
       "card_chars": "Characters",
@@ -488,7 +485,7 @@
       "type_label": "Type",
       "type": {
         "bug": "Problem",
-        "feature": "Feature request",
+        "feature": "Suggestion",
         "other": "Other"
       },
       "module": "Module",
@@ -549,6 +546,25 @@
           "other_suggestion": "Other suggestion"
         }
       }
+    },
+    "about": {
+      "title": "About",
+      "description": "A voice input tool that turns speech into text and types it into any app",
+      "current_version": "Current version",
+      "check_update": "Check for updates",
+      "beta": "Try beta releases"
+    },
+    "permissions": {
+      "title": "Permissions",
+      "accessibility": "Accessibility",
+      "accessibility_tooltip": "Required to type text into other apps",
+      "granted": "Granted",
+      "not_granted": "Not granted",
+      "grant": "Open Settings",
+      "microphone": "Microphone",
+      "denied": "Denied",
+      "check": "Check",
+      "macos_hint": "macOS needs microphone and accessibility permissions. Go to System Settings > Privacy & Security > Microphone / Accessibility."
     }
   }
 }
