@@ -275,7 +275,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                     清空反馈
                   </Button>
                 )}
-                <Button type="submit" disabled={f.environmentLoading}>
+                <Button type="submit" variant="accent" disabled={f.environmentLoading}>
                   {f.pending && (
                     <LoaderCircle
                       size={16}
@@ -286,11 +286,6 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                   {f.pending ? "正在提交…" : "提交反馈"}
                 </Button>
               </div>
-              {f.pending && (
-                <p role="status" className="text-xs text-text-muted">
-                  正在发送反馈与附件，请稍候。
-                </p>
-              )}
             </SectionContent>
           </Section>
         </fieldset>
