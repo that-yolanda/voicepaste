@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import type { PromptItem } from "@/settings/types/prompts";
 
 interface PromptMenuProps {
@@ -25,6 +26,7 @@ const GAP = 4;
  * its row.
  */
 export function PromptMenu({ anchor, prompts, currentId, onSelect, onClose }: PromptMenuProps) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -65,9 +67,9 @@ export function PromptMenu({ anchor, prompts, currentId, onSelect, onClose }: Pr
       className="fixed z-50 min-w-40 max-w-64 max-h-72 overflow-y-auto py-1 bg-accent text-text-on-accent rounded-lg shadow-lg"
       style={pos ? { top: pos.top, right: pos.right } : { visibility: "hidden" }}
     >
-      <div className="px-3 py-1.5 text-xs opacity-75">选择润色模板</div>
+      <div className="px-3 py-1.5 text-xs opacity-75">{t("ui.prompt.select")}</div>
       {prompts.length === 0 ? (
-        <div className="px-3 py-2 text-xs opacity-75">暂无模板，请先在 LLM 设置中添加</div>
+        <div className="px-3 py-2 text-xs opacity-75">{t("ui.prompt.empty")}</div>
       ) : (
         prompts.map((prompt) => (
           <button

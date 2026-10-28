@@ -20,8 +20,8 @@ import { useSettings } from "@/settings/SettingsProvider";
 import type { PromptItem } from "@/settings/types/prompts";
 
 const MODE_OPTIONS = [
-  { value: "toggle", label: "免提模式" },
-  { value: "hold", label: "按住说话" },
+  { value: "toggle", label: "ui.hotkey_page.mode_toggle" },
+  { value: "hold", label: "ui.hotkey_page.mode_hold" },
 ];
 
 export function HotkeyPage() {
@@ -40,6 +40,7 @@ export function HotkeyPage() {
   }[];
   const hotkeyMode = (app.hotkey_mode as string) || "toggle";
   const { toast, showToast } = useToast();
+  const modeOptions = MODE_OPTIONS.map((o) => ({ ...o, label: t(o.label) }));
 
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
   // Which field is currently capturing — only one recorder runs at a time, so
@@ -155,12 +156,14 @@ export function HotkeyPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="快捷键" description="为语音输入配置自定义快捷键。">
+      <PageHeader title={t("ui.hotkey_page.title")} description={t("ui.hotkey_page.description")}>
         <div className="flex flex-col gap-1 mt-2 text-text-muted">
-          <p>免提模式：按全局主键开始，按语音输入或润色模板各自的结束键完成；</p>
-          <p>按住说话：完整按住对应快捷键 500ms 后开始，松开结束；启动后其他按键不改变本次录音。</p>
+          <p>{t("ui.hotkey_page.toggle_hint")}</p>
+          <p>{t("ui.hotkey_page.hold_hint")}</p>
           <p>
-            录制快捷键时按 <KeyCap label={normalizeHotkeyToken("ESC", isMac).main} /> 取消
+            {t("ui.hotkey_page.cancel_hint_prefix")}{" "}
+            <KeyCap label={normalizeHotkeyToken("ESC", isMac).main} />{" "}
+            {t("ui.hotkey_page.cancel_hint_suffix")}
           </p>
         </div>
       </PageHeader>
@@ -168,13 +171,13 @@ export function HotkeyPage() {
       {/* Section 1 — global main key (the hands-free wake key) */}
       <Section>
         <SectionHeader
-          title="全局语音主键"
-          subtitle="所有免提模式均以此键开始录音；按住说话需另设独立快捷键。使用以辅助键（如 Ctrl、Shift、Tab 等）或 F1 等功能键为首的按键作为主键。"
+          title={t("ui.hotkey_page.main_section")}
+          subtitle={t("ui.hotkey_page.main_subtitle")}
         />
         <SectionContent>
           <SectionItemList>
             <SectionItem
-              title="语音唤起"
+              title={t("ui.hotkey_page.wake")}
               last
               action={
                 <HotkeyInput
@@ -196,11 +199,14 @@ export function HotkeyPage() {
 
       {/* Section 2 — per-feature hotkeys (voice input + each polish prompt) */}
       <Section>
-        <SectionHeader title="快捷键" subtitle="点击输入框进入录制 → 按下快捷键" />
+        <SectionHeader
+          title={t("ui.hotkey_page.hotkeys_section")}
+          subtitle={t("ui.hotkey_page.hotkeys_subtitle")}
+        />
         <SectionContent>
           <SectionItemList>
             <SectionItem
-              title="语音输入"
+              title={t("ui.hotkey_page.voice_input")}
               action={
                 <div className="flex items-center gap-2">
                   {hotkeyMode === "toggle" ? (
@@ -233,7 +239,7 @@ export function HotkeyPage() {
                     />
                   )}
                   <SegmentedControl
-                    options={MODE_OPTIONS}
+                    options={modeOptions}
                     value={hotkeyMode}
                     onChange={(v) =>
                       updateApp({
@@ -272,7 +278,7 @@ export function HotkeyPage() {
                         />
                       )}
                       <SegmentedControl
-                        options={MODE_OPTIONS}
+                        options={modeOptions}
                         value={mode}
                         onChange={(v) => updatePrompt(idx, { hotkey_mode: v })}
                       />

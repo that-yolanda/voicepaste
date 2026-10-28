@@ -10,6 +10,7 @@ import {
   Settings2,
   ShieldCheck,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { openHelpGuide } from "@/settings/bridge";
 import { ThemeSelector } from "@/settings/components/ThemeSelector";
 import { Toast, useToast } from "@/settings/components/Toast";
@@ -27,13 +28,13 @@ export type SectionId =
   | "about";
 
 const NAV_ITEMS: { id: SectionId; icon: typeof Home; label: string }[] = [
-  { id: "home", icon: Home, label: "首页" },
-  { id: "app", icon: Settings2, label: "应用设置" },
-  { id: "permissions", icon: ShieldCheck, label: "系统权限" },
-  { id: "hotkey", icon: Keyboard, label: "快捷键" },
-  { id: "service", icon: AudioLines, label: "音频模型" },
-  { id: "llm", icon: Bot, label: "大语言模型" },
-  { id: "hotwords", icon: NotebookText, label: "热词库" },
+  { id: "home", icon: Home, label: "ui.nav.home" },
+  { id: "app", icon: Settings2, label: "ui.nav.app" },
+  { id: "permissions", icon: ShieldCheck, label: "ui.nav.permissions" },
+  { id: "hotkey", icon: Keyboard, label: "ui.nav.hotkey" },
+  { id: "service", icon: AudioLines, label: "ui.nav.audio" },
+  { id: "llm", icon: Bot, label: "ui.nav.llm" },
+  { id: "hotwords", icon: NotebookText, label: "ui.nav.hotwords" },
 ];
 
 interface SidebarProps {
@@ -42,6 +43,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ active, onNavigate }: SidebarProps) {
+  const { t } = useTranslation();
   const { toast, showToast } = useToast();
 
   const navBtn = (id: SectionId, Icon: typeof Home, label: string) => (
@@ -56,7 +58,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
       }`}
     >
       <Icon size={18} />
-      {label}
+      {t(label)}
     </button>
   );
 
@@ -75,18 +77,18 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
       <nav className="flex-1 py-3 px-2 space-y-1">
         {NAV_ITEMS.map((item) => navBtn(item.id, item.icon, item.label))}
         <div className="my-2 border-t border-border-subtle" />
-        {navBtn("feedback", MessageSquare, "问题与建议")}
+        {navBtn("feedback", MessageSquare, "ui.nav.feedback")}
         <button
           type="button"
           onClick={() => {
-            openHelpGuide().catch(() => showToast("无法打开帮助文档，请稍后重试", "error"));
+            openHelpGuide().catch(() => showToast(t("ui.nav.help_error"), "error"));
           }}
           className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors text-text-dim hover:bg-fill-hover hover:text-text"
         >
           <BookOpen size={18} />
-          帮助说明
+          {t("ui.nav.help")}
         </button>
-        {navBtn("about", Info, "关于")}
+        {navBtn("about", Info, "ui.nav.about")}
       </nav>
 
       <div className="p-3 border-t border-border-subtle">

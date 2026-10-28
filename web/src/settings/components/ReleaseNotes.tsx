@@ -79,7 +79,7 @@ const Block = memo(function Block({ block }: { block: MarkdownBlock }) {
  * its full height — the settings page itself scrolls.
  */
 export function ReleaseNotes() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const current = useUpdateSnapshot();
   // The release-notes manifest carries both `zh` and `en`; follow the app
   // language resolved by i18next.
@@ -95,7 +95,13 @@ export function ReleaseNotes() {
 
   return (
     <Section>
-      <SectionHeader title={current.version ? `v${current.version} 更新内容` : "更新内容"} />
+      <SectionHeader
+        title={
+          current.version
+            ? t("ui.update.notes_title_version", { version: current.version })
+            : t("ui.update.notes_title")
+        }
+      />
       <SectionContent>
         <div className="space-y-3">
           {blocks.map((block) => (

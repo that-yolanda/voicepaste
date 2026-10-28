@@ -36,9 +36,22 @@
           "category": { "type": "string", "enum": ["asr", "vad", "punctuation"] },
           "engine": { "type": "string" },
           "name": { "type": "string" },
+          "name_en": {
+            "type": "string",
+            "description": "Optional English display name; falls back to name."
+          },
           "description": { "type": "string" },
+          "description_en": {
+            "type": "string",
+            "description": "Optional English description; falls back to description."
+          },
           "tags": {
             "type": "array",
+            "items": { "type": "string" }
+          },
+          "tags_en": {
+            "type": "array",
+            "description": "Optional English tags; falls back to tags.",
             "items": { "type": "string" }
           },
           "languages": {

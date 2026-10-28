@@ -10,6 +10,7 @@
  * rendering via FIELD_META; unknown keys fall back to a sensible default.
  */
 
+import type { TFunction } from "i18next";
 import type { RegistryModel } from "@/settings/types/models";
 
 export const DOUBAO_MODEL_ID = "doubao-streaming";
@@ -52,23 +53,23 @@ export interface FieldMeta {
   max?: number;
 }
 
-/** Enum option lists shared across models. */
+/** Enum option lists shared across models. `label` stores the i18n key. */
 export const HOTWORD_MODE_OPTS: SegmentOption[] = [
-  { value: "auto", label: "自动" },
-  { value: "disabled", label: "关闭" },
-  { value: "force", label: "开启" },
+  { value: "auto", label: "field.hotword_llm_mode.options.auto" },
+  { value: "disabled", label: "field.hotword_llm_mode.options.disabled" },
+  { value: "force", label: "field.hotword_llm_mode.options.force" },
 ];
 
 export const PROVIDER_OPTS: SegmentOption[] = [
-  { value: "cpu", label: "CPU" },
-  { value: "cuda", label: "CUDA" },
-  { value: "coreml", label: "CoreML" },
+  { value: "cpu", label: "field.provider.options.cpu" },
+  { value: "cuda", label: "field.provider.options.cuda" },
+  { value: "coreml", label: "field.provider.options.coreml" },
 ];
 
 export const PUNCT_OPTS: SegmentOption[] = [
-  { value: "auto", label: "自适应" },
-  { value: "disabled", label: "禁用" },
-  { value: "force", label: "强制启用" },
+  { value: "auto", label: "field.punctuation_mode.options.auto" },
+  { value: "disabled", label: "field.punctuation_mode.options.disabled" },
+  { value: "force", label: "field.punctuation_mode.options.force" },
 ];
 
 /**
@@ -79,44 +80,44 @@ export const PUNCT_OPTS: SegmentOption[] = [
  */
 export const FIELD_META: Record<string, FieldMeta> = {
   /* Shared asr_defaults params */
-  stream_simulate: { label: "模拟流式输出", type: "toggle", group: "shared" },
+  stream_simulate: { label: "field.stream_simulate", type: "toggle", group: "shared" },
   hotword_llm_mode: {
-    label: "热词强化",
+    label: "field.hotword_llm_mode",
     type: "segment",
     options: HOTWORD_MODE_OPTS,
     group: "shared",
   },
-  hotword_replace: { label: "热词替换", type: "toggle", group: "shared" },
-  num_threads: { label: "线程数", type: "number", group: "shared" },
+  hotword_replace: { label: "field.hotword_replace", type: "toggle", group: "shared" },
+  num_threads: { label: "field.num_threads", type: "number", group: "shared" },
   provider: {
-    label: "推理后端",
+    label: "field.provider",
     type: "segment",
     options: PROVIDER_OPTS,
     group: "shared",
   },
   punctuation_mode: {
-    label: "标点符号",
+    label: "field.punctuation_mode",
     type: "segment",
     options: PUNCT_OPTS,
     group: "shared",
   },
 
   /* VAD params */
-  threshold: { label: "VAD 阈值", type: "number", step: 0.1, group: "shared" },
+  threshold: { label: "field.threshold", type: "number", step: 0.1, group: "shared" },
   min_silence_duration: {
-    label: "VAD 最小静音时长",
+    label: "field.min_silence_duration",
     type: "number",
     step: 0.1,
     group: "shared",
   },
   min_speech_duration: {
-    label: "VAD 最小说话时长",
+    label: "field.min_speech_duration",
     type: "number",
     step: 0.1,
     group: "shared",
   },
   max_speech_duration: {
-    label: "VAD 最大说话时长",
+    label: "field.max_speech_duration",
     type: "number",
     step: 0.1,
     group: "shared",
@@ -124,139 +125,143 @@ export const FIELD_META: Record<string, FieldMeta> = {
 
   /* Doubao credentials */
   auth_mode: {
-    label: "鉴权方式",
+    label: "field.auth_mode",
     type: "segment",
     options: [
-      { value: "legacy", label: "旧版" },
-      { value: "v2", label: "新版" },
+      { value: "legacy", label: "field.auth_mode.options.legacy" },
+      { value: "v2", label: "field.auth_mode.options.v2" },
     ],
     group: "credentials",
   },
   url: {
-    label: "WebSocket 地址",
+    label: "field.url",
     type: "text",
-    placeholder: "wss://...",
+    placeholder: "field.url.placeholder",
     group: "credentials",
   },
-  app_id: { label: "App ID", group: "credentials", placeholder: "输入 App ID" },
+  app_id: { label: "field.app_id", group: "credentials", placeholder: "field.app_id.placeholder" },
   access_token: {
-    label: "Access Token",
+    label: "field.access_token",
     type: "password",
     group: "credentials",
-    placeholder: "输入 Access Token",
+    placeholder: "field.access_token.placeholder",
   },
   resource_id: {
-    label: "Resource ID",
+    label: "field.resource_id",
     group: "credentials",
-    placeholder: "输入 Resource ID",
+    placeholder: "field.resource_id.placeholder",
   },
   api_key: {
-    label: "API Key",
+    label: "field.api_key",
     type: "password",
     group: "credentials",
-    placeholder: "输入 API Key",
+    placeholder: "field.api_key.placeholder",
   },
 
   /* Doubao basic settings & feature toggles & advanced / internal params */
-  enable_nonstream: { label: "二遍识别", type: "toggle", group: "advanced" },
+  enable_nonstream: { label: "field.enable_nonstream", type: "toggle", group: "advanced" },
   enable_accelerate_text: {
-    label: "首字加速",
+    label: "field.enable_accelerate_text",
     type: "toggle",
     group: "advanced",
   },
-  enable_ddc: { label: "语义顺滑", type: "toggle", group: "advanced" },
-  enable_itn: { label: "数字格式化", type: "toggle", group: "advanced" },
-  enable_punc: { label: "自动标点", type: "toggle", group: "advanced" },
+  enable_ddc: { label: "field.enable_ddc", type: "toggle", group: "advanced" },
+  enable_itn: { label: "field.enable_itn", type: "toggle", group: "advanced" },
+  enable_punc: { label: "field.enable_punc", type: "toggle", group: "advanced" },
   "corpus.boosting_table_id": {
-    label: "热词表 ID",
+    label: "field.corpus.boosting_table_id",
     group: "advanced",
-    placeholder: "输入热词表 ID",
+    placeholder: "field.corpus.boosting_table_id.placeholder",
   },
   "corpus.correct_table_id": {
-    label: "替换词表 ID",
+    label: "field.corpus.correct_table_id",
     group: "advanced",
-    placeholder: "输入替换词表 ID",
+    placeholder: "field.corpus.correct_table_id.placeholder",
   },
   language: {
-    label: "语言",
+    label: "field.language",
     type: "text",
-    placeholder: "留空则自动检测",
+    placeholder: "field.language.placeholder",
     group: "advanced",
   },
-  rate: { label: "音频采样", type: "number", group: "advanced" },
-  channel: { label: "声道", type: "number", group: "advanced" },
-  format: { label: "音频格式", group: "advanced" },
-  bits: { label: "采样位数", type: "number", group: "advanced" },
-  model_name: { label: "模型名称", group: "advanced" },
-  model_version: { label: "模型版本", group: "advanced" },
-  operation: { label: "操作类型", group: "advanced" },
-  sequence: { label: "请求序号", type: "number", group: "advanced" },
-  show_utterances: { label: "显示分句", type: "toggle", group: "advanced" },
+  rate: { label: "field.rate", type: "number", group: "advanced" },
+  channel: { label: "field.channel", type: "number", group: "advanced" },
+  format: { label: "field.format", group: "advanced" },
+  bits: { label: "field.bits", type: "number", group: "advanced" },
+  model_name: { label: "field.model_name", group: "advanced" },
+  model_version: { label: "field.model_version", group: "advanced" },
+  operation: { label: "field.operation", group: "advanced" },
+  sequence: { label: "field.sequence", type: "number", group: "advanced" },
+  show_utterances: { label: "field.show_utterances", type: "toggle", group: "advanced" },
   result_type: {
-    label: "结果返回方式",
+    label: "field.result_type",
     type: "segment",
     options: [
-      { value: "full", label: "全量" },
-      { value: "single", label: "增量" },
+      { value: "full", label: "field.result_type.options.full" },
+      { value: "single", label: "field.result_type.options.single" },
     ],
     group: "advanced",
   },
-  accelerate_score: { label: "首字加速率", type: "number", group: "advanced" },
+  accelerate_score: { label: "field.accelerate_score", type: "number", group: "advanced" },
   ssd_version: {
-    label: "SSD 大模型版本",
+    label: "field.ssd_version",
     type: "segment",
     options: [
-      { value: "200", label: "200（大模型 SSD）" },
-      { value: "100", label: "100（标准）" },
+      { value: "200", label: "field.ssd_version.options.200" },
+      { value: "100", label: "field.ssd_version.options.100" },
     ],
     group: "advanced",
   },
   output_zh_variant: {
-    label: "繁体输出",
+    label: "field.output_zh_variant",
     type: "segment",
     options: [
-      { value: "off", label: "不转换" },
-      { value: "traditional", label: "繁体（大陆）" },
-      { value: "tw", label: "台湾正体" },
-      { value: "hk", label: "香港繁体" },
+      { value: "off", label: "field.output_zh_variant.options.off" },
+      { value: "traditional", label: "field.output_zh_variant.options.traditional" },
+      { value: "tw", label: "field.output_zh_variant.options.tw" },
+      { value: "hk", label: "field.output_zh_variant.options.hk" },
     ],
     group: "advanced",
   },
-  end_window_size: { label: "强制判停时长 (ms)", type: "number", group: "advanced" },
-  force_to_speech_time: { label: "最短强制判停 (ms)", type: "number", group: "advanced" },
+  end_window_size: { label: "field.end_window_size", type: "number", group: "advanced" },
+  force_to_speech_time: {
+    label: "field.force_to_speech_time",
+    type: "number",
+    group: "advanced",
+  },
   vad_segment_duration: {
-    label: "语义切句静音阈值 (ms)",
+    label: "field.vad_segment_duration",
     type: "number",
     group: "advanced",
   },
 
   /* Offline model params */
-  use_itn: { label: "数字格式化 (ITN)", type: "toggle", group: "basic" },
-  itn: { label: "ITN", type: "toggle", group: "basic" },
-  system_prompt: { label: "系统提示词", type: "textarea", group: "basic" },
-  user_prompt: { label: "用户提示词", type: "textarea", group: "basic" },
-  max_new_tokens: { label: "最大生成 Token", type: "number", group: "basic" },
-  temperature: { label: "采样温度", type: "number", step: 0.1, group: "basic" },
-  top_p: { label: "Top-P", type: "number", step: 0.1, group: "basic" },
-  seed: { label: "随机种子", type: "number", group: "basic" },
-  max_active_paths: { label: "最大活跃路径", type: "number", group: "basic" },
-  modeling_unit: { label: "建模单元", type: "text", group: "basic" },
-  max_total_len: { label: "最大总长度", type: "number", group: "basic" },
-  enable_endpoint: { label: "端点检测", type: "toggle", group: "basic" },
+  use_itn: { label: "field.use_itn", type: "toggle", group: "basic" },
+  itn: { label: "field.itn", type: "toggle", group: "basic" },
+  system_prompt: { label: "field.system_prompt", type: "textarea", group: "basic" },
+  user_prompt: { label: "field.user_prompt", type: "textarea", group: "basic" },
+  max_new_tokens: { label: "field.max_new_tokens", type: "number", group: "basic" },
+  temperature: { label: "field.temperature", type: "number", step: 0.1, group: "basic" },
+  top_p: { label: "field.top_p", type: "number", step: 0.1, group: "basic" },
+  seed: { label: "field.seed", type: "number", group: "basic" },
+  max_active_paths: { label: "field.max_active_paths", type: "number", group: "basic" },
+  modeling_unit: { label: "field.modeling_unit", type: "text", group: "basic" },
+  max_total_len: { label: "field.max_total_len", type: "number", group: "basic" },
+  enable_endpoint: { label: "field.enable_endpoint", type: "toggle", group: "basic" },
   rule1_min_trailing_silence: {
-    label: "规则1最小尾静音",
+    label: "field.rule1_min_trailing_silence",
     type: "number",
     step: 0.1,
     group: "basic",
   },
   rule2_min_trailing_silence: {
-    label: "规则2最小尾静音",
+    label: "field.rule2_min_trailing_silence",
     type: "number",
     step: 0.1,
     group: "basic",
   },
   rule3_min_utterance_length: {
-    label: "规则3最短话语长度",
+    label: "field.rule3_min_utterance_length",
     type: "number",
     group: "basic",
   },
@@ -266,58 +271,56 @@ const ELEVENLABS_FIELDS: Record<string, Partial<FieldMeta>> = {
   api_key: {},
   enable_ddc: {
     group: "basic",
-    tooltip: "去除口头填充、重复起句和不流畅表达；不影响临时文字的实时显示",
+    tooltip: "field.enable_ddc.tooltip",
   },
   enable_keyterms: {
-    label: "热词库",
+    label: "field.enable_keyterms",
     type: "toggle",
     group: "basic",
-    tooltip: "使用现有启用的热词；最多 50 条，每条最多 20 个字符",
-    description: "开启后基础转写费用增加 20%",
+    tooltip: "field.enable_keyterms.tooltip",
+    description: "field.enable_keyterms.description",
   },
   commit_strategy: {
-    label: "文本确认方式",
+    label: "field.commit_strategy",
     type: "segment",
     group: "basic",
     options: [
-      { value: "manual", label: "手动提交" },
-      { value: "vad", label: "VAD分段" },
+      { value: "manual", label: "field.commit_strategy.options.manual" },
+      { value: "vad", label: "field.commit_strategy.options.vad" },
     ],
-    tooltip:
-      "控制每段识别文字何时被确认，不影响实时显示。手动提交：结束录音时提交当前片段；VAD分段：服务端根据停顿自动确认片段。两种方式在结束录音后，都会等待最终结果再输出。",
+    tooltip: "field.commit_strategy.tooltip",
   },
-  language: { group: "advanced", tooltip: "留空自动识别；例如 zh、en、pol" },
+  language: { group: "advanced", tooltip: "field.language.tooltip" },
   secondary_languages: {
-    label: "第二语言",
+    label: "field.secondary_languages",
     type: "list",
     group: "advanced",
-    placeholder: "例如 zh, en",
-    tooltip: "可能混用的语言代码，以逗号分隔；留空不限制",
+    placeholder: "field.secondary_languages.placeholder",
+    tooltip: "field.secondary_languages.tooltip",
   },
   filter_background_audio: {
-    label: "过滤背景语音",
+    label: "field.filter_background_audio",
     type: "toggle",
     group: "advanced",
-    tooltip: "减少附近谈话与环境噪声造成的误识别",
+    tooltip: "field.filter_background_audio.tooltip",
   },
   transcript_edit: {
-    label: "转写编辑",
+    label: "field.transcript_edit",
     type: "textarea",
     group: "advanced",
     maxLength: 2000,
-    placeholder: "例如：将日期统一写成 YYYY-MM-DD 格式",
-    tooltip:
-      "留空关闭；最多 2000 个字符。服务端编辑每个确认片段，最终输出等待编辑结果；编辑缺失时提示失败并允许重试。",
-    description: "填写后基础转写费用增加 30%，每个确认片段至少按 10 秒计费",
+    placeholder: "field.transcript_edit.placeholder",
+    tooltip: "field.transcript_edit.tooltip",
+    description: "field.transcript_edit.description",
   },
   vad_silence_threshold_secs: {
-    label: "分段静音时长（秒）",
+    label: "field.vad_silence_threshold_secs",
     type: "number",
     group: "advanced",
     min: 0.3,
     max: 3,
     step: 0.1,
-    tooltip: "停顿多久后确认当前片段；0.3–3 秒",
+    tooltip: "field.vad_silence_threshold_secs.tooltip",
   },
   vad_threshold: {
     label: FIELD_META.threshold.label,
@@ -326,25 +329,25 @@ const ELEVENLABS_FIELDS: Record<string, Partial<FieldMeta>> = {
     min: 0.1,
     max: 0.9,
     step: 0.1,
-    tooltip: "0.1–0.9，越低越容易检测到讲话；仅影响服务端 VAD",
+    tooltip: "field.vad_threshold.tooltip",
   },
   min_speech_duration_ms: {
-    label: `${FIELD_META.min_speech_duration.label}（ms）`,
+    label: "field.min_speech_duration_ms",
     type: "number",
     group: "advanced",
     min: 50,
     max: 2000,
     step: 1,
-    tooltip: "过滤过短声音；50–2000 ms",
+    tooltip: "field.min_speech_duration_ms.tooltip",
   },
   min_silence_duration_ms: {
-    label: `${FIELD_META.min_silence_duration.label}（ms）`,
+    label: "field.min_silence_duration_ms",
     type: "number",
     group: "advanced",
     min: 50,
     max: 2000,
     step: 1,
-    tooltip: "判定语音间断的最小静音；50–2000 ms，与分段静音时长不同",
+    tooltip: "field.min_silence_duration_ms.tooltip",
   },
 };
 
@@ -402,6 +405,23 @@ export function getFieldMeta(key: string, value: unknown, modelId?: string): Fie
     label: key.replace(/_/g, " "),
     type: inferControlType(key, value),
     group: "basic",
+  };
+}
+
+/**
+ * Resolve a field's metadata to display strings for the active language.
+ * `getFieldMeta` returns i18n keys; pass this result through `t` before
+ * rendering so labels/placeholders/tooltips/options follow the UI language.
+ * Unknown keys (the underscore fallback) resolve to their own text.
+ */
+export function resolveFieldMeta(meta: FieldMeta, t: TFunction): FieldMeta {
+  return {
+    ...meta,
+    label: t(meta.label),
+    placeholder: meta.placeholder ? t(meta.placeholder) : undefined,
+    tooltip: meta.tooltip ? t(meta.tooltip) : undefined,
+    description: meta.description ? t(meta.description) : undefined,
+    options: meta.options?.map((option) => ({ ...option, label: t(option.label) })),
   };
 }
 

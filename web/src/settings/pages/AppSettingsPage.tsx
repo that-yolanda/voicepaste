@@ -35,13 +35,16 @@ export function AppSettingsPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="应用设置" description="启动行为与配置文件" />
+      <PageHeader
+        title={t("ui.app_settings.title")}
+        description={t("ui.app_settings.description")}
+      />
 
       <Section>
         <SectionContent>
           <SectionItemList>
             <SectionItem
-              title="开机自动启动"
+              title={t("ui.app_settings.auto_launch")}
               action={
                 <Toggle checked={!!app.autoLaunch} onChange={(v) => setAppBool("autoLaunch", v)} />
               }
@@ -49,16 +52,14 @@ export function AppSettingsPage() {
 
             {isMac && (
               <SectionItem
-                title="悬浮窗外观"
-                tooltip={
-                  "通透：背景透出更多、液态感更强\n磨砂：磨砂感更明显\n跟随主题：传统毛玻璃、明暗跟随外观主题"
-                }
+                title={t("ui.app_settings.overlay_style")}
+                tooltip={t("ui.app_settings.overlay_style_tooltip")}
                 action={
                   <SegmentedControl
                     options={[
-                      { value: "liquid", label: "通透" },
-                      { value: "liquid-standard", label: "磨砂" },
-                      { value: "vibrancy", label: "跟随主题" },
+                      { value: "liquid", label: t("ui.app_settings.overlay_liquid") },
+                      { value: "liquid-standard", label: t("ui.app_settings.overlay_standard") },
+                      { value: "vibrancy", label: t("ui.app_settings.overlay_follow_theme") },
                     ]}
                     value={(app.overlay_style as string) || "liquid"}
                     onChange={(v) => scheduleSave({ app: { overlay_style: v } })}
@@ -87,7 +88,7 @@ export function AppSettingsPage() {
               }
             />
 
-            <SectionItem last title="配置文件路径" description={configPath} />
+            <SectionItem last title={t("ui.app_settings.config_path")} description={configPath} />
           </SectionItemList>
         </SectionContent>
       </Section>
@@ -96,7 +97,7 @@ export function AppSettingsPage() {
         <SectionContent>
           <SectionItemList>
             <SectionItem
-              title="提示音"
+              title={t("ui.app_settings.sound")}
               action={
                 <Toggle
                   checked={sound.enabled !== false}
@@ -108,7 +109,7 @@ export function AppSettingsPage() {
             {sound.enabled !== false && (
               <>
                 <SectionItem
-                  title="就绪提示音"
+                  title={t("ui.app_settings.ready_sound")}
                   action={
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-text-muted max-w-40 truncate">
@@ -123,7 +124,7 @@ export function AppSettingsPage() {
                           }
                         }}
                       >
-                        选择文件
+                        {t("ui.app_settings.choose_file")}
                       </Button>
                       {startSound && (
                         <Button
@@ -133,7 +134,7 @@ export function AppSettingsPage() {
                             setSound({ start_sound: "" });
                           }}
                         >
-                          重置
+                          {t("ui.app_settings.reset")}
                         </Button>
                       )}
                     </div>
@@ -141,7 +142,7 @@ export function AppSettingsPage() {
                 />
 
                 <SectionItem
-                  title="完成提示音"
+                  title={t("ui.app_settings.finish_sound")}
                   last
                   action={
                     <div className="flex items-center gap-2">
@@ -157,7 +158,7 @@ export function AppSettingsPage() {
                           }
                         }}
                       >
-                        选择文件
+                        {t("ui.app_settings.choose_file")}
                       </Button>
                       {endSound && (
                         <Button
@@ -167,7 +168,7 @@ export function AppSettingsPage() {
                             setSound({ end_sound: "" });
                           }}
                         >
-                          重置
+                          {t("ui.app_settings.reset")}
                         </Button>
                       )}
                     </div>
@@ -183,8 +184,8 @@ export function AppSettingsPage() {
         <SectionContent>
           <SectionItemList>
             <SectionItem
-              title="移除末尾句号"
-              tooltip="粘贴前自动移除识别结果末尾的句号"
+              title={t("ui.app_settings.remove_period")}
+              tooltip={t("ui.app_settings.remove_period_tooltip")}
               action={
                 <Toggle
                   checked={app.remove_trailing_period !== false}
@@ -193,8 +194,8 @@ export function AppSettingsPage() {
               }
             />
             <SectionItem
-              title="保留剪贴板"
-              tooltip="粘贴后保留识别文字在剪贴板；关闭则恢复原剪贴板内容"
+              title={t("ui.app_settings.keep_clipboard")}
+              tooltip={t("ui.app_settings.keep_clipboard_tooltip")}
               action={
                 <Toggle
                   checked={app.keep_clipboard !== false}
@@ -203,8 +204,8 @@ export function AppSettingsPage() {
               }
             />
             <SectionItem
-              title="保留录音"
-              tooltip="开启后保留最近 1 个月录音；关闭时仅保留失败录音用于重试"
+              title={t("ui.app_settings.keep_recordings")}
+              tooltip={t("ui.app_settings.keep_recordings_tooltip")}
               last
               action={
                 <Toggle

@@ -66,7 +66,7 @@ export function useFeedback(active: boolean) {
   const validation = validateFeedback(draft, { system, appVersion });
   const fieldErrors: FeedbackFieldErrors = {};
   for (const field of feedbackFields) {
-    if (touched[field] && validation[field]) fieldErrors[field] = validation[field];
+    if (touched[field] && validation[field]) fieldErrors[field] = i18next.t(validation[field]);
   }
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export function useFeedback(active: boolean) {
     environmentRequested.current = true;
     getLogPath()
       .then(setLogPath)
-      .catch(() => setLogPath("无法读取日志路径"));
+      .catch(() => setLogPath(i18next.t("ui.feedback.log_path_error")));
     setEnvironmentLoading(true);
     getFeedbackEnvironment()
       .then((value) => {
@@ -194,7 +194,7 @@ export function useFeedback(active: boolean) {
       }
       await submitFeedback(prepared.current);
       clear();
-      showToast("反馈已提交，感谢你的帮助！");
+      showToast(i18next.t("ui.feedback.submitted"));
     } catch (reason) {
       fail(errText(reason));
     } finally {

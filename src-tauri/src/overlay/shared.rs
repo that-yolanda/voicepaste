@@ -61,6 +61,11 @@ impl WaveActivity {
 pub struct Shortcut {
     pub key: String,
     pub label: String,
+    /// Optional i18n key suffix for system actions ("retry"/"cancel"/"done"/"raw").
+    /// When present, renderers localize the action name instead of using `label`;
+    /// `label` stays as the verbatim fallback and for user data (prompt titles).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_key: Option<String>,
 }
 
 impl Shortcut {
@@ -68,6 +73,16 @@ impl Shortcut {
         Self {
             key: key.into(),
             label: label.into(),
+            label_key: None,
+        }
+    }
+
+    /// System shortcut whose action name is localized via `ui.overlay.shortcut_*`.
+    pub fn keyed(key: impl Into<String>, label: &str, label_key: &str) -> Self {
+        Self {
+            key: key.into(),
+            label: label.into(),
+            label_key: Some(label_key.into()),
         }
     }
 }

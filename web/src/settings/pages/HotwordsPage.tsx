@@ -1,5 +1,6 @@
 import { Trash } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { loadBuiltinHotwords, loadHotwords, saveHotwords } from "@/settings/bridge";
 import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
@@ -19,6 +20,7 @@ import { cloneBuiltinGroup, mergeHotwords, parseHotwordInput } from "@/settings/
 import type { HotwordData, HotwordGroup } from "@/settings/types/hotwords";
 
 export function HotwordsPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<HotwordData>({
     active_group: "",
     groups: [],
@@ -65,7 +67,7 @@ export function HotwordsPage() {
     const id = crypto.randomUUID();
     persist({
       ...data,
-      groups: [...data.groups, { id, name: "新热词表", words: [] }],
+      groups: [...data.groups, { id, name: t("ui.hotwords.new_group"), words: [] }],
     });
   };
 
@@ -76,16 +78,13 @@ export function HotwordsPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="热词库"
-        description="热词库用于提高特定词汇的识别准确率。开启开关的表为默认热词表，识别时自动传入；若模型不支持热词可追加到 LLM 文本润色，配置前往 音频模型 > 自定义配置 > 识别强化。内置热词表可在「常用热词表」中按需添加为自定义表。"
-      />
+      <PageHeader title={t("ui.hotwords.title")} description={t("ui.hotwords.description")} />
       <div className="flex items-center justify-between">
         <Button variant="accent" onClick={addGroup}>
-          添加热词表
+          {t("ui.hotwords.add_group")}
         </Button>
         <Button variant="default" onClick={() => setBuiltinOpen(true)}>
-          常用热词表
+          {t("ui.hotwords.builtin")}
         </Button>
       </div>
       {data.groups.map((group) => (
@@ -120,6 +119,7 @@ function HotwordGroupItem({
   onRemove: () => void;
   onSetActive: () => void;
 }) {
+  const { t } = useTranslation();
   const [wordDraft, setWordDraft] = useState("");
 
   return (
@@ -143,7 +143,7 @@ function HotwordGroupItem({
       <SectionContent>
         <SectionItemList>
           <SectionItem
-            title="热词组名称"
+            title={t("ui.hotwords.group_name")}
             action={
               <Input
                 className="w-full"
@@ -154,12 +154,12 @@ function HotwordGroupItem({
             }
           />
 
-          <SectionItem title="添加热词">
+          <SectionItem title={t("ui.hotwords.add_word")}>
             <Input
               className="w-full"
               value={wordDraft}
               onChange={setWordDraft}
-              placeholder="逗号分隔批量添加，例如：Claude, Anthropic|8（默认权重 4）"
+              placeholder={t("ui.hotwords.add_word_placeholder")}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   const entries = parseHotwordInput(wordDraft);
@@ -172,13 +172,13 @@ function HotwordGroupItem({
             />
           </SectionItem>
 
-          <SectionItem title="热词列表" last>
+          <SectionItem title={t("ui.hotwords.word_list")} last>
             <div className="flex flex-wrap gap-1.5">
               {group.words.map((word) => (
                 <Badge
                   key={word}
                   variant="accent"
-                  title="点击移除"
+                  title={t("ui.hotwords.remove_word")}
                   onClick={() => onUpdate({ words: group.words.filter((w) => w !== word) })}
                 >
                   {word}
@@ -211,6 +211,7 @@ interface BuiltinHotwordsModalProps {
  * from the built-in library on a future app update.
  */
 function BuiltinHotwordsModal({ open, onClose, onAdd }: BuiltinHotwordsModalProps) {
+  const { t } = useTranslation();
   const [groups, setGroups] = useState<HotwordGroup[]>([]);
 
   useEffect(() => {
@@ -221,10 +222,10 @@ function BuiltinHotwordsModal({ open, onClose, onAdd }: BuiltinHotwordsModalProp
   }, [open]);
 
   return (
-    <Modal open={open} onClose={onClose} title="常用热词表">
+    <Modal open={open} onClose={onClose} title={t("ui.hotwords.builtin")}>
       <div className="space-y-3 overscroll-y-auto">
         {groups.length === 0 ? (
-          <p className="text-text-muted">暂无内置热词表。</p>
+          <p className="text-text-muted">{t("ui.hotwords.no_builtin")}</p>
         ) : (
           groups.map((group) => {
             const preview = group.words.slice(0, PREVIEW_WORDS);
@@ -241,7 +242,7 @@ function BuiltinHotwordsModal({ open, onClose, onAdd }: BuiltinHotwordsModalProp
                         onClose();
                       }}
                     >
-                      添加
+                      {t("ui.hotwords.add")}
                     </Button>
                   }
                 />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ReleaseNotes } from "@/settings/components/ReleaseNotes";
 import { Toggle } from "@/settings/components/Toggle";
 import { UpdateButton } from "@/settings/components/UpdateButton";
@@ -13,6 +14,7 @@ import {
 import { useSettings } from "@/settings/SettingsProvider";
 
 export function AboutPage() {
+  const { t } = useTranslation();
   const { settings, scheduleSave } = useSettings();
   const cfg = settings?.parsedConfig || ({} as Record<string, unknown>);
   const app = (cfg.app || {}) as Record<string, unknown>;
@@ -23,25 +25,25 @@ export function AboutPage() {
 
   return (
     <PageLayout>
-      <PageHeader title="关于" />
+      <PageHeader title={t("ui.about.title")} />
       {/* App info */}
       <div className="flex flex-col items-center space-y-2">
         <img className="w-16 h-16 rounded-lg" src="./icon.png" alt="VoicePaste" />
 
         <p className="text-sm font-semibold text-text">VoicePaste</p>
-        <p className="text-xs text-text-muted">语音输入工具，将语音实时转为文字并输入到任意应用</p>
+        <p className="text-xs text-text-muted">{t("ui.about.description")}</p>
       </div>
 
       <Section>
         <SectionContent>
           <SectionItemList>
             <SectionItem
-              title="当前版本"
+              title={t("ui.about.current_version")}
               action={<span className="text-sm text-text-muted">{version}</span>}
             />
-            <SectionItem title="检查更新" action={<UpdateButton />} />
+            <SectionItem title={t("ui.about.check_update")} action={<UpdateButton />} />
             <SectionItem
-              title="体验 Beta 版本"
+              title={t("ui.about.beta")}
               last
               action={
                 <Toggle

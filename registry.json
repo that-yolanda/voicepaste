@@ -69,7 +69,10 @@
           "boosting_table_id": "",
           "correct_table_id": ""
         }
-      }
+      },
+      "name_en": "Volcano Engine — Doubao streaming ASR 2.0",
+      "description_en": "¥1/hour, first choice for Chinese",
+      "tags_en": ["Streaming", "Free trial quota", "Hotword library", "Chinese + English, dialects"]
     },
     {
       "id": "elevenlabs-realtime",
@@ -99,7 +102,10 @@
         "secondary_languages": [],
         "transcript_edit": "",
         "enable_keyterms": false
-      }
+      },
+      "name_en": "ElevenLabs — Scribe v2 Realtime",
+      "description_en": "$0.39/hour",
+      "tags_en": ["Streaming", "90+ languages", "Pay-as-you-go"]
     },
     {
       "id": "silero-vad",
@@ -113,13 +119,18 @@
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
       "file_size": 2,
       "mem_size": 50,
-      "model_files": { "model": "silero_vad.onnx" },
+      "model_files": {
+        "model": "silero_vad.onnx"
+      },
       "default_config": {
         "threshold": 0.5,
         "min_silence_duration": 0.2,
         "min_speech_duration": 0.2,
         "max_speech_duration": 10.0
-      }
+      },
+      "name_en": "Silero VAD",
+      "description_en": "Voice activity detection model, the basis for speech segmentation",
+      "tags_en": ["Base model"]
     },
     {
       "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8",
@@ -146,7 +157,10 @@
       "default_config": {
         "use_itn": true,
         "language": "auto"
-      }
+      },
+      "name_en": "SenseVoice multilingual",
+      "description_en": "High-accuracy offline model for Chinese, English, Japanese, Korean, and Cantonese",
+      "tags_en": ["High Chinese accuracy", "Low latency", "Low memory"]
     },
     {
       "id": "sherpa-onnx-funasr-nano-zh-en-ja-int8",
@@ -181,7 +195,10 @@
         "seed": 42,
         "language": "auto",
         "itn": true
-      }
+      },
+      "name_en": "FunASR-Nano Chinese/English/Japanese",
+      "description_en": "High-accuracy offline model based on FunASR-Nano-2512; Chinese, English, Japanese, dialects, and lyrics",
+      "tags_en": ["Chinese/English/Japanese, dialects", "Lyrics", "High Chinese accuracy"]
     },
     {
       "id": "sherpa-onnx-streaming-zipformer-zh-en",
@@ -215,7 +232,10 @@
         "rule1_min_trailing_silence": 2.4,
         "rule2_min_trailing_silence": 0.8,
         "rule3_min_utterance_length": 20
-      }
+      },
+      "name_en": "Zipformer streaming Chinese/English",
+      "description_en": "Real-time local streaming model for Chinese and English with low latency",
+      "tags_en": ["Mixed Chinese/English", "Low latency", "Low memory"]
     },
     {
       "id": "sherpa-onnx-streaming-zipformer-zh-int8",
@@ -248,7 +268,10 @@
         "rule1_min_trailing_silence": 2.4,
         "rule2_min_trailing_silence": 1.2,
         "rule3_min_utterance_length": 0
-      }
+      },
+      "name_en": "Zipformer streaming Chinese",
+      "description_en": "Real-time local streaming model for high-accuracy, low-latency Chinese",
+      "tags_en": ["Low latency", "Low memory"]
     },
     {
       "id": "sherpa-onnx-qwen3-asr-0.6B-int8",
@@ -280,7 +303,10 @@
         "temperature": 1e-6,
         "top_p": 0.8,
         "seed": 42
-      }
+      },
+      "name_en": "Qwen3 ASR multilingual",
+      "description_en": "Multilingual ASR based on Qwen3-ASR-0.6B: 31 languages, 20 Chinese dialects, lyrics/rap",
+      "tags_en": ["Multilingual", "Mixed Chinese/English", "High Chinese accuracy"]
     },
     {
       "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12",
@@ -296,7 +322,10 @@
       "mem_size": 200,
       "model_files": {
         "model": "model.int8.onnx"
-      }
+      },
+      "name_en": "CT-Transformer punctuation",
+      "description_en": "Chinese/English punctuation restoration; auto-applies to ASR models without punctuation",
+      "tags_en": ["Base model"]
     }
   ]
 }

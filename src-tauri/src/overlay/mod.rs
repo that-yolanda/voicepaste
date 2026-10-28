@@ -232,9 +232,9 @@ pub(crate) async fn begin_recording_hints(_app: &AppHandle, inner: &app_state::A
             .and_then(|c| c.app.last_polish_prompt_id.as_deref()),
         config.as_ref().and_then(|c| c.app.hotkey.as_str()),
     );
-    let mut shortcuts = vec![shared::Shortcut::new("Esc", "取消")];
+    let mut shortcuts = vec![shared::Shortcut::keyed("Esc", "取消", "cancel")];
     if !hotkey.is_empty() {
-        shortcuts.push(shared::Shortcut::new(hotkey, "完成"));
+        shortcuts.push(shared::Shortcut::keyed(hotkey, "完成", "done"));
     }
     if let Some(prompt) = selected.filter(|_| toggle) {
         shortcuts.push(shared::Shortcut::new(
@@ -299,7 +299,7 @@ pub(crate) async fn show_output_error(
     invalidate_feedback(inner);
     inner.feedback_visible.store(true, Ordering::SeqCst);
     emit_retryable_error(app, inner, error).await;
-    emit_shortcuts(app, &[shared::Shortcut::new("Esc", "取消")]);
+    emit_shortcuts(app, &[shared::Shortcut::keyed("Esc", "取消", "cancel")]);
     show(app);
     schedule_retry_overlay_hide(app.clone(), Arc::clone(inner));
 }
@@ -313,14 +313,17 @@ pub(crate) async fn show_success(
     invalidate_feedback(inner);
     inner.feedback_visible.store(true, Ordering::SeqCst);
     emit_shortcuts(app, &[]);
+    let mut payload = serde_json::json!({
+        "text": if keep_clipboard { "已保存到剪切板" } else { "" },
+        "level": "info",
+        "variant": "success"
+    });
+    if keep_clipboard {
+        payload["code"] = serde_json::json!("ui.overlay.copied");
+    }
     let _ = app.emit(
         "overlay:event",
-        serde_json::json!({
-            "type": "hint", "payload": {
-                "text": if keep_clipboard { "已保存到剪切板" } else { "" },
-                "level": "info", "variant": "success"
-            }
-        }),
+        serde_json::json!({ "type": "hint", "payload": payload }),
     );
     show(app);
     let epoch = inner.overlay_epoch.load(Ordering::SeqCst);
@@ -394,11 +397,11 @@ fn attach_error_payload(payload: &mut serde_json::Value, error: &crate::errors::
 fn error_shortcuts(hotkey: &str, polish: bool) -> Vec<shared::Shortcut> {
     let mut shortcuts = Vec::new();
     if !hotkey.is_empty() {
-        shortcuts.push(shared::Shortcut::new(hotkey, "重试"));
+        shortcuts.push(shared::Shortcut::keyed(hotkey, "重试", "retry"));
     }
-    shortcuts.push(shared::Shortcut::new("Esc", "取消"));
+    shortcuts.push(shared::Shortcut::keyed("Esc", "取消", "cancel"));
     if polish {
-        shortcuts.push(shared::Shortcut::new("Enter", "输出原文"));
+        shortcuts.push(shared::Shortcut::keyed("Enter", "输出原文", "raw"));
     }
     shortcuts
 }
@@ -416,11 +419,12 @@ pub(crate) async fn emit_polish_decision_hint(
     app_inner.feedback_visible.store(true, Ordering::SeqCst);
     let hotkey = hotkey::current_hotkey_label(app_inner).await;
     let mut payload = serde_json::json!({
-        "text": format!("{}\n5 秒后输出原文", render_error_text(app_inner, error)),
+        "text": render_error_text(app_inner, error),
         "level": "error",
         "variant": "text",
         "retryable": true,
-        "hotkey": hotkey
+        "hotkey": hotkey,
+        "suffixKey": "ui.overlay.raw_in_5s"
     });
     attach_error_payload(&mut payload, error);
     let _ = app.emit(
@@ -592,7 +596,7 @@ mod tests {
         assert_eq!(error_shortcuts("Fn", true).last().unwrap().key, "Enter");
         assert_eq!(
             error_shortcuts("", false),
-            vec![shared::Shortcut::new("Esc", "取消")]
+            vec![shared::Shortcut::keyed("Esc", "取消", "cancel")]
         );
     }
 }

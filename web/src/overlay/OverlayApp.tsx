@@ -2,7 +2,6 @@ import type { TFunction } from "i18next";
 import { Check, Info } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { errText } from "@/i18n/errText";
 import { getOverlayLayoutMetrics, type OverlayLayoutMetrics } from "./bridge";
 import type { OverlayState } from "./types";
 import { useOverlayLayout } from "./useOverlayLayout";
@@ -36,14 +35,12 @@ const FALLBACK_METRICS: OverlayLayoutMetrics = {
 
 // Visible hint text — aligned 1:1 with src-tauri/src/overlay/shared.rs::visible_hint.
 function visibleHintText(state: OverlayState, t: TFunction): string {
-  // Structured error hints render locally so they follow the UI language;
-  // the backend `hintText` stays as the fallback for hints without a code.
+  // Structured hints (errors.* / ui.*) render locally so they follow the UI
+  // language; the backend `hintText` stays as the fallback for plain hints.
   if (state.hintCode) {
-    return errText({
-      code: state.hintCode,
-      params: state.hintParams,
-      detail: state.hintDetail,
-    });
+    let text = t(state.hintCode, state.hintParams ?? {});
+    if (state.hintSuffixKey) text += `\n${t(state.hintSuffixKey)}`;
+    return text;
   }
   if (state.hintVariant === "success") return state.hintText;
   if (state.appState === "connecting") return t("ui.overlay.preparing");
@@ -122,7 +119,11 @@ export function OverlayApp() {
               className="inline-flex items-center gap-1 whitespace-nowrap"
             >
               <kbd>{shortcut.key}</kbd>
-              <span>{shortcut.label}</span>
+              <span>
+                {shortcut.label_key
+                  ? t(`ui.overlay.shortcut_${shortcut.label_key}`)
+                  : shortcut.label}
+              </span>
             </span>
           ))}
         </div>
@@ -135,7 +136,7 @@ export function OverlayApp() {
           >
             {showIcon &&
               (success ? (
-                <Check className="h-4 w-4 shrink-0" aria-label="输出成功" />
+                <Check className="h-4 w-4 shrink-0" aria-label={t("ui.overlay.output_success")} />
               ) : (
                 <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
               ))}

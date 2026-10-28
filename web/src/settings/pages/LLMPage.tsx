@@ -1,5 +1,6 @@
 import { Trash } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { loadBuiltinPrompts, loadPrompts, savePrompts } from "@/settings/bridge";
 import { Button } from "@/settings/components/Button";
 import { Input } from "@/settings/components/Input";
@@ -24,49 +25,49 @@ import type { PromptItem } from "@/settings/types/prompts";
 const LLM_PROVIDERS = [
   {
     key: "deepseek",
-    label: "DeepSeek",
+    label: "ui.llm.provider.deepseek",
     url: "https://api.deepseek.com/v1/chat/completions",
     model: "deepseek-flash",
   },
   {
     key: "openai",
-    label: "OpenAI",
+    label: "ui.llm.provider.openai",
     url: "https://api.openai.com/v1/chat/completions",
     model: "gpt-6-luna",
   },
   {
     key: "openrouter",
-    label: "OpenRouter",
+    label: "ui.llm.provider.openrouter",
     url: "https://openrouter.ai/api/v1/chat/completions",
     model: "openai/gpt-6-luna",
   },
   {
     key: "siliconflow",
-    label: "硅基流动",
+    label: "ui.llm.provider.siliconflow",
     url: "https://api.siliconflow.cn/v1/chat/completions",
     model: "Qwen/Qwen3.5-4B",
   },
   {
     key: "gemini",
-    label: "Gemini",
+    label: "ui.llm.provider.gemini",
     url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     model: "gemini-3.5-flash-lite",
   },
   {
     key: "anthropic",
-    label: "Anthropic",
+    label: "ui.llm.provider.anthropic",
     url: "https://api.anthropic.com/v1/chat/completions",
     model: "claude-haiku-5-5",
   },
   {
     key: "ollama",
-    label: "Ollama 本地",
+    label: "ui.llm.provider.ollama",
     url: "http://localhost:11434/v1/chat/completions",
     model: "qwen3.5:4b",
   },
   {
     key: "openai_compatible",
-    label: "自定义",
+    label: "ui.llm.provider.custom",
     url: "",
     model: "",
   },
@@ -78,6 +79,7 @@ function createPromptId(): string {
 }
 
 export function LLMPage() {
+  const { t } = useTranslation();
   const { settings, scheduleSave } = useSettings();
   const cfg = settings?.parsedConfig || ({} as Record<string, unknown>);
   const llm = (cfg.llm || {}) as Record<string, unknown>;
@@ -158,16 +160,13 @@ export function LLMPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title="文本润色"
-        description="用于语音识别后的文本润色与文本结构化，触发请前往「快捷键」页面配置对应提示词的快捷键"
-      />
+      <PageHeader title={t("ui.llm.title")} description={t("ui.llm.description")} />
       {/* API Config */}
       <Section>
-        <SectionHeader title="API 配置" />
+        <SectionHeader title={t("ui.llm.api_config")} />
         <SectionContent>
           <SectionItemList>
-            <SectionItem title="模型">
+            <SectionItem title={t("ui.llm.model")}>
               <div className="grid grid-cols-4 gap-2">
                 {LLM_PROVIDERS.map((p) => (
                   <Button
@@ -175,14 +174,14 @@ export function LLMPage() {
                     onClick={() => switchProvider(p.key)}
                     variant={providerKey === p.key ? "accent" : "ghost"}
                   >
-                    {p.label}
+                    {t(p.label)}
                   </Button>
                 ))}
               </div>
             </SectionItem>
 
             <SectionItem
-              title="URL"
+              title={t("ui.llm.url")}
               action={
                 <Input
                   className="w-full"
@@ -194,7 +193,7 @@ export function LLMPage() {
             />
 
             <SectionItem
-              title="API Key"
+              title={t("ui.llm.api_key")}
               action={
                 <Input
                   className="w-full"
@@ -207,7 +206,7 @@ export function LLMPage() {
               }
             />
             <SectionItem
-              title="模型ID"
+              title={t("ui.llm.model_id")}
               action={
                 <Input
                   className="w-full"
@@ -225,7 +224,7 @@ export function LLMPage() {
       {/* Prompts */}
       <Section>
         <SectionHeader
-          title="文本润色模板"
+          title={t("ui.llm.prompts")}
           action={
             <div className="flex items-center gap-2">
               <Button
@@ -235,7 +234,7 @@ export function LLMPage() {
                     ...prompts,
                     {
                       id: createPromptId(),
-                      title: "新建润色模板",
+                      title: t("ui.llm.new_template"),
                       hotkey: "",
                       hotkey_mode: "toggle",
                       prompt: "",
@@ -245,10 +244,10 @@ export function LLMPage() {
                   await savePromptsNow(updated);
                 }}
               >
-                + 添加模板
+                {t("ui.llm.add_template")}
               </Button>
               <Button variant="default" onClick={() => setBuiltinOpen(true)}>
-                常用润色提示词
+                {t("ui.llm.builtin_prompts")}
               </Button>
             </div>
           }
@@ -259,7 +258,7 @@ export function LLMPage() {
             {prompts.map((item, index) => (
               <SectionItem
                 key={item.id}
-                title="模板名称"
+                title={t("ui.llm.template_name")}
                 last={index === prompts.length - 1}
                 action={
                   <div className="flex gap-2">
@@ -272,7 +271,7 @@ export function LLMPage() {
                         scheduleSavePrompts(updated);
                       }}
                       className="w-full"
-                      placeholder="模板名称"
+                      placeholder={t("ui.llm.template_name_placeholder")}
                       commitOnBlur
                     />
                     <Button
@@ -297,7 +296,7 @@ export function LLMPage() {
                     scheduleSavePrompts(updated);
                   }}
                   textareaClassName="h-32 resize-none"
-                  placeholder="输入系统提示词…"
+                  placeholder={t("ui.llm.system_prompt_placeholder")}
                   commitOnBlur
                 />
               </SectionItem>
@@ -328,6 +327,7 @@ interface BuiltinPromptsModalProps {
  * re-merged from the built-in library on a future app update.
  */
 function BuiltinPromptsModal({ open, onClose, onAdd }: BuiltinPromptsModalProps) {
+  const { t } = useTranslation();
   const [items, setItems] = useState<PromptItem[]>([]);
 
   useEffect(() => {
@@ -338,17 +338,17 @@ function BuiltinPromptsModal({ open, onClose, onAdd }: BuiltinPromptsModalProps)
   }, [open]);
 
   return (
-    <Modal open={open} onClose={onClose} title="常用润色提示词">
+    <Modal open={open} onClose={onClose} title={t("ui.llm.builtin_prompts")}>
       <div className="space-y-3 overscroll-y-auto">
         {items.length === 0 ? (
-          <p className="text-text-muted">暂无内置润色模板。</p>
+          <p className="text-text-muted">{t("ui.llm.no_builtin")}</p>
         ) : (
           items.map((item) => {
-            const preview = item.prompt || "（无内容）";
+            const preview = item.prompt || t("ui.llm.empty_content");
             return (
               <Section key={item.id}>
                 <SectionHeader
-                  title={item.title || "未命名模板"}
+                  title={item.title || t("ui.llm.untitled")}
                   action={
                     <Button
                       variant="accent"
@@ -357,7 +357,7 @@ function BuiltinPromptsModal({ open, onClose, onAdd }: BuiltinPromptsModalProps)
                         onClose();
                       }}
                     >
-                      添加
+                      {t("ui.llm.add")}
                     </Button>
                   }
                 />

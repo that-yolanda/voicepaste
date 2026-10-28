@@ -21,6 +21,7 @@ type Action =
       code?: string;
       params?: Record<string, string>;
       detail?: string | null;
+      suffixKey?: string;
     }
   | { type: "shortcuts"; shortcuts: Shortcut[] }
   | { type: "appearance"; theme: OverlayState["theme"] };
@@ -40,7 +41,17 @@ export function reducer(state: OverlayState, action: Action): OverlayState {
         ...state,
         appState: action.state,
         shortcuts: action.state === "idle" ? state.shortcuts : [],
-        ...(clearHint ? { hintText: "", hintLevel: "info" as const, hintVariant: "text" } : {}),
+        ...(clearHint
+          ? {
+              hintText: "",
+              hintLevel: "info" as const,
+              hintVariant: "text",
+              hintCode: undefined,
+              hintParams: undefined,
+              hintDetail: null,
+              hintSuffixKey: undefined,
+            }
+          : {}),
       };
     }
     case "transcript":
@@ -54,6 +65,7 @@ export function reducer(state: OverlayState, action: Action): OverlayState {
         hintCode: action.code,
         hintParams: action.params,
         hintDetail: action.detail ?? null,
+        hintSuffixKey: action.suffixKey,
       };
   }
 }
@@ -98,6 +110,7 @@ export function useOverlayState() {
             code: payload.code as string | undefined,
             params: payload.params as Record<string, string> | undefined,
             detail: (payload.detail as string | null | undefined) ?? null,
+            suffixKey: payload.suffixKey as string | undefined,
           });
           break;
         case "shortcuts":

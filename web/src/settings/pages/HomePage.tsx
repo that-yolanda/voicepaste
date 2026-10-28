@@ -1,5 +1,7 @@
+import type { TFunction } from "i18next";
 import { Copy, Loader2, Pause, Play, RefreshCw, RotateCw, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { errText } from "@/i18n/errText";
 import {
   deleteHistory,
@@ -30,30 +32,42 @@ import type { PromptItem } from "@/settings/types/prompts";
 
 /* ---------- pure helpers ---------- */
 
-function formatDurationParts(s: number): { value: string; unit: string } {
+function formatDurationParts(s: number, t: TFunction): { value: string; unit: string } {
   const r = Math.round(s);
-  if (r < 60) return { value: String(r), unit: "秒" };
+  if (r < 60) return { value: String(r), unit: t("ui.home.duration.seconds") };
   const m = Math.floor(r / 60);
-  if (m < 60) return { value: String(m), unit: "分钟" };
+  if (m < 60) return { value: String(m), unit: t("ui.home.duration.minutes") };
   const h = r / 3600;
-  return { value: h < 10 ? h.toFixed(1) : String(Math.round(h)), unit: "小时" };
+  return {
+    value: h < 10 ? h.toFixed(1) : String(Math.round(h)),
+    unit: t("ui.home.duration.hours"),
+  };
 }
 
-function greeting(): string {
+/** Locale key for the greeting that matches the current hour. */
+function greetingKey(): string {
   const h = new Date().getHours();
-  if (h < 6) return "夜深了";
-  if (h < 11) return "早上好";
-  if (h < 13) return "中午好";
-  if (h < 18) return "下午好";
-  return "晚上好";
+  if (h < 6) return "ui.home.greeting.night";
+  if (h < 11) return "ui.home.greeting.morning";
+  if (h < 13) return "ui.home.greeting.noon";
+  if (h < 18) return "ui.home.greeting.afternoon";
+  return "ui.home.greeting.evening";
 }
 
-function dateLabel(key: string, today: string, yesterday: string): string {
-  if (key === today) return "今天";
-  if (key === yesterday) return "昨天";
-  const d = new Date(key);
-  const w = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${w[d.getDay()]}`;
+function dateLabel(
+  key: string,
+  today: string,
+  yesterday: string,
+  t: TFunction,
+  locale: string,
+): string {
+  if (key === today) return t("ui.home.date.today");
+  if (key === yesterday) return t("ui.home.date.yesterday");
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+  }).format(new Date(key));
 }
 
 /* ---------- types ---------- */
@@ -81,6 +95,8 @@ interface HistoryItem {
 /* ---------- component ---------- */
 
 export function HomePage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language ?? "zh-CN";
   const [stats, setStats] = useState<Stats | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [days, setDays] = useState(1);
@@ -151,29 +167,33 @@ export function HomePage() {
             prev.map((entry) => (entry.ts === ts ? { ...entry, text, promptId } : entry)),
           );
         }
-        showToast("润色完成");
+        showToast(t("ui.home.toast_polish_done"));
       } catch (error) {
         setRepolishErrors((prev) => ({ ...prev, [ts]: errText(error) }));
-        showToast("润色失败", "error");
+        showToast(t("ui.home.toast_polish_failed"), "error");
       } finally {
         setRepolishingTs(null);
       }
     },
-    [showToast],
+    [showToast, t],
   );
 
   /* —— achievements —— */
   const charTotal = stats?.totalCharacters || 0;
-  const saved = formatDurationParts(Math.round(charTotal * 0.67));
+  const saved = formatDurationParts(Math.round(charTotal * 0.67), t);
   const cards = [
     {
       v: formatCompact(Object.keys(stats?.dailyCounts || {}).length),
-      u: "天",
-      label: "已经使用",
+      u: t("ui.home.unit_days"),
+      label: t("ui.home.card_used"),
     },
-    { v: formatCompact(stats?.totalSessions || 0), u: "次", label: "发起会话" },
-    { v: formatCompact(charTotal), u: "字", label: "总输入字数" },
-    { v: saved.value, u: saved.unit, label: "节省时间" },
+    {
+      v: formatCompact(stats?.totalSessions || 0),
+      u: t("ui.home.unit_sessions"),
+      label: t("ui.home.card_sessions"),
+    },
+    { v: formatCompact(charTotal), u: t("ui.home.unit_chars"), label: t("ui.home.card_chars") },
+    { v: saved.value, u: saved.unit, label: t("ui.home.card_saved") },
   ];
 
   /* —— history —— */
@@ -186,7 +206,7 @@ export function HomePage() {
   /* ====== render ====== */
   return (
     <PageLayout>
-      <PageHeader title={greeting()} />
+      <PageHeader title={t(greetingKey())} />
 
       {/* Achievements */}
       <div className="grid grid-cols-4 gap-4">
@@ -217,12 +237,12 @@ export function HomePage() {
 
       {/* History */}
       <Section>
-        <SectionHeader title="输入记录" />
+        <SectionHeader title={t("ui.home.history_title")} />
         <SectionContent className="p-0!">
           <SectionItemList className="space-y-0">
             {history.length === 0 ? (
               <div className="flex justify-center items-center gap-3 p-4 min-h-10 text-xs text-text-muted">
-                暂无输入记录
+                {t("ui.home.empty_history")}
               </div>
             ) : (
               <>
@@ -233,7 +253,11 @@ export function HomePage() {
                     const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
                     const show = dk !== last;
                     last = dk;
-                    const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                    const time = new Intl.DateTimeFormat(locale, {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                    }).format(d);
                     const failed = item.status === "failed";
                     const retrying = retryingTs === item.ts;
                     const regenerating = regeneratingTs === item.ts;
@@ -245,14 +269,18 @@ export function HomePage() {
                     // legacy entries keep their stored Chinese text.
                     const failedText = item.code
                       ? errText({ code: item.code, params: item.params })
-                      : item.error || item.text || "请检查网络连接";
-                    const displayText = failed ? `转写失败：${failedText}` : item.text;
+                      : item.error || item.text || t("ui.home.check_network");
+                    const displayText = failed
+                      ? t("ui.home.transcribe_failed", { message: failedText })
+                      : item.text;
                     return (
                       <div key={item.ts} className="text-sm">
                         {show && (
                           <div className="flex items-center gap-2 p-2">
                             <div className="flex-1 h-px bg-border-subtle" />
-                            <span className="text-text-muted">{dateLabel(dk, tKey, yKey)}</span>
+                            <span className="text-text-muted">
+                              {dateLabel(dk, tKey, yKey, t, locale)}
+                            </span>
                             <div className="flex-1 h-px bg-border-subtle" />
                           </div>
                         )}
@@ -269,7 +297,7 @@ export function HomePage() {
                               </p>
                               {repolishError && (
                                 <p className="pb-1 text-xs leading-[1.4] text-warning">
-                                  润色失败：{repolishError}
+                                  {t("ui.home.repolish_failed", { message: repolishError })}
                                 </p>
                               )}
                             </div>
@@ -285,7 +313,7 @@ export function HomePage() {
                               <Button
                                 size="icon"
                                 variant="accent"
-                                title={playing ? "暂停" : "播放"}
+                                title={playing ? t("ui.home.pause") : t("ui.home.play")}
                                 onClick={async () => {
                                   try {
                                     if (playing) {
@@ -332,9 +360,14 @@ export function HomePage() {
                                       );
                                     }
                                     await load();
-                                    showToast("重新转写完成");
+                                    showToast(t("ui.home.toast_retranscribe_done"));
                                   } catch (error) {
-                                    showToast(`重新转写失败：${error}`, "error");
+                                    showToast(
+                                      t("ui.home.toast_retranscribe_failed", {
+                                        message: String(error),
+                                      }),
+                                      "error",
+                                    );
                                   } finally {
                                     setRetryingTs(null);
                                   }
@@ -352,7 +385,7 @@ export function HomePage() {
                                   <Button
                                     size="icon"
                                     variant="accent"
-                                    title="重新生成"
+                                    title={t("ui.home.regenerate")}
                                     disabled={regenerating}
                                     onClick={async () => {
                                       setRegeneratingTs(item.ts);
@@ -369,9 +402,14 @@ export function HomePage() {
                                             ),
                                           );
                                         }
-                                        showToast("重新生成完成");
+                                        showToast(t("ui.home.toast_regenerate_done"));
                                       } catch (error) {
-                                        showToast(`重新生成失败：${error}`, "error");
+                                        showToast(
+                                          t("ui.home.toast_regenerate_failed", {
+                                            message: String(error),
+                                          }),
+                                          "error",
+                                        );
                                       } finally {
                                         setRegeneratingTs(null);
                                       }
@@ -390,7 +428,9 @@ export function HomePage() {
                                 <Button
                                   size="icon"
                                   variant="accent"
-                                  title={item.promptId ? "重新润色" : "润色"}
+                                  title={
+                                    item.promptId ? t("ui.home.repolish") : t("ui.home.polish")
+                                  }
                                   disabled={repolishing}
                                   onClick={(event) => {
                                     if (menuOpen) {
@@ -418,13 +458,13 @@ export function HomePage() {
                                 <Button
                                   size="icon"
                                   variant="accent"
-                                  title="复制"
+                                  title={t("ui.home.copy")}
                                   onClick={async () => {
                                     try {
                                       await navigator.clipboard.writeText(item.text);
-                                      showToast("已复制");
+                                      showToast(t("ui.home.toast_copied"));
                                     } catch {
-                                      showToast("复制失败", "error");
+                                      showToast(t("ui.home.toast_copy_failed"), "error");
                                     }
                                   }}
                                 >
@@ -435,14 +475,14 @@ export function HomePage() {
                             <Button
                               size="icon"
                               variant="accent"
-                              title="删除"
+                              title={t("ui.home.delete")}
                               onClick={async () => {
                                 try {
                                   await deleteHistory(item.ts);
                                   setHistory((p) => p.filter((h) => h.ts !== item.ts));
-                                  showToast("已删除");
+                                  showToast(t("ui.home.toast_deleted"));
                                 } catch {
-                                  showToast("删除失败", "error");
+                                  showToast(t("ui.home.toast_delete_failed"), "error");
                                 }
                               }}
                             >
@@ -463,7 +503,7 @@ export function HomePage() {
                     loadHist(n);
                   }}
                 >
-                  加载更多
+                  {t("ui.home.load_more")}
                 </button>
               </>
             )}

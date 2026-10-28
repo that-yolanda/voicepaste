@@ -19,6 +19,7 @@ import {
   Trash,
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ModelDownloadProgress } from "@/settings/bridge";
 import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
@@ -46,14 +47,15 @@ import {
   isModelFieldVisible,
   type MergedField,
   parseLanguageList,
+  resolveFieldMeta,
 } from "@/settings/lib/model";
 import type { RegistryModel } from "@/settings/types/models";
 
 const CAPABILITY_LABELS: Record<string, string> = {
-  streaming: "流式输出",
-  hotwords: "热词库",
-  punctuation: "自动标点",
-  itn: "数字格式化",
+  streaming: "ui.model.capability.streaming",
+  hotwords: "ui.model.capability.hotwords",
+  punctuation: "ui.model.capability.punctuation",
+  itn: "ui.model.capability.itn",
 };
 
 /** Build a nested patch from a flattened key (e.g. "corpus.x" → { corpus: { x } }). */
@@ -179,6 +181,7 @@ export function ModelCard({
   onConfigChange,
   onResetConfig,
 }: ModelCardProps) {
+  const { t } = useTranslation();
   const [configExpanded, setConfigExpanded] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -240,7 +243,7 @@ export function ModelCard({
             target="_blank"
             rel="noreferrer"
           >
-            如何获取 API 凭据？
+            {t("ui.model.how_to_get_credentials")}
           </a>
           <Toggle checked={isActive} onChange={(v) => onToggleActive(model.id, v)} />
         </div>
@@ -265,7 +268,11 @@ export function ModelCard({
           </>
         ) : (
           <div className="flex items-center gap-2">
-            {fileStr && <span className="text-xs text-text-muted">模型文件 {fileStr}</span>}
+            {fileStr && (
+              <span className="text-xs text-text-muted">
+                {t("ui.model.model_file", { size: fileStr })}
+              </span>
+            )}
             <Button size="icon" onClick={() => onDownload(model.id)} disabled={isDownloading}>
               {isDownloading ? (
                 <LoaderCircle size={16} className="animate-spin" />
@@ -282,7 +289,7 @@ export function ModelCard({
   };
 
   const renderField = (field: MergedField) => {
-    const meta = fieldMeta(field);
+    const meta = resolveFieldMeta(fieldMeta(field), t);
     const control = renderControl(meta, field.value, (value) => {
       setConfigError(null);
       Promise.resolve(onConfigChange(model.id, patchFromFlatKey(field.key, value))).catch((error) =>
@@ -319,7 +326,7 @@ export function ModelCard({
                   size={16}
                   className={`text-surface ${model.capabilities?.[key] ? "fill-success" : "fill-text-muted"}`}
                 />
-                <span>{label}</span>
+                <span>{t(label)}</span>
               </Badge>
             ))}
           </div>
@@ -335,7 +342,7 @@ export function ModelCard({
           {memStr && model.category === "asr" && (
             <div className="flex gap-1 items-center text-text-muted">
               <ChartNoAxesCombined size={16} />
-              <span className="text-sm">内存峰值 {memStr}</span>
+              <span className="text-sm">{t("ui.model.memory_peak", { size: memStr })}</span>
             </div>
           )}
 
@@ -343,7 +350,7 @@ export function ModelCard({
             <span className="ml-auto">
               <Button variant="ghost" onClick={() => setConfigExpanded((v) => !v)}>
                 <Cog size={16} />
-                参数配置
+                {t("ui.model.config")}
               </Button>
             </span>
           )}
@@ -370,7 +377,7 @@ export function ModelCard({
             <div className="flex justify-between">
               <Button variant="ghost" onClick={() => onResetConfig(model.id)}>
                 <RotateCcw size={16} />
-                恢复默认
+                {t("ui.model.reset")}
               </Button>
 
               {advancedFields.length > 0 && (
@@ -383,7 +390,7 @@ export function ModelCard({
                     size={16}
                     className={`transition-transform duration-300 ${advancedExpanded ? "rotate-0" : "rotate-180"}`}
                   />
-                  更多参数
+                  {t("ui.model.more_params")}
                 </Button>
               )}
             </div>

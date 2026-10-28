@@ -215,6 +215,31 @@ pub(super) fn emit_hint(app: &AppHandle, text: &str, level: &str, variant: &str)
     );
 }
 
+/// Emit a hint carrying a full i18n key (plus interpolation params) so each
+/// renderer localizes it locally. `code` is the locale key (`ui.overlay.*` or
+/// `errors.*`).
+pub(super) fn emit_hint_key(
+    app: &AppHandle,
+    code: &str,
+    params: std::collections::BTreeMap<String, String>,
+    level: &str,
+    variant: &str,
+) {
+    let _ = app.emit(
+        "overlay:event",
+        serde_json::json!({
+            "type": "hint",
+            "payload": {
+                "text": "",
+                "code": code,
+                "params": params,
+                "level": level,
+                "variant": variant
+            }
+        }),
+    );
+}
+
 /// Reset matching after cancellation, diverted starts, or failed preparation.
 pub(super) fn reset_matcher_recording(app_handle: &AppHandle) {
     if let Some(hc) = app_handle.try_state::<hotkey::HotkeyConfig>() {

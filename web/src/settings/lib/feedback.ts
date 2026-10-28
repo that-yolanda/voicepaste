@@ -2,26 +2,26 @@ export type FeedbackType = "bug" | "feature" | "other";
 
 export const feedbackCategories: Record<FeedbackType, [string, string][]> = {
   bug: [
-    ["hotkey-recording", "快捷键录制"],
-    ["hotkey-trigger", "快捷键触发"],
-    ["microphone", "麦克风与录音"],
-    ["speech-recognition", "语音识别"],
-    ["text-polishing", "文本润色"],
-    ["speech-model-config", "语音模型配置"],
-    ["llm-config", "大语言模型配置"],
-    ["text-input", "文字输入"],
-    ["interface", "悬浮窗与界面"],
-    ["installation", "安装、启动与更新"],
-    ["other-problem", "其他问题"],
+    ["hotkey-recording", "ui.feedback.category.bug.hotkey_recording"],
+    ["hotkey-trigger", "ui.feedback.category.bug.hotkey_trigger"],
+    ["microphone", "ui.feedback.category.bug.microphone"],
+    ["speech-recognition", "ui.feedback.category.bug.speech_recognition"],
+    ["text-polishing", "ui.feedback.category.bug.text_polishing"],
+    ["speech-model-config", "ui.feedback.category.bug.speech_model_config"],
+    ["llm-config", "ui.feedback.category.bug.llm_config"],
+    ["text-input", "ui.feedback.category.bug.text_input"],
+    ["interface", "ui.feedback.category.bug.interface"],
+    ["installation", "ui.feedback.category.bug.installation"],
+    ["other-problem", "ui.feedback.category.bug.other_problem"],
   ],
   feature: [
-    ["hotkeys", "快捷键"],
-    ["speech-recognition", "语音识别"],
-    ["text-polishing", "文本润色"],
-    ["llm", "大语言模型"],
-    ["hotwords", "热词库"],
-    ["interface", "界面"],
-    ["other-suggestion", "其他建议"],
+    ["hotkeys", "ui.feedback.category.feature.hotkeys"],
+    ["speech-recognition", "ui.feedback.category.feature.speech_recognition"],
+    ["text-polishing", "ui.feedback.category.feature.text_polishing"],
+    ["llm", "ui.feedback.category.feature.llm"],
+    ["hotwords", "ui.feedback.category.feature.hotwords"],
+    ["interface", "ui.feedback.category.feature.interface"],
+    ["other-suggestion", "ui.feedback.category.feature.other_suggestion"],
   ],
   other: [],
 };
@@ -54,13 +54,13 @@ export function validateFeedback(
   environment: FeedbackEnvironment,
 ): FeedbackFieldErrors {
   const errors: FeedbackFieldErrors = {};
-  if (!draft.title.trim()) errors.title = "请输入标题。";
-  if (!draft.description.trim()) errors.description = "请填写问题描述或建议。";
-  if (!environment.appVersion.trim()) errors.appVersion = "请填写 App 版本。";
-  if (!environment.system.trim()) errors.system = "请填写操作系统版本。";
+  if (!draft.title.trim()) errors.title = "ui.feedback.error.title_required";
+  if (!draft.description.trim()) errors.description = "ui.feedback.error.description_required";
+  if (!environment.appVersion.trim()) errors.appVersion = "ui.feedback.error.app_version_required";
+  if (!environment.system.trim()) errors.system = "ui.feedback.error.system_required";
   const email = draft.email.trim();
   if (email && !/^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(email)) {
-    errors.email = "请输入有效的邮箱地址，或留空。";
+    errors.email = "ui.feedback.error.email_invalid";
   }
   return errors;
 }

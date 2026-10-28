@@ -48,7 +48,9 @@
       "../assets/sounds/start.mp3": "sounds/start.mp3",
       "../assets/sounds/end.mp3": "sounds/end.mp3",
       "icons/icon.png": "icons/icon.png",
-      "icons/trayTemplate.png": "icons/trayTemplate.png"
+      "icons/trayTemplate.png": "icons/trayTemplate.png",
+      "lang/en.lproj/InfoPlist.strings": "en.lproj/InfoPlist.strings",
+      "lang/zh-Hans.lproj/InfoPlist.strings": "zh-Hans.lproj/InfoPlist.strings"
     },
     "macOS": {
       "minimumSystemVersion": "10.15",

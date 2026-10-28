@@ -15,7 +15,8 @@ use super::cue;
 use super::finalize;
 use super::history;
 use super::{
-    current_session_text, emit_hint, is_current_epoch, is_recording, reset_matcher_recording,
+    current_session_text, emit_hint, emit_hint_key, is_current_epoch, is_recording,
+    reset_matcher_recording,
 };
 
 /// Maximum number of consecutive ASR reconnect attempts before giving up and
@@ -133,7 +134,13 @@ pub(super) async fn connect_and_attach(
             }
 
             if show_recording_hint {
-                emit_hint(&app_handle, "录制中…", "info", "recording");
+                emit_hint_key(
+                    &app_handle,
+                    "ui.overlay.recording",
+                    std::collections::BTreeMap::new(),
+                    "info",
+                    "recording",
+                );
             }
 
             let app_for_events = app_handle.clone();
@@ -341,16 +348,13 @@ async fn try_reconnect_asr(
         attempts,
         MAX_ASR_RECONNECT
     );
-    // Transition composite: reason headline + "reconnecting" suffix; moves to
-    // the structured overlay strings with the shortcut-label pass.
+    // Transition composite: the reason headline travels as a param so each
+    // renderer can append its own localized "reconnecting" suffix.
     let language = *app_inner.language.read().unwrap();
     let reason = error.code.render_headline(language, &error.params);
-    let suffix = if language == crate::lang::Language::ZhCn {
-        "，正在重连…"
-    } else {
-        ", reconnecting…"
-    };
-    emit_hint(app, &format!("{reason}{suffix}"), "warn", "text");
+    let mut params = std::collections::BTreeMap::new();
+    params.insert("reason".to_string(), reason);
+    emit_hint_key(app, "ui.overlay.reconnecting", params, "warn", "text");
 
     // Play the end cue on the first reconnect attempt so the user audibly knows
     // recording was interrupted and can stop talking until they hear it resume.
@@ -412,7 +416,13 @@ async fn try_reconnect_asr(
                 *slot = Some(session);
             }
             log_events!(info, "ASR reconnected successfully");
-            emit_hint(app, "已重连", "info", "text");
+            emit_hint_key(
+                app,
+                "ui.overlay.reconnected",
+                std::collections::BTreeMap::new(),
+                "info",
+                "text",
+            );
             // Play the start cue so the user audibly knows recording resumed.
             cue::emit_cue(app, app_inner, "start");
             Some(event_rx)

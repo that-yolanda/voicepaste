@@ -1,5 +1,6 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSettings } from "@/settings/SettingsProvider";
 
 type ThemePref = "light" | "dark" | "system";
@@ -9,6 +10,7 @@ function isThemePref(value: unknown): value is ThemePref {
 }
 
 export function ThemeSelector() {
+  const { t } = useTranslation();
   const { settings, scheduleSave } = useSettings();
   const [pref, setPref] = useState<ThemePref>("system");
 
@@ -47,9 +49,9 @@ export function ThemeSelector() {
   }, [pref, apply]);
 
   const options: { key: ThemePref; icon: typeof Sun; label: string }[] = [
-    { key: "light", icon: Sun, label: "浅色" },
-    { key: "dark", icon: Moon, label: "深色" },
-    { key: "system", icon: Monitor, label: "系统" },
+    { key: "light", icon: Sun, label: "ui.theme.light" },
+    { key: "dark", icon: Moon, label: "ui.theme.dark" },
+    { key: "system", icon: Monitor, label: "ui.theme.system" },
   ];
 
   return (
@@ -58,7 +60,7 @@ export function ThemeSelector() {
         <button
           key={opt.key}
           type="button"
-          title={opt.label}
+          title={t(opt.label)}
           onClick={() => {
             setPref(opt.key);
             scheduleSave({ app: { theme: opt.key } });

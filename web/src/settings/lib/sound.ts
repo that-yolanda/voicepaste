@@ -2,9 +2,12 @@
  * Sound file utilities extracted from settings.js.
  */
 
-/** Extract the filename from a file path. Returns "内置默认" for empty input. */
+import i18next from "i18next";
+
+/** Extract the filename from a file path. Returns the localized "built-in
+ *  default" label for empty input. */
 export function soundFileName(path: string | null | undefined): string {
-  if (!path) return "内置默认";
+  if (!path) return i18next.t("ui.sound.default");
   try {
     return path.split(/[\\/]/).pop() ?? path;
   } catch {

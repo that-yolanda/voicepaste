@@ -21,6 +21,7 @@
 
 import { Info } from "lucide-react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Tooltip } from "@/settings/components/Tooltip";
 
 export function PageLayout({ children }: { children: ReactNode }) {
@@ -140,6 +141,7 @@ export function SectionItem({
   last?: boolean;
   className?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className={`group flex flex-col gap-2 min-h-10 justify-center ${
@@ -151,7 +153,7 @@ export function SectionItem({
           <div className="flex items-center gap-1">
             {htmlFor ? <label htmlFor={htmlFor}>{title}</label> : <span>{title}</span>}
             {tooltip && (
-              <Tooltip content={tooltip} label={`${title}说明`}>
+              <Tooltip content={tooltip} label={t("ui.settings.tooltip_help", { title })}>
                 <Info size={14} aria-hidden="true" />
               </Tooltip>
             )}

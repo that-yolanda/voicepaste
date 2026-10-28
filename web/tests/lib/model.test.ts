@@ -43,7 +43,7 @@ describe("getMergedAsrConfig", () => {
 describe("getFieldMeta", () => {
   it("returns FIELD_META entry for a known key", () => {
     const meta = getFieldMeta("url", "");
-    expect(meta.label).toBe("WebSocket 地址");
+    expect(meta.label).toBe("field.url");
     expect(meta.type).toBe("text");
   });
 

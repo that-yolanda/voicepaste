@@ -74,6 +74,7 @@ struct Views {
     shortcuts_height: Retained<NSLayoutConstraint>,
     shortcut_items: Vec<ShortcutViews>,
     shortcut_content: Vec<Shortcut>,
+    shortcut_language: crate::lang::Language,
     bars: [WaveBar; WAVE_N],
     icon_layer: Retained<AnyObject>,
     fade_mask: Retained<AnyObject>, // CAGradientLayer for the multi-line top fade
@@ -334,36 +335,51 @@ fn apply_event(app: &AppHandle, event: &serde_json::Value) {
                     .and_then(|v| v.as_str())
                     .unwrap_or("text")
                     .into();
-                // Structured errors render locally so the pill follows the UI
-                // language; the transition `text` above stays as the fallback
-                // for hints without a code. The timeout suffix is UI copy that
-                // will move to the shared overlay strings with the shortcut
-                // labels in a later pass.
-                if let Some(code) = payload
-                    .and_then(|p| p.get("code"))
-                    .and_then(|v| v.as_str())
-                    .and_then(|c| {
-                        serde_json::from_value::<crate::errors::AppErrorCode>(
-                            serde_json::Value::String(c.to_string()),
+                // Structured code channel: `errors.*` render through the
+                // exhaustive render_headline table, `ui.*` through the overlay
+                // static table. Both interpolate params locally so the pill
+                // follows the UI language. The transition `text` above stays
+                // as the fallback for hints without a code.
+                let params = payload
+                    .and_then(|p| p.get("params"))
+                    .and_then(|v| {
+                        serde_json::from_value::<std::collections::BTreeMap<String, String>>(
+                            v.clone(),
                         )
                         .ok()
                     })
-                {
-                    let params = payload
-                        .and_then(|p| p.get("params"))
-                        .and_then(|v| {
-                            serde_json::from_value::<std::collections::BTreeMap<String, String>>(
-                                v.clone(),
+                    .unwrap_or_default();
+                let rendered = payload
+                    .and_then(|p| p.get("code"))
+                    .and_then(|v| v.as_str())
+                    .and_then(|code| {
+                        if let Some(reason) = code.strip_prefix("errors.") {
+                            serde_json::from_value::<crate::errors::AppErrorCode>(
+                                serde_json::Value::String(reason.to_string()),
                             )
                             .ok()
-                        })
-                        .unwrap_or_default();
-                    let headline = code.render_headline(model.language, &params);
-                    let suffix = match model.language {
-                        crate::lang::Language::ZhCn => "5 秒后输出原文",
-                        crate::lang::Language::En => "Raw text in 5 s",
-                    };
-                    model.hint_text = format!("{headline}\n{suffix}");
+                            .map(|code| code.render_headline(model.language, &params))
+                        } else if code.starts_with("ui.") {
+                            overlay_text(code, &params, model.language)
+                        } else {
+                            None
+                        }
+                    });
+                if let Some(mut text) = rendered {
+                    if let Some(suffix_key) = payload
+                        .and_then(|p| p.get("suffixKey"))
+                        .and_then(|v| v.as_str())
+                    {
+                        if let Some(suffix) = overlay_text(
+                            suffix_key,
+                            &std::collections::BTreeMap::new(),
+                            model.language,
+                        ) {
+                            text.push('\n');
+                            text.push_str(&suffix);
+                        }
+                    }
+                    model.hint_text = text;
                 }
             }
             "shortcuts" => {
@@ -633,6 +649,7 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
             shortcuts_height,
             shortcut_items: Vec::new(),
             shortcut_content: Vec::new(),
+            shortcut_language: model.language,
             bars,
             icon_layer,
             fade_mask: make_fade_mask(),
@@ -1007,11 +1024,70 @@ fn fade_shortcuts(view: &NSView, visible: bool) {
     }
 }
 
-fn update_shortcuts(views: &mut Views, shortcuts: &[Shortcut], mtm: MainThreadMarker) {
-    if views.shortcut_content == shortcuts {
+/// Localized text for an `ui.overlay.*` key rendered by the native pill.
+/// Mirrors `web/src/locales/*.json` by design — keep the strings in sync.
+/// `{{param}}` placeholders are interpolated from `params` here so callers
+/// never see raw template syntax.
+fn overlay_text(
+    key: &str,
+    params: &std::collections::BTreeMap<String, String>,
+    language: crate::lang::Language,
+) -> Option<String> {
+    use crate::lang::Language::{En, ZhCn};
+    let template = match (language, key) {
+        (ZhCn, "ui.overlay.shortcut_retry") => "重试",
+        (En, "ui.overlay.shortcut_retry") => "Retry",
+        (ZhCn, "ui.overlay.shortcut_cancel") => "取消",
+        (En, "ui.overlay.shortcut_cancel") => "Cancel",
+        (ZhCn, "ui.overlay.shortcut_done") => "完成",
+        (En, "ui.overlay.shortcut_done") => "Done",
+        (ZhCn, "ui.overlay.shortcut_raw") => "输出原文",
+        (En, "ui.overlay.shortcut_raw") => "Raw text",
+        (ZhCn, "ui.overlay.copied") => "已保存到剪切板",
+        (En, "ui.overlay.copied") => "Copied to clipboard",
+        (ZhCn, "ui.overlay.raw_in_5s") => "5 秒后输出原文",
+        (En, "ui.overlay.raw_in_5s") => "Raw text in 5 s",
+        (ZhCn, "ui.overlay.recording") => "录制中…",
+        (En, "ui.overlay.recording") => "Recording…",
+        (ZhCn, "ui.overlay.reconnecting") => "{{reason}}，正在重连…",
+        (En, "ui.overlay.reconnecting") => "{{reason}}, reconnecting…",
+        (ZhCn, "ui.overlay.reconnected") => "已重连",
+        (En, "ui.overlay.reconnected") => "Reconnected",
+        _ => return None,
+    };
+    let mut text = template.to_string();
+    for (k, v) in params {
+        text = text.replace(&format!("{{{{{k}}}}}"), v);
+    }
+    Some(text)
+}
+
+/// Resolve a shortcut's display label: `label_key` wins (localized), `label`
+/// stays as the verbatim fallback (user prompt titles, legacy payloads).
+fn shortcut_label(shortcut: &Shortcut, language: crate::lang::Language) -> String {
+    if let Some(key) = &shortcut.label_key {
+        if let Some(text) = overlay_text(
+            &format!("ui.overlay.shortcut_{key}"),
+            &std::collections::BTreeMap::new(),
+            language,
+        ) {
+            return text;
+        }
+    }
+    shortcut.label.clone()
+}
+
+fn update_shortcuts(
+    views: &mut Views,
+    shortcuts: &[Shortcut],
+    language: crate::lang::Language,
+    mtm: MainThreadMarker,
+) {
+    if views.shortcut_content == shortcuts && views.shortcut_language == language {
         return;
     }
     views.shortcut_content = shortcuts.to_vec();
+    views.shortcut_language = language;
     if shortcuts.is_empty() {
         fade_shortcuts(&views.shortcuts_root, false);
         return; // Keep the rendered items alive until their fade finishes.
@@ -1033,7 +1109,10 @@ fn update_shortcuts(views: &mut Views, shortcuts: &[Shortcut], mtm: MainThreadMa
         keycap.setWantsLayer(true);
         set_corner(&keycap, 4.0);
         keycap.addSubview(&key_label);
-        let label = NSTextField::labelWithString(&NSString::from_str(&shortcut.label), mtm);
+        let label = NSTextField::labelWithString(
+            &NSString::from_str(&shortcut_label(shortcut, language)),
+            mtm,
+        );
         label.setFont(Some(&NSFont::systemFontOfSize(11.0)));
         label.setUsesSingleLineMode(true);
         label.setLineBreakMode(NSLineBreakMode::ByClipping);
@@ -1259,7 +1338,7 @@ fn render(app: &AppHandle, model: &mut Model) {
             let attr = transcript_attr(model);
             views.label.setAttributedStringValue(&attr);
         }
-        update_shortcuts(views, &model.shortcuts, mtm);
+        update_shortcuts(views, &model.shortcuts, model.language, mtm);
 
         // Reconnecting uses text only; recording keeps its waveform.
         let show_wave = model.app_state == "recording"

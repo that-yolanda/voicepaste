@@ -1,5 +1,6 @@
 import { ImagePlus, LoaderCircle, X } from "lucide-react";
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/settings/components/Button";
 import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
@@ -27,13 +28,11 @@ function FieldError({ name, message }: { name: string; message?: string }) {
 }
 
 export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useFeedback> }) {
+  const { t } = useTranslation();
   const screenshotInput = useRef<HTMLInputElement>(null);
   return (
     <PageLayout>
-      <PageHeader
-        title="问题与建议"
-        description="告诉我们你遇到的问题，或希望 VoicePaste 带来的改进。"
-      />
+      <PageHeader title={t("ui.feedback.title")} description={t("ui.feedback.description")} />
       <form
         noValidate
         aria-busy={f.pending}
@@ -47,15 +46,15 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
             <SectionContent>
               <SectionItemList>
                 <SectionItem
-                  title="类型"
+                  title={t("ui.feedback.type_label")}
                   className="shrink-0"
                   action={
-                    <fieldset aria-label="类型">
+                    <fieldset aria-label={t("ui.feedback.type_label")}>
                       <SegmentedControl
                         options={[
-                          { value: "bug", label: "问题" },
-                          { value: "feature", label: "需求建议" },
-                          { value: "other", label: "其他" },
+                          { value: "bug", label: t("ui.feedback.type.bug") },
+                          { value: "feature", label: t("ui.feedback.type.feature") },
+                          { value: "other", label: t("ui.feedback.type.other") },
                         ]}
                         value={f.draft.type}
                         onChange={(value) => f.change("type", value as FeedbackType)}
@@ -65,7 +64,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                 />
                 {f.draft.type !== "other" && (
                   <SectionItem
-                    title="涉及模块"
+                    title={t("ui.feedback.module")}
                     htmlFor="feedback-category"
                     action={
                       <Select
@@ -73,10 +72,10 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                         value={f.draft.category}
                         onChange={(value) => f.change("category", value)}
                         options={[
-                          { value: "", label: "暂不选择" },
+                          { value: "", label: t("ui.feedback.module_none") },
                           ...feedbackCategories[f.draft.type].map(([value, label]) => ({
                             value,
-                            label,
+                            label: t(label),
                           })),
                         ]}
                       />
@@ -84,7 +83,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                   />
                 )}
                 <SectionItem
-                  title="标题 *"
+                  title={t("ui.feedback.title_field")}
                   htmlFor="feedback-title"
                   action={
                     <div className="w-full">
@@ -95,7 +94,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                         aria-describedby={f.fieldErrors.title ? "feedback-title-error" : undefined}
                         onBlur={() => f.touch("title")}
                         maxLength={120}
-                        placeholder="一句话概括"
+                        placeholder={t("ui.feedback.title_placeholder")}
                         value={f.draft.title}
                         onChange={(value) => f.change("title", value)}
                       />
@@ -103,7 +102,10 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                     </div>
                   }
                 />
-                <SectionItem title="详细描述 *" htmlFor="feedback-description">
+                <SectionItem
+                  title={t("ui.feedback.description_field")}
+                  htmlFor="feedback-description"
+                >
                   <Textarea
                     id="feedback-description"
                     required
@@ -114,14 +116,14 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                     onBlur={() => f.touch("description")}
                     maxLength={10_000}
                     rows={5}
-                    placeholder="发生了什么？你期望的结果是什么？"
+                    placeholder={t("ui.feedback.description_placeholder")}
                     value={f.draft.description}
                     onChange={(value) => f.change("description", value)}
                   />
                   <FieldError name="description" message={f.fieldErrors.description} />
                 </SectionItem>
                 <SectionItem
-                  title="App 版本"
+                  title={t("ui.feedback.app_version")}
                   htmlFor="feedback-version"
                   action={
                     <div className="w-full">
@@ -137,14 +139,18 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                         }
                         onBlur={() => f.touch("appVersion")}
                         onChange={f.changeAppVersion}
-                        placeholder={f.environmentLoading ? "读取中…" : "例如 2.1.5"}
+                        placeholder={
+                          f.environmentLoading
+                            ? t("ui.feedback.reading")
+                            : t("ui.feedback.version_placeholder")
+                        }
                       />
                       <FieldError name="version" message={f.fieldErrors.appVersion} />
                     </div>
                   }
                 />
                 <SectionItem
-                  title="系统版本"
+                  title={t("ui.feedback.system")}
                   htmlFor="feedback-system"
                   action={
                     <div className="w-full">
@@ -161,14 +167,18 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                         disabled={f.environmentLoading}
                         onChange={f.changeSystem}
                         placeholder={
-                          f.environmentLoading ? "读取中…" : "例如 Windows 11 或 macOS 15"
+                          f.environmentLoading
+                            ? t("ui.feedback.reading")
+                            : t("ui.feedback.system_placeholder")
                         }
                       />
                       <FieldError name="system" message={f.fieldErrors.system} />
                     </div>
                   }
                 />
-                <SectionItem title={`截图 ${f.screenshots.length}/4`}>
+                <SectionItem
+                  title={t("ui.feedback.screenshot_count", { count: f.screenshots.length })}
+                >
                   <div className="flex flex-wrap gap-2">
                     {f.screenshots.map((image, index) => (
                       <div
@@ -177,13 +187,13 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                       >
                         <img
                           src={image.url}
-                          alt={`截图 ${index + 1}`}
+                          alt={t("ui.feedback.screenshot_alt", { index: index + 1 })}
                           className="h-full w-full object-cover"
                         />
                         <Button
                           variant="ghost"
                           size="icon"
-                          title={`移除截图 ${index + 1}`}
+                          title={t("ui.feedback.remove_screenshot", { index: index + 1 })}
                           className="absolute right-0.5 top-0.5 bg-surface-card"
                           onClick={() => f.removeScreenshot(image.id)}
                         >
@@ -195,7 +205,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                       <Button
                         variant="default"
                         size="icon"
-                        title="添加截图"
+                        title={t("ui.feedback.add_screenshot")}
                         className="h-20 w-20 border-dashed"
                         onClick={() => screenshotInput.current?.click()}
                       >
@@ -216,17 +226,19 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                   />
                 </SectionItem>
                 <SectionItem
-                  title="附件运行日志"
-                  tooltip={`仅用于问题排查，不附带配置文件、录音或输入历史，也不会主动收集 API Key 等配置凭证。\n\n日志路径：${f.logPath || "读取中…"}`}
+                  title={t("ui.feedback.attach_log")}
+                  tooltip={t("ui.feedback.log_tooltip", {
+                    path: f.logPath || t("ui.feedback.reading"),
+                  })}
                   action={
                     <div className="flex items-center gap-2">
                       {f.includeLog && (
                         <Button variant="ghost" size="sm" onClick={() => void f.previewLog()}>
-                          查看日志
+                          {t("ui.feedback.view_log")}
                         </Button>
                       )}
                       <Toggle
-                        aria-label="附件运行日志"
+                        aria-label={t("ui.feedback.attach_log")}
                         checked={f.includeLog}
                         onChange={f.toggleLog}
                       />
@@ -234,7 +246,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                   }
                 />
                 <SectionItem
-                  title="邮箱"
+                  title={t("ui.feedback.email")}
                   htmlFor="feedback-email"
                   action={
                     <div className="w-full">
@@ -246,7 +258,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                         type="email"
                         autoComplete="email"
                         maxLength={254}
-                        placeholder="用于回复的邮箱"
+                        placeholder={t("ui.feedback.email_placeholder")}
                         value={f.draft.email}
                         onChange={(value) => f.change("email", value)}
                       />
@@ -255,7 +267,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                   }
                 />
                 <SectionItem
-                  title="微信号"
+                  title={t("ui.feedback.wechat")}
                   htmlFor="feedback-wechat"
                   last
                   action={
@@ -272,7 +284,7 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
               <div className="flex justify-end gap-2">
                 {f.dirty && (
                   <Button variant="ghost" onClick={f.clear}>
-                    清空反馈
+                    {t("ui.feedback.clear")}
                   </Button>
                 )}
                 <Button type="submit" variant="accent" disabled={f.environmentLoading}>
@@ -283,14 +295,18 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
                       aria-hidden="true"
                     />
                   )}
-                  {f.pending ? "正在提交…" : "提交反馈"}
+                  {f.pending ? t("ui.feedback.submitting") : t("ui.feedback.submit")}
                 </Button>
               </div>
             </SectionContent>
           </Section>
         </fieldset>
       </form>
-      <Modal open={f.logPreview !== null} onClose={f.closePreview} title="将发送的运行日志">
+      <Modal
+        open={f.logPreview !== null}
+        onClose={f.closePreview}
+        title={t("ui.feedback.log_modal_title")}
+      >
         <pre className="max-h-[55vh] whitespace-pre-wrap break-all text-xs" role="document">
           {f.logPreview}
         </pre>
