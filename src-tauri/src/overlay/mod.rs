@@ -336,8 +336,8 @@ pub(crate) async fn show_success(
     });
 }
 
-/// Emit a retryable error hint, tagged with the main hotkey label so the overlay
-/// can show which key (also) triggers the retry. Centralizes every failure path.
+/// Legacy text-only path for domains not yet migrated to structured errors
+/// (audio capture, output/paste). Goes away once those domains carry codes.
 pub(crate) async fn emit_retryable_error_hint(
     app: &AppHandle,
     app_inner: &Arc<app_state::AppInner>,
@@ -360,6 +360,66 @@ pub(crate) async fn emit_retryable_error_hint(
         }),
     );
     emit_shortcuts(app, &error_shortcuts(&hotkey, false));
+}
+
+/// Emit a retryable error hint from a structured error. The payload carries
+/// the full i18n key (`errors.<code>`) plus params/detail so each renderer
+/// localizes it; `text` keeps a pre-rendered transition line for renderers
+/// that have not migrated to the code yet.
+pub(crate) async fn emit_retryable_error(
+    app: &AppHandle,
+    app_inner: &Arc<app_state::AppInner>,
+    error: &crate::errors::AppError,
+) {
+    invalidate_feedback(app_inner);
+    app_inner.feedback_visible.store(true, Ordering::SeqCst);
+    let hotkey = hotkey::current_hotkey_label(app_inner).await;
+    let mut payload = serde_json::json!({
+        "text": render_error_text(app_inner, error),
+        "level": "error",
+        "variant": "text",
+        "retryable": true,
+        "hotkey": hotkey
+    });
+    attach_error_payload(&mut payload, error);
+    let _ = app.emit(
+        "overlay:event",
+        serde_json::json!({ "type": "hint", "payload": payload }),
+    );
+    emit_shortcuts(app, &error_shortcuts(&hotkey, false));
+}
+
+/// Transition text for renderers that have not migrated to `code`: headline
+/// (localized to the current UI language) plus detail, joined with a
+/// language-appropriate separator.
+pub(crate) fn render_error_text(
+    app_inner: &Arc<app_state::AppInner>,
+    error: &crate::errors::AppError,
+) -> String {
+    let language = *app_inner.language.read().unwrap();
+    let mut headline = error.code.render_headline(language, &error.params);
+    if let Some(detail) = &error.detail {
+        let separator = if language == crate::lang::Language::ZhCn {
+            "："
+        } else {
+            ": "
+        };
+        headline.push_str(separator);
+        headline.push_str(detail);
+    }
+    headline
+}
+
+/// Attach the structured error fields to a hint payload: the full i18n key
+/// (`errors.<code>`), interpolation params, and detail.
+fn attach_error_payload(payload: &mut serde_json::Value, error: &crate::errors::AppError) {
+    payload["code"] = serde_json::json!(format!("errors.{}", error.code.as_str()));
+    if !error.params.is_empty() {
+        payload["params"] = serde_json::to_value(&error.params).unwrap_or_default();
+    }
+    if let Some(detail) = &error.detail {
+        payload["detail"] = serde_json::json!(detail);
+    }
 }
 
 fn error_shortcuts(hotkey: &str, polish: bool) -> Vec<shared::Shortcut> {
@@ -386,31 +446,14 @@ pub(crate) async fn emit_polish_decision_hint(
     invalidate_feedback(app_inner);
     app_inner.feedback_visible.store(true, Ordering::SeqCst);
     let hotkey = hotkey::current_hotkey_label(app_inner).await;
-    let language = *app_inner.language.read().unwrap();
-    let mut headline = error.code.render_headline(language, &error.params);
-    if let Some(detail) = &error.detail {
-        let separator = if language == crate::lang::Language::ZhCn {
-            "："
-        } else {
-            ": "
-        };
-        headline.push_str(separator);
-        headline.push_str(detail);
-    }
     let mut payload = serde_json::json!({
-        "text": format!("{}\n5 秒后输出原文", headline),
+        "text": format!("{}\n5 秒后输出原文", render_error_text(app_inner, error)),
         "level": "error",
         "variant": "text",
         "retryable": true,
         "hotkey": hotkey
     });
-    payload["code"] = serde_json::json!(error.code.as_str());
-    if !error.params.is_empty() {
-        payload["params"] = serde_json::to_value(&error.params).unwrap_or_default();
-    }
-    if let Some(detail) = &error.detail {
-        payload["detail"] = serde_json::json!(detail);
-    }
+    attach_error_payload(&mut payload, error);
     let _ = app.emit(
         "overlay:event",
         serde_json::json!({ "type": "hint", "payload": payload }),

@@ -325,7 +325,7 @@ pub async fn delete_history(
 pub async fn retry_history_transcription(
     app: AppHandle,
     ts: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::AppError> {
     crate::recording::retry_history_transcription(app, ts).await
 }
 
@@ -333,7 +333,7 @@ pub async fn retry_history_transcription(
 #[tauri::command]
 pub async fn retry_latest_failed_transcription(
     app: AppHandle,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::AppError> {
     crate::recording::retry_latest_failed_transcription(app).await
 }
 
@@ -363,7 +363,7 @@ pub async fn repolish_history_entry(
 pub async fn regenerate_history_transcription(
     app: AppHandle,
     ts: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::AppError> {
     crate::recording::regenerate_history_transcription(app, ts).await
 }
 

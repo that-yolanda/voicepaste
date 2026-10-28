@@ -14,6 +14,7 @@ use super::{
     append_text, build_model_path, send_transcript, AsrEvent, AsrSession, WorkerCommand,
     SAMPLE_RATE,
 };
+use crate::errors::{AppError, AppErrorCode};
 use crate::model::ModelEntry;
 
 use super::{json_bool, json_f32, json_string, json_u32};
@@ -31,7 +32,7 @@ pub(crate) fn build_online_recognizer(
     num_threads: u32,
     model_config: &serde_json::Value,
     hotwords_buf: Option<Vec<u8>>,
-) -> Result<OnlineRecognizer, String> {
+) -> Result<OnlineRecognizer, AppError> {
     let mut config = OnlineRecognizerConfig::default();
     config.model_config.transducer.encoder = build_model_path(model_dir, entry, "encoder");
     config.model_config.transducer.decoder = build_model_path(model_dir, entry, "decoder");
@@ -65,8 +66,10 @@ pub(crate) fn build_online_recognizer(
         config.decoding_method = Some("greedy_search".to_string());
     }
 
-    OnlineRecognizer::create(&config)
-        .ok_or_else(|| format!("创建在线识别器失败 (model: {})", entry.id))
+    OnlineRecognizer::create(&config).ok_or_else(|| {
+        AppError::new(AppErrorCode::AsrRecognizerCreateFailed)
+            .with_detail(format!("model: {}", entry.id))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -433,7 +436,7 @@ pub(crate) fn spawn_online_worker(
     chunk_size: usize,
     event_tx: mpsc::UnboundedSender<AsrEvent>,
     punct_processor: Option<Arc<PunctuationProcessor>>,
-) -> Result<(OnlineSession, std_mpsc::SyncSender<WorkerCommand>), String> {
+) -> Result<(OnlineSession, std_mpsc::SyncSender<WorkerCommand>), AppError> {
     let (worker_tx, worker_rx) = std_mpsc::sync_channel(super::AUDIO_QUEUE_CAPACITY);
 
     let handle = std::thread::Builder::new()
@@ -441,7 +444,9 @@ pub(crate) fn spawn_online_worker(
         .spawn(move || {
             run_online_worker(recognizer, stream, vad, chunk_size, event_tx, worker_rx);
         })
-        .map_err(|e| format!("启动在线识别线程失败: {}", e))?;
+        .map_err(|e| {
+            AppError::new(AppErrorCode::AsrThreadStartFailed).with_detail(e.to_string())
+        })?;
 
     Ok((
         OnlineSession::new(worker_tx.clone(), handle, punct_processor),
@@ -520,41 +525,43 @@ impl AsrSession for OnlineSession {
         }
     }
 
-    async fn commit_and_await_final(&self) -> Result<String, String> {
+    async fn commit_and_await_final(&self) -> Result<String, AppError> {
         if !self.is_ready() {
-            return Err("ASR 会话已关闭".to_string());
+            return Err(AppError::new(AppErrorCode::AsrSessionClosed));
         }
         if self.is_committed.load(Ordering::SeqCst) {
-            return Err("录音已结束".to_string());
+            return Err(AppError::new(AppErrorCode::AsrSessionClosed));
         }
         self.is_committed.store(true, Ordering::SeqCst);
 
         let tx = self
             .worker_tx
             .lock()
-            .map_err(|_| "ASR worker 状态异常".to_string())?
+            .map_err(|_| AppError::new(AppErrorCode::AsrWorkerAborted))?
             .take()
-            .ok_or_else(|| "ASR worker 已关闭".to_string())?;
+            .ok_or_else(|| AppError::new(AppErrorCode::AsrWorkerClosed))?;
         let handle = self
             .worker_handle
             .lock()
-            .map_err(|_| "ASR worker 状态异常".to_string())?
+            .map_err(|_| AppError::new(AppErrorCode::AsrWorkerAborted))?
             .take();
 
         let result = tokio::task::spawn_blocking(move || {
             let (reply_tx, reply_rx) = std_mpsc::channel();
             tx.send(WorkerCommand::Finish(reply_tx))
-                .map_err(|_| "ASR worker 已关闭".to_string())?;
+                .map_err(|_| AppError::new(AppErrorCode::AsrWorkerClosed))?;
             let final_text = reply_rx
                 .recv()
-                .map_err(|_| "ASR worker 未返回最终结果".to_string())?;
+                .map_err(|_| AppError::new(AppErrorCode::AsrNoFinalResult))?;
             if let Some(handle) = handle {
                 let _ = handle.join();
             }
-            Ok::<_, String>(final_text)
+            Ok::<_, AppError>(final_text)
         })
         .await
-        .unwrap_or_else(|e| Err(format!("识别失败: {}", e)))?;
+        .unwrap_or_else(|e| {
+            Err(AppError::new(AppErrorCode::AsrRecognizeFailed).with_detail(e.to_string()))
+        })?;
 
         // Post-process punctuation here. Hotword text restoration is applied
         // once in the app finalization path so every ASR backend behaves the same.

@@ -22,7 +22,7 @@ const RETRY_CHUNK_SIZE: usize = 1600;
 pub(crate) async fn retry_history_transcription(
     app_handle: AppHandle,
     ts: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::AppError> {
     let app_inner = app_handle.state::<Arc<app_state::AppInner>>();
     let retry_epoch = app_inner
         .session_epoch
@@ -42,7 +42,7 @@ async fn fail_retry(
     app_handle: &AppHandle,
     app_inner: &Arc<app_state::AppInner>,
     ts: &str,
-    message: &str,
+    error: &crate::errors::AppError,
     retry_epoch: u64,
 ) {
     if !is_current_epoch(app_inner, retry_epoch) {
@@ -58,16 +58,16 @@ async fn fail_retry(
         }
     }
     let failure_ts = app_inner.stats.lock().await.record_failure(
-        message,
+        &crate::overlay::render_error_text(app_inner, error),
         history::current_recording_wav_string(app_inner).await,
         Some(ts.to_string()),
-        None,
+        Some(error),
     );
     if !is_current_epoch(app_inner, retry_epoch) {
         return;
     }
     *app_inner.current_failure_ts.lock().await = Some(failure_ts);
-    overlay::emit_retryable_error_hint(app_handle, app_inner, message).await;
+    overlay::emit_retryable_error(app_handle, app_inner, error).await;
     set_app_state(app_handle, app_inner, app_state::AppState::Idle).await;
     overlay::schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(app_inner));
 }
@@ -76,22 +76,25 @@ async fn retry_history_transcription_inner(
     app_handle: AppHandle,
     ts: String,
     retry_epoch: u64,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::AppError> {
+    use crate::errors::{AppError, AppErrorCode};
+
+    let cancelled = || AppError::new(AppErrorCode::Cancelled);
     let app_inner = app_handle.state::<Arc<app_state::AppInner>>();
     let entry = {
         let stats = app_inner.stats.lock().await;
         stats
             .find_history(&ts)
-            .ok_or_else(|| "未找到输入记录".to_string())?
+            .ok_or_else(|| AppError::new(AppErrorCode::StatsEntryNotFound))?
     };
     let audio_path = entry
         .audio_path
         .clone()
-        .ok_or_else(|| "这条记录没有可重试的录音".to_string())?;
+        .ok_or_else(|| AppError::new(AppErrorCode::StatsNoRetryableRecording))?;
     let path = PathBuf::from(&audio_path);
     let samples = wav::read_wav_16k_mono(&path)?;
     if samples.is_empty() {
-        return Err("录音文件为空，无法重试".to_string());
+        return Err(AppError::new(AppErrorCode::StatsEmptyRecording));
     }
 
     set_app_state(&app_handle, &app_inner, app_state::AppState::Finishing).await;
@@ -106,30 +109,32 @@ async fn retry_history_transcription_inner(
     *app_inner.current_recording_wav.lock().await = Some(path);
     *app_inner.current_retry_of.lock().await = Some(ts.clone());
 
-    let config = app_inner.config_manager.load_config()?;
+    let config = app_inner
+        .config_manager
+        .load_config()
+        .map_err(|_| AppError::new(AppErrorCode::InvalidConfig))?;
     let hotwords = app_inner.hotword_manager.active_words();
     let (session, event_rx, _) =
         match session::create_active_session(&app_handle, &config, &hotwords).await {
             Ok(result) => result,
             Err(error) => {
                 if !is_current_epoch(&app_inner, retry_epoch) {
-                    return Err("重试已取消".to_string());
+                    return Err(cancelled());
                 }
-                let message = error;
-                fail_retry(&app_handle, &app_inner, &ts, &message, retry_epoch).await;
-                return Err(message);
+                fail_retry(&app_handle, &app_inner, &ts, &error, retry_epoch).await;
+                return Err(error);
             }
         };
     let session: Arc<dyn crate::asr::AsrSession> = Arc::from(session);
     if !is_current_epoch(&app_inner, retry_epoch) {
         session.close();
-        return Err("重试已取消".to_string());
+        return Err(cancelled());
     }
     {
         let mut slot = app_inner.asr_session.lock().await;
         if !is_current_epoch(&app_inner, retry_epoch) {
             session.close();
-            return Err("重试已取消".into());
+            return Err(cancelled());
         }
         *slot = Some(Arc::clone(&session));
     }
@@ -147,17 +152,17 @@ async fn retry_history_transcription_inner(
         Ok(_) => {
             if !is_current_epoch(&app_inner, retry_epoch) {
                 session.close();
-                return Err("重试已取消".to_string());
+                return Err(cancelled());
             }
             session.close();
-            let message = "重试转写没有得到文本，请检查网络连接";
-            fail_retry(&app_handle, &app_inner, &ts, message, retry_epoch).await;
-            return Err(message.to_string());
+            let error = AppError::new(AppErrorCode::AsrEmptyResult);
+            fail_retry(&app_handle, &app_inner, &ts, &error, retry_epoch).await;
+            return Err(error);
         }
         Err(error) => {
             if !is_current_epoch(&app_inner, retry_epoch) {
                 session.close();
-                return Err("重试已取消".to_string());
+                return Err(cancelled());
             }
             session.close();
             fail_retry(&app_handle, &app_inner, &ts, &error, retry_epoch).await;
@@ -167,20 +172,20 @@ async fn retry_history_transcription_inner(
 
     if !is_current_epoch(&app_inner, retry_epoch) {
         session.close();
-        return Err("重试已取消".to_string());
+        return Err(cancelled());
     }
     session.close();
     {
         let mut slot = app_inner.asr_session.lock().await;
         if !is_current_epoch(&app_inner, retry_epoch) {
-            return Err("重试已取消".into());
+            return Err(cancelled());
         }
         slot.take();
     }
     let outcome =
         finalize::finalize_and_paste(&app_handle, &app_inner, text.clone(), retry_epoch).await;
     if !is_current_epoch(&app_inner, retry_epoch) {
-        return Err("重试已取消".into());
+        return Err(cancelled());
     }
     *app_inner.current_failure_ts.lock().await = None;
     if outcome != finalize::FinalizeOutcome::Deferred
@@ -196,13 +201,15 @@ async fn retry_history_transcription_inner(
 
 pub(crate) async fn retry_latest_failed_transcription(
     app_handle: AppHandle,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::AppError> {
     let app_inner = app_handle.state::<Arc<app_state::AppInner>>();
     let ts = app_inner
         .current_failure_ts
         .lock()
         .await
         .clone()
-        .ok_or_else(|| "没有可重试的失败录音".to_string())?;
+        .ok_or_else(|| {
+            crate::errors::AppError::new(crate::errors::AppErrorCode::StatsNoRetryableRecording)
+        })?;
     retry_history_transcription(app_handle, ts).await
 }

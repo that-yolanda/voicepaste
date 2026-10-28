@@ -7,6 +7,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::app_state::{self, set_app_state, RecordingState};
+use crate::errors::{AppError, AppErrorCode};
 use crate::overlay;
 
 use super::capture;
@@ -39,7 +40,7 @@ pub(super) async fn create_active_session(
         tokio::sync::mpsc::UnboundedReceiver<crate::asr::AsrEvent>,
         bool,
     ),
-    String,
+    AppError,
 > {
     let resource_dir = app_handle
         .path()
@@ -62,7 +63,7 @@ pub(super) async fn connect_and_attach(
     config: crate::config::AppConfig,
     hotwords: Vec<String>,
     my_epoch: u64,
-    connect_tx: tokio::sync::oneshot::Sender<Result<(), String>>,
+    connect_tx: tokio::sync::oneshot::Sender<Result<(), AppError>>,
 ) {
     let app_inner: Arc<app_state::AppInner> =
         Arc::clone(&app_handle.state::<Arc<app_state::AppInner>>());
@@ -71,20 +72,20 @@ pub(super) async fn connect_and_attach(
     // connecting, abort early instead of establishing a WebSocket that will
     // only time out on the server side (no audio will be fed to it).
     if !is_recording(&app_handle) {
-        let _ = connect_tx.send(Err("已取消".to_string()));
+        let _ = connect_tx.send(Err(AppError::new(AppErrorCode::Cancelled)));
         return;
     }
 
     // Retry transient setup failures once; permanent ElevenLabs errors need user action.
     let mut result = create_active_session(&app_handle, &config, &hotwords).await;
-    if result.as_ref().err().is_some_and(|message| {
+    if result.as_ref().err().is_some_and(|error| {
         config.audio_provider() != crate::config::ELEVENLABS_REALTIME_ID
-            || crate::asr::elevenlabs::retryable_start_error(message)
+            || crate::asr::elevenlabs::retryable_start_error(error.code)
     }) && is_current_epoch(&app_inner, my_epoch)
     {
         // Check again before opening another connection.
         if !is_recording(&app_handle) {
-            let _ = connect_tx.send(Err("已取消".to_string()));
+            let _ = connect_tx.send(Err(AppError::new(AppErrorCode::Cancelled)));
             return;
         }
         if let Err(ref e) = result {
@@ -98,7 +99,7 @@ pub(super) async fn connect_and_attach(
         if let Ok((session, _, _)) = result {
             session.close();
         }
-        let _ = connect_tx.send(Err("已取消".to_string()));
+        let _ = connect_tx.send(Err(AppError::new(AppErrorCode::Cancelled)));
         return;
     }
 
@@ -113,7 +114,7 @@ pub(super) async fn connect_and_attach(
                 let mut slot = app_inner.asr_session.lock().await;
                 if !is_current_epoch(&app_inner, my_epoch) {
                     session.close();
-                    let _ = connect_tx.send(Err("已取消".to_string()));
+                    let _ = connect_tx.send(Err(AppError::new(AppErrorCode::Cancelled)));
                     return;
                 }
                 let buffered: Vec<Vec<f32>> =
@@ -164,11 +165,10 @@ pub(super) async fn connect_and_attach(
             app_inner.pending_audio.lock().await.clear();
             capture::stop_capture(&app_inner).await;
             history::save_recording_wav(&app_handle, &app_inner).await;
-            let message = format!("ASR 连接失败: {}", e);
-            history::record_transcription_failure(&app_handle, &app_inner, &message).await;
+            history::record_transcription_failure(&app_handle, &app_inner, &e).await;
             // Emit error hint BEFORE setting idle so the overlay shows it: the
             // frontend's idle handler only clears "info"-level hints.
-            overlay::emit_retryable_error_hint(&app_handle, &app_inner, &message).await;
+            overlay::emit_retryable_error(&app_handle, &app_inner, &e).await;
             set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
             // Auto-hide after a delay so the user can read it; guard: still idle.
             overlay::schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(&app_inner));
@@ -235,18 +235,23 @@ pub(super) async fn manage_asr_session(
                         }),
                     );
                 }
-                AsrEvent::Warning { message } => {
+                AsrEvent::Warning { error } => {
                     if !is_current_epoch(&app_inner, my_epoch) {
                         break 'outer;
                     }
-                    log_events!(warn, "ASR warning: {}", message);
+                    log_events!(warn, "ASR warning: {} (detail redacted)", error.code);
+                    // Transition: render the localized headline; the code
+                    // channel for warnings lands with the overlay pass.
+                    let message = error
+                        .code
+                        .render_headline(*app_inner.language.read().unwrap(), &error.params);
                     emit_hint(&app, &message, "warn", "text");
                 }
                 AsrEvent::Open => {
                     log_events!(info, "ASR connection opened");
                 }
-                AsrEvent::Error { message, fatal } => {
-                    log_events!(error, "ASR error: {} (fatal={})", message, fatal);
+                AsrEvent::Error { error, fatal } => {
+                    log_events!(error, "ASR error: {} (fatal={})", error, fatal);
                     // If the user stopped/cancelled/restarted, the owning path
                     // handles finalization; don't interfere.
                     if !session_is_active(&app, &app_inner, my_epoch) {
@@ -258,7 +263,7 @@ pub(super) async fn manage_asr_session(
                             &app_inner,
                             my_epoch,
                             &mut reconnect_attempts,
-                            &message,
+                            &error,
                         )
                         .await
                         {
@@ -266,7 +271,7 @@ pub(super) async fn manage_asr_session(
                             continue 'outer;
                         }
                     }
-                    finalize::finalize_on_failure(&app, &app_inner, &message, my_epoch).await;
+                    finalize::finalize_on_failure(&app, &app_inner, &error, my_epoch).await;
                     break 'outer;
                 }
                 AsrEvent::Close { code, reason } => {
@@ -280,17 +285,18 @@ pub(super) async fn manage_asr_session(
                         break 'outer;
                     }
                     // Unexpected close mid-recording: treat as recoverable.
+                    let close_error = if reason.is_empty() {
+                        AppError::new(AppErrorCode::AsrConnectClosed)
+                    } else {
+                        AppError::new(AppErrorCode::AsrConnectClosed).with_detail(reason)
+                    };
                     if can_reconnect && reconnect_attempts < MAX_ASR_RECONNECT {
                         if let Some(rx) = try_reconnect_asr(
                             &app,
                             &app_inner,
                             my_epoch,
                             &mut reconnect_attempts,
-                            if reason.is_empty() {
-                                "ASR 连接已断开"
-                            } else {
-                                &reason
-                            },
+                            &close_error,
                         )
                         .await
                         {
@@ -298,8 +304,13 @@ pub(super) async fn manage_asr_session(
                             continue 'outer;
                         }
                     }
-                    finalize::finalize_on_failure(&app, &app_inner, "ASR 连接已断开", my_epoch)
-                        .await;
+                    finalize::finalize_on_failure(
+                        &app,
+                        &app_inner,
+                        &AppError::new(AppErrorCode::AsrConnectClosed),
+                        my_epoch,
+                    )
+                    .await;
                     break 'outer;
                 }
             }
@@ -321,7 +332,7 @@ async fn try_reconnect_asr(
     app_inner: &Arc<app_state::AppInner>,
     my_epoch: u64,
     attempts: &mut u32,
-    reason: &str,
+    error: &AppError,
 ) -> Option<tokio::sync::mpsc::UnboundedReceiver<crate::asr::AsrEvent>> {
     *attempts += 1;
     log_events!(
@@ -330,7 +341,16 @@ async fn try_reconnect_asr(
         attempts,
         MAX_ASR_RECONNECT
     );
-    emit_hint(app, &format!("{reason}，正在重连…"), "warn", "text");
+    // Transition composite: reason headline + "reconnecting" suffix; moves to
+    // the structured overlay strings with the shortcut-label pass.
+    let language = *app_inner.language.read().unwrap();
+    let reason = error.code.render_headline(language, &error.params);
+    let suffix = if language == crate::lang::Language::ZhCn {
+        "，正在重连…"
+    } else {
+        ", reconnecting…"
+    };
+    emit_hint(app, &format!("{reason}{suffix}"), "warn", "text");
 
     // Play the end cue on the first reconnect attempt so the user audibly knows
     // recording was interrupted and can stop talking until they hear it resume.

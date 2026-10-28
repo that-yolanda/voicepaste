@@ -6,6 +6,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::app_state::{self, set_app_state, ActivePromptId, RecordingState};
+use crate::errors::{AppError, AppErrorCode};
 use crate::overlay;
 
 use super::capture;
@@ -107,7 +108,8 @@ pub(super) async fn start_recording(app_handle: AppHandle) {
     *app_inner.asr_session.lock().await = None;
     *app_inner.accumulated_text.lock().await = String::new();
 
-    let (connect_tx, connect_rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
+    let (connect_tx, connect_rx) =
+        tokio::sync::oneshot::channel::<Result<(), crate::errors::AppError>>();
     *app_inner.connect_rx.lock().await = Some(connect_rx);
 
     cue::emit_cue(&app_handle, &app_inner, "start");
@@ -196,16 +198,16 @@ pub(super) async fn stop_recording(app_handle: AppHandle) {
             match rx {
                 Some(rx) => match tokio::time::timeout(Duration::from_secs(12), rx).await {
                     Ok(Ok(Ok(()))) => app_inner.asr_session.lock().await.clone(),
-                    Ok(Ok(Err(message))) => {
-                        connection_error = Some(message);
+                    Ok(Ok(Err(error))) => {
+                        connection_error = Some(error);
                         None
                     }
                     Ok(Err(_)) => {
-                        connection_error = Some("语音连接任务已结束，请重试".into());
+                        connection_error = Some(AppError::new(AppErrorCode::AsrConnectTaskEnded));
                         None
                     }
                     Err(_) => {
-                        connection_error = Some("语音服务连接超时，请重试".into());
+                        connection_error = Some(AppError::new(AppErrorCode::AsrConnectTimeoutHint));
                         None
                     }
                 },
@@ -268,7 +270,7 @@ pub(super) async fn stop_recording(app_handle: AppHandle) {
                 if !is_current_epoch(&app_inner, my_epoch) {
                     return;
                 }
-                overlay::emit_retryable_error_hint(&app_handle, &app_inner, &e).await;
+                overlay::emit_retryable_error(&app_handle, &app_inner, &e).await;
                 set_app_state(&app_handle, &app_inner, app_state::AppState::Idle).await;
                 overlay::schedule_retry_overlay_hide(app_handle.clone(), Arc::clone(&app_inner));
                 return;
@@ -320,8 +322,8 @@ pub(super) async fn stop_recording(app_handle: AppHandle) {
             &app_handle,
             &app_inner,
             connection_error
-                .as_deref()
-                .unwrap_or("语音服务未能完成最终确认，请重试"),
+                .as_ref()
+                .unwrap_or(&AppError::new(AppErrorCode::AsrFinalizeIncomplete)),
             my_epoch,
         )
         .await;

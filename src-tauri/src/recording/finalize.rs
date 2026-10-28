@@ -31,7 +31,7 @@ pub(crate) enum FinalizeOutcome {
 pub(super) async fn finalize_on_failure(
     app: &AppHandle,
     app_inner: &Arc<app_state::AppInner>,
-    message: &str,
+    error: &crate::errors::AppError,
     expected_epoch: u64,
 ) {
     if !super::is_current_epoch(app_inner, expected_epoch) {
@@ -56,14 +56,14 @@ pub(super) async fn finalize_on_failure(
     *app_inner.latest_transcript.lock().await = (String::new(), String::new());
     *app_inner.asr_events.lock().await = None;
     app_inner.pending_audio.lock().await.clear();
-    history::record_transcription_failure(app, app_inner, message).await;
+    history::record_transcription_failure(app, app_inner, error).await;
     if !super::is_current_epoch(app_inner, expected_epoch) {
         return;
     }
     if let Some(active) = app.try_state::<ActivePromptId>() {
         *active.0.lock().unwrap() = None;
     }
-    overlay::emit_retryable_error_hint(app, app_inner, message).await;
+    overlay::emit_retryable_error(app, app_inner, error).await;
     set_app_state(app, app_inner, app_state::AppState::Idle).await;
     overlay::schedule_retry_overlay_hide(app.clone(), Arc::clone(app_inner));
 }

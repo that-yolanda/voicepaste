@@ -19,6 +19,7 @@ use tokio_tungstenite::{
 
 use super::{AsrEngine, AsrEvent, AsrSession};
 use crate::config::ElevenLabsRealtimeConfig;
+use crate::errors::{AppError, AppErrorCode};
 
 const ENDPOINT: &str = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -38,12 +39,16 @@ fn request(
     config: &ElevenLabsRealtimeConfig,
     hotwords: &[String],
     endpoint: &str,
-) -> Result<Request<()>, String> {
-    config.validate()?;
+) -> Result<Request<()>, AppError> {
+    config
+        .validate()
+        .map_err(|reason| AppError::new(AppErrorCode::AsrConfigInvalid).with_detail(reason))?;
     if config.api_key.trim().is_empty() {
-        return Err("请先填写 ElevenLabs API Key".into());
+        return Err(AppError::new(AppErrorCode::AsrConfigMissing)
+            .with_param("field", "elevenlabs-realtime.api_key"));
     }
-    let mut url = url::Url::parse(endpoint).map_err(|_| "ElevenLabs 地址无效".to_string())?;
+    let mut url = url::Url::parse(endpoint)
+        .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid).with_detail(endpoint))?;
     {
         let mut query = url.query_pairs_mut();
         query
@@ -103,10 +108,10 @@ fn request(
                 .filter(|v| !v.is_empty())
                 .collect();
             if words.len() > 50 {
-                return Err("ElevenLabs 服务端热词最多 50 条，请减少启用词条".into());
+                return Err(AppError::new(AppErrorCode::AsrHotwordsOverLimit));
             }
             if words.iter().any(|v| v.chars().count() > 20) {
-                return Err("ElevenLabs 每条服务端热词最多 20 个字符".into());
+                return Err(AppError::new(AppErrorCode::AsrHotwordTooLong));
             }
             for word in words {
                 query.append_pair("keyterms", word);
@@ -116,12 +121,12 @@ fn request(
     let mut req = url
         .as_str()
         .into_client_request()
-        .map_err(|_| "ElevenLabs 请求构造失败".to_string())?;
+        .map_err(|e| AppError::new(AppErrorCode::AsrRequestInvalid).with_detail(e.to_string()))?;
     let mut key = config
         .api_key
         .trim()
         .parse::<tokio_tungstenite::tungstenite::http::HeaderValue>()
-        .map_err(|_| "ElevenLabs API Key 格式无效".to_string())?;
+        .map_err(|_| AppError::new(AppErrorCode::AsrElAuth))?;
     key.set_sensitive(true);
     req.headers_mut().insert("xi-api-key", key);
     Ok(req)
@@ -193,37 +198,35 @@ fn append_segment(text: &mut String, segment: &str) {
     text.push_str(segment);
 }
 
-fn server_error(value: &Value, api_key: &str) -> Option<(String, bool)> {
+fn server_error(value: &Value, api_key: &str) -> Option<(AppError, bool)> {
     let kind = value.get("message_type")?.as_str()?;
-    let (description, fatal) = match kind {
-        "auth_error" => ("API Key 无效或没有语音识别权限", true),
-        "quota_exceeded" => ("额度不足，请检查账号余额", true),
+    let (code, fatal) = match kind {
+        "auth_error" => (AppErrorCode::AsrElAuth, true),
+        "quota_exceeded" => (AppErrorCode::AsrElQuotaExhausted, true),
         "unaccepted_terms" | "unaccepted_terms_error" => {
-            ("请先在 ElevenLabs 控制台接受服务条款", true)
+            (AppErrorCode::AsrElTermsNotAccepted, true)
         }
         "invalid_request" | "input_error" | "chunk_size_exceeded" => {
-            ("请求参数或音频格式无效", true)
+            (AppErrorCode::AsrElInvalidRequest, true)
         }
-        "commit_throttled" => ("片段提交过于频繁，请稍后重试", false),
-        "rate_limited" | "throttled" => ("请求过于频繁，请稍后重试", false),
-        "queue_overflow" => ("音频处理队列已满，请重试", false),
+        "commit_throttled" | "rate_limited" | "throttled" => {
+            (AppErrorCode::AsrElRateLimited, false)
+        }
+        "queue_overflow" => (AppErrorCode::AsrElQueueFull, false),
         "resource_exhausted" | "transcriber_error" | "error" => {
-            ("语音服务暂时不可用，请重试", false)
+            (AppErrorCode::AsrElUnavailable, false)
         }
-        "session_time_limit_exceeded" => ("已达到单次会话时长限制", false),
-        "insufficient_audio_activity" => ("长时间没有收到有效音频", false),
+        "session_time_limit_exceeded" => (AppErrorCode::AsrElSessionLimit, false),
+        "insufficient_audio_activity" => (AppErrorCode::AsrElIdleTimeout, false),
         _ => return None,
     };
     let detail = safe_detail(value["error"].as_str().unwrap_or(""), api_key);
-    let suffix = if detail.is_empty() {
-        String::new()
+    let error = if detail.is_empty() {
+        AppError::new(code).with_detail(format!("kind={kind}"))
     } else {
-        format!("：{detail}")
+        AppError::new(code).with_detail(format!("kind={kind} {detail}"))
     };
-    Some((
-        format!("ElevenLabs：{description}（{kind}）{suffix}"),
-        fatal,
-    ))
+    Some((error, fatal))
 }
 
 fn safe_detail(text: &str, api_key: &str) -> String {
@@ -239,44 +242,30 @@ fn safe_detail(text: &str, api_key: &str) -> String {
         .collect()
 }
 
-/// Setup still crosses the engine boundary as a String; keep the retry decision
-/// limited to known transient ElevenLabs failures, not arbitrary server details.
-pub(crate) fn retryable_start_error(message: &str) -> bool {
-    [
-        "连接超时",
-        "会话启动超时",
-        "连接失败，请检查网络",
-        "启动连接失败",
-        "启动前断开连接",
-        "启动前关闭连接",
-        "心跳失败",
-    ]
-    .iter()
-    .any(|kind| message.starts_with(&format!("ElevenLabs {kind}")))
-        || [
-            "rate_limited",
-            "throttled",
-            "commit_throttled",
-            "queue_overflow",
-            "resource_exhausted",
-            "transcriber_error",
-            "session_time_limit_exceeded",
-            "insufficient_audio_activity",
-            "error",
-        ]
-        .iter()
-        .any(|kind| {
-            message.starts_with("ElevenLabs：")
-                && message
-                    .split('）')
-                    .next()
-                    .is_some_and(|v| v.ends_with(&format!("（{kind}")))
-        })
-        || message
-            .strip_prefix("ElevenLabs 连接失败：HTTP ")
-            .and_then(|v| v.split('，').next())
-            .and_then(|v| v.parse::<u16>().ok())
-            .is_some_and(|code| code == 429 || (500..600).contains(&code))
+/// A server `warning` frame surfaced as a non-fatal event; `detail` keeps the
+/// redacted server text when the frame carries one.
+fn warning_error(value: &Value, api_key: &str) -> AppError {
+    let text = safe_detail(value["warning"].as_str().unwrap_or(""), api_key);
+    if text.is_empty() {
+        AppError::new(AppErrorCode::AsrElWarning)
+    } else {
+        AppError::new(AppErrorCode::AsrElWarning).with_detail(text)
+    }
+}
+
+/// Keep the setup-retry decision limited to known transient failures (connect
+/// trouble, throttling, queue overflow, temporary unavailability); config,
+/// auth, and request errors are permanent until the user changes something.
+pub(crate) fn retryable_start_error(code: AppErrorCode) -> bool {
+    matches!(
+        code,
+        AppErrorCode::AsrElConnectTimeout
+            | AppErrorCode::AsrElConnectHttpError
+            | AppErrorCode::AsrNetwork
+            | AppErrorCode::AsrElRateLimited
+            | AppErrorCode::AsrElQueueFull
+            | AppErrorCode::AsrElUnavailable
+    )
 }
 
 fn server_reports_no_uncommitted_audio(value: &Value) -> bool {
@@ -297,21 +286,21 @@ struct Runtime {
     editing: bool,
     updates: watch::Sender<u64>,
     transcript: Mutex<Transcript>,
-    ended: watch::Sender<Option<String>>,
+    ended: watch::Sender<Option<AppError>>,
     events: mpsc::UnboundedSender<AsrEvent>,
 }
 
 impl Runtime {
-    fn fail(&self, message: String, fatal: bool) {
+    fn fail(&self, error: AppError, fatal: bool) {
         self.ready.store(false, Ordering::SeqCst);
         if self.ended.send_if_modified(|value| {
             if value.is_some() {
                 return false;
             }
-            *value = Some(message.clone());
+            *value = Some(error.clone());
             true
         }) {
-            let _ = self.events.send(AsrEvent::Error { message, fatal });
+            let _ = self.events.send(AsrEvent::Error { error, fatal });
         }
     }
 
@@ -412,7 +401,7 @@ impl AsrEngine for ElevenLabsEngine {
     async fn create_session(
         &self,
         hotwords: &[String],
-    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), String> {
+    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), AppError> {
         let req = request(&self.config, hotwords, ENDPOINT)?;
         connect_session(req, FINAL_WINDOW, self.config.api_key.clone()).await
     }
@@ -422,7 +411,7 @@ async fn connect_session(
     req: Request<()>,
     final_window: Duration,
     api_key: String,
-) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), String> {
+) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), AppError> {
     let editing = url::Url::parse(&req.uri().to_string())
         .ok()
         .is_some_and(|url| {
@@ -431,51 +420,47 @@ async fn connect_session(
         });
     let (mut socket, _) = timeout(CONNECT_TIMEOUT, connect_async(req))
         .await
-        .map_err(|_| "ElevenLabs 连接超时".to_string())?
+        .map_err(|_| AppError::new(AppErrorCode::AsrElConnectTimeout))?
         .map_err(|e| match e {
-            tokio_tungstenite::tungstenite::Error::Http(response) => format!(
-                "ElevenLabs 连接失败：HTTP {}，请检查 API Key、权限和余额",
-                response.status().as_u16()
-            ),
-            _ => "ElevenLabs 连接失败，请检查网络".into(),
+            tokio_tungstenite::tungstenite::Error::Http(response) => {
+                AppError::new(AppErrorCode::AsrElConnectHttpError)
+                    .with_param("status", response.status().as_u16().to_string())
+            }
+            _ => AppError::new(AppErrorCode::AsrNetwork).with_detail(e.to_string()),
         })?;
     let mut warnings = Vec::new();
     timeout(CONNECT_TIMEOUT, async {
         while let Some(message) = socket.next().await {
-            match message.map_err(|_| "ElevenLabs 启动连接失败".to_string())? {
+            match message
+                .map_err(|e| AppError::new(AppErrorCode::AsrNetwork).with_detail(e.to_string()))?
+            {
                 Message::Text(text) => {
                     let value: Value = serde_json::from_str(&text)
-                        .map_err(|_| "ElevenLabs 返回无效消息".to_string())?;
-                    if let Some((message, _)) = server_error(&value, &api_key) {
-                        return Err(message);
+                        .map_err(|_| AppError::new(AppErrorCode::AsrElProtocolError))?;
+                    if let Some((error, _)) = server_error(&value, &api_key) {
+                        return Err(error);
                     }
                     if value["message_type"] == "warning" {
-                        warnings.push(format!(
-                            "ElevenLabs：{}",
-                            safe_detail(
-                                value["warning"].as_str().unwrap_or("服务端警告"),
-                                &api_key
-                            )
-                        ));
+                        warnings.push(warning_error(&value, &api_key));
                     }
                     if value["message_type"] == "session_started" {
                         return Ok(());
                     }
                 }
-                Message::Close(_) => return Err("ElevenLabs 在启动前关闭连接".into()),
+                Message::Close(_) => return Err(AppError::new(AppErrorCode::AsrElClosedEarly)),
                 Message::Ping(data) => {
                     socket
                         .send(Message::Pong(data))
                         .await
-                        .map_err(|_| "ElevenLabs 心跳失败".to_string())?;
+                        .map_err(|_| AppError::new(AppErrorCode::AsrNetwork))?;
                 }
                 _ => {}
             }
         }
-        Err("ElevenLabs 在启动前断开连接".into())
+        Err(AppError::new(AppErrorCode::AsrElClosedEarly))
     })
     .await
-    .map_err(|_| "ElevenLabs 会话启动超时".to_string())??;
+    .map_err(|_| AppError::new(AppErrorCode::AsrElConnectTimeout))??;
     Ok(start_session(
         socket,
         final_window,
@@ -490,7 +475,7 @@ fn start_session<S>(
     final_window: Duration,
     api_key: String,
     editing: bool,
-    warnings: Vec<String>,
+    warnings: Vec<AppError>,
 ) -> (Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>)
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
@@ -508,8 +493,8 @@ where
         events,
     });
     let _ = runtime.events.send(AsrEvent::Open);
-    for message in warnings {
-        let _ = runtime.events.send(AsrEvent::Warning { message });
+    for error in warnings {
+        let _ = runtime.events.send(AsrEvent::Warning { error });
     }
     let (mut sink, mut stream) = socket.split();
     let (sender, mut commands) = mpsc::unbounded_channel();
@@ -543,7 +528,7 @@ where
                         _ = writer_end.changed() => break,
                         result = timeout(CONNECT_TIMEOUT, sink.send(message)) => result,
                     };
-                    if !matches!(sent, Ok(Ok(()))) { writer.fail("ElevenLabs 控制消息发送失败，请检查网络".into(), false); break; }
+                    if !matches!(sent, Ok(Ok(()))) { writer.fail(AppError::new(AppErrorCode::AsrElSendFailed), false); break; }
                 }
                 command = commands.recv(), if !finished => {
                     let Some(command) = command else { break; };
@@ -570,7 +555,7 @@ where
                         _ = writer_end.changed() => break,
                         result = timeout(CONNECT_TIMEOUT, sink.send(message)) => result,
                     };
-                    if !matches!(sent, Ok(Ok(()))) { writer.fail("ElevenLabs 音频发送失败，请检查网络".into(), false); break; }
+                    if !matches!(sent, Ok(Ok(()))) { writer.fail(AppError::new(AppErrorCode::AsrElSendFailed), false); break; }
                     let sent_samples = {
                         let mut state = writer.transcript.lock().unwrap();
                         state.samples += samples;
@@ -595,7 +580,7 @@ where
                         Some(Ok(Message::Text(text))) => {
                             let value: Value = match serde_json::from_str(&text) {
                                 Ok(value) => value,
-                                Err(_) => { reader.fail("ElevenLabs 返回无效消息".into(), true); break; }
+                                Err(_) => { reader.fail(AppError::new(AppErrorCode::AsrElProtocolError), true); break; }
                             };
                             if value["message_type"] == "commit_throttled"
                                 && reader.finishing.load(Ordering::SeqCst)
@@ -607,19 +592,19 @@ where
                                 log_asr!(debug, "ElevenLabs reports zero uncommitted audio; awaiting server close");
                                 continue;
                             }
-                            if let Some((message, fatal)) = server_error(&value, &reader.api_key) {
+                            if let Some((error, fatal)) = server_error(&value, &reader.api_key) {
                                 if value["message_type"] == "commit_throttled" && reader.finishing.load(Ordering::SeqCst) && retries < 3 {
                                     retries += 1;
-                                    let _ = reader.events.send(AsrEvent::Warning { message });
+                                    let _ = reader.events.send(AsrEvent::Warning { error });
                                     let _ = control_tx.send(Control::Commit);
                                     continue;
                                 }
-                                reader.fail(message, fatal); break;
+                                reader.fail(error, fatal); break;
                             }
                             if value["message_type"] == "warning" {
-                                let message = format!("ElevenLabs：{}", safe_detail(value["warning"].as_str().unwrap_or("服务端警告"), &reader.api_key));
-                                log_asr!(warn, "{}", message);
-                                let _ = reader.events.send(AsrEvent::Warning { message });
+                                let error = warning_error(&value, &reader.api_key);
+                                log_asr!(warn, "ElevenLabs server warning: {}", error.code.as_str());
+                                let _ = reader.events.send(AsrEvent::Warning { error });
                             }
                             if reader.transcript(&value) { let _ = control_tx.send(Control::Commit); }
                         }
@@ -637,13 +622,20 @@ where
                             // A bare normal close is insufficient; the server must first
                             // confirm the empty segment or explicitly report zero pending audio.
                             if reader.transcript.lock().unwrap().final_text(reader.editing).is_none() {
-                                let code = frame.as_ref().map(|f| u16::from(f.code));
-                                let reason = frame.as_ref().map(|f| safe_detail(&f.reason, &reader.api_key)).unwrap_or_default();
-                                reader.fail(format!("ElevenLabs 在最终确认前关闭连接（{}）{}", code.map(|c| c.to_string()).unwrap_or_else(|| "无状态码".into()), reason), false);
+                                let mut parts = Vec::new();
+                                if let Some(code) = code {
+                                    parts.push(format!("code={code}"));
+                                }
+                                if !reason.is_empty() {
+                                    parts.push(format!("reason={reason}"));
+                                }
+                                let error = AppError::new(AppErrorCode::AsrElClosedEarly);
+                                let error = if parts.is_empty() { error } else { error.with_detail(parts.join(" ")) };
+                                reader.fail(error, false);
                             }
                             break;
                         }
-                        None | Some(Err(_)) => { reader.fail("ElevenLabs 连接中断，请检查网络后重试".into(), false); break; }
+                        None | Some(Err(_)) => { reader.fail(AppError::new(AppErrorCode::AsrNetwork), false); break; }
                         _ => {}
                     }
                 }
@@ -675,7 +667,7 @@ impl AsrSession for ElevenLabsSession {
             }
         }
     }
-    async fn commit_and_await_final(&self) -> Result<String, String> {
+    async fn commit_and_await_final(&self) -> Result<String, AppError> {
         let mut ended = self.runtime.ended.subscribe();
         let mut updates = self.runtime.updates.subscribe();
         if let Some(error) = ended.borrow().clone() {
@@ -686,13 +678,13 @@ impl AsrSession for ElevenLabsSession {
             .lock()
             .unwrap()
             .take()
-            .ok_or("ElevenLabs 录音已结束")?
+            .ok_or_else(|| AppError::new(AppErrorCode::AsrSessionClosed))?
             .send(Command::Finish(ack))
-            .map_err(|_| "ElevenLabs 发送队列已关闭")?;
+            .map_err(|_| AppError::new(AppErrorCode::AsrWorkerClosed))?;
         let samples = tokio::select! {
             biased;
-            result = sent => result.map_err(|_| "ElevenLabs 最终提交失败")?,
-            _ = ended.changed() => return Err(ended.borrow().clone().unwrap_or_else(|| "ElevenLabs 会话已结束".into())),
+            result = sent => result.map_err(|_| AppError::new(AppErrorCode::AsrElFinalizeFailed))?,
+            _ = ended.changed() => return Err(ended.borrow().clone().unwrap_or_else(|| AppError::new(AppErrorCode::AsrSessionClosed))),
         };
         if samples == 0 {
             return Ok(String::new());
@@ -715,7 +707,8 @@ impl AsrSession for ElevenLabsSession {
                 _ = updates.changed() => {},
                 _ = sleep_until(deadline) => {
                     let editing = self.runtime.editing && self.runtime.transcript.lock().unwrap().segments.iter().any(|segment| segment.edited.is_none());
-                    return Err(if editing { "ElevenLabs 转写编辑未完成，请重试" } else { "ElevenLabs 最终确认超时，请重试" }.into());
+                    return Err(AppError::new(AppErrorCode::AsrElFinalizeFailed)
+                        .with_detail(if editing { "edits_pending" } else { "timeout" }));
                 }
             }
         }
@@ -725,7 +718,7 @@ impl AsrSession for ElevenLabsSession {
         self.sender.lock().unwrap().take();
         self.runtime
             .ended
-            .send_replace(Some("ElevenLabs 会话已取消".into()));
+            .send_replace(Some(AppError::new(AppErrorCode::AsrSessionClosed)));
     }
 }
 
@@ -828,8 +821,16 @@ mod tests {
         let words: Vec<_> = (0..51).map(|i| format!("word{i}")).collect();
         assert!(!params(&config, &words).iter().any(|(k, _)| k == "keyterms"));
         config.enable_keyterms = true;
-        assert!(request(&config, &words, ENDPOINT).is_err());
-        assert!(request(&config, &["x".repeat(21)], ENDPOINT).is_err());
+        assert_eq!(
+            request(&config, &words, ENDPOINT).unwrap_err().code,
+            AppErrorCode::AsrHotwordsOverLimit
+        );
+        assert_eq!(
+            request(&config, &["x".repeat(21)], ENDPOINT)
+                .unwrap_err()
+                .code,
+            AppErrorCode::AsrHotwordTooLong
+        );
         let pairs = params(&config, &[" A&B ".into(), "A&B".into(), "中文".into()]);
         assert_eq!(pairs.iter().filter(|(k, _)| k == "keyterms").count(), 2);
         assert!(pairs.contains(&("keyterms".into(), "A&B".into())));
@@ -869,21 +870,28 @@ mod tests {
 
     #[test]
     fn errors_are_classified_without_echoing_secrets() {
-        for (kind, fatal) in [
-            ("auth_error", true),
-            ("quota_exceeded", true),
-            ("invalid_request", true),
-            ("rate_limited", false),
-            ("queue_overflow", false),
-            ("session_time_limit_exceeded", false),
+        for (kind, fatal, code) in [
+            ("auth_error", true, AppErrorCode::AsrElAuth),
+            ("quota_exceeded", true, AppErrorCode::AsrElQuotaExhausted),
+            ("invalid_request", true, AppErrorCode::AsrElInvalidRequest),
+            ("rate_limited", false, AppErrorCode::AsrElRateLimited),
+            ("queue_overflow", false, AppErrorCode::AsrElQueueFull),
+            (
+                "session_time_limit_exceeded",
+                false,
+                AppErrorCode::AsrElSessionLimit,
+            ),
         ] {
-            let (message, actual) = server_error(
+            let (error, actual) = server_error(
                 &json!({"message_type":kind,"error":"test-secret"}),
                 "test-secret",
             )
             .unwrap();
             assert_eq!(actual, fatal);
-            assert!(!message.contains("test-secret"));
+            assert_eq!(error.code, code);
+            let detail = error.detail.unwrap_or_default();
+            assert!(detail.starts_with(&format!("kind={kind}")));
+            assert!(!detail.contains("test-secret"));
         }
         assert!(server_error(&json!({"message_type":"warning"}), "test-secret").is_none());
     }
@@ -985,7 +993,10 @@ mod tests {
         let mut server = server.await.unwrap();
         assert!(!client.is_finished());
         send(&mut server, "auth_error", "").await;
-        assert!(client.await.unwrap().err().unwrap().contains("API Key"));
+        assert_eq!(
+            client.await.unwrap().err().unwrap().code,
+            AppErrorCode::AsrElAuth
+        );
     }
 
     #[tokio::test]
@@ -1173,7 +1184,10 @@ mod tests {
         next_audio(&mut server).await;
         send(&mut server, "committed_transcript", "one").await;
         send(&mut server, "committed_transcript", "").await;
-        assert!(result.await.unwrap().unwrap_err().contains("转写编辑"));
+        assert_eq!(
+            result.await.unwrap().unwrap_err().code,
+            AppErrorCode::AsrElFinalizeFailed
+        );
         session.close();
     }
 
@@ -1217,53 +1231,65 @@ mod tests {
             ))
             .await
             .unwrap();
-        let Some(AsrEvent::Warning { message }) = events.recv().await else {
+        let Some(AsrEvent::Warning { error }) = events.recv().await else {
             panic!("expected warning")
         };
-        assert!(!message.contains("test-secret"));
-        assert!(message.contains("not retained"));
+        assert_eq!(error.code, AppErrorCode::AsrElWarning);
+        let detail = error.detail.unwrap_or_default();
+        assert!(!detail.contains("test-secret"));
+        assert!(detail.contains("not retained"));
         assert!(session.is_ready());
         session.close();
     }
 
     #[test]
     fn all_protocol_errors_keep_safe_reasons_and_setup_retry_policy() {
-        for (kind, fatal) in [
-            ("error", false),
-            ("auth_error", true),
-            ("quota_exceeded", true),
-            ("commit_throttled", false),
-            ("unaccepted_terms", true),
-            ("rate_limited", false),
-            ("queue_overflow", false),
-            ("resource_exhausted", false),
-            ("session_time_limit_exceeded", false),
-            ("input_error", true),
-            ("invalid_request", true),
-            ("chunk_size_exceeded", true),
-            ("insufficient_audio_activity", false),
-            ("transcriber_error", false),
+        for (kind, fatal, retryable) in [
+            ("error", false, true),
+            ("auth_error", true, false),
+            ("quota_exceeded", true, false),
+            ("commit_throttled", false, true),
+            ("unaccepted_terms", true, false),
+            ("rate_limited", false, true),
+            ("queue_overflow", false, true),
+            ("resource_exhausted", false, true),
+            ("session_time_limit_exceeded", false, false),
+            ("input_error", true, false),
+            ("invalid_request", true, false),
+            ("chunk_size_exceeded", true, false),
+            ("insufficient_audio_activity", false, false),
+            ("transcriber_error", false, true),
         ] {
-            let (message, actual) = server_error(&json!({"message_type":kind,"error":"specific reason; xi-api-key=test-secret; token=other-secret"}), "test-secret").unwrap();
+            let (error, actual) = server_error(&json!({"message_type":kind,"error":"specific reason; xi-api-key=test-secret; token=other-secret"}), "test-secret").unwrap();
             assert_eq!(actual, fatal);
-            assert!(message.contains("specific reason"));
-            assert!(!message.contains("test-secret"));
-            assert!(!message.contains("other-secret"));
-            assert_eq!(retryable_start_error(&message), !fatal);
+            let detail = error.detail.unwrap_or_default();
+            assert!(detail.starts_with(&format!("kind={kind}")), "{kind}");
+            assert!(detail.contains("specific reason"), "{kind}");
+            assert!(!detail.contains("test-secret"), "{kind}");
+            assert!(!detail.contains("other-secret"), "{kind}");
+            assert_eq!(retryable_start_error(error.code), retryable, "{kind}");
         }
-        for message in [
-            "请先填写 ElevenLabs API Key",
-            "ElevenLabs 参数格式错误，请检查模型配置",
-            "ElevenLabs 连接失败：HTTP 401，请检查 API Key、权限和余额",
+        // Config, auth, request, and premature-close failures are permanent
+        // until the user changes something; never retry them blindly.
+        for code in [
+            AppErrorCode::AsrConfigMissing,
+            AppErrorCode::AsrConfigInvalid,
+            AppErrorCode::AsrElAuth,
+            AppErrorCode::AsrElInvalidRequest,
+            AppErrorCode::AsrElClosedEarly,
         ] {
-            assert!(!retryable_start_error(message));
+            assert!(!retryable_start_error(code));
         }
-        for message in [
-            "ElevenLabs 连接超时",
-            "ElevenLabs 会话启动超时",
-            "ElevenLabs 连接失败：HTTP 503，请检查 API Key、权限和余额",
+        // Transient transport and server conditions justify one setup retry.
+        for code in [
+            AppErrorCode::AsrElConnectTimeout,
+            AppErrorCode::AsrElConnectHttpError,
+            AppErrorCode::AsrNetwork,
+            AppErrorCode::AsrElRateLimited,
+            AppErrorCode::AsrElQueueFull,
+            AppErrorCode::AsrElUnavailable,
         ] {
-            assert!(retryable_start_error(message));
+            assert!(retryable_start_error(code));
         }
     }
 
@@ -1476,7 +1502,7 @@ mod tests {
                 config.api_key.clone(),
             )
             .await
-            .unwrap_or_else(|error| panic!("{}", safe_detail(&error, &config.api_key)));
+            .unwrap_or_else(|error| panic!("{error:?}"));
             for chunk in samples.chunks(1600) {
                 session.append_audio(chunk);
                 tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1491,8 +1517,8 @@ mod tests {
                 .unwrap();
             if result.is_err() {
                 while let Ok(event) = events.try_recv() {
-                    if let AsrEvent::Warning { message } | AsrEvent::Error { message, .. } = event {
-                        eprintln!("LIVE detail: {}", safe_detail(&message, &config.api_key));
+                    if let AsrEvent::Warning { error } | AsrEvent::Error { error, .. } = event {
+                        eprintln!("LIVE detail: {:?}", error.detail);
                     }
                 }
             }

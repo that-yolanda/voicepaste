@@ -1,6 +1,7 @@
 use sherpa_onnx::{OfflineQwen3ASRModelConfig, OfflineRecognizer, OfflineRecognizerConfig};
 use std::path::Path;
 
+use crate::errors::{AppError, AppErrorCode};
 use crate::model::ModelEntry;
 
 use super::{build_model_path, json_f32, json_i32, json_string};
@@ -16,20 +17,25 @@ pub(crate) fn build_qwen3_asr_recognizer(
     num_threads: u32,
     model_config: &serde_json::Value,
     hotwords_str: Option<&str>,
-) -> Result<OfflineRecognizer, String> {
+) -> Result<OfflineRecognizer, AppError> {
     let mut config = OfflineRecognizerConfig::default();
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
     config.model_config.provider = json_string(model_config, "provider");
 
+    let missing_file_error = |file: &str| {
+        AppError::new(AppErrorCode::AsrModelFileMissing)
+            .with_param("model", entry.id.as_str())
+            .with_param("file", file)
+    };
     let conv_frontend = build_model_path(model_dir, entry, "conv_frontend")
-        .ok_or_else(|| format!("模型 {} 缺少 conv_frontend 文件", entry.id))?;
+        .ok_or_else(|| missing_file_error("conv_frontend"))?;
     let encoder = build_model_path(model_dir, entry, "encoder")
-        .ok_or_else(|| format!("模型 {} 缺少 encoder 文件", entry.id))?;
+        .ok_or_else(|| missing_file_error("encoder"))?;
     let decoder = build_model_path(model_dir, entry, "decoder")
-        .ok_or_else(|| format!("模型 {} 缺少 decoder 文件", entry.id))?;
+        .ok_or_else(|| missing_file_error("decoder"))?;
     let tokenizer = build_model_path(model_dir, entry, "tokenizer")
-        .ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
+        .ok_or_else(|| missing_file_error("tokenizer"))?;
 
     config.model_config.qwen3_asr = OfflineQwen3ASRModelConfig {
         conv_frontend: Some(conv_frontend),
@@ -47,6 +53,8 @@ pub(crate) fn build_qwen3_asr_recognizer(
     // tokens must be set to empty string for Qwen3 ASR (uses tokenizer directory)
     config.model_config.tokens = Some(String::new());
 
-    OfflineRecognizer::create(&config)
-        .ok_or_else(|| format!("创建离线识别器失败 (model: {})", entry.id))
+    OfflineRecognizer::create(&config).ok_or_else(|| {
+        AppError::new(AppErrorCode::AsrRecognizerCreateFailed)
+            .with_detail(format!("model: {}", entry.id))
+    })
 }

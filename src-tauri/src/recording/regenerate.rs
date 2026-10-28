@@ -25,26 +25,31 @@ const REGEN_CHUNK_SIZE: usize = 1600;
 pub(crate) async fn regenerate_history_transcription(
     app_handle: AppHandle,
     ts: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::AppError> {
+    use crate::errors::{AppError, AppErrorCode};
+
     let app_inner = app_handle.state::<Arc<app_state::AppInner>>();
 
     let entry = {
         let stats = app_inner.stats.lock().await;
         stats
             .find_history(&ts)
-            .ok_or_else(|| "未找到输入记录".to_string())?
+            .ok_or_else(|| AppError::new(AppErrorCode::StatsEntryNotFound))?
     };
     let audio_path = entry
         .audio_path
         .clone()
-        .ok_or_else(|| "这条记录没有可用于重新生成的录音（需开启保留录音）".to_string())?;
+        .ok_or_else(|| AppError::new(AppErrorCode::StatsNoRecordingKept))?;
     let path = PathBuf::from(&audio_path);
     let samples = wav::read_wav_16k_mono(&path)?;
     if samples.is_empty() {
-        return Err("录音文件为空，无法重新生成".to_string());
+        return Err(AppError::new(AppErrorCode::StatsEmptyRecording));
     }
 
-    let config = app_inner.config_manager.load_config()?;
+    let config = app_inner
+        .config_manager
+        .load_config()
+        .map_err(|_| AppError::new(AppErrorCode::InvalidConfig))?;
     let hotwords = app_inner.hotword_manager.active_words();
 
     // Keep the event receiver alive for the session's lifetime but never drain it
@@ -63,7 +68,7 @@ pub(crate) async fn regenerate_history_transcription(
     let text = text?;
     let text = text.trim();
     if text.is_empty() {
-        return Err("重新生成没有得到文本，请检查网络连接".to_string());
+        return Err(AppError::new(AppErrorCode::AsrEmptyResult));
     }
 
     // Mirror the finishing pipeline's lightweight text cleanup (LLM polishing is
@@ -78,7 +83,7 @@ pub(crate) async fn regenerate_history_transcription(
         .await
         .update_history_text(&ts, &final_text);
     if !updated {
-        return Err("更新输入记录失败".to_string());
+        return Err(AppError::new(AppErrorCode::StatsUpdateFailed));
     }
 
     log_rec!(

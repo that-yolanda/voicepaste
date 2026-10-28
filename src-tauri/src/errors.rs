@@ -48,6 +48,7 @@ app_error_codes! {
     // common — fallbacks for domains not yet migrated to typed codes
     Unexpected => "common.unexpected",
     InvalidConfig => "common.invalid_config",
+    Cancelled => "common.cancelled",
     // feedback — previously plain string codes rejected by feedback commands
     FeedbackInvalidFields => "feedback.invalid_fields",
     FeedbackInvalidFiles => "feedback.invalid_files",
@@ -77,6 +78,58 @@ app_error_codes! {
     StatsEntryNotPolishable => "stats.entry_not_polishable",
     StatsNoPolishText => "stats.no_polish_text",
     StatsUpdateFailed => "stats.update_failed",
+    StatsNoRetryableRecording => "stats.no_retryable_recording",
+    StatsEmptyRecording => "stats.empty_recording",
+    StatsNoRecordingKept => "stats.no_recording_kept",
+    StatsInvalidWav => "stats.invalid_wav",
+    // asr — speech recognition (engine-agnostic)
+    AsrConfigMissing => "asr.config_missing",
+    AsrConfigInvalid => "asr.config_invalid",
+    AsrAuthFailed => "asr.auth_failed",
+    AsrNetwork => "asr.network",
+    AsrTimeout => "asr.timeout",
+    AsrRequestInvalid => "asr.request_invalid",
+    AsrServerError => "asr.server_error",
+    AsrConnectClosed => "asr.connect_closed",
+    AsrFinalTimeout => "asr.final_timeout",
+    AsrSessionClosed => "asr.session_closed",
+    AsrRecognizeFailed => "asr.recognize_failed",
+    AsrThreadStartFailed => "asr.thread_start_failed",
+    AsrWorkerClosed => "asr.worker_closed",
+    AsrWorkerAborted => "asr.worker_aborted",
+    AsrNoFinalResult => "asr.no_final_result",
+    AsrModelFileMissing => "asr.model_file_missing",
+    AsrModelNotDownloaded => "asr.model_not_downloaded",
+    AsrModelNotInRegistry => "asr.model_not_in_registry",
+    AsrVadMissing => "asr.vad_missing",
+    AsrRecognizerCreateFailed => "asr.recognizer_create_failed",
+    AsrHotwordsOverLimit => "asr.hotwords_over_limit",
+    AsrHotwordTooLong => "asr.hotword_too_long",
+    // asr — elevenlabs-specific failures and server mappings
+    AsrElAuth => "asr.el_auth",
+    AsrElQuotaExhausted => "asr.el_quota_exhausted",
+    AsrElTermsNotAccepted => "asr.el_terms_not_accepted",
+    AsrElInvalidRequest => "asr.el_invalid_request",
+    AsrElRateLimited => "asr.el_rate_limited",
+    AsrElQueueFull => "asr.el_queue_full",
+    AsrElUnavailable => "asr.el_unavailable",
+    AsrElSessionLimit => "asr.el_session_limit",
+    AsrElIdleTimeout => "asr.el_idle_timeout",
+    AsrElWarning => "asr.el_warning",
+    AsrElConnectTimeout => "asr.el_connect_timeout",
+    AsrElConnectHttpError => "asr.el_connect_http_error",
+    AsrElProtocolError => "asr.el_protocol_error",
+    AsrElClosedEarly => "asr.el_closed_early",
+    AsrElSendFailed => "asr.el_send_failed",
+    AsrElFinalizeFailed => "asr.el_finalize_failed",
+    // asr — recording-layer composites (connect orchestration, reconnect UX)
+    AsrConnectFailed => "asr.connect_failed",
+    AsrConnectTaskEnded => "asr.connect_task_ended",
+    AsrConnectTimeoutHint => "asr.connect_timeout_hint",
+    AsrFinalizeIncomplete => "asr.finalize_incomplete",
+    AsrEmptyResult => "asr.empty_result",
+    AsrReconnecting => "asr.reconnecting",
+    AsrReconnected => "asr.reconnected",
 }
 
 impl AppErrorCode {
@@ -146,6 +199,135 @@ impl AppErrorCode {
             (En, Self::LlmPromptUnavailable) => {
                 "Polish template unavailable. Check template settings"
             }
+            // asr — engine-agnostic
+            (ZhCn, Self::AsrConfigMissing) => "语音识别模型还未配置，缺少 {{field}}",
+            (En, Self::AsrConfigMissing) => "Speech model is not configured: missing {{field}}",
+            (ZhCn, Self::AsrConfigInvalid) => "ElevenLabs 参数格式错误，请检查模型配置",
+            (En, Self::AsrConfigInvalid) => {
+                "Invalid ElevenLabs parameters. Check the model configuration"
+            }
+            (ZhCn, Self::AsrAuthFailed) => "ASR 鉴权失败，请检查 AppID / Token / Resource ID",
+            (En, Self::AsrAuthFailed) => {
+                "ASR authentication failed. Check the App ID / Token / Resource ID"
+            }
+            (ZhCn, Self::AsrNetwork) => "ASR 网络连接失败",
+            (En, Self::AsrNetwork) => "ASR network connection failed",
+            (ZhCn, Self::AsrTimeout) => "ASR 连接超时",
+            (En, Self::AsrTimeout) => "ASR connection timed out",
+            (ZhCn, Self::AsrRequestInvalid) => "ASR 请求参数无效",
+            (En, Self::AsrRequestInvalid) => "Invalid ASR request parameters",
+            (ZhCn, Self::AsrServerError) => "ASR 服务异常",
+            (En, Self::AsrServerError) => "ASR service error",
+            (ZhCn, Self::AsrConnectClosed) => "ASR 连接已断开，请重新开始",
+            (En, Self::AsrConnectClosed) => "ASR connection closed. Please start again",
+            (ZhCn, Self::AsrFinalTimeout) => "ASR 最终结果超时，请检查网络连接",
+            (En, Self::AsrFinalTimeout) => {
+                "Timed out waiting for the final result. Check the network"
+            }
+            (ZhCn, Self::AsrSessionClosed) => "录音已结束",
+            (En, Self::AsrSessionClosed) => "Recording already ended",
+            (ZhCn, Self::AsrRecognizeFailed) => "识别失败",
+            (En, Self::AsrRecognizeFailed) => "Recognition failed",
+            (ZhCn, Self::AsrThreadStartFailed) => "启动识别线程失败",
+            (En, Self::AsrThreadStartFailed) => "Failed to start the recognition thread",
+            (ZhCn, Self::AsrWorkerClosed) => "ASR worker 已关闭",
+            (En, Self::AsrWorkerClosed) => "The ASR worker has shut down",
+            (ZhCn, Self::AsrWorkerAborted) => "ASR worker 状态异常",
+            (En, Self::AsrWorkerAborted) => "The ASR worker is in an invalid state",
+            (ZhCn, Self::AsrNoFinalResult) => "ASR worker 未返回最终结果",
+            (En, Self::AsrNoFinalResult) => "The ASR worker returned no final result",
+            (ZhCn, Self::AsrModelFileMissing) => "模型 {{model}} 缺少 {{file}} 文件",
+            (En, Self::AsrModelFileMissing) => "Model {{model}} is missing its {{file}} file",
+            (ZhCn, Self::AsrModelNotDownloaded) => "模型 {{model}} 尚未下载，请先在设置中下载",
+            (En, Self::AsrModelNotDownloaded) => {
+                "Model {{model}} is not downloaded yet. Download it in Settings first"
+            }
+            (ZhCn, Self::AsrModelNotInRegistry) => "模型 {{model}} 未在注册表中找到",
+            (En, Self::AsrModelNotInRegistry) => "Model {{model}} was not found in the registry",
+            (ZhCn, Self::AsrVadMissing) => "VAD 模型缺失或不可用",
+            (En, Self::AsrVadMissing) => "The VAD model is missing or unusable",
+            (ZhCn, Self::AsrRecognizerCreateFailed) => "创建识别器失败",
+            (En, Self::AsrRecognizerCreateFailed) => "Failed to create the recognizer",
+            (ZhCn, Self::AsrHotwordsOverLimit) => "服务端热词最多 50 条，请减少启用词条",
+            (En, Self::AsrHotwordsOverLimit) => "Server-side hotwords are limited to 50 entries",
+            (ZhCn, Self::AsrHotwordTooLong) => "每条服务端热词最多 20 个字符",
+            (En, Self::AsrHotwordTooLong) => "Each server-side hotword is limited to 20 characters",
+            // asr — elevenlabs-specific
+            (ZhCn, Self::AsrElAuth) => "API Key 无效或没有语音识别权限",
+            (En, Self::AsrElAuth) => "API key is invalid or lacks speech recognition access",
+            (ZhCn, Self::AsrElQuotaExhausted) => "额度不足，请检查账号余额",
+            (En, Self::AsrElQuotaExhausted) => "Quota exhausted. Check the account balance",
+            (ZhCn, Self::AsrElTermsNotAccepted) => "请先在 ElevenLabs 控制台接受服务条款",
+            (En, Self::AsrElTermsNotAccepted) => {
+                "Accept the terms of service in the ElevenLabs console first"
+            }
+            (ZhCn, Self::AsrElInvalidRequest) => "请求参数或音频格式无效",
+            (En, Self::AsrElInvalidRequest) => "Invalid request parameters or audio format",
+            (ZhCn, Self::AsrElRateLimited) => "请求过于频繁，请稍后重试",
+            (En, Self::AsrElRateLimited) => "Too many requests. Please retry later",
+            (ZhCn, Self::AsrElQueueFull) => "音频处理队列已满，请重试",
+            (En, Self::AsrElQueueFull) => "The audio processing queue is full. Please retry",
+            (ZhCn, Self::AsrElUnavailable) => "语音服务暂时不可用，请重试",
+            (En, Self::AsrElUnavailable) => {
+                "The speech service is temporarily unavailable. Please retry"
+            }
+            (ZhCn, Self::AsrElSessionLimit) => "已达到单次会话时长限制",
+            (En, Self::AsrElSessionLimit) => "The single-session duration limit was reached",
+            (ZhCn, Self::AsrElIdleTimeout) => "长时间没有收到有效音频",
+            (En, Self::AsrElIdleTimeout) => "No valid audio was received for too long",
+            (ZhCn, Self::AsrElWarning) => "服务端警告",
+            (En, Self::AsrElWarning) => "Server warning",
+            (ZhCn, Self::AsrElConnectTimeout) => "连接超时",
+            (En, Self::AsrElConnectTimeout) => "Connection timed out",
+            (ZhCn, Self::AsrElConnectHttpError) => {
+                "连接失败（HTTP {{status}}），请检查 API Key、权限和余额"
+            }
+            (En, Self::AsrElConnectHttpError) => {
+                "Connection failed (HTTP {{status}}). Check the API key, access, and balance"
+            }
+            (ZhCn, Self::AsrElProtocolError) => "返回了无效消息",
+            (En, Self::AsrElProtocolError) => "The server returned an invalid message",
+            (ZhCn, Self::AsrElClosedEarly) => "连接在就绪前被关闭",
+            (En, Self::AsrElClosedEarly) => "The connection closed before it was ready",
+            (ZhCn, Self::AsrElSendFailed) => "消息发送失败，请检查网络",
+            (En, Self::AsrElSendFailed) => "Failed to send a message. Check the network",
+            (ZhCn, Self::AsrElFinalizeFailed) => "最终确认未完成，请重试",
+            (En, Self::AsrElFinalizeFailed) => "Final confirmation did not complete. Please retry",
+            // asr — recording-layer composites
+            (ZhCn, Self::AsrConnectFailed) => "ASR 连接失败",
+            (En, Self::AsrConnectFailed) => "Failed to connect to the ASR service",
+            (ZhCn, Self::AsrConnectTaskEnded) => "语音连接任务已结束，请重试",
+            (En, Self::AsrConnectTaskEnded) => "The connection task ended. Please retry",
+            (ZhCn, Self::AsrConnectTimeoutHint) => "语音服务连接超时，请重试",
+            (En, Self::AsrConnectTimeoutHint) => {
+                "The speech service connection timed out. Please retry"
+            }
+            (ZhCn, Self::AsrFinalizeIncomplete) => "语音服务未能完成最终确认，请重试",
+            (En, Self::AsrFinalizeIncomplete) => {
+                "The speech service could not finish recognition. Please retry"
+            }
+            (ZhCn, Self::AsrEmptyResult) => "没有得到转写文本，请检查网络连接",
+            (En, Self::AsrEmptyResult) => "No transcript text came back. Check the network",
+            (ZhCn, Self::AsrReconnecting) => "正在重连…",
+            (En, Self::AsrReconnecting) => "Reconnecting…",
+            (ZhCn, Self::AsrReconnected) => "已重连",
+            (En, Self::AsrReconnected) => "Reconnected",
+            // common — fallback surfaces
+            (ZhCn, Self::Cancelled) => "已取消",
+            (En, Self::Cancelled) => "Cancelled",
+            // stats — surfaces via the overlay retry hint / history list
+            (ZhCn, Self::StatsNoRetryableRecording) => "没有可重试的失败录音",
+            (En, Self::StatsNoRetryableRecording) => "No failed recording available to retry",
+            (ZhCn, Self::StatsEmptyRecording) => "录音文件为空，无法重试",
+            (En, Self::StatsEmptyRecording) => "The recording file is empty",
+            (ZhCn, Self::StatsNoRecordingKept) => {
+                "这条记录没有保留的录音（重新生成需开启保留录音）"
+            }
+            (En, Self::StatsNoRecordingKept) => {
+                "This entry kept no recording (regenerate requires \"keep recordings\")"
+            }
+            (ZhCn, Self::StatsInvalidWav) => "录音文件无效",
+            (En, Self::StatsInvalidWav) => "The recording file is invalid",
             // Codes that never reach a natively rendered surface (stats,
             // feedback, common) fall back to the machine code; the frontend
             // locale files own their user-facing text.
@@ -156,6 +338,12 @@ impl AppErrorCode {
             text = text.replace(&format!("{{{{{key}}}}}"), value);
         }
         text
+    }
+}
+
+impl fmt::Display for AppErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -275,9 +463,10 @@ mod tests {
     }
 
     #[test]
-    fn render_headline_covers_every_llm_code_in_both_languages() {
+    fn render_headline_covers_every_translated_code_in_both_languages() {
         for code in AppErrorCode::ALL {
-            if !code.as_str().starts_with("llm.") {
+            let domain = code.as_str().split('.').next().unwrap();
+            if !matches!(domain, "llm" | "asr") {
                 continue;
             }
             let empty = BTreeMap::new();

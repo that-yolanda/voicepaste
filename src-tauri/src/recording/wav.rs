@@ -37,10 +37,12 @@ pub fn write_wav_16k_mono(path: &std::path::Path, samples: &[f32]) -> Result<(),
 }
 
 /// Read a 16kHz mono 16-bit PCM WAV into 32-bit float samples.
-pub fn read_wav_16k_mono(path: &std::path::Path) -> Result<Vec<f32>, String> {
-    let data = std::fs::read(path).map_err(|e| format!("读取录音文件失败: {e}"))?;
+pub fn read_wav_16k_mono(path: &std::path::Path) -> Result<Vec<f32>, crate::errors::AppError> {
+    use crate::errors::{AppError, AppErrorCode};
+    let invalid = |detail: String| AppError::new(AppErrorCode::StatsInvalidWav).with_detail(detail);
+    let data = std::fs::read(path).map_err(|e| invalid(format!("read: {e}")))?;
     if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
-        return Err("录音文件不是有效 WAV".to_string());
+        return Err(invalid("not a RIFF/WAVE file".into()));
     }
     let mut pos = 12usize;
     let mut channels = 0u16;
@@ -69,9 +71,11 @@ pub fn read_wav_16k_mono(path: &std::path::Path) -> Result<Vec<f32>, String> {
         pos = start + size + (size % 2);
     }
     if channels != 1 || sample_rate != 16_000 || bits != 16 {
-        return Err("仅支持 16kHz mono 16-bit WAV 重试".to_string());
+        return Err(invalid(format!(
+            "expected 16kHz mono 16-bit, got {channels}ch {sample_rate}Hz {bits}bit"
+        )));
     }
-    let range = data_range.ok_or_else(|| "WAV 缺少 data chunk".to_string())?;
+    let range = data_range.ok_or_else(|| invalid("missing data chunk".to_string()))?;
     Ok(data[range]
         .as_chunks::<2>()
         .0

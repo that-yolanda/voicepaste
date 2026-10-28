@@ -72,7 +72,8 @@ pub struct AppInner {
     pub current_failure_ts: Mutex<Option<String>>,
     /// Resolves when the background ASR connect finishes (Ok) or fails (Err).
     /// `stop_recording` awaits this when the user stops before the session is ready.
-    pub connect_rx: Mutex<Option<tokio::sync::oneshot::Receiver<Result<(), String>>>>,
+    pub connect_rx:
+        Mutex<Option<tokio::sync::oneshot::Receiver<Result<(), crate::errors::AppError>>>>,
     /// Recording-session generation. Bumped on each start and on cancel so a
     /// stale background connect task (from a cancelled/superseded session) can
     /// detect it is obsolete and discard its result.

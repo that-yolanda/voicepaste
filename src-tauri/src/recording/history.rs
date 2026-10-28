@@ -83,18 +83,23 @@ pub(crate) async fn current_recording_wav_string(
 pub(crate) async fn record_transcription_failure(
     _app: &AppHandle,
     app_inner: &Arc<app_state::AppInner>,
-    message: &str,
+    error: &crate::errors::AppError,
 ) -> String {
+    // The stored `text`/`error` keep a rendered line for renderers that have
+    // not migrated to the code; the structured `code`/`params` (written by
+    // `record_failure`) are what the settings history list renders through.
+    let message = crate::overlay::render_error_text(app_inner, error);
     let audio_path = current_recording_wav_string(app_inner).await;
     let retryable = audio_path
         .as_ref()
         .is_some_and(|path| std::path::Path::new(path).is_file());
     let retry_of = app_inner.current_retry_of.lock().await.clone();
-    let ts = app_inner
-        .stats
-        .lock()
-        .await
-        .record_failure(message, audio_path, retry_of, None);
+    let ts =
+        app_inner
+            .stats
+            .lock()
+            .await
+            .record_failure(&message, audio_path, retry_of, Some(error));
     *app_inner.current_failure_ts.lock().await = retryable.then(|| ts.clone());
     ts
 }

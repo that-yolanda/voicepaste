@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 use std::path::Path;
 
+use crate::errors::{AppError, AppErrorCode};
 use crate::model::ModelEntry;
 
 /// VAD configuration loaded from registry.json's silero-vad model entry.
@@ -92,14 +93,18 @@ impl VadProcessor {
     /// Create a new VAD processor from a registry entry.
     ///
     /// `entry.model_files["model"]` names the Silero VAD ONNX file inside `model_dir`.
-    pub fn new(entry: &ModelEntry, model_dir: &Path, config: &VadConfig) -> Result<Self, String> {
+    pub fn new(entry: &ModelEntry, model_dir: &Path, config: &VadConfig) -> Result<Self, AppError> {
         let model_path = entry
             .model_files
             .get("model")
             .map(|filename| model_dir.join(filename))
-            .ok_or_else(|| format!("VAD 模型 {} 缺少 model 文件定义", entry.id))?;
+            .ok_or_else(|| {
+                AppError::new(AppErrorCode::AsrVadMissing)
+                    .with_detail(format!("model file not defined for '{}'", entry.id))
+            })?;
         if !model_path.exists() {
-            return Err(format!("VAD 模型文件不存在: {}", model_path.display()));
+            return Err(AppError::new(AppErrorCode::AsrVadMissing)
+                .with_detail(model_path.display().to_string()));
         }
 
         let silero_config = SileroVadModelConfig {
@@ -120,8 +125,9 @@ impl VadProcessor {
         };
 
         // 30-second buffer for VAD
-        let detector = VoiceActivityDetector::create(&vad_config, 30.0)
-            .ok_or_else(|| "创建 VAD 检测器失败".to_string())?;
+        let detector = VoiceActivityDetector::create(&vad_config, 30.0).ok_or_else(|| {
+            AppError::new(AppErrorCode::AsrRecognizerCreateFailed).with_detail("silero-vad")
+        })?;
 
         Ok(Self {
             detector,
@@ -232,6 +238,9 @@ mod tests {
             &super::VadConfig::default(),
         );
         assert!(result.is_err());
-        assert!(result.err().unwrap().contains("缺少 model 文件定义"));
+        assert_eq!(
+            result.err().unwrap().code,
+            crate::errors::AppErrorCode::AsrVadMissing
+        );
     }
 }

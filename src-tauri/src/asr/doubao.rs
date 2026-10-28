@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use super::{AsrEngine, AsrEvent, AsrSession};
 use crate::config::{AudioConfig, ConnectionConfig, RequestConfig};
+use crate::errors::{AppError, AppErrorCode};
 
 // ---------------------------------------------------------------------------
 // Binary protocol helpers
@@ -433,20 +434,30 @@ fn is_ignorable_raw_text(text: &str, connect_id: &str) -> bool {
     false
 }
 
-fn normalize_error_message(error: &str) -> String {
+/// Missing Doubao connection field → config error carrying the config path
+/// (rendered as "…缺少 audio.doubao-streaming.<field>").
+fn asr_config_missing(field: &str) -> AppError {
+    AppError::new(AppErrorCode::AsrConfigMissing)
+        .with_param("field", format!("audio.doubao-streaming.{field}"))
+}
+
+/// Classify a transport/server error string into a typed `AppError`. The
+/// original (already redacted) text — including any server code number — is
+/// preserved as `detail`.
+fn normalize_error_message(error: &str) -> AppError {
     if error.contains("401") || error.contains("403") {
-        return "ASR 鉴权失败，请检查 AppID / Token / Resource ID".to_string();
+        return AppError::new(AppErrorCode::AsrAuthFailed).with_detail(error);
     }
     if error.contains("ENOTFOUND") || error.contains("ECONNREFUSED") {
-        return "ASR 网络连接失败".to_string();
+        return AppError::new(AppErrorCode::AsrNetwork).with_detail(error);
     }
     if error.contains("45000001") {
-        return "ASR 请求参数无效".to_string();
+        return AppError::new(AppErrorCode::AsrRequestInvalid).with_detail(error);
     }
     if error.contains("45000081") {
-        return "ASR 等包超时".to_string();
+        return AppError::new(AppErrorCode::AsrTimeout).with_detail(error);
     }
-    error.to_string()
+    AppError::new(AppErrorCode::AsrServerError).with_detail(error)
 }
 
 /// Classify a Doubao ASR error code as fatal (unrecoverable by reconnect) or
@@ -519,15 +530,13 @@ impl AsrEngine for DoubaoEngine {
     async fn create_session(
         &self,
         hotwords: &[String],
-    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), String> {
+    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), AppError> {
         // Validate required fields (common to both auth modes)
         if self.connection.url.is_empty() {
-            return Err("语音识别模型还未配置，缺少 audio.doubao-streaming.url".to_string());
+            return Err(asr_config_missing("url"));
         }
         if self.connection.resource_id.is_empty() {
-            return Err(
-                "语音识别模型还未配置，缺少 audio.doubao-streaming.resource_id".to_string(),
-            );
+            return Err(asr_config_missing("resource_id"));
         }
 
         // Resolve auth mode: explicit v2 wins; otherwise a new user with only an
@@ -540,21 +549,13 @@ impl AsrEngine for DoubaoEngine {
 
         if mode == "legacy" {
             if self.connection.app_id.is_empty() {
-                return Err(
-                    "语音识别模型还未配置，缺少 audio.doubao-streaming.app_id（旧版鉴权）"
-                        .to_string(),
-                );
+                return Err(asr_config_missing("app_id"));
             }
             if self.connection.access_token.is_empty() {
-                return Err(
-                    "语音识别模型还未配置，缺少 audio.doubao-streaming.access_token（旧版鉴权）"
-                        .to_string(),
-                );
+                return Err(asr_config_missing("access_token"));
             }
         } else if self.connection.api_key.is_empty() {
-            return Err(
-                "语音识别模型还未配置，缺少 audio.doubao-streaming.api_key（新版鉴权）".to_string(),
-            );
+            return Err(asr_config_missing("api_key"));
         }
 
         let credentials = [
@@ -577,16 +578,17 @@ impl AsrEngine for DoubaoEngine {
         let connect_id = Uuid::new_v4().to_string();
 
         // Build URL with request_id
-        let mut url =
-            url::Url::parse(&self.connection.url).map_err(|e| format!("Invalid ASR URL: {}", e))?;
+        let mut url = url::Url::parse(&self.connection.url).map_err(|e| {
+            AppError::new(AppErrorCode::AsrNetwork).with_detail(format!("Invalid ASR URL: {e}"))
+        })?;
         url.query_pairs_mut().append_pair("request_id", &connect_id);
 
         // Build request with custom headers
         let mut request = url.as_str().into_client_request().map_err(|e| {
-            format!(
+            AppError::new(AppErrorCode::AsrNetwork).with_detail(format!(
                 "Failed to create WebSocket request: {}",
                 safe_detail(&e.to_string())
-            )
+            ))
         })?;
 
         let headers = request.headers_mut();
@@ -621,12 +623,12 @@ impl AsrEngine for DoubaoEngine {
             {
                 Ok(Ok(pair)) => pair,
                 Ok(Err(e)) => {
-                    return Err(format!(
+                    return Err(AppError::new(AppErrorCode::AsrNetwork).with_detail(format!(
                         "ASR WebSocket connection failed: {}",
                         safe_detail(&e.to_string())
-                    ))
+                    )))
                 }
-                Err(_) => return Err("ASR WebSocket 连接超时".to_string()),
+                Err(_) => return Err(AppError::new(AppErrorCode::AsrTimeout)),
             };
 
         let (sink, mut stream) = ws_stream.split();
@@ -644,10 +646,10 @@ impl AsrEngine for DoubaoEngine {
         sink.send(Message::Binary(init_frame.into()))
             .await
             .map_err(|e| {
-                format!(
+                AppError::new(AppErrorCode::AsrNetwork).with_detail(format!(
                     "Failed to send ASR init request: {}",
                     safe_detail(&e.to_string())
-                )
+                ))
             })?;
 
         // Create session state
@@ -761,15 +763,22 @@ impl AsrEngine for DoubaoEngine {
                             if let Some(code) = payload.get("code").and_then(|v| v.as_u64()) {
                                 if code != 20000000 {
                                     log_asr!(warn, "Binary response error code: {}", code);
-                                    let message = payload
+                                    let error = payload
                                         .get("message")
                                         .or_else(|| payload.get("msg"))
                                         .or_else(|| payload.get("error"))
                                         .and_then(|v| v.as_str())
-                                        .map(|m| format!("ASR error {}: {}", code, m))
-                                        .unwrap_or_else(|| format!("ASR error code {}", code));
+                                        .map(|m| {
+                                            AppError::new(AppErrorCode::AsrServerError).with_detail(
+                                                format!("code {code}: {}", safe_detail(m)),
+                                            )
+                                        })
+                                        .unwrap_or_else(|| {
+                                            AppError::new(AppErrorCode::AsrServerError)
+                                                .with_detail(format!("code {code}"))
+                                        });
                                     let _ = event_tx_clone.send(AsrEvent::Error {
-                                        message: safe_detail(&message),
+                                        error,
                                         fatal: is_fatal_asr_code(code),
                                     });
                                     // If a commit is waiting, resolve it now with the
@@ -919,14 +928,18 @@ impl AsrEngine for DoubaoEngine {
                         log_asr!(error, "ASR text message received ({} bytes)", text.len());
                         if let Ok(payload) = serde_json::from_str::<Value>(&text) {
                             if payload.get("type").and_then(|v| v.as_str()) == Some("error") {
-                                let message = payload
+                                let error = payload
                                     .get("message")
                                     .or_else(|| payload.get("error").and_then(|e| e.get("message")))
                                     .and_then(|v| v.as_str())
-                                    .unwrap_or("ASR 服务异常");
+                                    .map(|m| {
+                                        AppError::new(AppErrorCode::AsrServerError)
+                                            .with_detail(safe_detail(m))
+                                    })
+                                    .unwrap_or_else(|| AppError::new(AppErrorCode::AsrServerError));
                                 // Unknown text-protocol error: attempt reconnect before giving up.
                                 let _ = event_tx_clone.send(AsrEvent::Error {
-                                    message: safe_detail(message),
+                                    error,
                                     fatal: false,
                                 });
                             }
@@ -963,7 +976,7 @@ impl AsrEngine for DoubaoEngine {
                     }
                     Err(e) => {
                         is_ready.store(false, Ordering::SeqCst);
-                        let msg = normalize_error_message(&safe_detail(&e.to_string()));
+                        let error = normalize_error_message(&safe_detail(&e.to_string()));
                         // Connection reset without a clean Close: resolve any pending
                         // commit so the caller doesn't wait the full 5s timeout.
                         if is_committed.load(Ordering::SeqCst) {
@@ -975,7 +988,7 @@ impl AsrEngine for DoubaoEngine {
                         }
                         // Transport-level failure (network drop): recoverable by reconnect.
                         let _ = event_tx_clone.send(AsrEvent::Error {
-                            message: msg,
+                            error,
                             fatal: false,
                         });
                         break;
@@ -1026,12 +1039,12 @@ impl AsrSession for DoubaoSession {
         let _ = self.writer_tx.send(WsWrite::Audio(frame));
     }
 
-    async fn commit_and_await_final(&self) -> Result<String, String> {
+    async fn commit_and_await_final(&self) -> Result<String, AppError> {
         if !self.is_ready() {
-            return Err("ASR 连接已断开，请重新开始".to_string());
+            return Err(AppError::new(AppErrorCode::AsrConnectClosed));
         }
         if self.is_committed.load(Ordering::SeqCst) {
-            return Err("录音已结束".to_string());
+            return Err(AppError::new(AppErrorCode::AsrSessionClosed));
         }
         // Mark committed (stops further appends) and enqueue the last packet.
         // Because all prior audio was enqueued before this call (the renderer
@@ -1047,7 +1060,7 @@ impl AsrSession for DoubaoSession {
 
         match tokio::time::timeout(std::time::Duration::from_secs(15), rx).await {
             Ok(Ok(text)) => Ok(text),
-            _ => Err("ASR 最终结果超时，请检查网络连接".to_string()),
+            _ => Err(AppError::new(AppErrorCode::AsrFinalTimeout)),
         }
     }
 
@@ -1100,10 +1113,10 @@ mod tests {
             serde_json::from_value(json!({})).unwrap(),
         );
         let (session, mut events) = engine.create_session(&[]).await.unwrap();
-        let message = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        let error = tokio::time::timeout(std::time::Duration::from_secs(2), async {
             loop {
                 match events.recv().await {
-                    Some(AsrEvent::Error { message, .. }) => break message,
+                    Some(AsrEvent::Error { error, .. }) => break error,
                     Some(_) => {}
                     None => panic!("missing provider error"),
                 }
@@ -1111,7 +1124,12 @@ mod tests {
         })
         .await
         .unwrap();
-        assert_eq!(message, "Rejected [REDACTED] and [REDACTED]");
+        assert_eq!(error.code, AppErrorCode::AsrServerError);
+        // The provider message reaches the UI only through `detail`, redacted.
+        assert_eq!(
+            error.detail.as_deref(),
+            Some("Rejected [REDACTED] and [REDACTED]")
+        );
         session.close();
         server.await.unwrap();
     }
@@ -1225,45 +1243,60 @@ mod tests {
 
     #[test]
     fn normalize_error_401_auth() {
-        let msg = normalize_error_message("HTTP 401 Unauthorized");
-        assert!(msg.contains("鉴权失败"));
+        let error = normalize_error_message("HTTP 401 Unauthorized");
+        assert_eq!(error.code, AppErrorCode::AsrAuthFailed);
     }
 
     #[test]
     fn normalize_error_403_auth() {
-        let msg = normalize_error_message("403 Forbidden");
-        assert!(msg.contains("鉴权失败"));
+        let error = normalize_error_message("403 Forbidden");
+        assert_eq!(error.code, AppErrorCode::AsrAuthFailed);
     }
 
     #[test]
     fn normalize_error_enotfound_network() {
-        let msg = normalize_error_message("ENOTFOUND: DNS lookup failed");
-        assert!(msg.contains("网络连接失败"));
+        let error = normalize_error_message("ENOTFOUND: DNS lookup failed");
+        assert_eq!(error.code, AppErrorCode::AsrNetwork);
     }
 
     #[test]
     fn normalize_error_econnrefused_network() {
-        let msg = normalize_error_message("ECONNREFUSED");
-        assert!(msg.contains("网络连接失败"));
+        let error = normalize_error_message("ECONNREFUSED");
+        assert_eq!(error.code, AppErrorCode::AsrNetwork);
     }
 
     #[test]
     fn normalize_error_45000001_invalid_params() {
-        let msg = normalize_error_message("Error 45000001");
-        assert!(msg.contains("参数无效"));
+        let error = normalize_error_message("Error 45000001");
+        assert_eq!(error.code, AppErrorCode::AsrRequestInvalid);
     }
 
     #[test]
     fn normalize_error_45000081_timeout() {
-        let msg = normalize_error_message("Error 45000081");
-        assert!(msg.contains("等包超时"));
+        let error = normalize_error_message("Error 45000081");
+        assert_eq!(error.code, AppErrorCode::AsrTimeout);
     }
 
     #[test]
     fn normalize_error_unknown_passthrough() {
+        // Unknown errors classify as a server error but keep the original
+        // (redacted) text in `detail` for diagnostics.
         let original = "Some random error";
-        let msg = normalize_error_message(original);
-        assert_eq!(msg, original);
+        let error = normalize_error_message(original);
+        assert_eq!(error.code, AppErrorCode::AsrServerError);
+        assert_eq!(error.detail.as_deref(), Some(original));
+    }
+
+    // ── asr_config_missing ──────────────────────────────────────────────
+
+    #[test]
+    fn config_missing_carries_doubao_field_path() {
+        let error = asr_config_missing("access_token");
+        assert_eq!(error.code, AppErrorCode::AsrConfigMissing);
+        assert_eq!(
+            error.params.get("field").map(String::as_str),
+            Some("audio.doubao-streaming.access_token")
+        );
     }
 
     // ── is_fatal_asr_code ───────────────────────────────────────────────

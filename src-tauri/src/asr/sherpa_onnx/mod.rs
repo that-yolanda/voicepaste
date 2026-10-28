@@ -17,6 +17,7 @@ use self::punct::PunctuationProcessor;
 use self::vad::{VadConfig, VadProcessor};
 use super::{AsrEngine, AsrEvent, AsrSession};
 use crate::config::VadParams;
+use crate::errors::{AppError, AppErrorCode};
 use crate::model;
 
 // ---------------------------------------------------------------------------
@@ -275,13 +276,11 @@ impl AsrEngine for SherpaOnnxEngine {
     async fn create_session(
         &self,
         hotwords: &[String],
-    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), String> {
+    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), AppError> {
         let model_dir = model::model_path(&self.data_dir, &self.active_model_id);
         if !model_dir.exists() {
-            return Err(format!(
-                "模型 {} 尚未下载，请先在设置中下载",
-                self.active_model_id
-            ));
+            return Err(AppError::new(AppErrorCode::AsrModelNotDownloaded)
+                .with_param("model", self.active_model_id.as_str()));
         }
 
         // Load registry and find the model entry
@@ -291,10 +290,8 @@ impl AsrEngine for SherpaOnnxEngine {
             .iter()
             .find(|m| m.id == self.active_model_id)
             .ok_or_else(|| {
-                format!(
-                    "模型 {} 未在注册表 registry.json 中找到",
-                    self.active_model_id
-                )
+                AppError::new(AppErrorCode::AsrModelNotInRegistry)
+                    .with_param("model", self.active_model_id.as_str())
             })?;
 
         // Build VAD config (all models use VAD)
@@ -302,7 +299,7 @@ impl AsrEngine for SherpaOnnxEngine {
             .models
             .iter()
             .find(|m| m.id == "silero-vad")
-            .ok_or_else(|| "registry 中缺少 silero-vad 模型定义".to_string())?;
+            .ok_or_else(|| AppError::new(AppErrorCode::AsrVadMissing))?;
         let vad_base = VadConfig::from_registry(vad_entry.default_config.as_ref());
         let vad_config = VadConfig::merged(&vad_base, &self.vad_params);
 
@@ -399,10 +396,12 @@ impl AsrEngine for SherpaOnnxEngine {
                     )?
                 }
                 other => {
-                    return Err(format!(
-                        "非流式模型 {} 的 architecture '{}' 不支持",
-                        entry.id, other
-                    ));
+                    return Err(
+                        AppError::new(AppErrorCode::InvalidConfig).with_detail(format!(
+                            "model {} has unsupported architecture '{}'",
+                            entry.id, other
+                        )),
+                    );
                 }
             };
 
@@ -453,10 +452,12 @@ impl AsrEngine for SherpaOnnxEngine {
                     funasr_hotwords.as_deref(),
                 )?,
                 other => {
-                    return Err(format!(
-                        "非流式模型 {} 的 architecture '{}' 不支持",
-                        entry.id, other
-                    ));
+                    return Err(
+                        AppError::new(AppErrorCode::InvalidConfig).with_detail(format!(
+                            "model {} has unsupported architecture '{}'",
+                            entry.id, other
+                        )),
+                    );
                 }
             };
 

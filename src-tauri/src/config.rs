@@ -1801,7 +1801,8 @@ mod elevenlabs_tests {
         .await
         .err()
         .unwrap();
-        assert!(error.contains("ElevenLabs API Key"));
+        assert_eq!(error.code, crate::errors::AppErrorCode::AsrConfigMissing);
+        assert_eq!(error.params.get("field").map(String::as_str), Some("elevenlabs-realtime.api_key"));
     }
 }
 

@@ -1,6 +1,7 @@
 use sherpa_onnx::{OfflineFunASRNanoModelConfig, OfflineRecognizer, OfflineRecognizerConfig};
 use std::path::Path;
 
+use crate::errors::{AppError, AppErrorCode};
 use crate::model::ModelEntry;
 
 use super::{build_model_path, json_bool, json_f32, json_i32, json_string};
@@ -34,20 +35,24 @@ pub(crate) fn build_funasr_nano_recognizer(
     num_threads: u32,
     model_config: &serde_json::Value,
     funasr_hotwords: Option<&str>,
-) -> Result<OfflineRecognizer, String> {
+) -> Result<OfflineRecognizer, AppError> {
     let mut config = OfflineRecognizerConfig::default();
     config.model_config.num_threads = num_threads as i32;
     config.model_config.debug = cfg!(debug_assertions);
     config.model_config.provider = json_string(model_config, "provider");
 
+    let missing_file_error = |file: &str| {
+        AppError::new(AppErrorCode::AsrModelFileMissing)
+            .with_param("model", entry.id.as_str())
+            .with_param("file", file)
+    };
     let encoder_adaptor = build_model_path(model_dir, entry, "encoder_adaptor")
-        .ok_or_else(|| format!("模型 {} 缺少 encoder_adaptor 文件", entry.id))?;
-    let llm = build_model_path(model_dir, entry, "llm")
-        .ok_or_else(|| format!("模型 {} 缺少 llm 文件", entry.id))?;
+        .ok_or_else(|| missing_file_error("encoder_adaptor"))?;
+    let llm = build_model_path(model_dir, entry, "llm").ok_or_else(|| missing_file_error("llm"))?;
     let embedding = build_model_path(model_dir, entry, "embedding")
-        .ok_or_else(|| format!("模型 {} 缺少 embedding 文件", entry.id))?;
+        .ok_or_else(|| missing_file_error("embedding"))?;
     let tokenizer = build_model_path(model_dir, entry, "tokenizer")
-        .ok_or_else(|| format!("模型 {} 缺少 tokenizer 文件", entry.id))?;
+        .ok_or_else(|| missing_file_error("tokenizer"))?;
     config.model_config.funasr_nano = OfflineFunASRNanoModelConfig {
         encoder_adaptor: Some(encoder_adaptor),
         llm: Some(llm),
@@ -69,8 +74,10 @@ pub(crate) fn build_funasr_nano_recognizer(
     };
     config.model_config.model_type = Some("funasr_nano".to_string());
 
-    OfflineRecognizer::create(&config)
-        .ok_or_else(|| format!("创建离线识别器失败 (model: {})", entry.id))
+    OfflineRecognizer::create(&config).ok_or_else(|| {
+        AppError::new(AppErrorCode::AsrRecognizerCreateFailed)
+            .with_detail(format!("model: {}", entry.id))
+    })
 }
 
 #[cfg(test)]

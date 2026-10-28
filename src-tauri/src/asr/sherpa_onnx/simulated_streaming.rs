@@ -9,6 +9,7 @@ use tokio::sync::mpsc;
 use super::punct::PunctuationProcessor;
 use super::vad::VadProcessor;
 use super::{append_text, send_transcript, AsrEvent, AsrSession, WorkerCommand, SAMPLE_RATE};
+use crate::errors::{AppError, AppErrorCode};
 
 /// Interval between interim decodes (200ms).
 const INTERIM_INTERVAL_MS: u128 = 200;
@@ -90,41 +91,43 @@ impl AsrSession for SimulatedSession {
         }
     }
 
-    async fn commit_and_await_final(&self) -> Result<String, String> {
+    async fn commit_and_await_final(&self) -> Result<String, AppError> {
         if !self.is_ready() {
-            return Err("ASR 会话已关闭".to_string());
+            return Err(AppError::new(AppErrorCode::AsrSessionClosed));
         }
         if self.is_committed.load(Ordering::SeqCst) {
-            return Err("录音已结束".to_string());
+            return Err(AppError::new(AppErrorCode::AsrSessionClosed));
         }
         self.is_committed.store(true, Ordering::SeqCst);
 
         let tx = self
             .worker_tx
             .lock()
-            .map_err(|_| "ASR worker 状态异常".to_string())?
+            .map_err(|_| AppError::new(AppErrorCode::AsrWorkerAborted))?
             .take()
-            .ok_or_else(|| "ASR worker 已关闭".to_string())?;
+            .ok_or_else(|| AppError::new(AppErrorCode::AsrWorkerClosed))?;
         let handle = self
             .worker_handle
             .lock()
-            .map_err(|_| "ASR worker 状态异常".to_string())?
+            .map_err(|_| AppError::new(AppErrorCode::AsrWorkerAborted))?
             .take();
 
         let result = tokio::task::spawn_blocking(move || {
             let (reply_tx, reply_rx) = std_mpsc::channel();
             tx.send(WorkerCommand::Finish(reply_tx))
-                .map_err(|_| "ASR worker 已关闭".to_string())?;
+                .map_err(|_| AppError::new(AppErrorCode::AsrWorkerClosed))?;
             let final_text = reply_rx
                 .recv()
-                .map_err(|_| "ASR worker 未返回最终结果".to_string())?;
+                .map_err(|_| AppError::new(AppErrorCode::AsrNoFinalResult))?;
             if let Some(handle) = handle {
                 let _ = handle.join();
             }
-            Ok::<_, String>(final_text)
+            Ok::<_, AppError>(final_text)
         })
         .await
-        .unwrap_or_else(|e| Err(format!("识别失败: {}", e)))?;
+        .unwrap_or_else(|e| {
+            Err(AppError::new(AppErrorCode::AsrRecognizeFailed).with_detail(e.to_string()))
+        })?;
 
         // Post-process: apply punctuation restoration
         let result = if let Some(ref punct) = self.punct_processor {
@@ -298,7 +301,7 @@ pub(crate) fn spawn_simulated_streaming_worker(
     vad: VadProcessor,
     event_tx: mpsc::UnboundedSender<AsrEvent>,
     punct_processor: Option<Arc<PunctuationProcessor>>,
-) -> Result<(SimulatedSession, std_mpsc::SyncSender<WorkerCommand>), String> {
+) -> Result<(SimulatedSession, std_mpsc::SyncSender<WorkerCommand>), AppError> {
     let (worker_tx, worker_rx) = std_mpsc::sync_channel(super::AUDIO_QUEUE_CAPACITY);
 
     let handle = std::thread::Builder::new()
@@ -306,7 +309,9 @@ pub(crate) fn spawn_simulated_streaming_worker(
         .spawn(move || {
             run_simulated_streaming_worker(recognizer, vad, event_tx, worker_rx);
         })
-        .map_err(|e| format!("启动模拟流式识别线程失败: {}", e))?;
+        .map_err(|e| {
+            AppError::new(AppErrorCode::AsrThreadStartFailed).with_detail(e.to_string())
+        })?;
 
     Ok((
         SimulatedSession::new(worker_tx.clone(), handle, punct_processor),

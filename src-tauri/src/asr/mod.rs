@@ -7,19 +7,21 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
+use crate::errors::AppError;
+
 /// Unified ASR events sent from any engine to the app layer.
 #[derive(Debug, Clone)]
 pub enum AsrEvent {
     Open,
     Warning {
-        message: String,
+        error: AppError,
     },
     Transcript {
         final_text: String,
         partial_text: String,
     },
     Error {
-        message: String,
+        error: AppError,
         /// Whether the error is unrecoverable (reconnecting cannot help). Fatal
         /// errors fail the recording; recoverable errors may reconnect when
         /// the provider can preserve final-result integrity.
@@ -39,7 +41,7 @@ pub trait AsrEngine: Send + Sync {
     async fn create_session(
         &self,
         hotwords: &[String],
-    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), String>;
+    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), AppError>;
 }
 
 /// ASR session trait — one recording session.
@@ -53,7 +55,7 @@ pub trait AsrSession: Send + Sync {
     fn append_audio(&self, samples: &[f32]);
 
     /// Signal end-of-audio and wait for the final recognition result.
-    async fn commit_and_await_final(&self) -> Result<String, String>;
+    async fn commit_and_await_final(&self) -> Result<String, AppError>;
 
     /// Close the session and release resources.
     fn close(&self);
@@ -70,7 +72,7 @@ pub async fn create_engine_session(
     data_dir: PathBuf,
     resource_dir: PathBuf,
     hotwords: &[String],
-) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>, bool), String> {
+) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>, bool), AppError> {
     let engine_model_id = config.audio_provider();
     let entry = registry.models.iter().find(|m| m.id == engine_model_id);
 
@@ -81,8 +83,9 @@ pub async fn create_engine_session(
                 engine_model_id,
                 &config.audio,
             );
-            let config = serde_json::from_value(merged)
-                .map_err(|_| "ElevenLabs 参数格式错误，请检查模型配置".to_string())?;
+            let config = serde_json::from_value(merged).map_err(|_| {
+                crate::errors::AppError::new(crate::errors::AppErrorCode::AsrConfigInvalid)
+            })?;
             let engine = elevenlabs::ElevenLabsEngine::new(config);
             (engine.create_session(hotwords).await, false)
         }
