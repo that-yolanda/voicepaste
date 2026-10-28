@@ -18,8 +18,8 @@
         "title": "VoicePaste 配置",
         "width": 860,
         "height": 760,
-        "minWidth": 760,
-        "minHeight": 680,
+        "minWidth": 860,
+        "minHeight": 760,
         "visible": true,
         "decorations": true,
         "hiddenTitle": true

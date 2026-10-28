@@ -74,6 +74,7 @@ export function AppSettingsPage() {
               title={t("ui.settings.language")}
               action={
                 <Select
+                  className="max-w-40"
                   value={(app.language as string) || "auto"}
                   onChange={(v) => {
                     void scheduleSave({ app: { language: v } }).then(() =>

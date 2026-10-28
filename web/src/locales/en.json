@@ -297,7 +297,7 @@
     },
     "hotwords": {
       "title": "Hotwords",
-      "description": "Hotwords improve recognition of specific terms. The enabled table is the default and is passed in automatically; models that do not support hotwords can append them to LLM polishing (Audio models > Custom configuration > Recognition boost). Add built-in tables from \"Built-in hotword tables\" as custom tables.",
+      "description": "Hotwords improve recognition of specific terms. The enabled table is the default and is passed in automatically; models that do not support hotwords can append them to LLM polishing (Audio models > Configuration > Recognition boost). Add built-in tables from \"Built-in hotword tables\" as custom tables.",
       "add_group": "Add",
       "builtin": "Library",
       "group_name": "Table name",
@@ -342,8 +342,8 @@
     "hotkey_page": {
       "title": "Hotkeys",
       "description": "Configure custom hotkeys for voice input.",
-      "mode_toggle": "Hands-free",
-      "mode_hold": "Hold to talk",
+      "mode_toggle": "Toggle",
+      "mode_hold": "Hold",
       "toggle_hint": "Hands-free: press the global main key to start, and press the stop key of Voice input or a polish template to finish;",
       "hold_hint": "Hold to talk: hold the hotkey for 500 ms to start and release to finish; after starting, other keys do not change this recording.",
       "cancel_hint_prefix": "While recording a hotkey, press",
@@ -452,7 +452,7 @@
       "tooltip_help": "{{title}} help"
     },
     "model": {
-      "how_to_get_credentials": "How do I get API credentials?",
+      "how_to_get_credentials": "Get credentials",
       "model_file": "Model file {{size}}",
       "memory_peak": "Peak memory {{size}}",
       "config": "Configure",
@@ -470,9 +470,9 @@
       "current": "Current: {{name}}",
       "native": "Native support",
       "other": "Other support",
-      "online": "Online models",
-      "offline": "Local models",
-      "custom_config": "Custom configuration",
+      "online": "Online",
+      "offline": "Local",
+      "custom_config": "Configuration",
       "no_offline_models": "No local models available",
       "base_models": "Base models",
       "section_sample": "Audio sampling",
