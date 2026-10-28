@@ -5,6 +5,7 @@ import {
   getFieldMeta,
   getMergedAsrConfig,
   inferControlType,
+  localizedModelFields,
 } from "@/settings/lib/model";
 import { soundFileName } from "@/settings/lib/sound";
 import type { RegistryModel } from "@/settings/types/models";
@@ -132,5 +133,32 @@ describe("AsrDefaults", () => {
       },
     };
     expect(defaults.vad.threshold).toBe(0.2);
+  });
+});
+
+describe("localizedModelFields", () => {
+  const model = {
+    id: "test",
+    type: "online",
+    name: "测试模型",
+    name_en: "Test model",
+    description: "中文描述",
+    description_en: "English description",
+    tags: ["标签"],
+    tags_en: ["Tag"],
+  } satisfies Parameters<typeof localizedModelFields>[0];
+
+  it("uses English fields when the UI language is English", () => {
+    const fields = localizedModelFields(model, "en");
+    expect(fields.name).toBe("Test model");
+    expect(fields.description).toBe("English description");
+    expect(fields.tags).toEqual(["Tag"]);
+  });
+
+  it("falls back to the Chinese base fields for Chinese and when *_en is absent", () => {
+    expect(localizedModelFields(model, "zh-CN").name).toBe("测试模型");
+    const bare = localizedModelFields({ id: "x", type: "online", name: "只有中文" }, "en");
+    expect(bare.name).toBe("只有中文");
+    expect(bare.tags).toEqual([]);
   });
 });

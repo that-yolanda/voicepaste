@@ -16,6 +16,23 @@ import type { RegistryModel } from "@/settings/types/models";
 export const DOUBAO_MODEL_ID = "doubao-streaming";
 export const ELEVENLABS_MODEL_ID = "elevenlabs-realtime";
 
+/**
+ * Localized display fields for a registry model: the optional `*_en` values
+ * when the UI language is English and the registry carries them, the Chinese
+ * base fields otherwise.
+ */
+export function localizedModelFields(
+  model: RegistryModel,
+  language: string,
+): { name: string; description?: string; tags: string[] } {
+  const en = language.toLowerCase().startsWith("en");
+  return {
+    name: (en ? model.name_en : undefined) || model.name,
+    description: (en ? model.description_en : undefined) || model.description,
+    tags: (en ? model.tags_en : undefined) || model.tags || [],
+  };
+}
+
 /* ---------- Control types & field metadata ---------- */
 
 export type ControlType =

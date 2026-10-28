@@ -40,11 +40,20 @@ pub struct ModelEntry {
     pub engine: String,
     /// Display name in the UI.
     pub name: String,
+    /// English display name; the UI falls back to `name` when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name_en: Option<String>,
     /// Display description in the UI.
     pub description: String,
+    /// English description; the UI falls back to `description` when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description_en: Option<String>,
     /// Feature tags beyond capabilities.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// English tags; the UI falls back to `tags` when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tags_en: Option<Vec<String>>,
     /// Capabilities.
     #[serde(default)]
     pub capabilities: Capabilities,
@@ -196,6 +205,9 @@ fn minimal_registry() -> ModelRegistry {
                 "热词库".to_string(),
                 "中文,英文,方言".to_string(),
             ],
+            name_en: None,
+            description_en: None,
+            tags_en: None,
             capabilities: Capabilities {
                 streaming: true,
                 hotwords: true,
@@ -472,6 +484,9 @@ mod tests {
             name: "Test".to_string(),
             description: "Test model".to_string(),
             tags: vec![],
+            name_en: None,
+            description_en: None,
+            tags_en: None,
             capabilities: Capabilities {
                 streaming: false,
                 hotwords: false,
@@ -500,6 +515,9 @@ mod tests {
             name: "Doubao".to_string(),
             description: "Online ASR".to_string(),
             tags: vec![],
+            name_en: None,
+            description_en: None,
+            tags_en: None,
             capabilities: Capabilities {
                 streaming: true,
                 hotwords: true,
@@ -519,12 +537,12 @@ mod tests {
     }
 
     #[test]
-    fn embedded_registry_is_version_18() {
+    fn embedded_registry_is_version_19() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 18,
-            "EMBEDDED_REGISTRY version should be 18, got {}",
+            registry.version, 19,
+            "EMBEDDED_REGISTRY version should be 19, got {}",
             registry.version
         );
         assert!(
@@ -544,9 +562,29 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 18,
-            "bundled_registry should return version 18 from embedded, got {}",
+            registry.version, 19,
+            "bundled_registry should return version 19 from embedded, got {}",
             registry.version
+        );
+    }
+
+    #[test]
+    fn ensure_registry_preserves_localized_fields() {
+        // Regression guard: ensure_registry rewrites the bundled registry
+        // through the ModelEntry struct, so any registry.json field the struct
+        // does not carry would be silently stripped from the app-data copy.
+        let dir = tempfile::tempdir().expect("tempdir");
+        ensure_registry(dir.path(), std::path::Path::new("/nonexistent"));
+        let written =
+            read_registry_file(&registry_path(dir.path())).expect("app-data registry written");
+        let entry = written
+            .models
+            .iter()
+            .find(|m| m.id == "doubao-streaming")
+            .expect("doubao entry present");
+        assert!(
+            entry.name_en.is_some() && entry.description_en.is_some() && entry.tags_en.is_some(),
+            "English fallback fields must survive the bundled → app-data copy"
         );
     }
 
@@ -580,6 +618,9 @@ mod tests {
             name: "New Model".to_string(),
             description: "A new model".to_string(),
             tags: vec![],
+            name_en: None,
+            description_en: None,
+            tags_en: None,
             capabilities: Capabilities {
                 streaming: false,
                 hotwords: false,

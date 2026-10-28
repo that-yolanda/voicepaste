@@ -30,6 +30,7 @@ import {
   type AsrDefaults,
   DOUBAO_MODEL_ID,
   getFieldMeta,
+  localizedModelFields,
   mergeAsrDefaults,
   resolveFieldMeta,
 } from "@/settings/lib/model";
@@ -66,7 +67,7 @@ const ASR_DEFAULT_SECTIONS: { title: string; fields: string[] }[] = [
 ];
 
 export function AudioModelPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { settings, refresh } = useSettings();
   const cfg = (settings?.parsedConfig || {}) as Record<string, unknown>;
   const audio = (cfg.audio || {}) as Record<string, unknown>;
@@ -235,7 +236,10 @@ export function AudioModelPage() {
 
   /* ---------- Derived ---------- */
 
-  const currentName = registry.find((m) => m.id === provider)?.name || provider;
+  const currentModel = registry.find((m) => m.id === provider);
+  const currentName = currentModel
+    ? localizedModelFields(currentModel, i18n.language).name
+    : provider;
   const isModelDownloaded = (m: RegistryModel) =>
     m.type === "online" ||
     downloaded.includes(m.id) ||

@@ -45,6 +45,7 @@ import {
   getMergedAsrConfig,
   hasLegacyDoubaoCreds,
   isModelFieldVisible,
+  localizedModelFields,
   type MergedField,
   parseLanguageList,
   resolveFieldMeta,
@@ -181,7 +182,8 @@ export function ModelCard({
   onConfigChange,
   onResetConfig,
 }: ModelCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { name, description, tags } = localizedModelFields(model, i18n.language);
   const [configExpanded, setConfigExpanded] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -312,11 +314,7 @@ export function ModelCard({
 
   return (
     <Section>
-      <SectionHeader
-        title={model.name}
-        subtitle={model.description}
-        action={renderHeaderAction()}
-      />
+      <SectionHeader title={name} subtitle={description} action={renderHeaderAction()} />
       <SectionContent>
         {model.capabilities && (
           <div className="flex items-center gap-2 flex-wrap">
@@ -334,7 +332,7 @@ export function ModelCard({
 
         {/* Meta row: tags + capabilities + config toggle */}
         <div className="flex flex-wrap items-center gap-2">
-          {model.tags?.map((tag) => (
+          {tags.map((tag) => (
             <Badge key={tag} variant="accent">
               {tag}
             </Badge>
