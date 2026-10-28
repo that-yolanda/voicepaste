@@ -88,9 +88,50 @@
       "empty_result": "没有得到转写文本，请检查网络连接",
       "reconnecting": "正在重连…",
       "reconnected": "已重连"
+    },
+    "config": {
+      "invalid": "配置格式错误",
+      "io_read": "读取配置失败",
+      "io_write": "写入配置失败"
+    },
+    "hotkey": {
+      "unrecognized": "{{title}}：无法识别快捷键 {{key}}",
+      "needs_modifier": "{{title}}：快捷键需包含功能键、Tab 或修饰键",
+      "conflict": "{{aTitle}}（{{aKey}}）与{{bTitle}}（{{bKey}}）快捷键重复或包含，冲突绑定已停用",
+      "conflict_stopped": "{{aTitle}}（{{aKey}}）与{{bTitle}}（{{bKey}}）快捷键重复或包含，请使用独立快捷键",
+      "main_key_first_modifier": "为不影响键盘输入，主键第一个按键需为功能键、Tab 或修饰键（Ctrl/⌘/Shift/Option/Fn）"
+    },
+    "audio": {
+      "thread_start_failed": "启动录音线程失败",
+      "thread_exited": "录音线程提前退出",
+      "device_not_found": "未找到默认麦克风输入设备",
+      "device_config_failed": "读取麦克风配置失败",
+      "stream_start_failed": "启动麦克风输入流失败",
+      "unsupported_format": "不支持的采样格式",
+      "stream_aborted": "麦克风输入流已中断"
+    },
+    "paste": {
+      "simulation_failed": "模拟粘贴失败，请检查当前焦点位置",
+      "clipboard_write_failed": "剪贴板写入失败"
+    },
+    "model": {
+      "not_in_registry": "模型 {{model}} 未在注册表中找到",
+      "no_download_url": "模型 {{model}} 没有下载地址（在线模型无需下载）",
+      "mkdir_failed": "创建模型目录失败",
+      "download_failed": "下载失败",
+      "download_cancelled": "下载中断",
+      "extract_failed": "解压失败",
+      "save_failed": "保存文件失败",
+      "checksum_failed": "文件校验失败，请重试",
+      "delete_failed": "删除模型失败"
     }
   },
   "ui": {
+    "hotkey": {
+      "binding_main": "全局主键",
+      "binding_voice": "语音输入",
+      "cleared_hint": "已清除该快捷键，请重新设置"
+    },
     "overlay": {
       "preparing": "准备中",
       "recognizing": "识别中",

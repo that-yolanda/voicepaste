@@ -176,7 +176,7 @@ pub fn setup_keytap_hotkeys(app: &AppHandle) -> Result<(), Box<dyn std::error::E
     let prompts = app_inner.config_manager.load_prompts();
     let (bindings, issues) = compile_bindings(&config.app, &prompts);
     for issue in issues {
-        log_hotkey!(warn, "{}", issue.message);
+        log_hotkey!(warn, "binding issue: {} ({:?})", issue.code, issue.params);
     }
 
     let hotkey_config = create_config(bindings);

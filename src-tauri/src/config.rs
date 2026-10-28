@@ -1193,10 +1193,11 @@ impl ConfigManager {
     }
 
     /// Save config as a parsed YAML value, update memory cache and disk.
-    pub fn save_config(&self, config: &serde_norway::Value) -> Result<(), String> {
+    pub fn save_config(&self, config: &serde_norway::Value) -> Result<(), crate::errors::AppError> {
+        use crate::errors::{AppError, AppErrorCode};
         let _guard = self.hotkey_updates.lock().unwrap();
-        let mut candidate: AppConfig =
-            serde_norway::from_value(config.clone()).map_err(|e| format!("配置格式错误：{e}"))?;
+        let mut candidate: AppConfig = serde_norway::from_value(config.clone())
+            .map_err(|e| AppError::new(AppErrorCode::ConfigInvalid).with_detail(e.to_string()))?;
         // Canonicalize app.language (auto | zh-CN | en) so hand-edited YAML
         // variants round-trip to a value the settings UI can display.
         candidate.app.language = normalize_language(&candidate.app.language);
@@ -1206,7 +1207,10 @@ impl ConfigManager {
         crate::hotkey::validate_change(
             &candidate.app,
             &prompts,
-            &self.load_config()?.app,
+            &self
+                .load_config()
+                .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?
+                .app,
             &prompts,
         )?;
         if let Some(raw) = config
@@ -1214,29 +1218,34 @@ impl ConfigManager {
             .and_then(|a| a.get(ELEVENLABS_REALTIME_ID))
         {
             let params: ElevenLabsRealtimeConfig = serde_norway::from_value(raw.clone())
-                .map_err(|_| "ElevenLabs 参数格式错误，请检查模型配置".to_string())?;
-            params.validate()?;
+                .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid))?;
+            params
+                .validate()
+                .map_err(|e| AppError::new(AppErrorCode::AsrConfigInvalid).with_detail(e))?;
         }
         let yaml = serde_norway::to_string(&config)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        fs::write(&self.config_path, yaml).map_err(|e| format!("Failed to write config: {}", e))?;
+            .map_err(|e| AppError::new(AppErrorCode::ConfigIoWrite).with_detail(e.to_string()))?;
+        fs::write(&self.config_path, yaml)
+            .map_err(|e| AppError::new(AppErrorCode::ConfigIoWrite).with_detail(e.to_string()))?;
         // Re-read from disk to populate cache, avoiding JSON→YAML value round-trip
         // deserialization issues that can cause silent fallback to defaults.
         *self.cached_config.write().unwrap() = Self::read_config_from_disk(&self.config_path);
         Ok(())
     }
 
-    pub fn remember_polish_prompt(&self, id: &str) -> Result<(), String> {
+    pub fn remember_polish_prompt(&self, id: &str) -> Result<(), crate::errors::AppError> {
         let mut config = self.get_editable_config()?;
         config["app"]["last_polish_prompt_id"] = serde_norway::Value::String(id.into());
         self.save_config(&config)
     }
 
     /// Get config as editable YAML value (reads from disk for settings UI).
-    pub fn get_editable_config(&self) -> Result<serde_norway::Value, String> {
+    pub fn get_editable_config(&self) -> Result<serde_norway::Value, crate::errors::AppError> {
+        use crate::errors::{AppError, AppErrorCode};
         let content = fs::read_to_string(&self.config_path)
-            .map_err(|e| format!("Failed to read config: {}", e))?;
-        serde_norway::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
+            .map_err(|e| AppError::new(AppErrorCode::ConfigIoRead).with_detail(e.to_string()))?;
+        serde_norway::from_str(&content)
+            .map_err(|e| AppError::new(AppErrorCode::ConfigInvalid).with_detail(e.to_string()))
     }
 
     pub fn config_path(&self) -> &PathBuf {
@@ -1251,14 +1260,17 @@ impl ConfigManager {
     }
 
     /// Save prompts, update memory cache and disk.
-    pub fn save_prompts(&self, prompts: &[PromptItem]) -> Result<(), String> {
+    pub fn save_prompts(&self, prompts: &[PromptItem]) -> Result<(), crate::errors::AppError> {
+        use crate::errors::{AppError, AppErrorCode};
         let _guard = self.hotkey_updates.lock().unwrap();
-        let config = self.load_config()?;
+        let config = self
+            .load_config()
+            .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
         crate::hotkey::validate_change(&config.app, prompts, &config.app, &self.load_prompts())?;
         let json = serde_json::to_string_pretty(prompts)
-            .map_err(|e| format!("Failed to serialize prompts: {}", e))?;
+            .map_err(|e| AppError::new(AppErrorCode::ConfigIoWrite).with_detail(e.to_string()))?;
         fs::write(&self.prompts_path, json)
-            .map_err(|e| format!("Failed to write prompts: {}", e))?;
+            .map_err(|e| AppError::new(AppErrorCode::ConfigIoWrite).with_detail(e.to_string()))?;
         *self.cached_prompts.write().unwrap() = prompts.to_vec();
         Ok(())
     }
@@ -1802,7 +1814,10 @@ mod elevenlabs_tests {
         .err()
         .unwrap();
         assert_eq!(error.code, crate::errors::AppErrorCode::AsrConfigMissing);
-        assert_eq!(error.params.get("field").map(String::as_str), Some("elevenlabs-realtime.api_key"));
+        assert_eq!(
+            error.params.get("field").map(String::as_str),
+            Some("elevenlabs-realtime.api_key")
+        );
     }
 }
 

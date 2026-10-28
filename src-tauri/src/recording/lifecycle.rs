@@ -31,8 +31,12 @@ pub(super) async fn start_recording(app_handle: AppHandle) {
         Err(e) => {
             *recording_state.0.lock().unwrap() = false;
             log_rec!(error, "Failed to load config: {}", e);
-            overlay::show_restart_error(&app_handle, &app_inner, &format!("配置加载失败: {}", e))
-                .await;
+            overlay::show_restart_error(
+                &app_handle,
+                &app_inner,
+                &AppError::new(AppErrorCode::ConfigIoRead),
+            )
+            .await;
             return;
         }
     };

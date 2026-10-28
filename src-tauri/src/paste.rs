@@ -2,6 +2,8 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
+use crate::errors::{AppError, AppErrorCode};
+
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -9,7 +11,7 @@ use std::os::windows::process::CommandExt;
 pub struct PasteResult {
     pub(crate) ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) message: Option<String>,
+    pub(crate) message: Option<AppError>,
     #[serde(skip_serializing_if = "Option::is_none")]
     permission_error: Option<String>,
 }
@@ -61,9 +63,9 @@ pub fn simulate_paste() -> PasteResult {
             PasteResult {
                 ok: false,
                 message: Some(if msg.is_empty() {
-                    "模拟粘贴失败，请检查当前焦点位置".to_string()
+                    AppError::new(AppErrorCode::PasteSimulationFailed)
                 } else {
-                    msg
+                    AppError::new(AppErrorCode::PasteSimulationFailed).with_detail(msg)
                 }),
                 permission_error: if is_accessibility_error {
                     Some("accessibility".to_string())
@@ -142,18 +144,23 @@ mod tests {
     fn paste_result_error_with_message() {
         let result = PasteResult {
             ok: false,
-            message: Some("模拟粘贴失败".to_string()),
+            message: Some(AppError::new(AppErrorCode::PasteSimulationFailed)),
             permission_error: None,
         };
         assert!(!result.ok);
-        assert_eq!(result.message.as_deref(), Some("模拟粘贴失败"));
+        assert_eq!(
+            result.message.unwrap().code,
+            AppErrorCode::PasteSimulationFailed
+        );
     }
 
     #[test]
     fn paste_result_accessibility_error() {
         let result = PasteResult {
             ok: false,
-            message: Some("not allowed".to_string()),
+            message: Some(
+                AppError::new(AppErrorCode::PasteSimulationFailed).with_detail("not allowed"),
+            ),
             permission_error: Some("accessibility".to_string()),
         };
         assert!(result.permission_error.is_some());
@@ -164,7 +171,9 @@ mod tests {
     fn paste_result_non_accessibility_error() {
         let result = PasteResult {
             ok: false,
-            message: Some("generic error".to_string()),
+            message: Some(
+                AppError::new(AppErrorCode::PasteSimulationFailed).with_detail("generic error"),
+            ),
             permission_error: None,
         };
         assert!(result.permission_error.is_none());

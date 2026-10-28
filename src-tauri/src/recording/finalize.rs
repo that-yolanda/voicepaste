@@ -252,7 +252,10 @@ pub(super) async fn deliver_text(
     };
 
     if let Err(e) = app_handle.clipboard().write_text(final_text) {
-        overlay::show_output_error(app_handle, app_inner, &format!("剪贴板写入失败: {}", e)).await;
+        let error =
+            crate::errors::AppError::new(crate::errors::AppErrorCode::PasteClipboardWriteFailed)
+                .with_detail(e.to_string());
+        overlay::show_output_error(app_handle, app_inner, &error).await;
         return false;
     }
 
@@ -267,12 +270,10 @@ pub(super) async fn deliver_text(
     }
 
     if !result.ok {
-        overlay::show_output_error(
-            app_handle,
-            app_inner,
-            result.message.as_deref().unwrap_or("模拟粘贴失败"),
-        )
-        .await;
+        let error = result.message.unwrap_or_else(|| {
+            crate::errors::AppError::new(crate::errors::AppErrorCode::PasteSimulationFailed)
+        });
+        overlay::show_output_error(app_handle, app_inner, &error).await;
         return false;
     }
 

@@ -1,4 +1,5 @@
 use crate::app_state;
+use crate::errors::{AppError, AppErrorCode};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -26,7 +27,7 @@ impl NativeAudioCapture {
 pub async fn start_capture(
     app: AppHandle,
     app_inner: Arc<app_state::AppInner>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut slot = app_inner.native_audio.lock().await;
     if slot.is_some() {
         return Ok(());
@@ -34,7 +35,7 @@ pub async fn start_capture(
 
     let (audio_tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<f32>>();
     let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
-    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<Result<(), AppError>>();
 
     let input_thread = thread::Builder::new()
         .name("voicepaste-native-audio".to_string())
@@ -43,7 +44,9 @@ pub async fn start_capture(
                 log_audio!(error, "Native audio thread exited with error: {}", error);
             }
         })
-        .map_err(|e| format!("启动原生录音线程失败: {e}"))?;
+        .map_err(|e| {
+            AppError::new(AppErrorCode::AudioThreadStartFailed).with_detail(e.to_string())
+        })?;
 
     // Await the ready signal asynchronously: the worker sends it the moment the
     // input stream is built, so we never block a tokio worker thread.
@@ -56,7 +59,7 @@ pub async fn start_capture(
         }
         Err(_) => {
             let _ = input_thread.join();
-            return Err("原生录音线程提前退出".to_string());
+            return Err(AppError::new(AppErrorCode::AudioThreadExited));
         }
     }
 
@@ -94,8 +97,8 @@ pub async fn stop_capture(app_inner: &Arc<app_state::AppInner>) {
 fn run_input_thread(
     tx: tokio::sync::mpsc::UnboundedSender<Vec<f32>>,
     stop_rx: std::sync::mpsc::Receiver<()>,
-    ready_tx: tokio::sync::oneshot::Sender<Result<(), String>>,
-) -> Result<(), String> {
+    ready_tx: tokio::sync::oneshot::Sender<Result<(), AppError>>,
+) -> Result<(), AppError> {
     let final_chunk = Arc::new(Mutex::new(Vec::<f32>::with_capacity(TARGET_CHUNK_SAMPLES)));
     let stream = match build_input_stream(tx.clone(), Arc::clone(&final_chunk)) {
         Ok(stream) => stream,
@@ -105,14 +108,15 @@ fn run_input_thread(
         }
     };
     if let Err(error) = stream.play() {
-        let message = format!("启动麦克风输入流失败: {error}");
-        let _ = ready_tx.send(Err(message.clone()));
-        return Err(message);
+        let error =
+            AppError::new(AppErrorCode::AudioStreamStartFailed).with_detail(error.to_string());
+        let _ = ready_tx.send(Err(error.clone()));
+        return Err(error);
     }
     let _ = ready_tx.send(Ok(()));
     stop_rx
         .recv()
-        .map_err(|e| format!("等待停止原生录音失败: {e}"))?;
+        .map_err(|e| AppError::new(AppErrorCode::AudioStreamAborted).with_detail(e.to_string()))?;
     drop(stream);
     if let Ok(mut chunk) = final_chunk.lock() {
         if !chunk.is_empty() {
@@ -126,14 +130,14 @@ fn run_input_thread(
 fn build_input_stream(
     tx: tokio::sync::mpsc::UnboundedSender<Vec<f32>>,
     final_chunk: Arc<Mutex<Vec<f32>>>,
-) -> Result<cpal::Stream, String> {
+) -> Result<cpal::Stream, AppError> {
     let host = cpal::default_host();
     let device = host
         .default_input_device()
-        .ok_or_else(|| "未找到默认麦克风输入设备".to_string())?;
-    let config = device
-        .default_input_config()
-        .map_err(|e| format!("读取默认麦克风配置失败: {e}"))?;
+        .ok_or_else(|| AppError::new(AppErrorCode::AudioDeviceNotFound))?;
+    let config = device.default_input_config().map_err(|e| {
+        AppError::new(AppErrorCode::AudioDeviceConfigFailed).with_detail(e.to_string())
+    })?;
     let sample_rate = config.sample_rate();
     let channels = usize::from(config.channels());
     let stream_config = config.config();
@@ -178,7 +182,10 @@ fn build_input_stream(
             final_chunk,
             err_fn,
         ),
-        other => Err(format!("不支持的采样格式: {other:?}")),
+        other => {
+            Err(AppError::new(AppErrorCode::AudioUnsupportedFormat)
+                .with_detail(format!("{other:?}")))
+        }
     }
 }
 
@@ -190,7 +197,7 @@ fn build_stream<T>(
     tx: tokio::sync::mpsc::UnboundedSender<Vec<f32>>,
     final_chunk: Arc<Mutex<Vec<f32>>>,
     err_fn: impl FnMut(cpal::StreamError) + Send + 'static,
-) -> Result<cpal::Stream, String>
+) -> Result<cpal::Stream, AppError>
 where
     T: cpal::Sample + cpal::SizedSample + Send + 'static,
     f32: FromNativeSample<T>,
@@ -219,7 +226,7 @@ where
             err_fn,
             None,
         )
-        .map_err(|e| format!("创建麦克风输入流失败: {e}"))
+        .map_err(|e| AppError::new(AppErrorCode::AudioStreamStartFailed).with_detail(e.to_string()))
 }
 
 fn downmix_to_mono<T>(data: &[T], channels: usize) -> Vec<f32>

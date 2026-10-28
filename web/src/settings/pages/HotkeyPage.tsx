@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errText } from "@/i18n/errText";
 import { loadPrompts, savePrompts, validateHotkeySettings } from "@/settings/bridge";
 import { HotkeyInput } from "@/settings/components/HotkeyInput";
 import { KeyCap } from "@/settings/components/KeyCap";
@@ -23,6 +25,7 @@ const MODE_OPTIONS = [
 ];
 
 export function HotkeyPage() {
+  const { t } = useTranslation();
   const { settings, scheduleSave, refresh } = useSettings();
   const cfg = settings?.parsedConfig || ({} as Record<string, unknown>);
   const app = (cfg.app || {}) as Record<string, string | undefined>;
@@ -30,7 +33,11 @@ export function HotkeyPage() {
   // Keep an explicit empty string (user cleared the key) distinct from missing.
   const hotkeyStr = app.hotkey ?? (isMac ? "MetaLeft" : "ControlLeft");
   const voiceHotkey = app.voice_hotkey ?? (app.hotkey_mode === "hold" ? "" : hotkeyStr);
-  const issues = (settings?.runtime?.hotkeyIssues ?? []) as { id: string; message: string }[];
+  const issues = (settings?.runtime?.hotkeyIssues ?? []) as {
+    id: string;
+    code: string;
+    params?: Record<string, string>;
+  }[];
   const hotkeyMode = (app.hotkey_mode as string) || "toggle";
   const { toast, showToast } = useToast();
 
@@ -56,12 +63,26 @@ export function HotkeyPage() {
   // inline errors. An intentionally empty shortcut is a normal disabled state.
   const shownIssues = useRef(new Set<string>());
   useEffect(() => {
+    // Reserved binding titles are localized here; prompt templates carry their
+    // user-editable title verbatim.
+    const bindingTitle = (title: string): string =>
+      title === "main"
+        ? t("ui.hotkey.binding_main")
+        : title === "voice"
+          ? t("ui.hotkey.binding_voice")
+          : title;
     const messages = issues
-      .map((issue) => issue.message)
+      .map((issue) => {
+        const params = { ...(issue.params ?? {}) };
+        if (params.title) params.title = bindingTitle(params.title);
+        if (params.aTitle) params.aTitle = bindingTitle(params.aTitle);
+        if (params.bTitle) params.bTitle = bindingTitle(params.bTitle);
+        return t(`errors.${issue.code}`, params);
+      })
       .filter((message) => !shownIssues.current.has(message));
     for (const message of messages) shownIssues.current.add(message);
     if (messages.length > 0) showToast(messages.join("；"), "error");
-  }, [issues, showToast]);
+  }, [issues, showToast, t]);
 
   const updatePrompt = useCallback(
     async (index: number, patch: Partial<PromptItem>) => {
@@ -76,17 +97,17 @@ export function HotkeyPage() {
           if (patch.hotkey_mode === undefined) throw error;
           updated = updated.map((p, i) => (i === index ? { ...p, hotkey: "" } : p));
           await validateHotkeySettings(cfg, updated, targetId);
-          clearedReason = `${String(error)}；已清除该快捷键，请重新设置`;
+          clearedReason = `${errText(error)}；${t("ui.hotkey.cleared_hint")}`;
         }
         await savePrompts(updated as unknown[]);
         setPrompts(updated);
         await refresh();
         if (clearedReason) showToast(clearedReason, "error");
       } catch (error) {
-        showToast(String(error), "error");
+        showToast(errText(error), "error");
       }
     },
-    [cfg, prompts, refresh, showToast],
+    [cfg, prompts, refresh, showToast, t],
   );
 
   const updateApp = useCallback(
@@ -101,15 +122,15 @@ export function HotkeyPage() {
           if (patch.hotkey_mode === undefined) throw error;
           updates = { ...patch, voice_hotkey: "" };
           await validateHotkeySettings({ ...cfg, app: { ...app, ...updates } }, prompts, targetId);
-          clearedReason = `${String(error)}；已清除该快捷键，请重新设置`;
+          clearedReason = `${errText(error)}；${t("ui.hotkey.cleared_hint")}`;
         }
         await scheduleSave({ app: updates });
         if (clearedReason) showToast(clearedReason, "error");
       } catch (error) {
-        showToast(String(error), "error");
+        showToast(errText(error), "error");
       }
     },
-    [cfg, app, prompts, scheduleSave, showToast],
+    [cfg, app, prompts, scheduleSave, showToast, t],
   );
 
   // The recordable hotkey field for one prompt row — its "stop" key in toggle
@@ -121,7 +142,7 @@ export function HotkeyPage() {
       return {
         isMac,
         validateFirstKey: item.hotkey_mode === "hold",
-        onInvalid: (reason: string) => showToast(reason, "error"),
+        onInvalid: (reason: string) => showToast(errText({ code: reason }), "error"),
         busy: isBusyFor(recorderId),
         onStart: () => setActiveRecorder(recorderId),
         onDone: () => setActiveRecorder(null),
@@ -165,7 +186,7 @@ export function HotkeyPage() {
                   onCommit={(hk) => updateApp({ hotkey: hk })}
                   onClear={() => updateApp({ hotkey: "" })}
                   validateFirstKey
-                  onInvalid={(reason) => showToast(reason, "error")}
+                  onInvalid={(reason) => showToast(errText({ code: reason }), "error")}
                 />
               }
             />
@@ -195,7 +216,7 @@ export function HotkeyPage() {
                         onDone={() => setActiveRecorder(null)}
                         onCommit={(hk) => updateApp({ voice_hotkey: hk })}
                         onClear={() => updateApp({ voice_hotkey: "" })}
-                        onInvalid={(reason) => showToast(reason, "error")}
+                        onInvalid={(reason) => showToast(errText({ code: reason }), "error")}
                       />
                     </>
                   ) : (
@@ -208,7 +229,7 @@ export function HotkeyPage() {
                       onDone={() => setActiveRecorder(null)}
                       onCommit={(hk) => updateApp({ voice_hotkey: hk })}
                       onClear={() => updateApp({ voice_hotkey: "" })}
-                      onInvalid={(reason) => showToast(reason, "error")}
+                      onInvalid={(reason) => showToast(errText({ code: reason }), "error")}
                     />
                   )}
                   <SegmentedControl

@@ -281,10 +281,10 @@ fn select_hint_prompt<'a>(
 pub(crate) async fn show_restart_error(
     app: &AppHandle,
     inner: &Arc<app_state::AppInner>,
-    text: &str,
+    error: &crate::errors::AppError,
 ) {
     app_state::set_app_state(app, inner, app_state::AppState::Idle).await;
-    emit_retryable_error_hint(app, inner, text).await;
+    emit_retryable_error(app, inner, error).await;
     show(app);
     schedule_retry_overlay_hide(app.clone(), Arc::clone(inner));
 }
@@ -292,18 +292,13 @@ pub(crate) async fn show_restart_error(
 pub(crate) async fn show_output_error(
     app: &AppHandle,
     inner: &Arc<app_state::AppInner>,
-    text: &str,
+    error: &crate::errors::AppError,
 ) {
-    log_rec!(error, "Text output failed: {}", text);
+    log_rec!(error, "Text output failed: {}", error);
     app_state::set_app_state(app, inner, app_state::AppState::Idle).await;
     invalidate_feedback(inner);
     inner.feedback_visible.store(true, Ordering::SeqCst);
-    let _ = app.emit(
-        "overlay:event",
-        serde_json::json!({
-            "type": "hint", "payload": { "text": text, "level": "error", "variant": "text" }
-        }),
-    );
+    emit_retryable_error(app, inner, error).await;
     emit_shortcuts(app, &[shared::Shortcut::new("Esc", "取消")]);
     show(app);
     schedule_retry_overlay_hide(app.clone(), Arc::clone(inner));
@@ -334,32 +329,6 @@ pub(crate) async fn show_success(
         tokio::time::sleep(Duration::from_secs(2)).await;
         hide_for_epoch(&app, Some(epoch));
     });
-}
-
-/// Legacy text-only path for domains not yet migrated to structured errors
-/// (audio capture, output/paste). Goes away once those domains carry codes.
-pub(crate) async fn emit_retryable_error_hint(
-    app: &AppHandle,
-    app_inner: &Arc<app_state::AppInner>,
-    text: &str,
-) {
-    invalidate_feedback(app_inner);
-    app_inner.feedback_visible.store(true, Ordering::SeqCst);
-    let hotkey = hotkey::current_hotkey_label(app_inner).await;
-    let _ = app.emit(
-        "overlay:event",
-        serde_json::json!({
-            "type": "hint",
-            "payload": {
-                "text": text,
-                "level": "error",
-                "variant": "text",
-                "retryable": true,
-                "hotkey": hotkey
-            }
-        }),
-    );
-    emit_shortcuts(app, &error_shortcuts(&hotkey, false));
 }
 
 /// Emit a retryable error hint from a structured error. The payload carries

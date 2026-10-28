@@ -3,6 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 
+use crate::errors::{AppError, AppErrorCode};
+
 /// Model category: what the model does (not its online/offline nature).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -260,12 +262,14 @@ pub async fn download_model(
     data_dir: &Path,
     registry: &ModelRegistry,
     model_id: &str,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let entry = registry
         .models
         .iter()
         .find(|m| m.id == model_id)
-        .ok_or_else(|| format!("模型 {} 未在注册表中找到", model_id))?
+        .ok_or_else(|| {
+            AppError::new(AppErrorCode::ModelNotInRegistry).with_param("model", model_id)
+        })?
         .clone();
 
     if entry.engine == "sherpa-onnx" && entry.category == ModelCategory::Asr {
@@ -293,11 +297,10 @@ async fn download_model_entry(
     app: &AppHandle,
     data_dir: &Path,
     entry: &ModelEntry,
-) -> Result<(), String> {
-    let url = entry
-        .download_url
-        .as_ref()
-        .ok_or_else(|| format!("模型 {} 没有下载地址（在线模型无需下载）", entry.id))?;
+) -> Result<(), AppError> {
+    let url = entry.download_url.as_ref().ok_or_else(|| {
+        AppError::new(AppErrorCode::ModelNoDownloadUrl).with_param("model", entry.id.as_str())
+    })?;
 
     let dir = models_dir(data_dir);
     if is_model_downloaded(&dir, entry) {
@@ -313,7 +316,8 @@ async fn download_model_entry(
     }
 
     let model_dir = dir.join(&entry.id);
-    fs::create_dir_all(&model_dir).map_err(|e| format!("创建模型目录失败: {}", e))?;
+    fs::create_dir_all(&model_dir)
+        .map_err(|e| AppError::new(AppErrorCode::ModelMkdirFailed).with_detail(e.to_string()))?;
 
     // Registry URLs are public release addresses (no credentials), and the
     // failure error itself carries no URL — keep it as the download source.
@@ -331,10 +335,11 @@ async fn download_model_entry(
     // Download the archive
     let response = reqwest::get(url)
         .await
-        .map_err(|e| format!("下载失败: {}", e))?;
+        .map_err(|e| AppError::new(AppErrorCode::ModelDownloadFailed).with_detail(e.to_string()))?;
 
     if !response.status().is_success() {
-        return Err(format!("下载失败: HTTP {}", response.status()));
+        return Err(AppError::new(AppErrorCode::ModelDownloadFailed)
+            .with_detail(format!("HTTP {}", response.status())));
     }
 
     let total_size = response.content_length();
@@ -345,7 +350,9 @@ async fn download_model_entry(
     let mut chunks: Vec<u8> = Vec::new();
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("下载中断: {}", e))?;
+        let chunk = chunk.map_err(|e| {
+            AppError::new(AppErrorCode::ModelDownloadCancelled).with_detail(e.to_string())
+        })?;
         downloaded += chunk.len() as u64;
         chunks.extend_from_slice(&chunk);
 
@@ -368,21 +375,22 @@ async fn download_model_entry(
         use flate2::read::GzDecoder;
         let gz = GzDecoder::new(&archive_data[..]);
         let mut archive = tar::Archive::new(gz);
-        archive
-            .unpack(&model_dir)
-            .map_err(|e| format!("解压失败: {}", e))?;
+        archive.unpack(&model_dir).map_err(|e| {
+            AppError::new(AppErrorCode::ModelExtractFailed).with_detail(e.to_string())
+        })?;
     } else if url.ends_with(".tar.bz2") || url.ends_with(".tbz2") {
         use bzip2::read::BzDecoder;
         let bz = BzDecoder::new(&archive_data[..]);
         let mut archive = tar::Archive::new(bz);
-        archive
-            .unpack(&model_dir)
-            .map_err(|e| format!("解压失败: {}", e))?;
+        archive.unpack(&model_dir).map_err(|e| {
+            AppError::new(AppErrorCode::ModelExtractFailed).with_detail(e.to_string())
+        })?;
     } else {
         // Single file — save directly using the first model_files value
         if let Some(filename) = entry.model_files.values().next() {
-            fs::write(model_dir.join(filename), &archive_data)
-                .map_err(|e| format!("保存文件失败: {}", e))?;
+            fs::write(model_dir.join(filename), &archive_data).map_err(|e| {
+                AppError::new(AppErrorCode::ModelSaveFailed).with_detail(e.to_string())
+            })?;
         }
     }
 
@@ -393,7 +401,9 @@ async fn download_model_entry(
     }
 
     if !is_model_downloaded(&dir, entry) {
-        return Err(format!("模型 {} 下载完成但文件校验失败，请重试", entry.id));
+        return Err(
+            AppError::new(AppErrorCode::ModelChecksumFailed).with_param("model", entry.id.as_str())
+        );
     }
 
     let _ = app.emit(
@@ -429,10 +439,12 @@ fn flatten_single_subdir(dir: &Path) {
 }
 
 /// Delete a downloaded model's directory.
-pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<(), String> {
+pub fn delete_model(data_dir: &Path, model_id: &str) -> Result<(), AppError> {
     let dir = models_dir(data_dir).join(model_id);
     if dir.exists() {
-        fs::remove_dir_all(&dir).map_err(|e| format!("删除模型失败: {}", e))?;
+        fs::remove_dir_all(&dir).map_err(|e| {
+            AppError::new(AppErrorCode::ModelDeleteFailed).with_detail(e.to_string())
+        })?;
     }
     Ok(())
 }

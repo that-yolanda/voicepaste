@@ -130,6 +130,37 @@ app_error_codes! {
     AsrEmptyResult => "asr.empty_result",
     AsrReconnecting => "asr.reconnecting",
     AsrReconnected => "asr.reconnected",
+    // config — configuration file / validation
+    ConfigInvalid => "config.invalid",
+    ConfigIoRead => "config.io_read",
+    ConfigIoWrite => "config.io_write",
+    // hotkey — binding validation
+    HotkeyUnrecognized => "hotkey.unrecognized",
+    HotkeyNeedsModifier => "hotkey.needs_modifier",
+    HotkeyConflict => "hotkey.conflict",
+    HotkeyConflictStopped => "hotkey.conflict_stopped",
+    HotkeyMainKeyModifier => "hotkey.main_key_first_modifier",
+    // audio — microphone capture
+    AudioThreadStartFailed => "audio.thread_start_failed",
+    AudioThreadExited => "audio.thread_exited",
+    AudioDeviceNotFound => "audio.device_not_found",
+    AudioDeviceConfigFailed => "audio.device_config_failed",
+    AudioStreamStartFailed => "audio.stream_start_failed",
+    AudioUnsupportedFormat => "audio.unsupported_format",
+    AudioStreamAborted => "audio.stream_aborted",
+    // paste — clipboard / simulated paste output
+    PasteSimulationFailed => "paste.simulation_failed",
+    PasteClipboardWriteFailed => "paste.clipboard_write_failed",
+    // model — download / delete
+    ModelNotInRegistry => "model.not_in_registry",
+    ModelNoDownloadUrl => "model.no_download_url",
+    ModelMkdirFailed => "model.mkdir_failed",
+    ModelDownloadFailed => "model.download_failed",
+    ModelDownloadCancelled => "model.download_cancelled",
+    ModelExtractFailed => "model.extract_failed",
+    ModelSaveFailed => "model.save_failed",
+    ModelChecksumFailed => "model.checksum_failed",
+    ModelDeleteFailed => "model.delete_failed",
 }
 
 impl AppErrorCode {
@@ -328,6 +359,31 @@ impl AppErrorCode {
             }
             (ZhCn, Self::StatsInvalidWav) => "录音文件无效",
             (En, Self::StatsInvalidWav) => "The recording file is invalid",
+            // config / audio / paste — surfaces via the overlay restart/output hints
+            (ZhCn, Self::ConfigInvalid) => "配置格式错误",
+            (En, Self::ConfigInvalid) => "Invalid configuration",
+            (ZhCn, Self::ConfigIoRead) => "读取配置失败",
+            (En, Self::ConfigIoRead) => "Failed to read the configuration",
+            (ZhCn, Self::ConfigIoWrite) => "写入配置失败",
+            (En, Self::ConfigIoWrite) => "Failed to write the configuration",
+            (ZhCn, Self::AudioThreadStartFailed) => "启动录音线程失败",
+            (En, Self::AudioThreadStartFailed) => "Failed to start the recording thread",
+            (ZhCn, Self::AudioThreadExited) => "录音线程提前退出",
+            (En, Self::AudioThreadExited) => "The recording thread exited early",
+            (ZhCn, Self::AudioDeviceNotFound) => "未找到默认麦克风输入设备",
+            (En, Self::AudioDeviceNotFound) => "No default microphone input found",
+            (ZhCn, Self::AudioDeviceConfigFailed) => "读取麦克风配置失败",
+            (En, Self::AudioDeviceConfigFailed) => "Failed to read the microphone configuration",
+            (ZhCn, Self::AudioStreamStartFailed) => "启动麦克风输入流失败",
+            (En, Self::AudioStreamStartFailed) => "Failed to start the microphone input stream",
+            (ZhCn, Self::AudioUnsupportedFormat) => "不支持的采样格式",
+            (En, Self::AudioUnsupportedFormat) => "Unsupported sample format",
+            (ZhCn, Self::AudioStreamAborted) => "麦克风输入流已中断",
+            (En, Self::AudioStreamAborted) => "The microphone input stream aborted",
+            (ZhCn, Self::PasteSimulationFailed) => "模拟粘贴失败，请检查当前焦点位置",
+            (En, Self::PasteSimulationFailed) => "Paste simulation failed. Check the focused input",
+            (ZhCn, Self::PasteClipboardWriteFailed) => "剪贴板写入失败",
+            (En, Self::PasteClipboardWriteFailed) => "Failed to write to the clipboard",
             // Codes that never reach a natively rendered surface (stats,
             // feedback, common) fall back to the machine code; the frontend
             // locale files own their user-facing text.

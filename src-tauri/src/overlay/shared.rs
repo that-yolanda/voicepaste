@@ -247,8 +247,10 @@ mod tests {
 
     #[test]
     fn visible_hint_state_placeholders_in_english() {
-        let mut m = Model::default(); // default language is English
-        m.app_state = "connecting".into();
+        let mut m = Model {
+            app_state: "connecting".into(),
+            ..Default::default()
+        }; // default language is English
         assert_eq!(visible_hint(&m), "Preparing…");
         m.app_state = "finishing".into();
         m.hint_variant = "progress".into();

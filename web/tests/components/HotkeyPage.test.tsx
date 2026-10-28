@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
     parsedConfig: {
       app: { hotkey: "F13" as string | undefined, hotkey_mode: "toggle", voice_hotkey: "F2" },
     },
-    runtime: { platform: "windows", hotkeyIssues: [] as { id: string; message: string }[] },
+    runtime: {
+      platform: "windows",
+      hotkeyIssues: [] as { id: string; code: string; params?: Record<string, string> }[],
+    },
   },
   save: vi.fn(),
   refresh: vi.fn(),
@@ -102,10 +105,10 @@ describe("HotkeyPage", () => {
   });
   it("shows legacy disabled-binding warnings only in a transient toast", async () => {
     mocks.settings.runtime.hotkeyIssues = [
-      { id: "voice", message: "按住说话键未配置，请重新设置" },
+      { id: "voice", code: "hotkey.needs_modifier", params: { title: "voice" } },
     ];
     render(<HotkeyPage />);
-    const warning = screen.getByText("按住说话键未配置，请重新设置");
+    const warning = screen.getByText("语音输入：快捷键需包含功能键、Tab 或修饰键");
     expect(warning.closest("section")).toBeNull();
     expect(warning.closest(".fixed")).not.toBeNull();
     await screen.findByText("润色");
@@ -162,11 +165,18 @@ describe("HotkeyPage", () => {
     expect(mocks.save).toHaveBeenCalledWith({ app: { hotkey_mode: "hold", voice_hotkey: "F2" } });
   });
   it("does not repeat a warning after an unchanged settings refresh", async () => {
-    mocks.settings.runtime.hotkeyIssues = [{ id: "p", message: "重复快捷键已停用" }];
+    mocks.settings.runtime.hotkeyIssues = [
+      {
+        id: "p",
+        code: "hotkey.conflict",
+        params: { aTitle: "main", aKey: "Ctrl", bTitle: "p", bKey: "Ctrl" },
+      },
+    ];
     const view = render(<HotkeyPage />);
     await screen.findByText("润色");
     view.rerender(<HotkeyPage />);
-    expect(screen.getAllByText("重复快捷键已停用")).toHaveLength(1);
-    expect(screen.getByText("重复快捷键已停用").closest(".fixed")).not.toBeNull();
+    const message = "全局主键（Ctrl）与p（Ctrl）快捷键重复或包含，冲突绑定已停用";
+    expect(screen.getAllByText(message)).toHaveLength(1);
+    expect(screen.getByText(message).closest(".fixed")).not.toBeNull();
   });
 });

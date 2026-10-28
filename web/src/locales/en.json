@@ -88,9 +88,50 @@
       "empty_result": "No transcript text came back. Check the network",
       "reconnecting": "Reconnecting…",
       "reconnected": "Reconnected"
+    },
+    "config": {
+      "invalid": "Invalid configuration",
+      "io_read": "Failed to read the configuration",
+      "io_write": "Failed to write the configuration"
+    },
+    "hotkey": {
+      "unrecognized": "{{title}}: unrecognized hotkey {{key}}",
+      "needs_modifier": "{{title}}: the hotkey needs a function key, Tab, or a modifier",
+      "conflict": "{{aTitle}} ({{aKey}}) and {{bTitle}} ({{bKey}}) overlap or contain each other; the conflicting binding was disabled",
+      "conflict_stopped": "{{aTitle}} ({{aKey}}) and {{bTitle}} ({{bKey}}) overlap or contain each other; use an independent hotkey",
+      "main_key_first_modifier": "To avoid interfering with typing, the main key must start with a function key, Tab, or a modifier (Ctrl/⌘/Shift/Option/Fn)"
+    },
+    "audio": {
+      "thread_start_failed": "Failed to start the recording thread",
+      "thread_exited": "The recording thread exited early",
+      "device_not_found": "No default microphone input found",
+      "device_config_failed": "Failed to read the microphone configuration",
+      "stream_start_failed": "Failed to start the microphone input stream",
+      "unsupported_format": "Unsupported sample format",
+      "stream_aborted": "The microphone input stream aborted"
+    },
+    "paste": {
+      "simulation_failed": "Paste simulation failed. Check the focused input",
+      "clipboard_write_failed": "Failed to write to the clipboard"
+    },
+    "model": {
+      "not_in_registry": "Model {{model}} was not found in the registry",
+      "no_download_url": "Model {{model}} has no download URL (online models do not download)",
+      "mkdir_failed": "Failed to create the model directory",
+      "download_failed": "Download failed",
+      "download_cancelled": "Download cancelled",
+      "extract_failed": "Extraction failed",
+      "save_failed": "Failed to save the file",
+      "checksum_failed": "File verification failed. Please retry",
+      "delete_failed": "Failed to delete the model"
     }
   },
   "ui": {
+    "hotkey": {
+      "binding_main": "Global main key",
+      "binding_voice": "Voice input",
+      "cleared_hint": "Cleared this hotkey. Please set it again"
+    },
     "overlay": {
       "preparing": "Preparing…",
       "recognizing": "Recognizing…",

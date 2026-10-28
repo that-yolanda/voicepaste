@@ -1,6 +1,7 @@
 use crate::app_state::AppHandle as AppState;
 use crate::app_state::HotkeyMode;
 use crate::config::{AsrDefaults, PromptItem};
+use crate::errors::{AppError, AppErrorCode};
 use crate::hotword::HotwordData;
 use crate::model;
 use tauri::{utils::Theme, AppHandle, Emitter, Manager, State};
@@ -120,15 +121,20 @@ pub async fn get_overlay_layout_metrics() -> Result<crate::overlay::shared::Layo
 
 /// Get audio config defaults used as runtime fallback.
 #[tauri::command]
-pub async fn get_audio_config_defaults() -> Result<serde_json::Value, String> {
-    serde_json::to_value(AsrDefaults::default())
-        .map_err(|e| format!("Failed to serialize audio defaults: {}", e))
+pub async fn get_audio_config_defaults() -> Result<serde_json::Value, AppError> {
+    serde_json::to_value(AsrDefaults::default()).map_err(|e| {
+        AppError::new(AppErrorCode::Unexpected)
+            .with_detail(format!("Failed to serialize audio defaults: {}", e))
+    })
 }
 
 /// Get settings data for the settings window.
 #[tauri::command]
-pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let config = state.config_manager.load_config()?;
+pub async fn get_settings_data(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
+    let config = state
+        .config_manager
+        .load_config()
+        .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
     let parsed_config = state.config_manager.get_editable_config()?;
 
     let hotkey = match &config.app.hotkey {
@@ -178,11 +184,14 @@ pub async fn save_config_object(
     app: AppHandle,
     state: State<'_, AppState>,
     config_object: serde_norway::Value,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     state.config_manager.save_config(&config_object)?;
 
     // Sync hotkey mode from saved config
-    let updated_config = state.config_manager.load_config()?;
+    let updated_config = state
+        .config_manager
+        .load_config()
+        .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
     apply_app_theme(&app, &updated_config.app.theme);
 
     // Sync UI language: update shared state, rebuild the tray, and let both
@@ -227,7 +236,10 @@ pub async fn save_config_object(
     );
 
     let parsed = state.config_manager.get_editable_config()?;
-    let config = state.config_manager.load_config()?;
+    let config = state
+        .config_manager
+        .load_config()
+        .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
     let hotkey = match &config.app.hotkey {
         serde_norway::Value::String(s) => s.clone(),
         _ => String::new(),
@@ -250,16 +262,23 @@ pub async fn validate_hotkey_settings(
     config_object: serde_norway::Value,
     prompts: Vec<PromptItem>,
     target_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), crate::errors::AppError> {
     let candidate: crate::config::AppConfig =
-        serde_norway::from_value(config_object).map_err(|e| format!("配置格式错误：{e}"))?;
+        serde_norway::from_value(config_object).map_err(|e| {
+            crate::errors::AppError::new(crate::errors::AppErrorCode::ConfigInvalid)
+                .with_detail(e.to_string())
+        })?;
     if let Some(target) = target_id {
         crate::hotkey::validate_target(&candidate.app, &prompts, &target)?;
     }
     crate::hotkey::validate_change(
         &candidate.app,
         &prompts,
-        &state.config_manager.load_config()?.app,
+        &state
+            .config_manager
+            .load_config()
+            .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?
+            .app,
         &state.config_manager.load_prompts(),
     )
 }
@@ -283,7 +302,7 @@ pub async fn save_prompts(
     app: AppHandle,
     state: State<'_, AppState>,
     prompts: Vec<PromptItem>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     state.config_manager.save_prompts(&prompts)?;
 
     // Reload shortcuts so changed prompt hotkeys take effect immediately
@@ -589,9 +608,9 @@ pub struct HotkeyRecordResult {
     pub invalid_reason: Option<String>,
 }
 
-/// Toast copy shown when a main-hotkey recording starts with a typing key.
-const MAIN_HOTKEY_FIRST_KEY_HINT: &str =
-    "为不影响键盘输入，主键第一个按键需为功能键、Tab 或修饰键（Ctrl/⌘/Shift/Option/Fn）";
+/// The i18n code carried by `invalid_reason` when a main-hotkey recording
+/// starts with a typing key.
+const MAIN_HOTKEY_FIRST_KEY_HINT: &str = "hotkey.main_key_first_modifier";
 
 /// Record a hotkey combination via events from the resident keytap listener.
 /// Unlike a DOM keydown listener this captures keys the WebView never
@@ -791,15 +810,18 @@ pub async fn get_downloaded_models(app: AppHandle) -> Result<serde_json::Value, 
 
 /// Download a model by ID.
 #[tauri::command]
-pub async fn download_model(app: AppHandle, model_id: String) -> Result<serde_json::Value, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve data dir: {}", e))?;
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("Failed to resolve resource dir: {}", e))?;
+pub async fn download_model(
+    app: AppHandle,
+    model_id: String,
+) -> Result<serde_json::Value, crate::errors::AppError> {
+    let data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::errors::AppError::new(crate::errors::AppErrorCode::Unexpected)
+            .with_detail(format!("Failed to resolve data dir: {}", e))
+    })?;
+    let resource_dir = app.path().resource_dir().map_err(|e| {
+        crate::errors::AppError::new(crate::errors::AppErrorCode::Unexpected)
+            .with_detail(format!("Failed to resolve resource dir: {}", e))
+    })?;
     let registry = model::load_registry(&data_dir, &resource_dir);
     model::download_model(&app, &data_dir, &registry, &model_id).await?;
     Ok(serde_json::json!({ "ok": true }))
@@ -807,11 +829,14 @@ pub async fn download_model(app: AppHandle, model_id: String) -> Result<serde_js
 
 /// Delete a downloaded model.
 #[tauri::command]
-pub async fn delete_model(app: AppHandle, model_id: String) -> Result<serde_json::Value, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve data dir: {}", e))?;
+pub async fn delete_model(
+    app: AppHandle,
+    model_id: String,
+) -> Result<serde_json::Value, crate::errors::AppError> {
+    let data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::errors::AppError::new(crate::errors::AppErrorCode::Unexpected)
+            .with_detail(format!("Failed to resolve data dir: {}", e))
+    })?;
     model::delete_model(&data_dir, &model_id)?;
     Ok(serde_json::json!({ "ok": true }))
 }

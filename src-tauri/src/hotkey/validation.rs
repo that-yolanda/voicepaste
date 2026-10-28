@@ -1,17 +1,56 @@
 //! One binding compiler for startup, saves, runtime reloads and settings warnings.
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::Serialize;
 
 use super::{parse_hotkey_string, recorder, HotkeyBinding, HotkeyMode};
 use crate::config::{AppSettings, PromptItem};
+use crate::errors::{AppError, AppErrorCode};
 
+/// A binding problem, surfaced either as a passive settings warning (the
+/// `hotkeyIssues` payload) or as a blocking save error. The `code` + `params`
+/// are rendered by the frontend through the locale files; `title` params carry
+/// either the reserved ids `main`/`voice` (localized on the frontend) or a
+/// prompt template's user-editable title verbatim.
 #[derive(Debug, Clone, Serialize)]
 pub struct BindingIssue {
     pub id: String,
-    pub message: String,
+    pub code: AppErrorCode,
+    pub params: BTreeMap<String, String>,
     #[serde(skip)]
     fingerprint: String,
+}
+
+impl BindingIssue {
+    fn new(
+        id: String,
+        code: AppErrorCode,
+        params: BTreeMap<String, String>,
+        fingerprint: String,
+    ) -> Self {
+        Self {
+            id,
+            code,
+            params,
+            fingerprint,
+        }
+    }
+
+    /// Render as a blocking `AppError` for save-time validation, swapping the
+    /// passive "conflict stopped" wording for the imperative variant when the
+    /// caller is blocking a save.
+    fn to_error(&self, blocking: bool) -> AppError {
+        let code = if self.code == AppErrorCode::HotkeyConflict && blocking {
+            AppErrorCode::HotkeyConflictStopped
+        } else {
+            self.code
+        };
+        AppError {
+            code,
+            params: self.params.clone(),
+            detail: None,
+        }
+    }
 }
 
 pub fn compile_bindings(
@@ -26,7 +65,7 @@ pub fn compile_bindings(
     let mut specs = vec![
         (
             "main".to_string(),
-            "全局主键".to_string(),
+            "main".to_string(),
             main,
             "toggle",
             None,
@@ -34,7 +73,7 @@ pub fn compile_bindings(
         ),
         (
             "voice".to_string(),
-            "语音输入".to_string(),
+            "voice".to_string(),
             voice,
             app.hotkey_mode.as_str(),
             None,
@@ -58,22 +97,29 @@ pub fn compile_bindings(
             continue;
         }
         let Some(keys) = parse_hotkey_string(text) else {
-            issues.push(BindingIssue {
+            let mut params = BTreeMap::new();
+            params.insert("title".to_string(), title);
+            params.insert("key".to_string(), text.to_string());
+            issues.push(BindingIssue::new(
                 id,
-                fingerprint: format!("invalid:{text}"),
-                message: format!("{title}：无法识别快捷键 {text}"),
-            });
+                AppErrorCode::HotkeyUnrecognized,
+                params,
+                format!("invalid:{text}"),
+            ));
             continue;
         };
         let mode = HotkeyMode::from_str(mode);
         if (wake_only || mode == HotkeyMode::Hold)
             && !keys.iter().any(|k| recorder::is_valid_main_first_key(*k))
         {
-            issues.push(BindingIssue {
+            let mut params = BTreeMap::new();
+            params.insert("title".to_string(), title);
+            issues.push(BindingIssue::new(
                 id,
-                fingerprint: format!("first-key:{keys:?}"),
-                message: format!("{title}：快捷键需包含功能键、Tab 或修饰键"),
-            });
+                AppErrorCode::HotkeyNeedsModifier,
+                params,
+                format!("first-key:{keys:?}"),
+            ));
             continue;
         }
         candidates.push((
@@ -111,24 +157,32 @@ pub fn compile_bindings(
             let contains_hold = (a.mode == HotkeyMode::Hold || b.mode == HotkeyMode::Hold)
                 && (a.keys.is_subset(&b.keys) || b.keys.is_subset(&a.keys));
             if same || contains_hold {
-                let message = format!(
-                    "{title_a}（{text_a}）与{title_b}（{text_b}）快捷键重复或包含，冲突绑定已停用"
-                );
+                let params = |title: &str, text: &str, other_title: &str, other_text: &str| {
+                    let mut params = BTreeMap::new();
+                    params.insert("aTitle".to_string(), title.to_string());
+                    params.insert("aKey".to_string(), text.to_string());
+                    params.insert("bTitle".to_string(), other_title.to_string());
+                    params.insert("bKey".to_string(), other_text.to_string());
+                    params
+                };
+                let fingerprint = format!("conflict:{id_a}:{:?}:{id_b}:{:?}", a.keys, b.keys);
                 if !protected(a) {
                     disabled.insert(i);
-                    issues.push(BindingIssue {
-                        id: id_a.clone(),
-                        fingerprint: format!("conflict:{id_a}:{:?}:{id_b}:{:?}", a.keys, b.keys),
-                        message: message.clone(),
-                    });
+                    issues.push(BindingIssue::new(
+                        id_a.clone(),
+                        AppErrorCode::HotkeyConflict,
+                        params(title_a, text_a, title_b, text_b),
+                        fingerprint.clone(),
+                    ));
                 }
                 if !protected(b) {
                     disabled.insert(j);
-                    issues.push(BindingIssue {
-                        id: id_b.clone(),
-                        fingerprint: format!("conflict:{id_a}:{:?}:{id_b}:{:?}", a.keys, b.keys),
-                        message,
-                    });
+                    issues.push(BindingIssue::new(
+                        id_b.clone(),
+                        AppErrorCode::HotkeyConflict,
+                        params(title_b, text_b, title_a, text_a),
+                        fingerprint,
+                    ));
                 }
             }
         }
@@ -147,15 +201,13 @@ pub fn validate_target(
     app: &AppSettings,
     prompts: &[PromptItem],
     target: &str,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if let Some(issue) = compile_bindings(app, prompts)
         .1
         .into_iter()
         .find(|issue| issue.id == target)
     {
-        return Err(issue
-            .message
-            .replace("，冲突绑定已停用", "，请使用独立快捷键"));
+        return Err(issue.to_error(true));
     }
     Ok(())
 }
@@ -166,16 +218,14 @@ pub fn validate_change(
     prompts: &[PromptItem],
     previous: &AppSettings,
     previous_prompts: &[PromptItem],
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let (_, old) = compile_bindings(previous, previous_prompts);
     let (_, new) = compile_bindings(app, prompts);
     if let Some(issue) = new.iter().find(|issue| {
         !old.iter()
             .any(|old| old.id == issue.id && old.fingerprint == issue.fingerprint)
     }) {
-        return Err(issue
-            .message
-            .replace("，冲突绑定已停用", "，请使用独立快捷键"));
+        return Err(issue.to_error(true));
     }
     Ok(())
 }
