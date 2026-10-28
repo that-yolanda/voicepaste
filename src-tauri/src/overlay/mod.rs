@@ -375,26 +375,45 @@ fn error_shortcuts(hotkey: &str, polish: bool) -> Vec<shared::Shortcut> {
 }
 
 /// Show a polish failure with explicit timeout wording and keyboard actions above it.
+/// Carries the structured error (code/params/detail) so each renderer can
+/// localize it; `text` keeps a pre-rendered transition line for renderers
+/// that have not migrated to the code yet.
 pub(crate) async fn emit_polish_decision_hint(
     app: &AppHandle,
     app_inner: &Arc<app_state::AppInner>,
-    text: &str,
+    error: &crate::errors::AppError,
 ) {
     invalidate_feedback(app_inner);
     app_inner.feedback_visible.store(true, Ordering::SeqCst);
     let hotkey = hotkey::current_hotkey_label(app_inner).await;
+    let language = *app_inner.language.read().unwrap();
+    let mut headline = error.code.render_headline(language, &error.params);
+    if let Some(detail) = &error.detail {
+        let separator = if language == crate::lang::Language::ZhCn {
+            "："
+        } else {
+            ": "
+        };
+        headline.push_str(separator);
+        headline.push_str(detail);
+    }
+    let mut payload = serde_json::json!({
+        "text": format!("{}\n5 秒后输出原文", headline),
+        "level": "error",
+        "variant": "text",
+        "retryable": true,
+        "hotkey": hotkey
+    });
+    payload["code"] = serde_json::json!(error.code.as_str());
+    if !error.params.is_empty() {
+        payload["params"] = serde_json::to_value(&error.params).unwrap_or_default();
+    }
+    if let Some(detail) = &error.detail {
+        payload["detail"] = serde_json::json!(detail);
+    }
     let _ = app.emit(
         "overlay:event",
-        serde_json::json!({
-            "type": "hint",
-            "payload": {
-                "text": format!("{}\n5 秒后输出原文", text),
-                "level": "error",
-                "variant": "text",
-                "retryable": true,
-                "hotkey": hotkey
-            }
-        }),
+        serde_json::json!({ "type": "hint", "payload": payload }),
     );
     emit_shortcuts(app, &error_shortcuts(&hotkey, true));
 }

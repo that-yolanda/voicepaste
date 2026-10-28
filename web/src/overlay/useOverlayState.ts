@@ -13,7 +13,15 @@ type Action =
   | { type: "reset" }
   | { type: "state"; state: AppState }
   | { type: "transcript"; finalText?: string; partialText?: string }
-  | { type: "hint"; text?: string; level?: HintLevel; variant?: string }
+  | {
+      type: "hint";
+      text?: string;
+      level?: HintLevel;
+      variant?: string;
+      code?: string;
+      params?: Record<string, string>;
+      detail?: string | null;
+    }
   | { type: "shortcuts"; shortcuts: Shortcut[] }
   | { type: "appearance"; theme: OverlayState["theme"] };
 
@@ -43,6 +51,9 @@ export function reducer(state: OverlayState, action: Action): OverlayState {
         hintText: action.text || "",
         hintLevel: action.level || "info",
         hintVariant: action.variant || "text",
+        hintCode: action.code,
+        hintParams: action.params,
+        hintDetail: action.detail ?? null,
       };
   }
 }
@@ -84,6 +95,9 @@ export function useOverlayState() {
             text: payload.text as string,
             level: payload.level as HintLevel,
             variant: payload.variant as string,
+            code: payload.code as string | undefined,
+            params: payload.params as Record<string, string> | undefined,
+            detail: (payload.detail as string | null | undefined) ?? null,
           });
           break;
         case "shortcuts":

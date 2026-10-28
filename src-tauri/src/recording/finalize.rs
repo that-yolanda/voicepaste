@@ -156,14 +156,7 @@ pub(super) async fn finalize_and_paste(
                 "LLM config invalid, holding text for polish retry: {}",
                 e
             );
-            polish::arm_pending_polish(
-                app_handle,
-                app_inner,
-                trimmed.clone(),
-                prompt_id,
-                &crate::llm::PolishError::config(e),
-            )
-            .await;
+            polish::arm_pending_polish(app_handle, app_inner, trimmed.clone(), prompt_id, &e).await;
             return FinalizeOutcome::Deferred;
         }
     }

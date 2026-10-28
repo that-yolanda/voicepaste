@@ -61,6 +61,7 @@ async fn fail_retry(
         message,
         history::current_recording_wav_string(app_inner).await,
         Some(ts.to_string()),
+        None,
     );
     if !is_current_epoch(app_inner, retry_epoch) {
         return;

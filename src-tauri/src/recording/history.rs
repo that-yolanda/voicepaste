@@ -94,7 +94,7 @@ pub(crate) async fn record_transcription_failure(
         .stats
         .lock()
         .await
-        .record_failure(message, audio_path, retry_of);
+        .record_failure(message, audio_path, retry_of, None);
     *app_inner.current_failure_ts.lock().await = retryable.then(|| ts.clone());
     ts
 }

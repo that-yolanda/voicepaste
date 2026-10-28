@@ -41,6 +41,13 @@ pub struct HistoryEntry {
     /// of re-polishing already-polished prose.
     #[serde(rename = "rawText", default, skip_serializing_if = "Option::is_none")]
     pub raw_text: Option<String>,
+    /// Structured error code (plus interpolation params) when the failure came
+    /// from a migrated domain; the frontend renders the localized headline from
+    /// it. `detail` is deliberately NOT persisted — it can echo transcripts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<crate::errors::AppErrorCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<std::collections::BTreeMap<String, String>>,
 }
 
 /// Polish provenance for a finished session: enough to re-run the polish later
@@ -117,6 +124,8 @@ impl StatsService {
             retry_of,
             prompt_id: polish.prompt_id,
             raw_text: polish.raw_text,
+            code: None,
+            params: None,
         };
         self.append_history(&entry);
     }
@@ -239,6 +248,7 @@ impl StatsService {
         message: &str,
         audio_path: Option<String>,
         retry_of: Option<String>,
+        error: Option<&crate::errors::AppError>,
     ) -> String {
         let now = Local::now();
         let ts = now.to_rfc3339();
@@ -252,6 +262,10 @@ impl StatsService {
             retry_of,
             prompt_id: None,
             raw_text: None,
+            code: error.map(|e| e.code),
+            params: error
+                .filter(|e| !e.params.is_empty())
+                .map(|e| e.params.clone()),
         };
         self.append_history(&entry);
         ts
@@ -454,6 +468,8 @@ mod tests {
             retry_of: None,
             prompt_id: None,
             raw_text: None,
+            code: None,
+            params: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("hello"));
@@ -596,7 +612,8 @@ mod tests {
     fn replace_history_with_success_updates_entry_in_place() {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         let (mut svc, _dir) = new_stats_service();
-        let failure_ts = svc.record_failure("timeout", Some("/tmp/retry.wav".to_string()), None);
+        let failure_ts =
+            svc.record_failure("timeout", Some("/tmp/retry.wav".to_string()), None, None);
 
         assert_eq!(failure_ts[0..10], today);
         assert!(svc.replace_history_with_success(

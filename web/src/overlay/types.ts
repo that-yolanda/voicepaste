@@ -10,6 +10,11 @@ export interface OverlayState {
   hintText: string;
   hintLevel: HintLevel;
   hintVariant: string;
+  /** Structured error carried by the hint event; rendered locally so it
+   * follows the UI language. Absent for plain hints. */
+  hintCode?: string;
+  hintParams?: Record<string, string>;
+  hintDetail?: string | null;
   appState: AppState;
   shortcuts: Shortcut[];
   theme: "system" | "light" | "dark";

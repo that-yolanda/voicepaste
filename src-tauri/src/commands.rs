@@ -352,7 +352,7 @@ pub async fn repolish_history_entry(
     app: tauri::AppHandle,
     ts: String,
     prompt_id: Option<String>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::AppError> {
     crate::recording::repolish_history_entry(app, ts, prompt_id).await
 }
 

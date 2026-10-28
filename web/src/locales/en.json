@@ -14,6 +14,28 @@
       "send_failed": "Could not confirm the submission. Your content is kept — please retry.",
       "rate_limited": "Submitting too often. Please wait 10 minutes and retry.",
       "log_unavailable": "Cannot read the app log. Uncheck “attach log” and retry."
+    },
+    "llm": {
+      "config_incomplete": "Polishing model is not configured: missing {{field}}",
+      "auth_invalid": "API key is invalid or expired. Update it in Settings",
+      "model_not_found": "Model not found or retired. Update the model name in Settings",
+      "request_rejected": "The model service rejected the request",
+      "rate_limited": "Too many requests or insufficient balance. Try again later",
+      "server_error": "The model service is temporarily unavailable. Try again later",
+      "timeout": "The model timed out",
+      "network": "Cannot reach the model service. Check the network or service URL",
+      "url_not_found": "Service URL is wrong or missing (404). Check it in Settings",
+      "reasoning_truncated": "The model spent its output budget thinking and wrote no text",
+      "empty_response": "The model returned no content",
+      "parse_failed": "Could not parse the model response",
+      "prompt_missing": "Choose a polish template first",
+      "prompt_unavailable": "Polish template unavailable. Check template settings"
+    },
+    "stats": {
+      "entry_not_found": "History entry not found",
+      "entry_not_polishable": "Failed transcripts cannot be polished",
+      "no_polish_text": "This entry has no text to polish",
+      "update_failed": "Failed to update the history entry"
     }
   },
   "ui": {

@@ -334,6 +334,37 @@ fn apply_event(app: &AppHandle, event: &serde_json::Value) {
                     .and_then(|v| v.as_str())
                     .unwrap_or("text")
                     .into();
+                // Structured errors render locally so the pill follows the UI
+                // language; the transition `text` above stays as the fallback
+                // for hints without a code. The timeout suffix is UI copy that
+                // will move to the shared overlay strings with the shortcut
+                // labels in a later pass.
+                if let Some(code) = payload
+                    .and_then(|p| p.get("code"))
+                    .and_then(|v| v.as_str())
+                    .and_then(|c| {
+                        serde_json::from_value::<crate::errors::AppErrorCode>(
+                            serde_json::Value::String(c.to_string()),
+                        )
+                        .ok()
+                    })
+                {
+                    let params = payload
+                        .and_then(|p| p.get("params"))
+                        .and_then(|v| {
+                            serde_json::from_value::<std::collections::BTreeMap<String, String>>(
+                                v.clone(),
+                            )
+                            .ok()
+                        })
+                        .unwrap_or_default();
+                    let headline = code.render_headline(model.language, &params);
+                    let suffix = match model.language {
+                        crate::lang::Language::ZhCn => "5 秒后输出原文",
+                        crate::lang::Language::En => "Raw text in 5 s",
+                    };
+                    model.hint_text = format!("{headline}\n{suffix}");
+                }
             }
             "shortcuts" => {
                 model.shortcuts = payload

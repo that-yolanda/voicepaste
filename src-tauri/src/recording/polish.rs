@@ -23,7 +23,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 use crate::app_state::{self, set_app_state, PendingPolish, PolishRetryCommand};
-use crate::llm::PolishError;
+use crate::errors::{AppError, AppErrorCode};
 use crate::overlay;
 
 use super::emit_hint;
@@ -39,7 +39,7 @@ pub(super) async fn arm_pending_polish(
     app_inner: &Arc<app_state::AppInner>,
     raw_text: String,
     prompt_id: &str,
-    error: &PolishError,
+    error: &AppError,
 ) {
     log_rec!(
         warn,
@@ -59,7 +59,7 @@ pub(super) async fn arm_pending_polish(
     set_app_state(app_handle, app_inner, app_state::AppState::Idle).await;
     overlay::set_decision_keys_enabled(app_handle, true);
 
-    overlay::emit_polish_decision_hint(app_handle, app_inner, &error.user_message()).await;
+    overlay::emit_polish_decision_hint(app_handle, app_inner, error).await;
     // The keyboard-only decision window stays click-through.
     let app_handle = app_handle.clone();
     let app_inner = Arc::clone(app_inner);
@@ -325,28 +325,31 @@ pub(crate) async fn repolish_history_entry(
     app_handle: AppHandle,
     ts: String,
     prompt_id: Option<String>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     let app_inner = app_handle.state::<Arc<app_state::AppInner>>();
 
     let entry = {
         let stats = app_inner.stats.lock().await;
         stats
             .find_history(&ts)
-            .ok_or_else(|| "未找到输入记录".to_string())?
+            .ok_or_else(|| AppError::new(AppErrorCode::StatsEntryNotFound))?
     };
     if entry.status != "success" {
-        return Err("转写失败的记录无法润色".to_string());
+        return Err(AppError::new(AppErrorCode::StatsEntryNotPolishable));
     }
     let prompt_id = prompt_id
         .filter(|id| !id.is_empty())
         .or(entry.prompt_id)
-        .ok_or_else(|| "请选择润色模板".to_string())?;
+        .ok_or_else(|| AppError::new(AppErrorCode::LlmPromptMissing))?;
     let source = entry.raw_text.unwrap_or(entry.text);
     if source.trim().is_empty() {
-        return Err("这条记录没有可润色的文本".to_string());
+        return Err(AppError::new(AppErrorCode::StatsNoPolishText));
     }
 
-    let config = app_inner.config_manager.load_config()?;
+    let config = app_inner
+        .config_manager
+        .load_config()
+        .map_err(|_| AppError::new(AppErrorCode::InvalidConfig))?;
     crate::llm::validate_llm_config(&config.llm)?;
 
     let prompts = app_inner.config_manager.load_prompts();
@@ -365,9 +368,9 @@ pub(crate) async fn repolish_history_entry(
     {
         crate::llm::PolishOutcome::Polished(text) => text,
         crate::llm::PolishOutcome::NotPolished => {
-            return Err("润色模板不可用，请检查模板设置".to_string())
+            return Err(AppError::new(AppErrorCode::LlmPromptUnavailable))
         }
-        crate::llm::PolishOutcome::Failed(error) => return Err(error.user_message()),
+        crate::llm::PolishOutcome::Failed(error) => return Err(error),
     };
 
     let updated = app_inner
@@ -376,7 +379,7 @@ pub(crate) async fn repolish_history_entry(
         .await
         .update_history_polished_text(&ts, &polished, &source, &prompt_id);
     if !updated {
-        return Err("更新输入记录失败".to_string());
+        return Err(AppError::new(AppErrorCode::StatsUpdateFailed));
     }
 
     log_rec!(

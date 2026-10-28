@@ -14,6 +14,28 @@
       "send_failed": "暂时无法确认提交结果，内容已保留，请重试。",
       "rate_limited": "提交过于频繁，请等待 10 分钟后重试。",
       "log_unavailable": "无法读取运行日志，请取消附加日志后提交。"
+    },
+    "llm": {
+      "config_incomplete": "润色模型还未配置，缺少 {{field}}",
+      "auth_invalid": "API Key 无效或已过期，请在设置中更新",
+      "model_not_found": "模型不存在或已下线，请在设置中更新模型名称",
+      "request_rejected": "请求被模型服务拒绝",
+      "rate_limited": "请求过于频繁或余额不足，请稍后再试",
+      "server_error": "模型服务暂时不可用，请稍后再试",
+      "timeout": "模型响应超时",
+      "network": "无法连接模型服务，请检查网络或服务地址",
+      "url_not_found": "服务地址不正确或不存在（404），请检查服务地址",
+      "reasoning_truncated": "模型思考占满了输出长度，未能写出正文",
+      "empty_response": "模型没有返回任何内容",
+      "parse_failed": "无法解析模型返回内容",
+      "prompt_missing": "请选择润色模板",
+      "prompt_unavailable": "润色模板不可用，请检查模板设置"
+    },
+    "stats": {
+      "entry_not_found": "未找到输入记录",
+      "entry_not_polishable": "转写失败的记录无法润色",
+      "no_polish_text": "这条记录没有可润色的文本",
+      "update_failed": "更新输入记录失败"
     }
   },
   "ui": {

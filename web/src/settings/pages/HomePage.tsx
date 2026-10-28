@@ -1,5 +1,6 @@
 import { Copy, Loader2, Pause, Play, RefreshCw, RotateCw, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { errText } from "@/i18n/errText";
 import {
   deleteHistory,
   getHistory,
@@ -68,6 +69,10 @@ interface HistoryItem {
   status?: "success" | "failed";
   audioPath?: string;
   error?: string;
+  /** Structured error code (plus params) for failures from migrated domains;
+   * rendered through the locale files. Absent on legacy entries. */
+  code?: string;
+  params?: Record<string, string>;
   retryOf?: string;
   /** Prompt template this entry was polished with; absent when never polished. */
   promptId?: string;
@@ -148,7 +153,7 @@ export function HomePage() {
         }
         showToast("润色完成");
       } catch (error) {
-        setRepolishErrors((prev) => ({ ...prev, [ts]: String(error) }));
+        setRepolishErrors((prev) => ({ ...prev, [ts]: errText(error) }));
         showToast("润色失败", "error");
       } finally {
         setRepolishingTs(null);
@@ -236,9 +241,12 @@ export function HomePage() {
                     const repolishError = repolishErrors[item.ts];
                     const menuOpen = polishMenu?.ts === item.ts;
                     const playing = playingTs === item.ts;
-                    const displayText = failed
-                      ? `转写失败：${item.error || item.text || "请检查网络连接"}`
-                      : item.text;
+                    // Structured failures localize through the locale files;
+                    // legacy entries keep their stored Chinese text.
+                    const failedText = item.code
+                      ? errText({ code: item.code, params: item.params })
+                      : item.error || item.text || "请检查网络连接";
+                    const displayText = failed ? `转写失败：${failedText}` : item.text;
                     return (
                       <div key={item.ts} className="text-sm">
                         {show && (

@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import { Check, Info } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { errText } from "@/i18n/errText";
 import { getOverlayLayoutMetrics, type OverlayLayoutMetrics } from "./bridge";
 import type { OverlayState } from "./types";
 import { useOverlayLayout } from "./useOverlayLayout";
@@ -35,6 +36,15 @@ const FALLBACK_METRICS: OverlayLayoutMetrics = {
 
 // Visible hint text — aligned 1:1 with src-tauri/src/overlay/shared.rs::visible_hint.
 function visibleHintText(state: OverlayState, t: TFunction): string {
+  // Structured error hints render locally so they follow the UI language;
+  // the backend `hintText` stays as the fallback for hints without a code.
+  if (state.hintCode) {
+    return errText({
+      code: state.hintCode,
+      params: state.hintParams,
+      detail: state.hintDetail,
+    });
+  }
   if (state.hintVariant === "success") return state.hintText;
   if (state.appState === "connecting") return t("ui.overlay.preparing");
   if (state.appState === "finishing") {
