@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.1.6 (2026-10-29)
+This update ships a full English interface with in-app language switching, adds a first-run setup guide, in-app feedback, and pending-update release notes in About, and consolidates the settings pages.
+
+### Added
+- **Full Bilingual Interface** — The UI language can now follow the system or be pinned to Chinese / English in settings; every settings page, the tray menu, the voice overlay, and all error messages re-render in the selected language.
+- **First-Run Setup Guide** — New users get a bilingual checklist covering microphone permission, recognition model, and hotkey setup. The guide stays available from the sidebar and never interrupts existing users.
+- **In-App Feedback** — Report issues and suggestions directly from the app with editable version info, optional diagnostics, and bounded screenshot attachments — no GitHub account needed (delivered through voicepaste.dev).
+- **Update Notes in About** — When an update is available, the About panel now shows the pending version's release notes.
+
+### Changed
+- **Consolidated Settings** — Sidebar settings and update controls are grouped, model and usage controls moved next to the polishing templates, page state survives settings refreshes without flicker, and controls and labels stay aligned across languages.
+
+### Fixed
+- **Log Rotation No Longer Blocks Input** — Rotating the log file used to stall voice input; rotation now happens off the recording path.
+- **Credential Redaction** — Provider errors no longer echo API keys, tokens, or service endpoints into log files or the overlay.
+- **Polishing Models** — Text polishing now uses the providers' current lightweight models.
+
+### Under the Hood
+- Every backend error now crosses the IPC boundary as a structured code and localizes per UI language; the locale files are the single translation source.
+
 ## v2.1.5 (2026-10-24)
 This update adds ElevenLabs realtime speech recognition, makes the default hotkeys reachable on common keyboards, hardens toggle and hold hotkey handling, and introduces a new logo with a bilingual product website.
 
