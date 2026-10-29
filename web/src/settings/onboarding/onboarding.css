@@ -150,3 +150,19 @@ div.voicepaste-tour {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* Restore the app's interaction rules outside the focused control. */
+.driver-active.voicepaste-tour-interactive * {
+  pointer-events: revert-layer;
+}
+
+.driver-active.voicepaste-tour-interactive .driver-popover {
+  pointer-events: auto;
+}
+
+.driver-active.voicepaste-tour-interactive .driver-layer,
+.driver-active.voicepaste-tour-interactive .driver-overlay,
+.driver-active.voicepaste-tour-interactive .driver-overlay * {
+  /* biome-ignore lint/complexity/noImportantStyles: Driver.js sets pointer-events inline on the SVG mask path. */
+  pointer-events: none !important;
+}

@@ -178,17 +178,19 @@ export function HotkeyPage() {
               tooltip={t("ui.hotkey_page.main_subtitle")}
               last
               action={
-                <HotkeyInput
-                  value={hotkeyStr}
-                  isMac={isMac}
-                  busy={isBusyFor("main")}
-                  onStart={() => setActiveRecorder("main")}
-                  onDone={() => setActiveRecorder(null)}
-                  onCommit={(hk) => updateApp({ hotkey: hk })}
-                  onClear={() => updateApp({ hotkey: "" })}
-                  validateFirstKey
-                  onInvalid={(reason) => showToast(errText({ code: reason }), "error")}
-                />
+                <div data-tour="hotkey-wake-edit">
+                  <HotkeyInput
+                    value={hotkeyStr}
+                    isMac={isMac}
+                    busy={isBusyFor("main")}
+                    onStart={() => setActiveRecorder("main")}
+                    onDone={() => setActiveRecorder(null)}
+                    onCommit={(hk) => updateApp({ hotkey: hk })}
+                    onClear={() => updateApp({ hotkey: "" })}
+                    validateFirstKey
+                    onInvalid={(reason) => showToast(errText({ code: reason }), "error")}
+                  />
+                </div>
               }
             />
           </SectionItemList>
@@ -210,11 +212,29 @@ export function HotkeyPage() {
                   {hotkeyMode === "toggle" ? (
                     <>
                       {/* start = main key (locked); stop = independently configurable raw-input key */}
-                      <HotkeyInput value={hotkeyStr} isMac={isMac} locked />
+                      <div data-tour="hotkey-voice-start">
+                        <HotkeyInput value={hotkeyStr} isMac={isMac} locked />
+                      </div>
                       <span className="text-xs text-text-muted">→</span>
+                      <div data-tour="hotkey-voice-key">
+                        <HotkeyInput
+                          value={voiceHotkey}
+                          isMac={isMac}
+                          busy={isBusyFor("voice")}
+                          onStart={() => setActiveRecorder("voice")}
+                          onDone={() => setActiveRecorder(null)}
+                          onCommit={(hk) => updateApp({ voice_hotkey: hk })}
+                          onClear={() => updateApp({ voice_hotkey: "" })}
+                          onInvalid={(reason) => showToast(errText({ code: reason }), "error")}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div data-tour="hotkey-voice-key">
                       <HotkeyInput
                         value={voiceHotkey}
                         isMac={isMac}
+                        validateFirstKey
                         busy={isBusyFor("voice")}
                         onStart={() => setActiveRecorder("voice")}
                         onDone={() => setActiveRecorder(null)}
@@ -222,69 +242,64 @@ export function HotkeyPage() {
                         onClear={() => updateApp({ voice_hotkey: "" })}
                         onInvalid={(reason) => showToast(errText({ code: reason }), "error")}
                       />
-                    </>
-                  ) : (
-                    <HotkeyInput
-                      value={voiceHotkey}
-                      isMac={isMac}
-                      validateFirstKey
-                      busy={isBusyFor("voice")}
-                      onStart={() => setActiveRecorder("voice")}
-                      onDone={() => setActiveRecorder(null)}
-                      onCommit={(hk) => updateApp({ voice_hotkey: hk })}
-                      onClear={() => updateApp({ voice_hotkey: "" })}
-                      onInvalid={(reason) => showToast(errText({ code: reason }), "error")}
-                    />
+                    </div>
                   )}
-                  <SegmentedControl
-                    options={modeOptions}
-                    value={hotkeyMode}
-                    onChange={(v) =>
-                      updateApp({
-                        hotkey_mode: v,
-                        voice_hotkey: voiceHotkey || (v === "toggle" ? hotkeyStr : ""),
-                      })
-                    }
-                  />
+                  <div data-tour="hotkey-voice-mode" data-voice-mode={hotkeyMode}>
+                    <SegmentedControl
+                      options={modeOptions}
+                      value={hotkeyMode}
+                      onChange={(v) =>
+                        updateApp({
+                          hotkey_mode: v,
+                          voice_hotkey: voiceHotkey || (v === "toggle" ? hotkeyStr : ""),
+                        })
+                      }
+                    />
+                  </div>
                 </div>
               }
             />
 
-            {prompts.map((item, idx) => {
-              const mode = item.hotkey_mode || "toggle";
-              return (
-                <SectionItem
-                  key={item.id}
-                  title={item.title}
-                  last={idx === prompts.length - 1}
-                  action={
-                    <div className="flex items-center gap-2">
-                      {mode === "toggle" ? (
-                        <>
-                          {/* start = main key (locked); stop = this prompt's polish key */}
-                          <HotkeyInput value={hotkeyStr} isMac={isMac} locked />
-                          <span className="text-xs text-text-muted">→</span>
+            <div data-tour="hotkey-templates" className="space-y-2">
+              {prompts.length === 0 && (
+                <p className="text-sm text-text-muted">{t("ui.hotkey_page.no_templates")}</p>
+              )}
+              {prompts.map((item, idx) => {
+                const mode = item.hotkey_mode || "toggle";
+                return (
+                  <SectionItem
+                    key={item.id}
+                    title={item.title}
+                    last={idx === prompts.length - 1}
+                    action={
+                      <div className="flex items-center gap-2">
+                        {mode === "toggle" ? (
+                          <>
+                            {/* start = main key (locked); stop = this prompt's polish key */}
+                            <HotkeyInput value={hotkeyStr} isMac={isMac} locked />
+                            <span className="text-xs text-text-muted">→</span>
+                            <HotkeyInput
+                              value={item.hotkey || ""}
+                              {...promptRecorderProps(item, idx)}
+                            />
+                          </>
+                        ) : (
                           <HotkeyInput
                             value={item.hotkey || ""}
                             {...promptRecorderProps(item, idx)}
                           />
-                        </>
-                      ) : (
-                        <HotkeyInput
-                          value={item.hotkey || ""}
-                          {...promptRecorderProps(item, idx)}
+                        )}
+                        <SegmentedControl
+                          options={modeOptions}
+                          value={mode}
+                          onChange={(v) => updatePrompt(idx, { hotkey_mode: v })}
                         />
-                      )}
-                      <SegmentedControl
-                        options={modeOptions}
-                        value={mode}
-                        onChange={(v) => updatePrompt(idx, { hotkey_mode: v })}
-                      />
-                    </div>
-                  }
-                />
-              );
-            })}
+                      </div>
+                    }
+                  />
+                );
+              })}
+            </div>
           </SectionItemList>
         </SectionContent>
       </Section>

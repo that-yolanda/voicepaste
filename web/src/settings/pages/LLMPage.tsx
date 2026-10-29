@@ -5,6 +5,7 @@ import { loadBuiltinPrompts, loadPrompts, savePrompts } from "@/settings/bridge"
 import { Button } from "@/settings/components/Button";
 import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
+import { Select } from "@/settings/components/Select";
 import { Textarea } from "@/settings/components/Textarea";
 import {
   PageHeader,
@@ -166,19 +167,20 @@ export function LLMPage() {
         <SectionHeader title={t("ui.llm.api_config")} />
         <SectionContent>
           <SectionItemList>
-            <SectionItem title={t("ui.llm.model")}>
-              <div className="grid grid-cols-4 gap-2">
-                {LLM_PROVIDERS.map((p) => (
-                  <Button
-                    key={p.key}
-                    onClick={() => switchProvider(p.key)}
-                    variant={providerKey === p.key ? "accent" : "ghost"}
-                  >
-                    {t(p.label)}
-                  </Button>
-                ))}
-              </div>
-            </SectionItem>
+            <SectionItem
+              title={t("ui.llm.model")}
+              htmlFor="llm-provider"
+              action={
+                <div data-tour="llm-provider" className="w-full">
+                  <Select
+                    id="llm-provider"
+                    value={providerKey}
+                    onChange={switchProvider}
+                    options={LLM_PROVIDERS.map((p) => ({ value: p.key, label: t(p.label) }))}
+                  />
+                </div>
+              }
+            />
 
             <SectionItem
               title={t("ui.llm.url")}
@@ -192,19 +194,23 @@ export function LLMPage() {
               }
             />
 
-            <SectionItem
-              title={t("ui.llm.api_key")}
-              action={
-                <Input
-                  className="w-full"
-                  type="password"
-                  placeholder="sk-..."
-                  value={savedProviderCfg.api_key || ""}
-                  onChange={(v) => setLlmField("api_key", v)}
-                  commitOnBlur
-                />
-              }
-            />
+            <div data-tour="llm-api-key">
+              <SectionItem
+                title={t("ui.llm.api_key")}
+                htmlFor="llm-api-key"
+                action={
+                  <Input
+                    className="w-full"
+                    id="llm-api-key"
+                    type="password"
+                    placeholder="sk-..."
+                    value={savedProviderCfg.api_key || ""}
+                    onChange={(v) => setLlmField("api_key", v)}
+                    commitOnBlur
+                  />
+                }
+              />
+            </div>
             <SectionItem
               title={t("ui.llm.model_id")}
               action={
@@ -227,30 +233,34 @@ export function LLMPage() {
           title={t("ui.llm.prompts")}
           action={
             <div className="flex items-center gap-2">
-              <Button
-                variant="accent"
-                onClick={async () => {
-                  const updated = [
-                    ...prompts,
-                    {
-                      id: createPromptId(),
-                      title: t("ui.llm.new_template"),
-                      hotkey: "",
-                      hotkey_mode: "toggle",
-                      prompt: "",
-                    },
-                  ];
-                  setPrompts(updated);
-                  await savePromptsNow(updated);
-                }}
-              >
-                <Plus size={14} aria-hidden="true" />
-                {t("ui.llm.add_template")}
-              </Button>
-              <Button variant="default" onClick={() => setBuiltinOpen(true)}>
-                <Library size={14} aria-hidden="true" />
-                {t("ui.llm.builtin_prompts")}
-              </Button>
+              <span data-tour="llm-add-template" className="inline-flex">
+                <Button
+                  variant="accent"
+                  onClick={async () => {
+                    const updated = [
+                      ...prompts,
+                      {
+                        id: createPromptId(),
+                        title: t("ui.llm.new_template"),
+                        hotkey: "",
+                        hotkey_mode: "toggle",
+                        prompt: "",
+                      },
+                    ];
+                    setPrompts(updated);
+                    await savePromptsNow(updated);
+                  }}
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  {t("ui.llm.add_template")}
+                </Button>
+              </span>
+              <span data-tour="llm-library" className="inline-flex">
+                <Button variant="default" onClick={() => setBuiltinOpen(true)}>
+                  <Library size={14} aria-hidden="true" />
+                  {t("ui.llm.builtin_prompts")}
+                </Button>
+              </span>
             </div>
           }
         />

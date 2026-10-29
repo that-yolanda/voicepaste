@@ -57,7 +57,7 @@ describe("ElevenLabs model settings", () => {
     expect(screen.queryByRole("button", { name: "轮次预测" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "VAD分段" })).toBeVisible();
     expect(screen.getByText(/基础转写费用增加 20%/)).toBeVisible();
-    expect(screen.getByText("如何获取 API 凭据？")).toHaveAttribute(
+    expect(screen.getByText("API 申请指南")).toHaveAttribute(
       "href",
       "https://voicepaste.dev/docs/api/elevenlabs",
     );
@@ -105,7 +105,7 @@ describe("ElevenLabs model settings", () => {
     card(doubao);
     expect(screen.getByPlaceholderText("输入 API Key")).toBeVisible();
     expect(screen.queryByText("语言")).not.toBeInTheDocument();
-    expect(screen.getByText("如何获取 API 凭据？")).toHaveAttribute(
+    expect(screen.getByText("API 申请指南")).toHaveAttribute(
       "href",
       "https://voicepaste.dev/docs/api/volcengine",
     );

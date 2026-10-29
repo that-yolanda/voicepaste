@@ -353,7 +353,8 @@
       "wake": "Start recording",
       "hotkeys_section": "Hotkeys",
       "hotkeys_subtitle": "Click a field, then press your shortcut",
-      "voice_input": "Voice input"
+      "voice_input": "Voice input",
+      "no_templates": "No polishing templates yet. Add one on the LLM page."
     },
     "home": {
       "greeting": {
@@ -452,7 +453,7 @@
       "tooltip_help": "{{title}} help"
     },
     "model": {
-      "how_to_get_credentials": "Get credentials",
+      "how_to_get_credentials": "API setup guide",
       "model_file": "Model file {{size}}",
       "memory_peak": "Peak memory {{size}}",
       "config": "Configure",
@@ -576,63 +577,91 @@
       "welcomeDescription": "Follow the guide to configure permissions, speech recognition, and shortcuts for voice input. A language model is optional.",
       "dismiss": "Don't show again",
       "start": "Start setup",
-      "exit": "Exit guide",
-      "finish": "Finish and close",
+      "exit": "Exit",
+      "finish": "Done",
       "collapse": "Collapse checklist",
+      "collapseGuide": "Collapse",
+      "expandGuide": "Expand",
       "backToChecklist": "Back to setup checklist",
       "next": "Next",
       "previous": "Previous",
-      "completeTask": "Finish this task",
-      "skip": "Skip this task",
+      "completeTask": "Done",
+      "skip": "Skip",
       "skipped": "Skipped",
       "reviewed": "Guide completed",
-      "progress": "{{done}} / {{total}} tasks reviewed",
-      "completeTitle": "Setup guide finished",
-      "completeDescription": "Open a text editor and try voice input. This checklist tracks guide progress; it does not verify that your configuration works.",
+      "progress": "{{done}} / {{total}}",
       "saveError": "Could not save the guide preference. Please try again.",
       "targetError": "This setting is not available yet. Return to the checklist and try again.",
       "tasks": {
         "permissions": "System permissions",
-        "asr": "Speech recognition",
+        "asr": "Speech recognition model",
         "llm": "Language model (optional)",
         "hotkey": "Shortcuts"
       },
       "steps": {
         "microphone": {
           "title": "Allow microphone access",
-          "description": "Click Allow to grant access, or Check to verify it. If access was denied or disabled, click Settings to enable it manually. Continue when the green check appears."
+          "description": "Click Allow to enable microphone access. If disabled, enable it in system settings. Continue when you see a green check."
         },
         "accessibility": {
           "title": "Allow Accessibility access",
-          "description": "Click Settings and enable VoicePaste under Accessibility. Return and look for the green check; click Check if it hasn't updated."
+          "description": "Enable VoicePaste under Accessibility in system settings. Return and click Check."
         },
         "asrMode": {
-          "title": "Choose speech recognition",
-          "description": "Online models need provider credentials. Local models need a download, with no API key. Select a tab before continuing. You only need one model."
+          "title": "Choose a speech model",
+          "description": "Online models require your own API key. Local models work after download."
         },
         "asrOnline": {
-          "title": "Configure and enable an online model",
-          "description": "Choose an online model, expand Configure, and enter its credentials. Enable it using the switch at the top right. Get credentials links to the setup instructions. After saving your settings, finish this task."
+          "title": "Enable an online model",
+          "description": "Choose a model. Open Configure, enter your API key and any other required details, then turn it on. See API setup guide for help."
         },
         "asrOffline": {
-          "title": "Download and enable a local model",
-          "description": "Choose a local speech model and click its download icon. When the download finishes, enable the model using the top-right switch. Default parameters are fine; no API key is needed. Then finish this task."
-        },
-        "llmConfig": {
-          "title": "Configure a language model (optional)",
-          "description": "For translation or polishing, select a provider and enter the required settings. Local services may not need a key. Fields save when they lose focus. For transcription alone, choose Skip this task."
-        },
-        "llmTemplates": {
-          "title": "Review text templates",
-          "description": "Use an existing template or add one from Template library. For translation, specify the target language in the template. Close the template window to continue."
+          "title": "Enable a local model",
+          "description": "Choose a model and click the download icon. Once downloaded, turn it on. You can keep the default settings."
         },
         "hotkeyMain": {
-          "title": "Review the global wake key",
-          "description": "Keep the default wake key or click the recorder and press a new shortcut."
+          "title": "Recording hotkey",
+          "description": "Voice input and all polishing templates share this start key in Tap (hands-free) mode."
         },
         "hotkeyVoice": {
-          "title": "Choose an input mode",
-          "description": "Hands-free uses the wake key to start and the stop key to finish. Push-to-talk records while you hold its key and finishes on release. You can keep the defaults. After setup, try voice input in a text editor."
+          "title": "Choose a voice input mode",
+          "description": "Tap: press the recording hotkey to start, then the stop key to finish. Hold: hold the shortcut to record and release to finish."
+        },
+        "llmProvider": {
+          "title": "Choose a provider",
+          "description": "Choose a provider for translation or polishing. Skip this task if you only need transcription."
+        },
+        "llmApiKey": {
+          "title": "Enter an API key",
+          "description": "Enter your provider’s API key, then click outside to save."
+        },
+        "llmLibrary": {
+          "title": "Browse templates",
+          "description": "Open Template library, choose a template, and click Add. You can edit it later. Close the library to continue."
+        },
+        "llmTemplateCreate": {
+          "title": "Create a template",
+          "description": "Click Add to create a template. Give it a name and describe what it should do. For translation, name the target language. If a template already suits you, click Done."
+        },
+        "hotkeyWakeEdit": {
+          "title": "Change the recording hotkey",
+          "description": "Click the current shortcut, then press a new key or combination. To avoid disrupting typing, use Ctrl, ⌘, Shift, or a function key such as F1. For combinations, press one of these keys first."
+        },
+        "hotkeyVoiceStart": {
+          "title": "Tap: start recording",
+          "description": "The key on the left starts recording. To change it, edit Start recording under Recording hotkey above."
+        },
+        "hotkeyVoiceStop": {
+          "title": "Tap: stop recording",
+          "description": "The key on the right stops recording and inserts the transcript. Click it, then press a new key to change it."
+        },
+        "hotkeyVoiceHold": {
+          "title": "Set a Hold shortcut",
+          "description": "Click the current shortcut, then press a new key or combination. Hold it to record; release to insert the transcript."
+        },
+        "hotkeyTemplates": {
+          "title": "Set template shortcuts",
+          "description": "Each template has its own mode. Tap shares the recording hotkey and has an editable stop key that applies the template. Hold uses the template’s own shortcut."
         }
       }
     }

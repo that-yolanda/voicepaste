@@ -286,15 +286,17 @@ export function AudioModelPage() {
         </div>
       </PageHeader>
 
-      <div data-tour="asr-mode" className="flex items-center justify-between gap-3">
-        <SegmentedControl
-          options={[
-            { value: "online", label: t("ui.audio.online") },
-            { value: "offline", label: t("ui.audio.offline") },
-          ]}
-          value={tab}
-          onChange={(value) => setTab(value === "offline" ? "offline" : "online")}
-        />
+      <div className="flex items-center justify-between gap-3">
+        <div data-tour="asr-mode" className="shrink-0">
+          <SegmentedControl
+            options={[
+              { value: "online", label: t("ui.audio.online") },
+              { value: "offline", label: t("ui.audio.offline") },
+            ]}
+            value={tab}
+            onChange={(value) => setTab(value === "offline" ? "offline" : "online")}
+          />
+        </div>
         <Button variant="ghost" onClick={() => setCustomConfigOpen(true)}>
           <Cog size={16} />
           {t("ui.audio.custom_config")}

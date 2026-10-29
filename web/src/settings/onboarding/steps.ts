@@ -11,7 +11,12 @@ export const TASK_SECTION: Record<TaskId, SectionId> = {
   hotkey: "hotkey",
 };
 
-export function getSteps(task: TaskId, isMac: boolean, t: TFunction): DriveStep[] {
+export function getSteps(
+  task: TaskId,
+  isMac: boolean,
+  t: TFunction,
+  voiceMode = "toggle",
+): DriveStep[] {
   const step = (target: string, key: string): DriveStep => ({
     element: `[data-tour="${target}"]`,
     popover: {
@@ -30,9 +35,23 @@ export function getSteps(task: TaskId, isMac: boolean, t: TFunction): DriveStep[
     case "asr":
       return [step("asr-mode", "asrMode"), step("asr-models", "asrOnline")];
     case "llm":
-      return [step("llm-config", "llmConfig"), step("llm-templates", "llmTemplates")];
+      return [
+        step("llm-provider", "llmProvider"),
+        step("llm-api-key", "llmApiKey"),
+        step("llm-library", "llmLibrary"),
+        step("llm-add-template", "llmTemplateCreate"),
+      ];
     case "hotkey":
-      return [step("hotkey-main", "hotkeyMain"), step("hotkey-voice", "hotkeyVoice")];
+      return [
+        step("hotkey-main", "hotkeyMain"),
+        step("hotkey-wake-edit", "hotkeyWakeEdit"),
+        step("hotkey-voice-mode", "hotkeyVoice"),
+        voiceMode === "hold"
+          ? step("hotkey-voice-key", "hotkeyVoiceHold")
+          : step("hotkey-voice-start", "hotkeyVoiceStart"),
+        step("hotkey-voice-key", "hotkeyVoiceStop"),
+        step("hotkey-templates", "hotkeyTemplates"),
+      ];
   }
 }
 

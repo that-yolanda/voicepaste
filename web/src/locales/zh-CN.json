@@ -313,7 +313,7 @@
       "title": "文本润色",
       "description": "用于语音识别后的文本润色与文本结构化，触发请前往「快捷键」页面配置对应提示词的快捷键",
       "api_config": "供应商",
-      "model": "模型",
+      "model": "服务商",
       "url": "URL",
       "api_key": "API Key",
       "model_id": "模型ID",
@@ -353,7 +353,8 @@
       "wake": "语音唤起",
       "hotkeys_section": "快捷键",
       "hotkeys_subtitle": "点击输入框进入录制 → 按下快捷键",
-      "voice_input": "语音输入"
+      "voice_input": "语音输入",
+      "no_templates": "暂无润色模板，可前往「大语言模型」页面添加。"
     },
     "home": {
       "greeting": {
@@ -452,7 +453,7 @@
       "tooltip_help": "{{title}}说明"
     },
     "model": {
-      "how_to_get_credentials": "如何获取 API 凭据？",
+      "how_to_get_credentials": "API 申请指南",
       "model_file": "模型文件 {{size}}",
       "memory_peak": "内存峰值 {{size}}",
       "config": "参数配置",
@@ -576,9 +577,11 @@
       "welcomeDescription": "跟随引导完成系统权限、语音模型和快捷键配置，即可开始使用语音输入。大语言模型可选。",
       "dismiss": "不再显示",
       "start": "进入引导",
-      "exit": "退出引导",
-      "finish": "完成并关闭",
+      "exit": "退出",
+      "finish": "完成",
       "collapse": "折叠清单",
+      "collapseGuide": "收起说明",
+      "expandGuide": "展开说明",
       "backToChecklist": "返回配置清单",
       "next": "下一步",
       "previous": "上一步",
@@ -586,53 +589,79 @@
       "skip": "跳过此项",
       "skipped": "已跳过",
       "reviewed": "已完成引导",
-      "progress": "已处理 {{done}} / {{total}} 项",
-      "completeTitle": "配置引导已结束",
-      "completeDescription": "请打开文本编辑器，尝试一次语音输入。清单记录引导进度，不代表配置已验证可用。",
+      "progress": "{{done}} / {{total}}",
       "saveError": "未能保存引导状态，请重试。",
       "targetError": "暂时无法定位配置项，请返回清单重试。",
       "tasks": {
         "permissions": "系统权限",
-        "asr": "语音模型",
+        "asr": "语音识别模型",
         "llm": "大语言模型（可选）",
         "hotkey": "快捷键"
       },
       "steps": {
         "microphone": {
           "title": "允许使用麦克风",
-          "description": "点击「授权」允许访问；显示「检测」时可重新检查。若曾拒绝或关闭权限，点击「前往设置」手动开启。显示绿色勾后继续。"
+          "description": "点击「授权」允许使用麦克风。若权限已关闭，前往系统设置开启；出现绿色勾后继续。"
         },
         "accessibility": {
           "title": "开启辅助功能权限",
-          "description": "点击「前往设置」，开启 VoicePaste 的辅助功能权限。返回后确认绿色勾；未更新时点击「检测」。"
+          "description": "前往系统设置，开启 VoicePaste 的辅助功能权限。返回后点击「检测」确认。"
         },
         "asrMode": {
           "title": "选择语音识别方式",
-          "description": "在线模型需要服务商凭据；本地模型需先下载，无需 API Key。选择一个标签，再继续。只需配置一种模型。"
+          "description": "在线模型需自行申请 API Key；本地模型下载后即可使用。"
         },
         "asrOnline": {
-          "title": "配置并启用在线模型",
-          "description": "选择一个在线模型，展开「参数配置」填写凭据，再打开卡片右上角开关。「如何获取 API 凭据？」提供申请说明。填写完成并保存后，点击「完成此项」。"
+          "title": "启用在线模型",
+          "description": "选择一个模型，在「参数配置」中填写 API Key 等信息，再打开右上角开关。申请方法见「API 申请指南」。"
         },
         "asrOffline": {
-          "title": "下载并启用本地模型",
-          "description": "选择需要的本地识别模型，点击下载图标；下载完成后打开卡片右上角开关。可保留默认参数。本地模型无需 API Key；完成后点击「完成此项」。"
-        },
-        "llmConfig": {
-          "title": "配置大语言模型（可选）",
-          "description": "需要翻译、整理或润色时，选择提供商并填写必要参数；本地服务可能不需要 API Key。填写后点击其他位置保存。只需语音转文字，可点击「跳过此项」。"
-        },
-        "llmTemplates": {
-          "title": "检查文本模板",
-          "description": "使用现有模板，或从「模板库」添加一个模板。翻译时在模板中说明目标语言。关闭模板窗口后继续。"
+          "title": "启用本地模型",
+          "description": "选择一个模型，点击下载图标，下载完成后打开右上角开关。参数可保持默认。"
         },
         "hotkeyMain": {
-          "title": "查看全局唤醒键",
-          "description": "查看当前唤醒键，可以保留默认值，也可以点击录制后按下新快捷键。"
+          "title": "了解语音唤醒键",
+          "description": "语音输入和各个润色模板在免提模式下，都用这个按键开始录音。"
         },
         "hotkeyVoice": {
           "title": "选择语音输入模式",
-          "description": "免提模式使用唤醒键开始、停止键结束；按住说话模式按住配置的键录音、松开结束。可保留默认设置。完成后在文本编辑器中尝试首次输入。"
+          "description": "免提：按一下唤醒键开始录音，再按结束键停止。按住说话：按住快捷键录音，松开即结束。"
+        },
+        "llmProvider": {
+          "title": "选择服务商",
+          "description": "选择你要使用的服务商。翻译和润色需要大语言模型；只需语音转文字可跳过此项。"
+        },
+        "llmApiKey": {
+          "title": "填写 API Key",
+          "description": "填写所选服务商的 API Key，点击其他位置保存。"
+        },
+        "llmLibrary": {
+          "title": "从模板库添加",
+          "description": "打开「模板库」，选择现成模板并点击「添加」。添加后可修改内容；关闭模板库后继续。"
+        },
+        "llmTemplateCreate": {
+          "title": "创建自己的模板",
+          "description": "点击「添加」新建模板，填写名称和处理要求。需要翻译时，写明目标语言；已有合适模板可直接完成。"
+        },
+        "hotkeyWakeEdit": {
+          "title": "修改语音唤醒键",
+          "description": "点击当前快捷键，再按下新的按键或组合键。为避免影响打字，请使用 Ctrl、⌘、Shift、F1 等非文字输入键；组合键也需先按这类按键。"
+        },
+        "hotkeyVoiceStart": {
+          "title": "免提：开始录音",
+          "description": "左侧显示的是语音唤醒键，用于开始录音。它与上方设置一致；可在上方「语音唤起」中修改。"
+        },
+        "hotkeyVoiceStop": {
+          "title": "免提：结束录音",
+          "description": "右侧按键用于结束录音并输出原文。点击当前快捷键，再按下新按键即可修改。"
+        },
+        "hotkeyVoiceHold": {
+          "title": "设置按住说话的快捷键",
+          "description": "点击当前快捷键，再按下新的按键或组合键。使用时按住录音，松开结束并输出原文。"
+        },
+        "hotkeyTemplates": {
+          "title": "为润色模板设置快捷键",
+          "description": "每个模板都可单独选择模式。免提共用语音唤醒键，结束键可单独修改，按下后结束录音并按该模板处理文字；按住说话则使用该模板自己的快捷键。"
         }
       }
     }

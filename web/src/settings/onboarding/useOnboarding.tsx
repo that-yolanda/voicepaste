@@ -12,12 +12,24 @@ import "driver.js/dist/driver.css";
 import "driver.js/dist/checklist.css";
 import "./onboarding.css";
 
+type InlineGuide = {
+  task: TaskId;
+  index: number;
+  key: string;
+  previous: () => void;
+  next: () => void;
+  close: () => void;
+};
+
 export function useOnboarding(navigate: (section: SectionId) => void) {
   const { t } = useTranslation();
   const { config, settings, loading, scheduleSave } = useSettings();
   const [active, setActive] = useState(false);
   const [welcomeClosed, setWelcomeClosed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [guide, setGuide] = useState<InlineGuide | null>(null);
+  const [guideCollapsed, setGuideCollapsed] = useState(false);
+  const guideHeading = useRef<HTMLHeadingElement>(null);
   const completed = useRef(new Set<TaskId>());
   const skipped = useRef(false);
   const current = useRef<{ task: TaskId; index: number } | null>(null);
@@ -27,6 +39,13 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
   const { toast, showToast } = useToast();
   const isMac = settings?.runtime?.platform === "macos";
   const welcome = !loading && config?.app?.onboarding_pending === true && !welcomeClosed;
+
+  const guideStep = guide ? `${guide.task}-${guide.index}` : null;
+  useEffect(() => {
+    if (!guideStep) return;
+    setGuideCollapsed(false);
+    guideHeading.current?.focus({ preventScroll: true });
+  }, [guideStep]);
 
   useEffect(() => {
     if (!welcome) return;
@@ -95,6 +114,7 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
     let suppressRestore = false;
     let pending: AbortController | null = null;
     let modalPaused = false;
+    let inlineActive = false;
     const resume = current.current;
     const label = (task: TaskId) =>
       t(`ui.onboarding.tasks.${task}`) +
@@ -142,59 +162,89 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
       pending = null;
       current.current = null;
       tour.current?.destroy();
+      document.body.classList.remove("voicepaste-tour-interactive");
       tour.current = null;
       modalPaused = false;
+      inlineActive = false;
+      setGuide(null);
       restore();
     };
     cancel.current = stop;
 
+    const voiceMode = () =>
+      document.querySelector('[data-tour="hotkey-voice-mode"]')?.getAttribute("data-voice-mode") ??
+      "toggle";
     const run = async (task: TaskId, index = 0) => {
       pending?.abort();
       const controller = new AbortController();
       pending = controller;
+      inlineActive = false;
+      setGuide(null);
       suppressRestore = true;
       tour.current?.destroy();
+      document.body.classList.remove("voicepaste-tour-interactive");
       tour.current = null;
       suppressRestore = false;
       current.current = { task, index };
       widget.hide();
       navigate(TASK_SECTION[task]);
-      const steps = getSteps(task, isMac, t);
+      const steps = getSteps(task, isMac, t, voiceMode());
       const definition = steps[index];
       try {
         const target = await waitForTarget(definition.element as string, controller.signal);
         if (disposed || controller.signal.aborted) return;
         // Use the actual resolved element; a missing target must never silently complete a task.
         definition.element = target;
+        const complete = () => {
+          completed.current.add(task);
+          if (task === "llm") skipped.current = false;
+          widget.complete(task);
+          stop();
+        };
+        const skip = () => {
+          skipped.current = true;
+          completed.current.add(task);
+          widget.complete(task);
+          stop();
+        };
+        // Configuration needs the full page, including tabs and the scroll container.
         if (task === "asr" && index === 1) {
-          const key =
-            target.getAttribute("data-model-kind") === "offline" ? "asrOffline" : "asrOnline";
-          definition.popover = {
-            ...definition.popover,
-            title: t(`ui.onboarding.steps.${key}.title`),
-            description: t(`ui.onboarding.steps.${key}.description`),
-          };
+          inlineActive = true;
+          setGuide({
+            task,
+            index,
+            key: target.getAttribute("data-model-kind") === "offline" ? "asrOffline" : "asrOnline",
+            previous: () => void run(task, index - 1),
+            next: index === steps.length - 1 ? complete : () => void run(task, index + 1),
+            close: stop,
+          });
+          return;
+        }
+        const move = (direction: number) => {
+          let next = index + direction;
+          if (task === "hotkey" && next === 4 && voiceMode() === "hold") next += direction;
+          void run(task, next);
+        };
+        if (task === "llm" || task === "hotkey") {
+          document.body.classList.add("voicepaste-tour-interactive");
         }
         const instance = driver({
           steps,
           animate: !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
           overlayClickBehavior: "none",
-          allowKeyboardControl: task !== "hotkey",
+          allowKeyboardControl: task !== "hotkey" && task !== "llm",
+          ...(task === "llm" ? { overlayOpacity: 0.35 } : {}),
           popoverClass: "voicepaste-tour",
           nextBtnText: t("ui.onboarding.next"),
           prevBtnText: t("ui.onboarding.previous"),
           doneBtnText: t("ui.onboarding.completeTask"),
           closeBtnLabel: t("ui.onboarding.backToChecklist"),
           showButtons: ["next", "previous", "close"],
-          onNextClick: () => void run(task, index + 1),
-          onPrevClick: () => void run(task, index - 1),
-          onDoneClick: () => {
-            completed.current.add(task);
-            if (task === "llm") skipped.current = false;
-            widget.complete(task);
-            stop();
-          },
+          onNextClick: () => move(1),
+          onPrevClick: () => move(-1),
+          onDoneClick: complete,
           onDestroyed: () => {
+            document.body.classList.remove("voicepaste-tour-interactive");
             if (!suppressRestore && !disposed) {
               current.current = null;
               tour.current = null;
@@ -202,29 +252,37 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
             }
           },
           onPopoverRender: (popover) => {
+            popover.title.tabIndex = -1;
+            // Run after Driver.js's synchronous close-button autofocus, before the next paint.
+            queueMicrotask(() => {
+              if (disposed || controller.signal.aborted || modalPaused || !target.isConnected)
+                return;
+              const control = target.querySelector<HTMLElement>(
+                "select:not(:disabled), input:not(:disabled), textarea:not(:disabled), button:not(:disabled), a[href]",
+              );
+              const focus =
+                task === "hotkey" && index === 0 ? popover.title : (control ?? popover.title);
+              focus.focus({ preventScroll: true });
+            });
             popover.previousButton.disabled = index === 0;
             // Each substep runs independently so async navigation can be cancelled safely.
             popover.nextButton.textContent = t(
               index === steps.length - 1 ? "ui.onboarding.completeTask" : "ui.onboarding.next",
             );
             if (task === "llm") {
-              const skip = document.createElement("button");
-              skip.type = "button";
-              skip.className = "onboarding-skip";
-              skip.textContent = t("ui.onboarding.skip");
-              skip.addEventListener("click", () => {
-                skipped.current = true;
-                completed.current.add(task);
-                widget.complete(task);
-                stop();
-              });
-              popover.footerButtons.prepend(skip);
+              const button = document.createElement("button");
+              button.type = "button";
+              button.className = "onboarding-skip";
+              button.textContent = t("ui.onboarding.skip");
+              button.addEventListener("click", skip);
+              popover.footerButtons.prepend(button);
             }
           },
         });
         tour.current = instance;
         instance.drive(index);
       } catch {
+        document.body.classList.remove("voicepaste-tour-interactive");
         if (!disposed && !controller.signal.aborted) {
           current.current = null;
           showToast(t("ui.onboarding.targetError"), "error");
@@ -238,9 +296,9 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
       className: "voicepaste-checklist checklist-compact",
       title: t("ui.onboarding.title"),
       launcherText: t("ui.onboarding.title"),
-      completeTitle: t("ui.onboarding.completeTitle"),
-      completeDescription: t("ui.onboarding.completeDescription"),
-      completeLauncherText: t("ui.onboarding.completeTitle"),
+      completeTitle: t("ui.onboarding.title"),
+      completeDescription: "",
+      completeLauncherText: t("ui.onboarding.title"),
       progressText: t("ui.onboarding.progress", { done: "{{done}}", total: "{{total}}" }),
       launcherProgressText: "{{done}}/{{total}}",
       position: "bottom-right",
@@ -259,25 +317,50 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
     if (resume) void run(resume.task, resume.index);
 
     // Existing settings dialogs temporarily own focus and Escape; resume after they close.
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((records) => {
       const dialogOpen = !!document.querySelector("[data-settings-dialog]");
-      if (dialogOpen && tour.current && !modalPaused) {
+      if (dialogOpen && (tour.current || inlineActive) && !modalPaused) {
         modalPaused = true;
+        inlineActive = false;
+        setGuide(null);
         suppressRestore = true;
-        tour.current.destroy();
+        tour.current?.destroy();
+        document.body.classList.remove("voicepaste-tour-interactive");
         tour.current = null;
         suppressRestore = false;
       } else if (!dialogOpen && modalPaused) {
         modalPaused = false;
         const saved = current.current;
         if (saved) void run(saved.task, saved.index);
+      } else if (
+        !dialogOpen &&
+        current.current?.task === "hotkey" &&
+        (current.current.index === 3 || current.current.index === 4) &&
+        records.some((record) => record.attributeName === "data-voice-mode")
+      ) {
+        void run("hotkey", 3);
+      } else if (inlineActive && current.current?.task === "asr") {
+        const key =
+          document.querySelector('[data-tour="asr-models"]')?.getAttribute("data-model-kind") ===
+          "offline"
+            ? "asrOffline"
+            : "asrOnline";
+        setGuide((previous) =>
+          previous && previous.key !== key ? { ...previous, key } : previous,
+        );
       }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-model-kind", "data-voice-mode"],
+    });
     const onEscape = (event: KeyboardEvent) => {
+      if (document.querySelector("[data-settings-dialog]")) return;
       if (
         event.key === "Escape" &&
-        current.current?.task === "hotkey" &&
+        (inlineActive || current.current?.task === "hotkey" || current.current?.task === "llm") &&
         !document.querySelector("[data-hotkey-recording]")
       )
         stop();
@@ -286,10 +369,12 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
 
     return () => {
       disposed = true;
+      setGuide(null);
       pending?.abort();
       observer.disconnect();
       window.removeEventListener("keydown", onEscape);
       tour.current?.destroy();
+      document.body.classList.remove("voicepaste-tour-interactive");
       tour.current = null;
       widget.hide();
       list.current = null;
@@ -300,6 +385,50 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
   return {
     start,
     cancelTour: () => cancel.current(),
+    guide: guide && (
+      <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden p-4 pr-6">
+        <section
+          className="onboarding-guide pointer-events-auto ml-auto max-h-full w-full max-w-sm overflow-y-auto rounded-xl border border-border bg-surface-card p-4 text-text shadow-lg"
+          aria-labelledby="onboarding-guide-title"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2
+              id="onboarding-guide-title"
+              ref={guideHeading}
+              tabIndex={-1}
+              className="font-semibold"
+            >
+              {t(`ui.onboarding.steps.${guide.key}.title`)}
+            </h2>
+            <button
+              type="button"
+              className="text-xs text-text-dim hover:text-text focus-visible:outline-2 focus-visible:outline-accent"
+              aria-expanded={!guideCollapsed}
+              aria-controls="onboarding-guide-details"
+              onClick={() => setGuideCollapsed((collapsed) => !collapsed)}
+            >
+              {t(guideCollapsed ? "ui.onboarding.expandGuide" : "ui.onboarding.collapseGuide")}
+            </button>
+          </div>
+          <div id="onboarding-guide-details" hidden={guideCollapsed}>
+            <p className="mt-2 text-sm text-text-dim">
+              {t(`ui.onboarding.steps.${guide.key}.description`)}
+            </p>
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={guide.close}>
+                {t("ui.onboarding.backToChecklist")}
+              </Button>
+              <Button size="sm" disabled={guide.index === 0} onClick={guide.previous}>
+                {t("ui.onboarding.previous")}
+              </Button>
+              <Button size="sm" variant="accent" onClick={guide.next}>
+                {t(guide.index === 1 ? "ui.onboarding.completeTask" : "ui.onboarding.next")}
+              </Button>
+            </div>
+          </div>
+        </section>
+      </div>
+    ),
     overlay: (
       <>
         <Modal

@@ -58,6 +58,12 @@ afterEach(() => {
 });
 
 describe("HotkeyPage", () => {
+  it("keeps a template guide target available when no templates exist", async () => {
+    mocks.loadPrompts.mockResolvedValue([]);
+    const view = render(<HotkeyPage />);
+    expect(await screen.findByText("暂无润色模板，可前往「大语言模型」页面添加。")).toBeVisible();
+    expect(view.container.querySelector('[data-tour="hotkey-templates"]')).toBeInTheDocument();
+  });
   it.each([
     ["macos", "⌘"],
     ["windows", "Ctrl"],
