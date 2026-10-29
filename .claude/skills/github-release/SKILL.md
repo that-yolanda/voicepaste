@@ -56,18 +56,17 @@ git log ${LAST_TAG}..HEAD --oneline
 
 ### Step 2: Categorize Changes
 
-Classify commits by conventional commit type:
+Classify commits by conventional commit type into the fixed changelog sections defined in "Changelog Format" below:
 
 | Type | Description | Changelog Section |
 |------|-------------|-------------------|
-| `feat` | New features | Features |
-| `fix` | Bug fixes | Fixes |
-| `docs` | Documentation | Documentation |
-| `refactor` | Code refactoring | Refactor |
-| `perf` | Performance | Performance |
-| `style` | Formatting | (skip in changelog) |
-| `test` | Tests | (skip in changelog) |
-| `chore` | Maintenance | (skip in changelog) |
+| `feat` | New features | Added |
+| `feat` / `refactor` | Behavior changes, UX polish, user-facing perf gains on existing features | Changed |
+| `fix` | Bug fixes | Fixed |
+| removals | Removed features, options, bundled resources | Removed |
+| `refactor` / `test` / `ci` / `chore` | Changes invisible to users | Under the Hood |
+| `docs` / `style` | Documentation, formatting | (skip in changelog) |
+| any type with `(website)` scope | Website workspace changes | (skip in changelog — app-only scope, see "Changelog Format") |
 
 **Breaking change detection**:
 - Commit message starts with `BREAKING CHANGE`
@@ -258,14 +257,52 @@ Report these outcomes separately:
 
 If website deployment is not authorized or has not completed, report that it remains pending. Do not mark the whole release synchronized merely because the local JSON changed.
 
+## Changelog Format
+
+Both changelogs (`CHANGELOG.md` in English, `CHANGELOG.zh.md` in Chinese) group every release entry under a fixed set of section headings — a trimmed Keep a Changelog set adapted to this project. Use these categories in exactly this order, and omit any category with nothing to report:
+
+| Order | English heading (`CHANGELOG.md`) | Chinese heading (`CHANGELOG.zh.md`) | Covers |
+|-------|----------------------------------|-------------------------------------|--------|
+| 1 | `### Breaking Changes` | `### 破坏性变更` | Incompatible changes that require user action or change expected behavior |
+| 2 | `### Added` | `### 新增` | New features |
+| 3 | `### Changed` | `### 改进` | Behavior changes and UX polish on existing features |
+| 4 | `### Fixed` | `### 修复` | Bug fixes |
+| 5 | `### Removed` | `### 移除` | Removed features, options, or bundled resources |
+| 6 | `### Under the Hood` | `### 内部优化` | Refactors, tests, CI — changes invisible to users |
+
+Rules:
+
+- App-only scope: the changelogs cover the desktop app itself. Changes to the bundled website (`website/` workspace, `(website)` scope) never appear — the changelog feeds the in-app About panel and the website's release-notes display, and those readers don't care about website internals.
+- Keep the existing `**Title** — user-facing description` bullet style; write for users, not as a commit log.
+- Never rename, reorder, or translate headings within one file — the Chinese changelog uses the Chinese headings only, the English changelog the English ones.
+- Rare Keep a Changelog categories (`Deprecated`, `Security`) are not part of the fixed set; add one only if a release truly needs it, inserted after `Removed`.
+- Historical entries keep the headings they were published with — do not rewrite old releases.
+- The GitHub Release notes are rendered from the `CHANGELOG.md` entry (see "Release Notes Style"), so these sections are what users see on the release page and in the in-app About panel.
+
+Entry skeleton:
+
+```md
+## v2.2.0 (2026-10-29)
+One-sentence summary of the release.
+
+### Added
+- **Feature title** — user-facing benefit
+
+### Fixed
+- **Fix title** — what was broken and what changed
+```
+
 ## Release Notes Style
 
-Mirror the historical GitHub Release style:
+Mirror the historical GitHub Release style — `render-release-notes.sh` embeds the whole `## v<version>` changelog entry under `## What's New`, so the section headings come from "Changelog Format":
 
 ```md
 ## What's New
 
+### Added
 - **Title** — user-facing benefit
+
+### Fixed
 - **Title** — user-facing benefit
 
 ## Downloads
@@ -280,9 +317,9 @@ Mirror the historical GitHub Release style:
 **Full Changelog**: https://github.com/that-yolanda/voicepaste/compare/v<previous>...v<version>
 ```
 
-- Keep the list concise: usually 3-6 bullets.
+- Keep the changelog entry concise: usually 3-6 bullets per section.
 - Rewrite release notes for users. Do not paste file-level implementation details.
-- If the release is mostly fixes, `## What's Changed` is also acceptable.
+- `## What's New` stays the outer heading even for fix-heavy releases; the inner sections already communicate the mix.
 
 ## Update Channels
 
