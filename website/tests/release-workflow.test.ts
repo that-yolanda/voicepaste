@@ -24,8 +24,12 @@ const base = "https://github.com/that-yolanda/voicepaste/releases"
 const scripts = fileURLToPath(
   new URL("../../.claude/skills/github-release/scripts/", import.meta.url)
 )
+// A version that never exists in the real changelogs, so fixture notes built
+// by prepending fake entries to the real files never trigger duplicate
+// detection once a release with that number actually ships.
+const futureVersion = "9.9.9"
 
-function fixture(version = "2.1.6"): GitHubRelease {
+function fixture(version = futureVersion): GitHubRelease {
   return {
     tag_name: `v${version}`,
     draft: false,
@@ -50,27 +54,28 @@ function notes(version: string) {
 }
 
 test("stable synchronization inserts once using remote assets and publication date", () => {
-  const source = notes("2.1.6")
+  const latestBefore = config.latest
+  const source = notes(futureVersion)
   const output = syncWebsiteRelease(
     config,
     fixture(),
-    "v2.1.6",
+    `v${futureVersion}`,
     source.en,
     source.zh
   )
-  assert.equal(output.latest, "v2.1.6")
+  assert.equal(output.latest, `v${futureVersion}`)
   assert.equal(output.releases[0].date, "2026-10-27")
   assert.equal(output.releases[0].files[2].size, 1002)
   assert.match(output.releases[0].notes.en, /A "quoted" update/)
   assert.deepEqual(
-    syncWebsiteRelease(output, fixture(), "2.1.6", source.en, source.zh),
+    syncWebsiteRelease(output, fixture(), futureVersion, source.en, source.zh),
     output
   )
-  assert.equal(config.latest, "v2.1.5")
+  assert.equal(config.latest, latestBefore)
 })
 
 test("beta synchronization preserves the stable default and first timeline entry", () => {
-  const version = "2.1.6-beta"
+  const version = `${futureVersion}-beta`
   const source = notes(version)
   const output = syncWebsiteRelease(
     config,
@@ -86,10 +91,10 @@ test("beta synchronization preserves the stable default and first timeline entry
 })
 
 test("sync rejects draft, wrong tag, incomplete assets and missing source notes", () => {
-  const source = notes("2.1.6")
+  const source = notes(futureVersion)
   for (const release of [
     { ...fixture(), draft: true },
-    { ...fixture(), tag_name: "v2.1.60" },
+    { ...fixture(), tag_name: `v${futureVersion}0` },
     { ...fixture(), prerelease: true },
     { ...fixture(), published_at: null },
     { ...fixture(), assets: fixture().assets.slice(1) },
@@ -107,35 +112,46 @@ test("sync rejects draft, wrong tag, incomplete assets and missing source notes"
     },
   ]) {
     assert.throws(() =>
-      syncWebsiteRelease(config, release, "2.1.6", source.en, source.zh)
+      syncWebsiteRelease(config, release, futureVersion, source.en, source.zh)
     )
   }
   assert.throws(
-    () => syncWebsiteRelease(config, fixture(), "2.1.6", source.en, chinese),
+    () =>
+      syncWebsiteRelease(
+        config,
+        fixture(),
+        futureVersion,
+        source.en,
+        chinese
+      ),
     /Missing bilingual/
   )
 })
 
 test("target gate catches a new version omitted from an otherwise valid config", () => {
+  const oldest = config.releases[config.releases.length - 1].version.replace(
+    /^v/,
+    ""
+  )
   assert.throws(
-    () =>
-      syncWebsiteRelease(config, fixture("2.1.4"), "2.1.4", english, chinese),
+    () => syncWebsiteRelease(config, fixture(oldest), oldest, english, chinese),
     /older stable release/
   )
-  checkWebsiteRelease(config, "2.1.5", english, chinese)
+  const current = config.latest.replace(/^v/, "")
+  checkWebsiteRelease(config, current, english, chinese)
   assert.throws(
-    () => checkWebsiteRelease(config, "2.1.6", english, chinese),
+    () => checkWebsiteRelease(config, futureVersion, english, chinese),
     /Website release is missing/
   )
   const stale = structuredClone(config)
   stale.releases[0].notes.zh = "stale"
   assert.throws(
-    () => checkWebsiteRelease(stale, "2.1.5", english, chinese),
+    () => checkWebsiteRelease(stale, current, english, chinese),
     /out of sync/
   )
-  const wrongLatest = { ...config, latest: "v2.1.4" }
+  const wrongLatest = { ...config, latest: `v${oldest}` }
   assert.throws(
-    () => checkWebsiteRelease(wrongLatest, "2.1.5", english, chinese),
+    () => checkWebsiteRelease(wrongLatest, current, english, chinese),
     /latest does not match/
   )
 })
