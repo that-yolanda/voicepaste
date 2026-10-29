@@ -638,7 +638,7 @@
         },
         "hotkeyVoice": {
           "title": "Choose a voice input mode",
-          "description": "Tap: press the recording hotkey to start, then the stop key to finish. Hold: hold the shortcut to record and release to finish."
+          "description": "Tap: press the recording hotkey to start, then the stop key to finish. Hold: hold the shortcut to record and release to finish. Press Esc anytime while recording to cancel."
         },
         "llmProvider": {
           "title": "Choose a provider",
