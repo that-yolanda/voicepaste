@@ -1,7 +1,42 @@
 {
-  "latest": "v2.1.5",
+  "latest": "v2.1.6",
   "githubReleases": "https://github.com/that-yolanda/voicepaste/releases",
   "releases": [
+    {
+      "version": "v2.1.6",
+      "date": "2026-10-29",
+      "releaseUrl": "https://github.com/that-yolanda/voicepaste/releases/tag/v2.1.6",
+      "files": [
+        {
+          "platform": "macos-arm64",
+          "filename": "VoicePaste_2.1.6_aarch64.dmg",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.6/VoicePaste_2.1.6_aarch64.dmg",
+          "size": 16242305
+        },
+        {
+          "platform": "macos-x64",
+          "filename": "VoicePaste_2.1.6_x64.dmg",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.6/VoicePaste_2.1.6_x64.dmg",
+          "size": 18314566
+        },
+        {
+          "platform": "windows-x64",
+          "filename": "VoicePaste_2.1.6_x64-setup.exe",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.6/VoicePaste_2.1.6_x64-setup.exe",
+          "size": 10464196
+        },
+        {
+          "platform": "windows-msi",
+          "filename": "VoicePaste_2.1.6_x64_en-US.msi",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.6/VoicePaste_2.1.6_x64_en-US.msi",
+          "size": 15044608
+        }
+      ],
+      "notes": {
+        "en": "This update ships a full English interface with in-app language switching, adds a first-run setup guide, in-app feedback, and pending-update release notes in About, and consolidates the settings pages.\n\n### Added\n- **Full Bilingual Interface** — The UI language can now follow the system or be pinned to Chinese / English in settings; every settings page, the tray menu, the voice overlay, and all error messages re-render in the selected language.\n- **First-Run Setup Guide** — New users get a bilingual checklist covering microphone permission, recognition model, and hotkey setup. The guide stays available from the sidebar and never interrupts existing users.\n- **In-App Feedback** — Report issues and suggestions directly from the app with editable version info, optional diagnostics, and bounded screenshot attachments — no GitHub account needed (delivered through voicepaste.dev).\n- **Update Notes in About** — When an update is available, the About panel now shows the pending version's release notes.\n\n### Changed\n- **Consolidated Settings** — Sidebar settings and update controls are grouped, model and usage controls moved next to the polishing templates, page state survives settings refreshes without flicker, and controls and labels stay aligned across languages.\n\n### Fixed\n- **Log Rotation No Longer Blocks Input** — Rotating the log file used to stall voice input; rotation now happens off the recording path.\n- **Credential Redaction** — Provider errors no longer echo API keys, tokens, or service endpoints into log files or the overlay.\n- **Polishing Models** — Text polishing now uses the providers' current lightweight models.\n\n### Under the Hood\n- Every backend error now crosses the IPC boundary as a structured code and localizes per UI language; the locale files are the single translation source.",
+        "zh": "本次更新带来完整的英文界面与应用内语言切换，新增新手设置引导、应用内反馈与 About 面板更新说明，并整合精简设置页。\n\n### 新增\n- **完整双语界面** — 界面语言可跟随系统，或在设置中固定为中文 / 英文；设置页、托盘菜单、语音浮窗与全部错误提示都会按所选语言重新渲染。\n- **新手设置引导** — 新用户首次启动可获得双语设置清单，涵盖麦克风权限、识别模型与快捷键配置；引导保留在侧栏入口，不打扰已有用户。\n- **应用内反馈** — 可直接在应用内提交问题与建议，支持编辑版本信息、按需附带诊断信息与有限大小的截图，无需 GitHub 账号（经 voicepaste.dev 投递）。\n- **About 更新说明** — 有新版本待更新时，About 面板会显示该版本的更新说明。\n\n### 改进\n- **设置页整合** — 侧栏设置与更新控件归组，模型与用量控件移至润色模板旁；设置刷新时保留页面状态、不再闪烁，控件与文案在各语言下保持对齐。\n\n### 修复\n- **日志轮转不再阻塞输入** — 日志文件轮转曾会短暂卡住语音输入，现已在录音路径之外执行。\n- **凭证脱敏** — 服务商错误不再把 API key、token 或服务地址回显到日志文件与浮窗。\n- **润色模型** — 文本润色改用服务商当前的轻量模型。\n\n### 内部优化\n- 后端所有错误改为以结构化错误码跨越 IPC 边界，并按界面语言本地化；locale 文件成为唯一翻译来源。"
+      }
+    },
     {
       "version": "v2.1.5",
       "date": "2026-10-24",
