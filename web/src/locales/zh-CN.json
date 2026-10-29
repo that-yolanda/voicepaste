@@ -270,7 +270,8 @@
       "usage": "使用",
       "templates": "润色模板",
       "support": "帮助与反馈",
-      "navigation": "导航"
+      "navigation": "导航",
+      "general": "通用设置"
     },
     "heatmap": {
       "title": "使用统计",

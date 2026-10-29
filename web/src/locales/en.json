@@ -270,7 +270,8 @@
       "usage": "Usage",
       "templates": "Polishing templates",
       "support": "Help & feedback",
-      "navigation": "Navigation"
+      "navigation": "Navigation",
+      "general": "General settings"
     },
     "heatmap": {
       "title": "Usage",

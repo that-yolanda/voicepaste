@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import { CircleArrowUp, LoaderCircle, RotateCcw } from "lucide-react";
+import { ArrowUp, LoaderCircle, RefreshCw, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -243,61 +243,72 @@ function UpdateIcon({ state }: { state: UpdateState }) {
     case "downloading":
     case "installing":
       return <LoaderCircle size={14} className="shrink-0 animate-spin" />;
+    case "available":
+      return <ArrowUp size={14} className="shrink-0" />;
+    case "idle":
+    case "not-available":
+    case "disabled":
+      return <RefreshCw size={14} className="shrink-0" />;
     case "error":
       return <RotateCcw size={14} className="shrink-0" />;
     default:
-      return <CircleArrowUp size={14} className="shrink-0" />;
+      return <ArrowUp size={14} className="shrink-0" />;
   }
 }
-
-const compactVisibleStates = new Set<UpdateState>([
-  "available",
-  "downloading",
-  "downloaded",
-  "installing",
-  "error",
-]);
 
 export function UpdateButton({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
   const current = useUpdateSnapshot();
   const action = updateAction(current, t);
   const statusText = updateStatusText(current, t);
-  const statusVariant =
-    current.state === "error"
-      ? "danger"
-      : current.state === "not-available" || current.state === "downloaded"
-        ? "success"
-        : current.state === "checking"
-          ? "muted"
-          : "accent";
-
-  if (compact) {
-    if (!compactVisibleStates.has(current.state)) return null;
+  if (!compact) {
+    const statusVariant =
+      current.state === "error"
+        ? "danger"
+        : current.state === "not-available" || current.state === "downloaded"
+          ? "success"
+          : current.state === "checking"
+            ? "muted"
+            : "accent";
     return (
-      <Button
-        type="button"
-        size="sm"
-        variant={action.variant}
-        onClick={action.onClick}
-        disabled={action.disabled}
-      >
-        <span className="min-w-0 truncate">{action.label}</span>
-      </Button>
+      <div className="flex flex-row items-center gap-2">
+        {statusText && (
+          <Badge variant={statusVariant} size="xs">
+            {statusText}
+          </Badge>
+        )}
+        <Button variant={action.variant} onClick={action.onClick} disabled={action.disabled}>
+          <UpdateIcon state={current.state} />
+          <span>{action.label}</span>
+        </Button>
+      </div>
     );
   }
 
+  if (
+    !["available", "downloading", "downloaded", "installing"].includes(current.state) &&
+    !(current.state === "error" && current.version)
+  )
+    return null;
+
+  const color =
+    action.variant === "danger"
+      ? "bg-error/10 text-error hover:bg-error/20"
+      : action.variant === "accent"
+        ? "bg-accent-soft text-accent hover:bg-accent/20"
+        : "bg-fill-hover text-text-muted";
+
   return (
-    <div className="flex flex-row items-center gap-2">
-      {statusText && (
-        <Badge variant={statusVariant} size="xs">
-          {statusText}
-        </Badge>
-      )}
-      <Button variant={action.variant} onClick={action.onClick} disabled={action.disabled}>
-        <UpdateIcon state={current.state} />
-        <span>{action.label}</span>
-      </Button>
-    </div>
+    <button
+      type="button"
+      title={statusText || action.label}
+      aria-label={action.label}
+      onClick={action.onClick}
+      disabled={action.disabled}
+      className={`inline-flex h-6 shrink-0 items-center justify-center gap-1 rounded-full px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim disabled:cursor-default ${color}`}
+    >
+      <UpdateIcon state={current.state} />
+      <span aria-live="polite">{action.label}</span>
+    </button>
   );
 }

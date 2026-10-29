@@ -2,7 +2,6 @@ import {
   AudioLines,
   BookOpen,
   Bot,
-  CircleHelp,
   Home,
   Info,
   Keyboard,
@@ -17,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { openHelpGuide } from "@/settings/bridge";
 import { Toast, useToast } from "@/settings/components/Toast";
 import { UpdateButton } from "@/settings/components/UpdateButton";
+import { useSettings } from "@/settings/SettingsProvider";
 
 export type SectionId =
   | "home"
@@ -47,6 +47,8 @@ interface SidebarProps {
 
 export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps) {
   const { t } = useTranslation();
+  const { settings } = useSettings();
+  const version = settings?.runtime?.version as string | undefined;
   const { toast, showToast } = useToast();
   const menu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -107,16 +109,15 @@ export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps)
         ))}
       </nav>
       <div className="p-2 border-t border-border-subtle space-y-1">
-        <UpdateButton compact />
-        {navBtn("app", Settings2, "ui.nav.app")}
         <details ref={menu} className="relative">
           <summary
             className={`${utilityClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
           >
-            <CircleHelp size={18} />
-            {t("ui.nav.support")}
+            <Settings2 size={18} />
+            {t("ui.nav.app")}
           </summary>
           <div className="absolute bottom-full left-0 mb-2 w-52 p-1 bg-[var(--boot-card)] border border-border rounded-lg shadow-lg z-50">
+            {navBtn("app", Settings2, "ui.nav.general")}
             <button
               type="button"
               className={utilityClass}
@@ -143,6 +144,12 @@ export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps)
             {navBtn("about", Info, "ui.nav.about")}
           </div>
         </details>
+        <div className="flex h-8 items-center justify-between gap-2 px-3 py-1 text-xs text-text-muted">
+          <span className="shrink-0 tabular-nums" title={t("ui.about.current_version")}>
+            {version ? `v${version}` : "—"}
+          </span>
+          <UpdateButton compact />
+        </div>
       </div>
       <Toast toast={toast} />
     </aside>
