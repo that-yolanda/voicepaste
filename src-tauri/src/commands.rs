@@ -490,92 +490,42 @@ pub async fn send_diagnostic(
     Ok(())
 }
 
-/// Get microphone permission status via macOS AVFoundation.
-/// Returns the real TCC authorization status on macOS; on other platforms
-/// delegates to the WebView frontend.
+/// Read native permission state; never infer it from WebView media access.
 #[tauri::command]
 pub async fn get_microphone_status() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({ "status": check_microphone() }))
+    let status = tauri::async_runtime::spawn_blocking(check_microphone)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "status": status }))
 }
 
-/// Check microphone permission via AVCaptureDevice authorization status.
-#[cfg(target_os = "macos")]
 fn check_microphone() -> &'static str {
-    use objc2::{class, msg_send};
-
-    // AVMediaTypeAudio is a framework NSString constant → @"soun"
-    extern "C" {
-        static AVMediaTypeAudio: *const objc2::runtime::AnyObject;
-    }
-
-    let status: isize = unsafe {
-        msg_send![
-            class!(AVCaptureDevice),
-            authorizationStatusForMediaType: AVMediaTypeAudio
-        ]
-    };
-
-    // AVAuthorizationStatus values
-    match status {
-        0 => "prompt",     // AVAuthorizationStatusNotDetermined — never asked
-        1 => "restricted", // AVAuthorizationStatusRestricted — parental / MDM
-        2 => "denied",     // AVAuthorizationStatusDenied — user refused
-        3 => "granted",    // AVAuthorizationStatusAuthorized
-        _ => "unknown",
-    }
+    crate::permissions::microphone_status()
 }
 
-#[cfg(not(target_os = "macos"))]
-fn check_microphone() -> &'static str {
-    // On non-macOS platforms the WebView getUserMedia flow handles this
-    "granted"
-}
-
-/// Request microphone access.
 #[tauri::command]
 pub async fn request_microphone_access() -> Result<serde_json::Value, String> {
-    // In Tauri, this is handled by getUserMedia in the frontend
-    Ok(serde_json::json!({ "status": "granted", "granted": true }))
+    let status = crate::permissions::request_microphone().await?;
+    Ok(serde_json::json!({ "status": status, "granted": status == "granted" }))
 }
 
-/// Check the real accessibility permission status on macOS via AXIsProcessTrusted.
-#[cfg(target_os = "macos")]
 fn check_accessibility() -> &'static str {
-    extern "C" {
-        fn AXIsProcessTrusted() -> u8;
-    }
-    if unsafe { AXIsProcessTrusted() != 0 } {
-        "granted"
-    } else {
-        "denied"
-    }
+    crate::permissions::accessibility_status()
 }
 
-#[cfg(not(target_os = "macos"))]
-fn check_accessibility() -> &'static str {
-    "granted"
-}
-
-/// Get accessibility status (macOS only).
 #[tauri::command]
 pub async fn get_accessibility_status() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "status": check_accessibility() }))
 }
 
-/// Open accessibility settings (macOS only).
+#[tauri::command]
+pub async fn open_microphone_settings() -> Result<(), String> {
+    crate::permissions::open_microphone_settings()
+}
+
 #[tauri::command]
 pub async fn open_accessibility_settings() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        let status = std::process::Command::new("open")
-            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-            .status()
-            .map_err(|e| format!("Failed to open accessibility settings: {}", e))?;
-        if !status.success() {
-            return Err(format!("Failed to open accessibility settings: {}", status));
-        }
-    }
-    Ok(())
+    crate::permissions::open_accessibility_settings()
 }
 
 /// Try to start the keytap listener if it was skipped at startup due to

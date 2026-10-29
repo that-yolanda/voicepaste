@@ -14,6 +14,7 @@ mod migration;
 mod model;
 mod overlay;
 mod paste;
+mod permissions;
 mod platform;
 mod recording;
 mod sound;
@@ -180,6 +181,7 @@ pub fn run() {
             commands::repolish_history_entry,
             commands::send_diagnostic,
             commands::get_microphone_status,
+            commands::open_microphone_settings,
             commands::request_microphone_access,
             commands::get_accessibility_status,
             commands::open_accessibility_settings,

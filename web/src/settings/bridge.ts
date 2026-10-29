@@ -6,7 +6,7 @@
  * - Hotkey recording: capture-phase keydown/keyup, pressed Set, canonical mod ordering, 300ms timeout
  * - Space preventDefault: only on non-Mac platforms to avoid suppressing keyup
  * - Tauri listen cleanup: Promise<() => void> async pattern
- * - Permission calls: getUserMedia -> release stream immediately
+ * - Permission calls: native platform checks and requests
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -54,10 +54,18 @@ export interface SettingsEvent {
   payload: Record<string, unknown>;
 }
 
+export type PermissionStatus =
+  | "granted"
+  | "denied"
+  | "prompt"
+  | "restricted"
+  | "unknown"
+  | "no_device"
+  | "unavailable";
+
 export interface MicStatusResult {
-  status: "granted" | "denied" | "prompt" | "restricted";
+  status: PermissionStatus;
   granted: boolean;
-  error?: string;
 }
 
 export interface AccessibilityResult {
@@ -112,25 +120,16 @@ export async function getAudioConfigDefaults(): Promise<Record<string, unknown>>
 
 // ---- Permission methods ----
 
-export async function getMicrophoneStatus(): Promise<{ status: string }> {
+export async function getMicrophoneStatus(): Promise<{ status: PermissionStatus }> {
   return invoke("get_microphone_status");
 }
 
-/**
- * Request microphone access via getUserMedia.
- * Opens the system permission dialog, then immediately releases the stream.
- */
 export async function requestMicrophoneAccess(): Promise<MicStatusResult> {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((t) => {
-      t.stop();
-    });
-    return { status: "granted", granted: true };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return { status: "denied", granted: false, error: message };
-  }
+  return invoke("request_microphone_access");
+}
+
+export async function openMicrophoneSettings(): Promise<void> {
+  return invoke("open_microphone_settings");
 }
 
 export async function getAccessibilityStatus(): Promise<AccessibilityResult> {

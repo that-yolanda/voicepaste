@@ -5569,6 +5569,7 @@ dependencies = [
  "block2",
  "bzip2",
  "chrono",
+ "core-foundation",
  "cpal 0.17.1",
  "crossbeam-channel",
  "dirs 6.0.0",
@@ -5602,6 +5603,7 @@ dependencies = [
  "tokio-tungstenite",
  "url",
  "uuid",
+ "windows 0.61.3",
  "wiremock",
 ]
 

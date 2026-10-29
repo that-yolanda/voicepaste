@@ -212,32 +212,22 @@ describe("settings bridge — event listeners", () => {
 // ---- Permission: requestMicrophoneAccess ----
 
 describe("settings bridge — requestMicrophoneAccess", () => {
-  it("returns granted when getUserMedia succeeds", async () => {
-    const mockTrack = { stop: vi.fn() };
-    const mockStream = { getTracks: () => [mockTrack] };
-    Object.defineProperty(navigator, "mediaDevices", {
-      value: { getUserMedia: vi.fn().mockResolvedValue(mockStream) },
-      configurable: true,
-      writable: true,
-    });
+  it.each([
+    "granted",
+    "denied",
+    "no_device",
+    "unavailable",
+    "unknown",
+  ])("preserves the native %s result without asking the WebView for access", async (status) => {
+    mockInvoke.mockResolvedValueOnce({ status, granted: status === "granted" });
     const result = await requestMicrophoneAccess();
-    expect(result.status).toBe("granted");
-    expect(result.granted).toBe(true);
-    expect(mockTrack.stop).toHaveBeenCalled();
+    expect(result).toEqual({ status, granted: status === "granted" });
+    expect(invoke).toHaveBeenCalledWith("request_microphone_access");
   });
 
-  it("returns denied when getUserMedia fails", async () => {
-    Object.defineProperty(navigator, "mediaDevices", {
-      value: {
-        getUserMedia: vi.fn().mockRejectedValue(new Error("NotAllowedError")),
-      },
-      configurable: true,
-      writable: true,
-    });
-    const result = await requestMicrophoneAccess();
-    expect(result.status).toBe("denied");
-    expect(result.granted).toBe(false);
-    expect(result.error).toContain("NotAllowedError");
+  it("propagates a native request error instead of claiming permission was denied", async () => {
+    mockInvoke.mockRejectedValueOnce(new Error("IPC failed"));
+    await expect(requestMicrophoneAccess()).rejects.toThrow("IPC failed");
   });
 });
 

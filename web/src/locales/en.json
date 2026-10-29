@@ -558,16 +558,17 @@
       "title": "Permissions",
       "accessibility": "Accessibility",
       "accessibility_tooltip": "Required to type text into other apps",
-      "granted": "Granted",
-      "not_granted": "Not granted",
-      "grant": "Open Settings",
+      "granted": "Authorized",
       "microphone": "Microphone",
-      "denied": "Denied",
       "check": "Check",
-      "macos_hint": "macOS needs microphone and accessibility permissions. Go to System Settings > Privacy & Security > Microphone / Accessibility.",
-      "checking": "Checking…",
-      "check_result": "Check complete: {{status}}",
-      "check_failed": "Check failed. Please try again."
+      "allow": "Allow",
+      "settings": "Settings",
+      "enable_in_settings": "Access disabled. Enable in Settings.",
+      "contact_admin": "Access restricted. Contact your admin.",
+      "unknown": "Check failed. Try again.",
+      "no_device": "No microphone found. Set a default input device.",
+      "unavailable": "Microphone unavailable. Check your device.",
+      "settings_failed": "Couldn't open Settings"
     },
     "onboarding": {
       "title": "Setup guide",
@@ -599,11 +600,11 @@
       "steps": {
         "microphone": {
           "title": "Allow microphone access",
-          "description": "Click Check and allow microphone access when prompted. If already allowed, continue."
+          "description": "Click Allow to grant access, or Check to verify it. If access was denied or disabled, click Settings to enable it manually. Continue when the green check appears."
         },
         "accessibility": {
           "title": "Allow Accessibility access",
-          "description": "Click Grant and allow VoicePaste in macOS System Settings so shortcuts and text insertion can work. Return and check the permission status before continuing."
+          "description": "Click Settings and enable VoicePaste under Accessibility. Return and look for the green check; click Check if it hasn't updated."
         },
         "asrMode": {
           "title": "Choose speech recognition",
