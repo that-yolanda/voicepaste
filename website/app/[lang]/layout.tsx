@@ -27,11 +27,6 @@ export default async function LocaleLayout({
   if (!isLocale(lang)) notFound()
   return (
     <html lang={lang === "zh" ? "zh-CN" : "en"} suppressHydrationWarning>
-      <head>
-        {/* Bypass CSS optimization for the native Highlight API selector. */}
-        {/* eslint-disable-next-line @next/next/no-css-tags */}
-        <link rel="stylesheet" href="/search-highlights.css" />
-      </head>
       <body>
         <Providers locale={lang}>
           <SiteHeader locale={lang} />

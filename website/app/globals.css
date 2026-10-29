@@ -8,8 +8,12 @@
 @import "@fontsource-variable/sora";
 @import "./marketing.css";
 
-/* Loaded separately in search-highlights.css until the optimizer supports ::highlight(). */
-@source not inline("[&_::highlight(fd-search)]:text-fd-primary [&_::highlight(fd-search)]:underline");
+/* CSS Custom Highlight API for fumadocs search result highlighting.
+   The theme css (shadcn/preset) does not ship this rule, so define it here. */
+::highlight(fd-search) {
+  color: var(--color-fd-primary);
+  text-decoration: underline;
+}
 
 @custom-variant dark (&:is(.dark *));
 
