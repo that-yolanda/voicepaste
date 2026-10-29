@@ -101,6 +101,7 @@ export function HotkeyInput({
 
   return (
     <div
+      data-hotkey-recording={recording || undefined}
       className={`relative group flex items-center h-8.5 min-w-20 px-2 rounded-lg border text-xs whitespace-nowrap transition-colors ${containerClass}`}
     >
       <button

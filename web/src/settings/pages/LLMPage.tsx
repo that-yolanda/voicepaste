@@ -162,7 +162,7 @@ export function LLMPage() {
     <PageLayout>
       <PageHeader title={t("ui.llm.title")} description={t("ui.llm.description")} />
       {/* API Config */}
-      <Section>
+      <Section data-tour="llm-config">
         <SectionHeader title={t("ui.llm.api_config")} />
         <SectionContent>
           <SectionItemList>
@@ -222,7 +222,7 @@ export function LLMPage() {
       </Section>
 
       {/* Prompts */}
-      <Section>
+      <Section data-tour="llm-templates">
         <SectionHeader
           title={t("ui.llm.prompts")}
           action={

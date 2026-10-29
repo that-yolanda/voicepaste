@@ -286,7 +286,7 @@ export function AudioModelPage() {
         </div>
       </PageHeader>
 
-      <div className="flex items-center justify-between gap-3">
+      <div data-tour="asr-mode" className="flex items-center justify-between gap-3">
         <SegmentedControl
           options={[
             { value: "online", label: t("ui.audio.online") },
@@ -309,29 +309,33 @@ export function AudioModelPage() {
         saveAsrVadDefaults={saveAsrVadDefaults}
       />
 
-      {tab === "online" &&
-        onlineModels.map((m) => <ModelCard key={m.id} model={m} {...cardProps(m)} />)}
+      <div data-tour="asr-models" data-model-kind={tab} className="space-y-5">
+        {tab === "online" &&
+          onlineModels.map((m) => <ModelCard key={m.id} model={m} {...cardProps(m)} />)}
 
-      {tab === "offline" && (
-        <>
-          {offlineAsrModels.length === 0 && (
-            <p className="text-sm text-text-muted">{t("ui.audio.no_offline_models")}</p>
-          )}
-          {offlineAsrModels.map((m) => (
-            <ModelCard key={m.id} model={m} {...cardProps(m)} />
-          ))}
-          {baseModels.length > 0 && (
-            <div className="pt-2">
-              <h2 className="text-sm font-semibold text-text mb-3">{t("ui.audio.base_models")}</h2>
-              <div className="space-y-5">
-                {baseModels.map((m) => (
-                  <ModelCard key={m.id} model={m} {...cardProps(m)} />
-                ))}
+        {tab === "offline" && (
+          <>
+            {offlineAsrModels.length === 0 && (
+              <p className="text-sm text-text-muted">{t("ui.audio.no_offline_models")}</p>
+            )}
+            {offlineAsrModels.map((m) => (
+              <ModelCard key={m.id} model={m} {...cardProps(m)} />
+            ))}
+            {baseModels.length > 0 && (
+              <div className="pt-2">
+                <h2 className="text-sm font-semibold text-text mb-3">
+                  {t("ui.audio.base_models")}
+                </h2>
+                <div className="space-y-5">
+                  {baseModels.map((m) => (
+                    <ModelCard key={m.id} model={m} {...cardProps(m)} />
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </PageLayout>
   );
 }

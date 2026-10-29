@@ -169,7 +169,7 @@ export function HotkeyPage() {
       </PageHeader>
 
       {/* Section 1 — global main key (the hands-free wake key) */}
-      <Section>
+      <Section data-tour="hotkey-main">
         <SectionHeader title={t("ui.hotkey_page.main_section")} />
         <SectionContent>
           <SectionItemList>
@@ -196,7 +196,7 @@ export function HotkeyPage() {
       </Section>
 
       {/* Section 2 — per-feature hotkeys (voice input + each polish prompt) */}
-      <Section>
+      <Section data-tour="hotkey-voice">
         <SectionHeader
           title={t("ui.hotkey_page.hotkeys_section")}
           subtitle={t("ui.hotkey_page.hotkeys_subtitle")}

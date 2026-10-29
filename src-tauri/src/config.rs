@@ -215,6 +215,9 @@ pub struct DoubaoStreamingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
+    /// Only newly created configurations opt into the setup invitation.
+    #[serde(default)]
+    pub onboarding_pending: bool,
     #[serde(default)]
     pub last_polish_prompt_id: Option<String>,
     #[serde(default = "default_hotkey")]
@@ -936,6 +939,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
             app: AppSettings {
+                onboarding_pending: false,
                 last_polish_prompt_id: None,
                 hotkey: default_hotkey(),
                 hotkey_mode: default_hotkey_mode(),
@@ -1604,6 +1608,7 @@ min_silence_duration: 0.3
         .unwrap();
         let manager = ConfigManager::new(data.path(), resources.path());
         let config = manager.load_config().unwrap();
+        assert!(config.app.onboarding_pending);
         assert_eq!(config.app.hotkey.as_str(), Some(DEFAULT_HOTKEY));
         assert_eq!(config.app.voice_hotkey.as_deref(), Some(DEFAULT_HOTKEY));
         let prompts = manager.load_prompts();
@@ -1624,10 +1629,27 @@ min_silence_duration: 0.3
         .unwrap();
         let manager = ConfigManager::new(data.path(), resources.path());
         let config = manager.load_config().unwrap();
+        assert!(!config.app.onboarding_pending);
         assert_eq!(config.app.hotkey.as_str(), Some("F13"));
         assert_eq!(config.app.voice_hotkey.as_deref(), Some("F13"));
         assert_eq!(manager.load_prompts()[0].hotkey, "ControlLeft+ShiftLeft");
         assert_eq!(manager.load_prompts()[0].prompt, "custom");
+    }
+
+    #[test]
+    fn onboarding_dismissal_survives_restart_and_default_is_disabled() {
+        assert!(!AppConfig::default().app.onboarding_pending);
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        std::fs::write(
+            data.path().join("config.yaml"),
+            "app:\n  onboarding_pending: false\n",
+        )
+        .unwrap();
+        let manager = ConfigManager::new(data.path(), resources.path());
+        assert!(!manager.load_config().unwrap().app.onboarding_pending);
+        let manager = ConfigManager::new(data.path(), resources.path());
+        assert!(!manager.load_config().unwrap().app.onboarding_pending);
     }
 
     fn write_builtin_prompts(resource_dir: &std::path::Path, items: &[PromptItem]) {

@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SettingsEvent } from "@/settings/bridge";
@@ -25,6 +26,7 @@ export function PermissionsPage() {
   const { settings } = useSettings();
   const [micStatus, setMicStatus] = useState<string>("unknown");
   const [accStatus, setAccStatus] = useState<string>("unknown");
+  const [micCheck, setMicCheck] = useState<"idle" | "checking" | "done" | "error">("idle");
 
   useEffect(() => {
     const cleanup = onEvent((event: SettingsEvent) => {
@@ -66,6 +68,25 @@ export function PermissionsPage() {
   }, [check, accStatus]);
 
   const isMac = settings?.runtime?.platform === "macos";
+  const micStatusLabel = t(
+    micStatus === "granted"
+      ? "ui.permissions.granted"
+      : micStatus === "denied"
+        ? "ui.permissions.denied"
+        : "ui.permissions.not_granted",
+  );
+
+  const checkMicrophone = async () => {
+    if (micCheck === "checking") return;
+    setMicCheck("checking");
+    try {
+      const result = await requestMicrophoneAccess();
+      setMicStatus(result.status);
+      setMicCheck("done");
+    } catch {
+      setMicCheck("error");
+    }
+  };
 
   return (
     <PageLayout>
@@ -78,7 +99,7 @@ export function PermissionsPage() {
                 title={t("ui.permissions.accessibility")}
                 tooltip={t("ui.permissions.accessibility_tooltip")}
                 action={
-                  <div className="flex items-center gap-2">
+                  <div data-tour="accessibility" className="flex items-center gap-2">
                     <span
                       className={`w-2 h-2 rounded-full ${accStatus === "granted" ? "bg-success" : "bg-error"}`}
                     />
@@ -96,7 +117,7 @@ export function PermissionsPage() {
               title={t("ui.permissions.microphone")}
               last
               action={
-                <div className="flex items-center gap-2">
+                <div data-tour="microphone" className="flex items-center gap-2">
                   <span
                     className={`w-2 h-2 rounded-full ${
                       micStatus === "granted"
@@ -106,20 +127,20 @@ export function PermissionsPage() {
                           : "bg-warning"
                     }`}
                   />
-                  <span className="text-xs text-text-muted">
-                    {micStatus === "granted"
-                      ? t("ui.permissions.granted")
-                      : micStatus === "denied"
-                        ? t("ui.permissions.denied")
-                        : t("ui.permissions.not_granted")}
+                  <span role="status" aria-live="polite" className="text-xs text-text-muted">
+                    {micCheck === "done"
+                      ? t("ui.permissions.check_result", { status: micStatusLabel })
+                      : micCheck === "error"
+                        ? t("ui.permissions.check_failed")
+                        : micStatusLabel}
                   </span>
-                  <Button
-                    onClick={async () => {
-                      await requestMicrophoneAccess();
-                      check();
-                    }}
-                  >
-                    {t("ui.permissions.check")}
+                  <Button disabled={micCheck === "checking"} onClick={() => void checkMicrophone()}>
+                    {micCheck === "checking" && (
+                      <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                    )}
+                    {t(
+                      micCheck === "checking" ? "ui.permissions.checking" : "ui.permissions.check",
+                    )}
                   </Button>
                 </div>
               }

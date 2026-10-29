@@ -1,0 +1,152 @@
+.voicepaste-checklist,
+.voicepaste-tour {
+  --driver-checklist-color: var(--color-accent);
+  --driver-popover-font-family: var(--font-family-ui);
+  font-family: var(--font-family-ui);
+  color: var(--color-text);
+}
+
+.voicepaste-checklist .driver-checklist-launcher,
+.voicepaste-checklist .driver-checklist-panel,
+div.voicepaste-tour {
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 12px;
+  backdrop-filter: blur(20px);
+}
+
+.voicepaste-checklist .driver-checklist-launcher {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
+.voicepaste-checklist .driver-checklist-panel {
+  width: min(260px, calc(100vw - 32px));
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+.voicepaste-checklist .driver-checklist-header {
+  padding: 12px 14px 8px;
+}
+
+.voicepaste-checklist .driver-checklist-title,
+.voicepaste-tour .driver-popover-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.voicepaste-checklist .driver-checklist-items {
+  padding: 0 6px 6px;
+}
+
+.voicepaste-checklist .driver-checklist-item {
+  padding: 6px 8px;
+  gap: 8px;
+}
+
+.voicepaste-checklist .driver-checklist-item-title {
+  font-size: 13px;
+}
+
+.voicepaste-checklist .driver-checklist-item-done .driver-checklist-item-title {
+  text-decoration: none;
+}
+
+/* Override the bundled :has() hover rule, including when its text button is hovered. */
+.driver-checklist.voicepaste-checklist .driver-checklist-items .driver-checklist-item:focus-within {
+  background: transparent;
+}
+
+.driver-checklist.voicepaste-checklist .driver-checklist-items .driver-checklist-item:hover {
+  background: var(--color-fill-hover);
+}
+
+.voicepaste-checklist .driver-checklist-progress-bar {
+  background: var(--color-fill-track);
+}
+
+.voicepaste-checklist .driver-checklist-description,
+.voicepaste-checklist .driver-checklist-progress-text,
+.voicepaste-checklist .driver-checklist-launcher-count,
+.voicepaste-tour .driver-popover-description {
+  color: var(--color-text-dim);
+}
+
+.voicepaste-checklist .driver-checklist-close-btn,
+.voicepaste-tour .driver-popover-close-btn {
+  color: var(--color-text-dim);
+}
+
+.voicepaste-checklist .driver-checklist-check {
+  width: 14px;
+  height: 14px;
+  border-color: var(--color-border-hover);
+}
+
+.voicepaste-tour .driver-popover-description {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.voicepaste-tour .driver-popover-footer button,
+.voicepaste-checklist .onboarding-exit {
+  font-family: inherit;
+  font-size: 12px;
+  text-shadow: none;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-fill-subtle);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.voicepaste-tour .driver-popover-footer button:hover,
+.voicepaste-checklist .onboarding-exit:hover {
+  background: var(--color-fill-hover);
+}
+
+.voicepaste-tour .driver-popover-footer .driver-popover-next-btn {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  border-color: transparent;
+}
+
+.voicepaste-tour .driver-popover-footer .driver-popover-next-btn:hover {
+  background: var(--color-accent-hover);
+}
+
+.voicepaste-checklist .onboarding-exit {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 12px;
+  padding: 7px 12px;
+}
+
+.voicepaste-tour .driver-popover-arrow {
+  color: var(--color-surface-card);
+}
+
+.voicepaste-tour .driver-popover-arrow-side-top {
+  border-bottom-color: currentColor;
+}
+
+.voicepaste-tour .driver-popover-arrow-side-bottom {
+  border-top-color: currentColor;
+}
+
+.voicepaste-tour .driver-popover-arrow-side-left {
+  border-right-color: currentColor;
+}
+
+.voicepaste-tour .driver-popover-arrow-side-right {
+  border-left-color: currentColor;
+}
+
+.voicepaste-tour button:focus-visible,
+.voicepaste-checklist button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

@@ -5,6 +5,7 @@
 # 通过设置 UI 修改任意参数后，对应字段会自动写入此文件。
 
 app:
+  onboarding_pending: true      # 首次打开设置时邀请进入配置引导
   # 默认全局主键：macOS 左 Command，Windows 左 Ctrl；省略时按平台自动选择。
   hotkey_mode: toggle             # 原文输入模式；全局主键始终用于免提唤起
   # voice_hotkey 默认跟随全局主键；hold 时需配置独立键，完整按住 500ms 后启动。

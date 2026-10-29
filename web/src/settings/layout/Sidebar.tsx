@@ -5,6 +5,7 @@ import {
   Home,
   Info,
   Keyboard,
+  ListChecks,
   MessageSquare,
   NotebookText,
   Settings2,
@@ -40,9 +41,10 @@ const NAV_ITEMS: { id: SectionId; icon: typeof Home; label: string }[] = [
 interface SidebarProps {
   active: SectionId;
   onNavigate: (id: SectionId) => void;
+  onStartOnboarding?: () => void;
 }
 
-export function Sidebar({ active, onNavigate }: SidebarProps) {
+export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps) {
   const { t } = useTranslation();
   const { toast, showToast } = useToast();
 
@@ -78,6 +80,14 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
         {NAV_ITEMS.map((item) => navBtn(item.id, item.icon, item.label))}
         <div className="my-2 border-t border-border-subtle" />
         {navBtn("feedback", MessageSquare, "ui.nav.feedback")}
+        <button
+          type="button"
+          onClick={onStartOnboarding}
+          className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors text-text-dim hover:bg-fill-hover hover:text-text"
+        >
+          <ListChecks size={18} />
+          {t("ui.onboarding.title")}
+        </button>
         <button
           type="button"
           onClick={() => {

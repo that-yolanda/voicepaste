@@ -5,10 +5,11 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  closeLabel?: string;
   children: ReactNode;
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+export function Modal({ open, onClose, title, closeLabel = "Close modal", children }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -21,18 +22,28 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center h-svh">
+    <div data-settings-dialog className="fixed inset-0 z-50 flex items-center justify-center h-svh">
       <button
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-sm border-0 cursor-pointer w-full"
         onClick={onClose}
-        aria-label="Close modal"
+        aria-label={closeLabel}
       />
-      <div className="relative bg-surface-card border border-border rounded-xl shadow-lg max-w-lg w-full mx-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative bg-surface-card border border-border rounded-xl shadow-lg max-w-lg w-full mx-4"
+      >
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
             <h2 className="text-lg font-semibold text-text">{title}</h2>
-            <button type="button" className="text-text-muted hover:text-text p-1" onClick={onClose}>
+            <button
+              type="button"
+              aria-label={closeLabel}
+              className="text-text-muted hover:text-text p-1"
+              onClick={onClose}
+            >
               <X size={18} />
             </button>
           </div>

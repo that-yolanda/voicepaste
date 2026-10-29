@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Toast } from "@/settings/components/Toast";
 import { useFeedback } from "@/settings/hooks/useFeedback";
 import { type SectionId, Sidebar } from "@/settings/layout/Sidebar";
+import { useOnboarding } from "@/settings/onboarding/useOnboarding";
 import { AboutPage } from "@/settings/pages/AboutPage";
 import { AppSettingsPage } from "@/settings/pages/AppSettingsPage";
 import { AudioModelPage } from "@/settings/pages/AudioModelPage";
@@ -14,8 +15,17 @@ import { PermissionsPage } from "@/settings/pages/PermissionsPage";
 import { SettingsProvider } from "@/settings/SettingsProvider";
 
 export function SettingsApp() {
+  return (
+    <SettingsProvider>
+      <SettingsShell />
+    </SettingsProvider>
+  );
+}
+
+function SettingsShell() {
   const [section, setSection] = useState<SectionId>("home");
   const feedback = useFeedback(section === "feedback");
+  const onboarding = useOnboarding(setSection);
 
   // Prevent Alt and F10 from activating the WebView2 menu bar, which
   // would pause JavaScript execution and block IPC promise resolution
@@ -31,9 +41,16 @@ export function SettingsApp() {
   }, []);
 
   return (
-    <SettingsProvider>
+    <>
       <div className="flex h-screen overflow-hidden font-ui text-text text-sm leading-relaxed antialiased">
-        <Sidebar active={section} onNavigate={setSection} />
+        <Sidebar
+          active={section}
+          onNavigate={(next) => {
+            onboarding.cancelTour();
+            setSection(next);
+          }}
+          onStartOnboarding={() => void onboarding.start()}
+        />
         <main className="flex-1 overflow-y-auto relative rounded-tl-xl border-l border-border bg-surface-main ">
           <div className="max-w-[640px] mx-auto py-7 px-9">
             {section === "home" && <HomePage />}
@@ -51,6 +68,7 @@ export function SettingsApp() {
           <Toast toast={feedback.toast} />
         </div>
       </div>
-    </SettingsProvider>
+      {onboarding.overlay}
+    </>
   );
 }

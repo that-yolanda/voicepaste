@@ -20,7 +20,7 @@
  */
 
 import { Info } from "lucide-react";
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Tooltip } from "@/settings/components/Tooltip";
 
@@ -59,9 +59,10 @@ export function PageContent({ children }: { children: ReactNode }) {
    Replaces the old .section-card / Card component.
    ======================================================================== */
 
-export function Section({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Section({ children, className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
+      {...props}
       className={`bg-surface-card py-2 space-y-4 border border-border rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] ${className}`}
     >
       {children}

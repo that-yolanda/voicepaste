@@ -1,6 +1,7 @@
 /** Full application config shape (maps to config.yaml structure). */
 
 export interface AppConfig {
+  onboarding_pending?: boolean;
   hotkey?: string;
   hotkeyMode?: "toggle" | "hold";
   removeTrailingPeriod?: boolean;
