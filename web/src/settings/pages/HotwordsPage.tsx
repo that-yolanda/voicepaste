@@ -8,7 +8,6 @@ import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
 import { Toggle } from "@/settings/components/Toggle";
 import {
-  PageHeader,
   PageLayout,
   Section,
   SectionContent,
@@ -78,7 +77,6 @@ export function HotwordsPage() {
 
   return (
     <PageLayout>
-      <PageHeader title={t("ui.hotwords.title")} description={t("ui.hotwords.description")} />
       <div className="flex items-center justify-between">
         <Button variant="accent" onClick={addGroup}>
           <Plus size={14} aria-hidden="true" />

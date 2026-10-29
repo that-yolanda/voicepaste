@@ -1,12 +1,29 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-settings>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="/settings-theme.js"></script>
+    <link rel="stylesheet" href="/settings-boot.css" />
     <title>VoicePaste 配置</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="settings-boot" aria-hidden="true">
+        <aside><div class="boot-line"></div><div class="boot-line"></div><div class="boot-line"></div><div class="boot-line"></div><div class="boot-line"></div><div class="boot-line"></div></aside>
+        <main class="settings-page-scroll"><div class="settings-boot-content">
+          <div class="boot-line boot-title"></div>
+          <div class="boot-stats">
+            <div class="boot-stat"><div class="boot-line"></div><div class="boot-line"></div></div>
+            <div class="boot-stat"><div class="boot-line"></div><div class="boot-line"></div></div>
+            <div class="boot-stat"><div class="boot-line"></div><div class="boot-line"></div></div>
+            <div class="boot-stat"><div class="boot-line"></div><div class="boot-line"></div></div>
+          </div>
+          <div class="boot-panel"><div class="boot-line"></div></div>
+          <div class="boot-panel"><div class="boot-line"></div></div>
+        </div></main>
+      </div>
+    </div>
     <script type="module" src="./src/settings/index.tsx"></script>
   </body>
 </html>

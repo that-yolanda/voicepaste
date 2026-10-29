@@ -5,7 +5,9 @@ import { useTranslation } from "react-i18next";
 import { errText } from "@/i18n/errText";
 import {
   deleteHistory,
+  getAccessibilityStatus,
   getHistory,
+  getMicrophoneStatus,
   getStats,
   loadPrompts,
   onPreviewEnded,
@@ -18,9 +20,9 @@ import {
 import { Button } from "@/settings/components/Button";
 import { Heatmap } from "@/settings/components/Heatmap";
 import { PromptMenu } from "@/settings/components/PromptMenu";
+import { Skeleton } from "@/settings/components/Skeleton";
 import { Toast, useToast } from "@/settings/components/Toast";
 import {
-  PageHeader,
   PageLayout,
   Section,
   SectionContent,
@@ -28,6 +30,7 @@ import {
   SectionItemList,
 } from "@/settings/layout/PageLayout";
 import { formatCompact } from "@/settings/lib/format";
+import { useSettings } from "@/settings/SettingsProvider";
 import type { PromptItem } from "@/settings/types/prompts";
 
 /* ---------- pure helpers ---------- */
@@ -46,11 +49,11 @@ function formatDurationParts(s: number, t: TFunction): { value: string; unit: st
 
 /** Locale key for the greeting that matches the current hour. */
 function greetingKey(): string {
-  const h = new Date().getHours();
-  if (h < 6) return "ui.home.greeting.night";
-  if (h < 11) return "ui.home.greeting.morning";
-  if (h < 13) return "ui.home.greeting.noon";
-  if (h < 18) return "ui.home.greeting.afternoon";
+  const hour = new Date().getHours();
+  if (hour < 6) return "ui.home.greeting.night";
+  if (hour < 11) return "ui.home.greeting.morning";
+  if (hour < 13) return "ui.home.greeting.noon";
+  if (hour < 18) return "ui.home.greeting.afternoon";
   return "ui.home.greeting.evening";
 }
 
@@ -94,9 +97,33 @@ interface HistoryItem {
 
 /* ---------- component ---------- */
 
-export function HomePage() {
+export function HomePage({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language ?? "zh-CN";
+  const { settings } = useSettings();
+  const [permissionMissing, setPermissionMissing] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const checks: Promise<{ status: string }>[] = [getMicrophoneStatus()];
+    if (settings?.runtime?.platform === "macos") checks.push(getAccessibilityStatus());
+    void Promise.allSettled(checks).then((results) => {
+      if (active)
+        setPermissionMissing(
+          results.some(
+            (result) =>
+              result.status === "fulfilled" &&
+              ["denied", "prompt", "restricted"].includes(result.value.status),
+          ),
+        );
+    });
+    return () => {
+      active = false;
+    };
+  }, [settings?.runtime?.platform]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [days, setDays] = useState(1);
@@ -121,18 +148,26 @@ export function HomePage() {
   useEffect(() => onPreviewEnded(() => setPlayingTs(null)), []);
 
   const load = useCallback(async () => {
+    setStatsLoading(true);
+    setStatsError(false);
     try {
       setStats((await getStats()) as unknown as Stats);
     } catch {
-      /* */
+      setStatsError(true);
+    } finally {
+      setStatsLoading(false);
     }
   }, []);
 
   const loadHist = useCallback(async (d: number) => {
+    setHistoryLoading(true);
+    setHistoryError(false);
     try {
       setHistory(((await getHistory(d)) || []) as HistoryItem[]);
     } catch {
-      /* */
+      setHistoryError(true);
+    } finally {
+      setHistoryLoading(false);
     }
   }, []);
 
@@ -141,7 +176,7 @@ export function HomePage() {
     loadHist(1);
   }, [load, loadHist]);
 
-  // Reloaded each time the picker opens so templates edited on the LLM page show up.
+  // Reloaded each time the picker opens so templates edited on the templates page show up.
   const openPolishMenu = useCallback(async (ts: string, anchor: HTMLElement) => {
     try {
       setPrompts(((await loadPrompts()) || []) as PromptItem[]);
@@ -206,43 +241,74 @@ export function HomePage() {
   /* ====== render ====== */
   return (
     <PageLayout>
-      <PageHeader title={t(greetingKey())} />
-
+      <h1 className="mb-6 text-xl font-semibold tracking-[-0.01em] text-text">
+        {t(greetingKey())}
+      </h1>
+      {permissionMissing && (
+        <div className="flex items-center justify-between gap-3 text-sm text-warning">
+          <span>{t("ui.permissions.required")}</span>
+          <Button onClick={onOpenSettings}>{t("ui.nav.permissions")}</Button>
+        </div>
+      )}
       {/* Achievements */}
-      <div className="grid grid-cols-4 gap-4">
-        {cards.map((c) => (
-          <div
-            key={c.label}
-            className="flex min-h-40 py-4 px-4 pb-5 bg-surface-card border border-border rounded-xl"
-          >
-            <div className="flex flex-1 flex-col justify-between min-w-0">
-              <div className="flex items-baseline gap-1 min-w-0">
-                <span className="text-xl font-bold leading-[1.05] text-text tracking-normal whitespace-nowrap">
-                  {c.v}
-                </span>
-                {c.u && (
-                  <span className="text-sm font-medium text-text whitespace-nowrap">{c.u}</span>
-                )}
+      {statsError ? (
+        <div role="alert" className="flex items-center justify-between gap-3">
+          <span>{t("ui.load_failed")}</span>
+          <Button onClick={() => void load()}>{t("ui.retry")}</Button>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-4 gap-4">
+            {cards.map((c) => (
+              <div
+                key={c.label}
+                className="flex min-h-24 py-4 px-4 bg-surface-card border border-border rounded-xl"
+              >
+                <div className="flex flex-1 flex-col justify-between gap-3 min-w-0">
+                  <div className="flex items-baseline gap-1 min-w-0">
+                    {statsLoading ? (
+                      <Skeleton className="h-5 w-12" />
+                    ) : (
+                      <>
+                        <span className="text-xl font-bold leading-[1.05] text-text tracking-normal whitespace-nowrap">
+                          {c.v}
+                        </span>
+                        {c.u && (
+                          <span className="text-sm font-medium text-text whitespace-nowrap">
+                            {c.u}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-end gap-3">
+                    <span className="text-xs font-semibold text-text whitespace-nowrap leading-none">
+                      {c.label}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-text whitespace-nowrap leading-none">
-                  {c.label}
-                </span>
-              </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Heatmap */}
-      <Heatmap dailyCounts={stats?.dailyCounts || {}} />
+          {/* Heatmap */}
+          <Heatmap dailyCounts={stats?.dailyCounts || {}} loading={statsLoading} />
+        </>
+      )}
 
       {/* History */}
       <Section>
         <SectionHeader title={t("ui.home.history_title")} />
         <SectionContent className="p-0!">
           <SectionItemList className="space-y-0">
-            {history.length === 0 ? (
+            {historyLoading && history.length === 0 ? (
+              <Skeleton className="h-10 m-4" />
+            ) : historyError ? (
+              <div role="alert" className="flex items-center justify-between gap-3 px-4 py-2">
+                <span>{t("ui.load_failed")}</span>
+                <Button onClick={() => void loadHist(days)}>{t("ui.retry")}</Button>
+              </div>
+            ) : history.length === 0 ? (
               <div className="flex justify-center items-center gap-3 p-4 min-h-10 text-xs text-text-muted">
                 {t("ui.home.empty_history")}
               </div>

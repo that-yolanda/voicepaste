@@ -217,7 +217,7 @@ pub fn run() {
                 // Position the overlay after the event loop is fully initialized,
                 // avoiding "Window move completed without beginning" on macOS.
                 overlay::position_overlay(app);
-                // Bring the auto-shown settings window to the front on launch.
+                // Create settings after configuration is available, then bring it to front.
                 platform::show_settings(app);
             }
             // macOS: dock icon click while the app is already running — re-show

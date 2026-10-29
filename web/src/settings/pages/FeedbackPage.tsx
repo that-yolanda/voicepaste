@@ -10,7 +10,6 @@ import { Textarea } from "@/settings/components/Textarea";
 import { Toggle } from "@/settings/components/Toggle";
 import type { useFeedback } from "@/settings/hooks/useFeedback";
 import {
-  PageHeader,
   PageLayout,
   Section,
   SectionContent,
@@ -32,7 +31,6 @@ export function FeedbackPage({ feedback: f }: { feedback: ReturnType<typeof useF
   const screenshotInput = useRef<HTMLInputElement>(null);
   return (
     <PageLayout>
-      <PageHeader title={t("ui.feedback.title")} description={t("ui.feedback.description")} />
       <form
         noValidate
         aria-busy={f.pending}

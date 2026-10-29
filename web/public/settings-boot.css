@@ -1,0 +1,103 @@
+/* Critical settings-only styles also cover the time before React and i18n load. */
+html[data-settings] {
+  --boot-ground: #141413;
+  --boot-main: #1c1c1a;
+  --boot-card: #222220;
+  --boot-fill: #30302e;
+  background: var(--boot-ground);
+  color-scheme: dark;
+}
+html[data-settings][data-theme="light"] {
+  --boot-ground: #faf9f5;
+  --boot-main: #f5f4ed;
+  --boot-card: #fff;
+  --boot-fill: #e8e8e4;
+  color-scheme: light;
+}
+html[data-settings] body {
+  margin: 0;
+  background: var(--boot-ground);
+}
+.settings-boot {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+.settings-boot aside {
+  box-sizing: border-box;
+  width: 200px;
+  flex-shrink: 0;
+  padding: 16px;
+}
+.settings-boot main {
+  flex: 1;
+  background: var(--boot-main);
+  border-radius: 12px 0 0;
+}
+.settings-boot-content {
+  box-sizing: border-box;
+  max-width: 640px;
+  margin: auto;
+  padding: 28px 36px;
+}
+.boot-line {
+  height: 14px;
+  width: 65%;
+  border-radius: 4px;
+  background: var(--boot-fill);
+}
+.settings-boot aside .boot-line {
+  margin-bottom: 24px;
+}
+.boot-title {
+  height: 28px;
+  width: 176px;
+  margin-bottom: 24px;
+}
+.boot-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.boot-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 96px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--boot-card);
+}
+.boot-stat .boot-line + .boot-line {
+  align-self: flex-end;
+  width: 85%;
+  height: 12px;
+}
+.boot-panel {
+  height: 220px;
+  padding: 16px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: var(--boot-card);
+  margin-bottom: 20px;
+}
+.boot-panel:last-child {
+  height: 110px;
+}
+
+/* Reserve the same scrollbar gutter in the boot shell and every settings page. */
+.settings-page-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--color-scrollbar-thumb, var(--boot-fill)) var(--boot-main);
+}
+.settings-page-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-page-scroll::-webkit-scrollbar,
+.settings-page-scroll::-webkit-scrollbar-track {
+  background: var(--boot-main);
+}

@@ -30,7 +30,7 @@
       "empty_response": "The model returned no content",
       "parse_failed": "Could not parse the model response",
       "prompt_missing": "Choose a template first",
-      "prompt_unavailable": "Template unavailable. Check your templates in LLM settings"
+      "prompt_unavailable": "Template unavailable. Check Polishing templates in Settings"
     },
     "stats": {
       "entry_not_found": "History entry not found",
@@ -256,26 +256,32 @@
     },
     "nav": {
       "home": "Home",
-      "app": "App settings",
+      "app": "Settings",
       "permissions": "Permissions",
       "hotkey": "Hotkeys",
-      "audio": "Audio models",
-      "llm": "LLM",
+      "audio": "Speech models",
+      "llm": "Language models",
       "hotwords": "Hotwords",
       "feedback": "Feedback",
       "help": "Help",
       "about": "About",
-      "help_error": "Cannot open the help guide. Please retry later"
+      "help_error": "Cannot open the help guide. Please retry later",
+      "models": "Models",
+      "usage": "Usage",
+      "templates": "Polishing templates",
+      "support": "Help & feedback",
+      "navigation": "Navigation"
     },
     "heatmap": {
       "title": "Usage",
       "range": "Past 26 weeks",
       "total": "<count>{{count}}</count> characters entered",
-      "cell_title": "{{month}}/{{day}}: {{count}} chars"
+      "cell_title": "{{month}}/{{day}}: {{count}} chars",
+      "summary": "Past 26 weeks · {{count}} characters entered"
     },
     "app_settings": {
-      "title": "App settings",
-      "description": "Startup behavior and config file",
+      "title": "Settings",
+      "description": "App preferences, permissions and configuration",
       "auto_launch": "Launch at login",
       "overlay_style": "Overlay appearance",
       "overlay_style_tooltip": "Clear: more transparent, stronger liquid feel\nFrosted: more frosted look\nFollow theme: classic frosted glass that follows light/dark",
@@ -293,11 +299,15 @@
       "keep_clipboard": "Keep text on clipboard",
       "keep_clipboard_tooltip": "Keep the transcript on the clipboard after pasting. Turn off to restore the previous clipboard contents.",
       "keep_recordings": "Keep recordings",
-      "keep_recordings_tooltip": "Keep recordings for one month. When off, only failed recordings are kept for retry."
+      "keep_recordings_tooltip": "Keep recordings for one month. When off, only failed recordings are kept for retry.",
+      "general": "General",
+      "preferences": "Usage preferences",
+      "permissions_config": "Permissions & configuration",
+      "theme": "Theme"
     },
     "hotwords": {
       "title": "Hotwords",
-      "description": "Hotwords help recognize specific terms. Enabled lists are included automatically. For models without native hotword support, use Audio models > Configuration > Recognition to add hotwords to text polishing. Add preset lists from Common hotwords.",
+      "description": "Hotwords help recognize specific terms. Enabled lists are included automatically. For models without native hotword support, use Speech models > Configuration > Recognition to add hotwords to text polishing. Add preset lists from Common hotwords.",
       "add_group": "Add",
       "builtin": "Common hotwords",
       "group_name": "List name",
@@ -337,7 +347,8 @@
         "anthropic": "Anthropic",
         "ollama": "Ollama (local)",
         "custom": "Custom"
-      }
+      },
+      "model_description": "Configure the provider and model used for text polishing."
     },
     "hotkey_page": {
       "title": "Hotkeys",
@@ -403,7 +414,7 @@
     },
     "prompt": {
       "select": "Choose a template",
-      "empty": "No templates yet. Add one in LLM settings"
+      "empty": "No templates yet. Add one in Polishing templates"
     },
     "update": {
       "status": {
@@ -467,7 +478,7 @@
       }
     },
     "audio": {
-      "title": "Audio models",
+      "title": "Speech models",
       "current": "Current: {{name}}",
       "native": "Native support",
       "other": "Available via other methods",
@@ -569,7 +580,8 @@
       "unknown": "Check failed. Try again.",
       "no_device": "No microphone found. Set a default input device.",
       "unavailable": "Microphone unavailable. Check your device.",
-      "settings_failed": "Couldn't open Settings"
+      "settings_failed": "Couldn't open Settings",
+      "required": "VoicePaste needs system permissions to record and paste."
     },
     "onboarding": {
       "title": "Setup guide",
@@ -664,6 +676,9 @@
           "description": "Each template has its own mode. Tap shares the recording hotkey and has an editable stop key that applies the template. Hold uses the template’s own shortcut."
         }
       }
-    }
+    },
+    "loading": "Loading…",
+    "load_failed": "Could not load. Please retry.",
+    "retry": "Retry"
   }
 }

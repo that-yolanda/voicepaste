@@ -3,11 +3,9 @@ import { useTranslation } from "react-i18next";
 import { errText } from "@/i18n/errText";
 import { loadPrompts, savePrompts, validateHotkeySettings } from "@/settings/bridge";
 import { HotkeyInput } from "@/settings/components/HotkeyInput";
-import { KeyCap } from "@/settings/components/KeyCap";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
 import { Toast, useToast } from "@/settings/components/Toast";
 import {
-  PageHeader,
   PageLayout,
   Section,
   SectionContent,
@@ -15,7 +13,6 @@ import {
   SectionItem,
   SectionItemList,
 } from "@/settings/layout/PageLayout";
-import { normalizeHotkeyToken } from "@/settings/lib/hotkey";
 import { useSettings } from "@/settings/SettingsProvider";
 import type { PromptItem } from "@/settings/types/prompts";
 
@@ -156,18 +153,6 @@ export function HotkeyPage() {
 
   return (
     <PageLayout>
-      <PageHeader title={t("ui.hotkey_page.title")} description={t("ui.hotkey_page.description")}>
-        <div className="flex flex-col gap-1 mt-2 text-text-muted">
-          <p>{t("ui.hotkey_page.toggle_hint")}</p>
-          <p>{t("ui.hotkey_page.hold_hint")}</p>
-          <p>
-            {t("ui.hotkey_page.cancel_hint_prefix")}{" "}
-            <KeyCap label={normalizeHotkeyToken("ESC", isMac).main} />{" "}
-            {t("ui.hotkey_page.cancel_hint_suffix")}
-          </p>
-        </div>
-      </PageHeader>
-
       {/* Section 1 — global main key (the hands-free wake key) */}
       <Section data-tour="hotkey-main">
         <SectionHeader title={t("ui.hotkey_page.main_section")} />

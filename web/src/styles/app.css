@@ -163,3 +163,18 @@ main {
 .animate-toast-in {
   animation: toast-in 160ms ease-out;
 }
+
+/* Settings reveal is brief and never delays data or changes layout. */
+@keyframes heatmap-reveal {
+  from {
+    background-color: var(--color-heatmap-0);
+  }
+}
+.heatmap-reveal {
+  animation: heatmap-reveal 250ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .heatmap-reveal {
+    animation: none;
+  }
+}

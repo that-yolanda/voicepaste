@@ -60,7 +60,7 @@ fn detect_system_theme() -> &'static str {
 }
 
 /// Resolve a theme preference ("system" / "light" / "dark") to an actual theme value.
-fn resolve_theme(preference: &str) -> String {
+pub(crate) fn resolve_theme(preference: &str) -> String {
     match preference {
         "system" => detect_system_theme().to_string(),
         other => other.to_string(),
@@ -185,6 +185,7 @@ pub async fn save_config_object(
     state: State<'_, AppState>,
     config_object: serde_norway::Value,
 ) -> Result<serde_json::Value, AppError> {
+    let previous_config = state.config_manager.load_config().ok();
     state.config_manager.save_config(&config_object)?;
 
     // Sync hotkey mode from saved config
@@ -192,12 +193,18 @@ pub async fn save_config_object(
         .config_manager
         .load_config()
         .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
-    apply_app_theme(&app, &updated_config.app.theme);
+    let theme_changed = previous_config
+        .as_ref()
+        .is_none_or(|previous| previous.app.theme != updated_config.app.theme);
+    if theme_changed {
+        apply_app_theme(&app, &updated_config.app.theme);
+    }
 
     // Sync UI language: update shared state, rebuild the tray, and let both
     // overlay renderers re-render through the appearance event below.
     let new_language = crate::lang::Language::resolve(&updated_config.app.language);
-    if *state.language.read().unwrap() != new_language {
+    let language_changed = *state.language.read().unwrap() != new_language;
+    if language_changed {
         *state.language.write().unwrap() = new_language;
         crate::rebuild_tray_menu(&app, new_language);
     }
@@ -209,31 +216,39 @@ pub async fn save_config_object(
     // Re-register shortcuts with the new hotkey from the config object
     crate::hotkey::reload_hotkey_bindings(&app);
 
-    // Notify the overlay so it can re-apply the glass appearance live.
-    let _ = app.emit(
-        "overlay:event",
-        serde_json::json!({
-            "type": "appearance",
-            "payload": {
-                "platform": std::env::consts::OS,
-                "overlayStyle": updated_config.app.overlay_style,
-                "theme": updated_config.app.theme,
-                "language": new_language.code(),
-            }
-        }),
-    );
+    // Re-render native appearance only when appearance settings actually change.
+    let appearance_changed = theme_changed
+        || language_changed
+        || previous_config
+            .as_ref()
+            .is_none_or(|previous| previous.app.overlay_style != updated_config.app.overlay_style);
+    if appearance_changed {
+        let _ = app.emit(
+            "overlay:event",
+            serde_json::json!({
+                "type": "appearance",
+                "payload": {
+                    "platform": std::env::consts::OS,
+                    "overlayStyle": updated_config.app.overlay_style,
+                    "theme": updated_config.app.theme,
+                    "language": new_language.code(),
+                }
+            }),
+        );
+    }
 
-    // Notify the settings window when the theme changes.
-    let _ = app.emit(
-        "settings:event",
-        serde_json::json!({
-            "type": "theme-changed",
-            "payload": {
-                "preference": updated_config.app.theme,
-                "resolved": resolve_theme(&updated_config.app.theme),
-            }
-        }),
-    );
+    if theme_changed {
+        let _ = app.emit(
+            "settings:event",
+            serde_json::json!({
+                "type": "theme-changed",
+                "payload": {
+                    "preference": updated_config.app.theme,
+                    "resolved": resolve_theme(&updated_config.app.theme),
+                }
+            }),
+        );
+    }
 
     let parsed = state.config_manager.get_editable_config()?;
     let config = state

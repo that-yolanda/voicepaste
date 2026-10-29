@@ -5,7 +5,7 @@ import type { SectionId } from "@/settings/layout/Sidebar";
 export const TASKS = ["permissions", "asr", "llm", "hotkey"] as const;
 export type TaskId = (typeof TASKS)[number];
 export const TASK_SECTION: Record<TaskId, SectionId> = {
-  permissions: "permissions",
+  permissions: "app",
   asr: "service",
   llm: "llm",
   hotkey: "hotkey",

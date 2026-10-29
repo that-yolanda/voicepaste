@@ -30,7 +30,7 @@
       "empty_response": "模型没有返回任何内容",
       "parse_failed": "无法解析模型返回内容",
       "prompt_missing": "请选择润色模板",
-      "prompt_unavailable": "润色模板不可用，请检查模板设置"
+      "prompt_unavailable": "模板不可用，请在设置的润色模板中检查"
     },
     "stats": {
       "entry_not_found": "未找到输入记录",
@@ -256,26 +256,32 @@
     },
     "nav": {
       "home": "首页",
-      "app": "应用设置",
+      "app": "设置",
       "permissions": "系统权限",
       "hotkey": "快捷键",
-      "audio": "音频模型",
+      "audio": "语音识别模型",
       "llm": "大语言模型",
       "hotwords": "热词库",
       "feedback": "问题与建议",
       "help": "帮助说明",
       "about": "关于",
-      "help_error": "无法打开帮助文档，请稍后重试"
+      "help_error": "无法打开帮助文档，请稍后重试",
+      "models": "模型",
+      "usage": "使用",
+      "templates": "润色模板",
+      "support": "帮助与反馈",
+      "navigation": "导航"
     },
     "heatmap": {
       "title": "使用统计",
       "range": "过去 26 周",
       "total": "共输入 <count>{{count}}</count> 字",
-      "cell_title": "{{month}}月{{day}}日: {{count}} 字"
+      "cell_title": "{{month}}月{{day}}日: {{count}} 字",
+      "summary": "过去 26 周 · 共输入 {{count}} 字"
     },
     "app_settings": {
-      "title": "应用设置",
-      "description": "启动行为与配置文件",
+      "title": "设置",
+      "description": "应用偏好、系统权限与配置",
       "auto_launch": "开机自动启动",
       "overlay_style": "悬浮窗外观",
       "overlay_style_tooltip": "通透：背景透出更多、液态感更强\n磨砂：磨砂感更明显\n跟随主题：传统毛玻璃、明暗跟随外观主题",
@@ -293,11 +299,15 @@
       "keep_clipboard": "保留剪贴板",
       "keep_clipboard_tooltip": "粘贴后保留识别文字在剪贴板；关闭则恢复原剪贴板内容",
       "keep_recordings": "保留录音",
-      "keep_recordings_tooltip": "开启后保留最近 1 个月录音；关闭时仅保留失败录音用于重试"
+      "keep_recordings_tooltip": "开启后保留最近 1 个月录音；关闭时仅保留失败录音用于重试",
+      "general": "通用",
+      "preferences": "使用偏好",
+      "permissions_config": "权限与配置",
+      "theme": "主题"
     },
     "hotwords": {
       "title": "热词库",
-      "description": "热词库用于提高特定词汇的识别准确率。开启开关的表为默认热词表，识别时自动传入；若模型不支持热词可追加到 LLM 文本润色，配置前往 音频模型 > 自定义配置 > 识别强化。内置热词表可在「常用热词」中按需添加为自定义表。",
+      "description": "热词库用于提高特定词汇的识别准确率。开启开关的表为默认热词表，识别时自动传入；若模型不支持热词可追加到 LLM 文本润色，配置前往 语音识别模型 > 自定义配置 > 识别强化。内置热词表可在「常用热词」中按需添加为自定义表。",
       "add_group": "添加热词表",
       "builtin": "常用热词",
       "group_name": "热词组名称",
@@ -337,7 +347,8 @@
         "anthropic": "Anthropic",
         "ollama": "Ollama 本地",
         "custom": "自定义"
-      }
+      },
+      "model_description": "配置文本润色使用的服务商与模型。"
     },
     "hotkey_page": {
       "title": "快捷键",
@@ -403,7 +414,7 @@
     },
     "prompt": {
       "select": "选择润色模板",
-      "empty": "暂无模板，请先在 LLM 设置中添加"
+      "empty": "暂无模板，请在「润色模板」中添加"
     },
     "update": {
       "status": {
@@ -467,7 +478,7 @@
       }
     },
     "audio": {
-      "title": "音频模型",
+      "title": "语音识别模型",
       "current": "当前：{{name}}",
       "native": "原生支持",
       "other": "其他方式支持",
@@ -569,7 +580,8 @@
       "unknown": "检测失败。请重试。",
       "no_device": "未找到麦克风。请设置默认输入设备。",
       "unavailable": "麦克风不可用。请检查设备。",
-      "settings_failed": "无法打开设置"
+      "settings_failed": "无法打开设置",
+      "required": "需要开启系统权限，才能正常录音和粘贴。"
     },
     "onboarding": {
       "title": "配置引导",
@@ -664,6 +676,9 @@
           "description": "每个模板都可单独选择模式。免提共用语音唤醒键，结束键可单独修改，按下后结束录音并按该模板处理文字；按住说话则使用该模板自己的快捷键。"
         }
       }
-    }
+    },
+    "loading": "加载中…",
+    "load_failed": "加载失败，请重试。",
+    "retry": "重试"
   }
 }

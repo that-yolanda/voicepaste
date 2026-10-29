@@ -10,17 +10,7 @@ import {
   requestMicrophoneAccess,
 } from "@/settings/bridge";
 import { Button } from "@/settings/components/Button";
-import {
-  PageHeader,
-  PageLayout,
-  Section,
-  SectionContent,
-  SectionItem,
-  SectionItemList,
-} from "@/settings/layout/PageLayout";
-import { useSettings } from "@/settings/SettingsProvider";
-
-function PermissionActions({ microphone }: { microphone: boolean }) {
+export function PermissionActions({ microphone }: { microphone: boolean }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState("unknown");
   const [busy, setBusy] = useState<"check" | "settings" | null>("check");
@@ -132,35 +122,5 @@ function PermissionActions({ microphone }: { microphone: boolean }) {
         {t("ui.permissions.settings")}
       </Button>
     </div>
-  );
-}
-
-export function PermissionsPage() {
-  const { t } = useTranslation();
-  const { settings } = useSettings();
-  const isMac = settings?.runtime?.platform === "macos";
-
-  return (
-    <PageLayout>
-      <PageHeader title={t("ui.permissions.title")} />
-      <Section>
-        <SectionContent>
-          <SectionItemList>
-            {isMac && (
-              <SectionItem
-                title={t("ui.permissions.accessibility")}
-                tooltip={t("ui.permissions.accessibility_tooltip")}
-                action={<PermissionActions microphone={false} />}
-              />
-            )}
-            <SectionItem
-              title={t("ui.permissions.microphone")}
-              last
-              action={<PermissionActions microphone />}
-            />
-          </SectionItemList>
-        </SectionContent>
-      </Section>
-    </PageLayout>
   );
 }

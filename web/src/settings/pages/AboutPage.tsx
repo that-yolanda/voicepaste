@@ -4,7 +4,6 @@ import { ReleaseNotes } from "@/settings/components/ReleaseNotes";
 import { Toggle } from "@/settings/components/Toggle";
 import { UpdateButton } from "@/settings/components/UpdateButton";
 import {
-  PageHeader,
   PageLayout,
   Section,
   SectionContent,
@@ -25,7 +24,6 @@ export function AboutPage() {
 
   return (
     <PageLayout>
-      <PageHeader title={t("ui.about.title")} />
       {/* App info */}
       <div className="flex flex-col items-center space-y-2">
         <img className="w-16 h-16 rounded-lg" src="./icon.png" alt="VoicePaste" />

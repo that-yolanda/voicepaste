@@ -17,6 +17,7 @@ vi.mock("@/settings/bridge", () => ({
 }));
 
 import { LLMPage } from "@/settings/pages/LLMPage";
+import { TemplatesPage } from "@/settings/pages/TemplatesPage";
 
 beforeEach(() => {
   mocks.config = {
@@ -54,7 +55,7 @@ describe("language model setup", () => {
   });
 
   it("adds a library template and lets users create and edit their own", async () => {
-    render(<LLMPage />);
+    render(<TemplatesPage />);
     fireEvent.click(screen.getByRole("button", { name: "模板库" }));
     const dialog = await screen.findByRole("dialog");
     await within(dialog).findByText("测试润色");
@@ -62,7 +63,7 @@ describe("language model setup", () => {
     await screen.findByDisplayValue("测试润色");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "添加" }));
-    await waitFor(() => expect(screen.getAllByRole("textbox")).toHaveLength(6));
+    await waitFor(() => expect(screen.getAllByRole("textbox")).toHaveLength(4));
     const custom = screen.getByDisplayValue("新建润色模板");
     fireEvent.change(custom, { target: { value: "我的翻译" } });
     fireEvent.blur(custom);

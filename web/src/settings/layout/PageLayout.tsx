@@ -2,7 +2,6 @@
  * Root for all setting pages
  * Use Page* as Page Layout
  * ┌-- PageLayout --┐
- * | PageHeader     |
  * | PageContent    |
  * └----------------┘
  *
@@ -26,26 +25,6 @@ import { Tooltip } from "@/settings/components/Tooltip";
 
 export function PageLayout({ children }: { children: ReactNode }) {
   return <div className="space-y-5">{children}</div>;
-}
-
-/* ---------- PageHeader ---------- */
-
-export function PageHeader({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="mb-6">
-      <h1 className="text-xl font-semibold tracking-[-0.01em] text-text">{title}</h1>
-      {description && <p className="text-sm text-text-muted mt-1">{description}</p>}
-      {children}
-    </div>
-  );
 }
 
 /* ---------- PageContent — free-form content area ---------- */

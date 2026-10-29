@@ -1,6 +1,7 @@
 /** Full application config shape (maps to config.yaml structure). */
 
 export interface AppConfig {
+  theme?: "light" | "dark" | "system";
   onboarding_pending?: boolean;
   hotkey?: string;
   hotkeyMode?: "toggle" | "hold";

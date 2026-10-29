@@ -1,4 +1,4 @@
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { Section, SectionContent, SectionHeader } from "@/settings/layout/PageLayout";
 
 /* ---------- constants ---------- */
@@ -36,9 +36,10 @@ const DAY_SHOWN = [false, true, false, true, false, true, false];
 
 interface HeatmapProps {
   dailyCounts: Record<string, number>;
+  loading?: boolean;
 }
 
-export function Heatmap({ dailyCounts }: HeatmapProps) {
+export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language ?? "zh-CN";
   const monthFormat = new Intl.DateTimeFormat(locale, { month: "short" });
@@ -91,7 +92,7 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
   }));
 
   return (
-    <Section>
+    <Section aria-busy={loading}>
       <SectionHeader title={t("ui.heatmap.title")} />
       <SectionContent className="px-4 flex flex-col gap-1">
         {/* Square cells scale with the available section width. */}
@@ -134,7 +135,7 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
               {cells.map((c) => (
                 <div
                   key={c.key}
-                  className={`aspect-square rounded-xs ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
+                  className={`aspect-square rounded-xs transition-colors duration-250 motion-reduce:transition-none ${!loading ? "heatmap-reveal" : ""} ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
                   title={
                     c.future
                       ? ""
@@ -150,14 +151,9 @@ export function Heatmap({ dailyCounts }: HeatmapProps) {
           </div>
         </div>
 
-        <div className="flex justify-end items-baseline gap-2 whitespace-nowrap text-xs font-normal">
-          <span className="text-text-muted">{t("ui.heatmap.range")}</span>
-          <span className="text-text-dim">
-            <Trans
-              i18nKey="ui.heatmap.total"
-              values={{ count: total.toLocaleString() }}
-              components={{ count: <span className="font-medium" /> }}
-            />
+        <div className="flex justify-end text-xs font-normal text-text-muted">
+          <span>
+            {loading ? t("ui.loading") : t("ui.heatmap.summary", { count: total.toLocaleString() })}
           </span>
         </div>
       </SectionContent>

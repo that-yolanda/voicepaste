@@ -2,6 +2,7 @@ import {
   AudioLines,
   BookOpen,
   Bot,
+  CircleHelp,
   Home,
   Info,
   Keyboard,
@@ -9,34 +10,34 @@ import {
   MessageSquare,
   NotebookText,
   Settings2,
-  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { openHelpGuide } from "@/settings/bridge";
-import { ThemeSelector } from "@/settings/components/ThemeSelector";
 import { Toast, useToast } from "@/settings/components/Toast";
 import { UpdateButton } from "@/settings/components/UpdateButton";
 
 export type SectionId =
   | "home"
   | "app"
-  | "permissions"
   | "hotkey"
   | "service"
   | "llm"
+  | "templates"
   | "hotwords"
   | "feedback"
   | "about";
 
-const NAV_ITEMS: { id: SectionId; icon: typeof Home; label: string }[] = [
-  { id: "home", icon: Home, label: "ui.nav.home" },
-  { id: "app", icon: Settings2, label: "ui.nav.app" },
-  { id: "permissions", icon: ShieldCheck, label: "ui.nav.permissions" },
-  { id: "hotkey", icon: Keyboard, label: "ui.nav.hotkey" },
+const MODEL_ITEMS = [
   { id: "service", icon: AudioLines, label: "ui.nav.audio" },
   { id: "llm", icon: Bot, label: "ui.nav.llm" },
+] as const;
+const USAGE_ITEMS = [
+  { id: "hotkey", icon: Keyboard, label: "ui.nav.hotkey" },
   { id: "hotwords", icon: NotebookText, label: "ui.nav.hotwords" },
-];
+  { id: "templates", icon: Sparkles, label: "ui.nav.templates" },
+] as const;
 
 interface SidebarProps {
   active: SectionId;
@@ -47,15 +48,42 @@ interface SidebarProps {
 export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps) {
   const { t } = useTranslation();
   const { toast, showToast } = useToast();
+  const menu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const dismiss = (event: MouseEvent) => {
+      if (menu.current && !menu.current.contains(event.target as Node)) menu.current.open = false;
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && menu.current?.open) {
+        menu.current.open = false;
+        menu.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, []);
+  const closeMenu = () => {
+    if (menu.current) menu.current.open = false;
+  };
+  const utilityClass =
+    "w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm text-text-dim hover:bg-fill-hover hover:text-text";
 
   const navBtn = (id: SectionId, Icon: typeof Home, label: string) => (
     <button
       key={id}
       type="button"
-      onClick={() => onNavigate(id)}
+      aria-current={active === id ? "page" : undefined}
+      onClick={() => {
+        closeMenu();
+        onNavigate(id);
+      }}
       className={`w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors ${
         active === id
-          ? "bg-accent-soft text-accent font-medium"
+          ? "bg-fill-hover text-text font-medium"
           : "text-text-dim hover:bg-fill-hover hover:text-text"
       }`}
     >
@@ -66,43 +94,55 @@ export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps)
 
   return (
     <aside className="w-50 shrink-0 flex flex-col">
-      {/* Header: icon + title + update button */}
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border-subtle">
-        <img src="./icon.png" alt="VoicePaste" className="w-7 h-7 rounded-md shrink-0" />
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text tracking-[-0.01em]">
-          VoicePaste
-        </span>
-        <UpdateButton compact />
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 py-3 px-2 space-y-1">
-        {NAV_ITEMS.map((item) => navBtn(item.id, item.icon, item.label))}
-        <div className="my-2 border-t border-border-subtle" />
-        {navBtn("feedback", MessageSquare, "ui.nav.feedback")}
-        <button
-          type="button"
-          onClick={onStartOnboarding}
-          className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors text-text-dim hover:bg-fill-hover hover:text-text"
-        >
-          <ListChecks size={18} />
-          {t("ui.onboarding.title")}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            openHelpGuide().catch(() => showToast(t("ui.nav.help_error"), "error"));
-          }}
-          className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors text-text-dim hover:bg-fill-hover hover:text-text"
-        >
-          <BookOpen size={18} />
-          {t("ui.nav.help")}
-        </button>
-        {navBtn("about", Info, "ui.nav.about")}
+      <nav aria-label={t("ui.nav.navigation")} className="flex-1 overflow-y-auto py-3 px-2">
+        {navBtn("home", Home, "ui.nav.home")}
+        {[
+          { title: "ui.nav.models", items: MODEL_ITEMS },
+          { title: "ui.nav.usage", items: USAGE_ITEMS },
+        ].map((group) => (
+          <div key={group.title} className="mt-5 space-y-1">
+            <div className="px-3 mb-2 text-xs font-normal text-text-muted">{t(group.title)}</div>
+            {group.items.map((item) => navBtn(item.id, item.icon, item.label))}
+          </div>
+        ))}
       </nav>
-
-      <div className="p-3 border-t border-border-subtle">
-        <ThemeSelector />
+      <div className="p-2 border-t border-border-subtle space-y-1">
+        <UpdateButton compact />
+        {navBtn("app", Settings2, "ui.nav.app")}
+        <details ref={menu} className="relative">
+          <summary
+            className={`${utilityClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
+          >
+            <CircleHelp size={18} />
+            {t("ui.nav.support")}
+          </summary>
+          <div className="absolute bottom-full left-0 mb-2 w-52 p-1 bg-[var(--boot-card)] border border-border rounded-lg shadow-lg z-50">
+            <button
+              type="button"
+              className={utilityClass}
+              onClick={() => {
+                closeMenu();
+                onStartOnboarding?.();
+              }}
+            >
+              <ListChecks size={18} />
+              {t("ui.onboarding.title")}
+            </button>
+            <button
+              type="button"
+              className={utilityClass}
+              onClick={() => {
+                closeMenu();
+                openHelpGuide().catch(() => showToast(t("ui.nav.help_error"), "error"));
+              }}
+            >
+              <BookOpen size={18} />
+              {t("ui.nav.help")}
+            </button>
+            {navBtn("feedback", MessageSquare, "ui.nav.feedback")}
+            {navBtn("about", Info, "ui.nav.about")}
+          </div>
+        </details>
       </div>
       <Toast toast={toast} />
     </aside>

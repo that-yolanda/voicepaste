@@ -3,14 +3,16 @@ import { useTranslation } from "react-i18next";
 import { syncLanguageFromBackend } from "@/i18n";
 import { selectSoundFile } from "@/settings/bridge";
 import { Button } from "@/settings/components/Button";
+import { PermissionActions } from "@/settings/components/PermissionActions";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
 import { Select } from "@/settings/components/Select";
+import { ThemeSelector } from "@/settings/components/ThemeSelector";
 import { Toggle } from "@/settings/components/Toggle";
 import {
-  PageHeader,
   PageLayout,
   Section,
   SectionContent,
+  SectionHeader,
   SectionItem,
   SectionItemList,
 } from "@/settings/layout/PageLayout";
@@ -36,12 +38,8 @@ export function AppSettingsPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title={t("ui.app_settings.title")}
-        description={t("ui.app_settings.description")}
-      />
-
       <Section>
+        <SectionHeader title={t("ui.app_settings.general")} />
         <SectionContent>
           <SectionItemList>
             <SectionItem
@@ -92,12 +90,21 @@ export function AppSettingsPage() {
               }
             />
 
-            <SectionItem last title={t("ui.app_settings.config_path")} description={configPath} />
+            <SectionItem
+              last
+              title={t("ui.app_settings.theme")}
+              action={
+                <div className="w-48">
+                  <ThemeSelector />
+                </div>
+              }
+            />
           </SectionItemList>
         </SectionContent>
       </Section>
 
       <Section>
+        <SectionHeader title={t("ui.app_settings.preferences")} />
         <SectionContent>
           <SectionItemList>
             <SectionItem
@@ -147,7 +154,6 @@ export function AppSettingsPage() {
 
                 <SectionItem
                   title={t("ui.app_settings.finish_sound")}
-                  last
                   action={
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-text-muted max-w-40 truncate">
@@ -180,13 +186,6 @@ export function AppSettingsPage() {
                 />
               </>
             )}
-          </SectionItemList>
-        </SectionContent>
-      </Section>
-
-      <Section>
-        <SectionContent>
-          <SectionItemList>
             <SectionItem
               title={t("ui.app_settings.remove_period")}
               tooltip={t("ui.app_settings.remove_period_tooltip")}
@@ -218,6 +217,25 @@ export function AppSettingsPage() {
                 />
               }
             />
+          </SectionItemList>
+        </SectionContent>
+      </Section>
+      <Section>
+        <SectionHeader title={t("ui.app_settings.permissions_config")} />
+        <SectionContent>
+          <SectionItemList>
+            {isMac && (
+              <SectionItem
+                title={t("ui.permissions.accessibility")}
+                tooltip={t("ui.permissions.accessibility_tooltip")}
+                action={<PermissionActions microphone={false} />}
+              />
+            )}
+            <SectionItem
+              title={t("ui.permissions.microphone")}
+              action={<PermissionActions microphone />}
+            />
+            <SectionItem last title={t("ui.app_settings.config_path")} description={configPath} />
           </SectionItemList>
         </SectionContent>
       </Section>

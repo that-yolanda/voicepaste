@@ -17,7 +17,7 @@ vi.mock("@/settings/SettingsProvider", () => ({
 }));
 vi.mock("@/settings/bridge", () => mocks);
 
-import { PermissionsPage } from "@/settings/pages/PermissionsPage";
+import { AppSettingsPage } from "@/settings/pages/AppSettingsPage";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -29,7 +29,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 async function mount() {
-  render(<PermissionsPage />);
+  render(<AppSettingsPage />);
   await waitFor(() => expect(screen.getByRole("button", { name: "检测" })).toBeEnabled());
 }
 
@@ -46,7 +46,7 @@ describe("native permission controls", () => {
 
   it("only offers Allow for a confirmed first request, without an extra hint", async () => {
     mocks.getMicrophoneStatus.mockResolvedValue({ status: "prompt" });
-    render(<PermissionsPage />);
+    render(<AppSettingsPage />);
     const allow = await screen.findByRole("button", { name: "授权" });
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
     mocks.requestMicrophoneAccess.mockResolvedValue({ status: "denied", granted: false });
@@ -99,7 +99,7 @@ describe("native permission controls", () => {
 
   it("refreshes both permissions on focus and restores the hotkey after granting accessibility", async () => {
     mocks.platform = "macos";
-    render(<PermissionsPage />);
+    render(<AppSettingsPage />);
     await screen.findByText("权限已禁用。请在设置中开启。");
     expect(mocks.reinitHotkey).not.toHaveBeenCalled();
     mocks.getAccessibilityStatus.mockResolvedValue({ status: "granted" });
@@ -121,7 +121,7 @@ describe("native permission controls", () => {
 
   it("routes accessibility settings through its native prompt/settings command", async () => {
     mocks.platform = "macos";
-    render(<PermissionsPage />);
+    render(<AppSettingsPage />);
     await screen.findByText("权限已禁用。请在设置中开启。");
     fireEvent.click(screen.getAllByRole("button", { name: "前往设置" })[0]);
     await waitFor(() => expect(mocks.openAccessibilitySettings).toHaveBeenCalledTimes(1));

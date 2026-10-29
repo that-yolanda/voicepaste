@@ -14,6 +14,7 @@
     "windows": [
       {
         "label": "settings",
+        "create": false,
         "url": "settings.html",
         "title": "VoicePaste 配置",
         "width": 860,

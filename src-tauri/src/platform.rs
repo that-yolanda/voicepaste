@@ -68,7 +68,34 @@ pub(crate) fn show_settings(app: &AppHandle) {
     {
         match tauri::WebviewWindowBuilder::from_config(app, cfg) {
             Ok(builder) => {
-                if let Err(e) = builder.build() {
+                // Resolve configuration before creating the WebView, including reopened windows.
+                let state = app.state::<crate::app_state::AppHandle>();
+                let preference = state
+                    .config_manager
+                    .load_config()
+                    .map(|config| config.app.theme)
+                    .unwrap_or_else(|_| "system".into());
+                let resolved = crate::commands::resolve_theme(&preference);
+                let background = if resolved == "light" {
+                    tauri::window::Color(250, 249, 245, 255)
+                } else {
+                    tauri::window::Color(20, 20, 19, 255)
+                };
+                let theme = match preference.as_str() {
+                    "light" => Some(tauri::Theme::Light),
+                    "dark" => Some(tauri::Theme::Dark),
+                    _ => None,
+                };
+                let script = format!(
+                    "window.__VOICEPASTE_THEME__ = {};",
+                    serde_json::to_string(&preference).unwrap()
+                );
+                if let Err(e) = builder
+                    .theme(theme)
+                    .background_color(background)
+                    .initialization_script(script)
+                    .build()
+                {
                     log_tray!(error, "failed to rebuild settings window: {e}");
                 }
             }

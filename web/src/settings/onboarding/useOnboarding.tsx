@@ -187,7 +187,7 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
       suppressRestore = false;
       current.current = { task, index };
       widget.hide();
-      navigate(TASK_SECTION[task]);
+      navigate(task === "llm" && index >= 2 ? "templates" : TASK_SECTION[task]);
       const steps = getSteps(task, isMac, t, voiceMode());
       const definition = steps[index];
       try {

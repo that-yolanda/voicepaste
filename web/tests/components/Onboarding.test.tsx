@@ -198,6 +198,7 @@ describe("setup onboarding", () => {
       fireEvent.click(await screen.findByRole("button", { name: "下一步" }));
       await waitFor(() => expect(lastDriver().drive).toHaveBeenCalledWith(step + 1));
     }
+    expect(screen.getByText(index >= 2 ? "templates" : "llm", { exact: true })).toBeInTheDocument();
     expect(lastDriver().config.steps?.[index].element).toBe(
       document.querySelector(`[data-tour="${targets[index]}"]`),
     );

@@ -1,4 +1,4 @@
-import { CircleCheck, Cog } from "lucide-react";
+import { Cog } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -11,13 +11,11 @@ import {
   onModelDownloadProgress,
   saveConfigObject,
 } from "@/settings/bridge";
-import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
 import { Modal } from "@/settings/components/Modal";
 import { ModelCard, type ModelCardProps, renderControl } from "@/settings/components/ModelCard";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
 import {
-  PageHeader,
   PageLayout,
   Section,
   SectionContent,
@@ -30,7 +28,6 @@ import {
   type AsrDefaults,
   DOUBAO_MODEL_ID,
   getFieldMeta,
-  localizedModelFields,
   mergeAsrDefaults,
   resolveFieldMeta,
 } from "@/settings/lib/model";
@@ -67,7 +64,7 @@ const ASR_DEFAULT_SECTIONS: { title: string; fields: string[] }[] = [
 ];
 
 export function AudioModelPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { settings, refresh } = useSettings();
   const cfg = (settings?.parsedConfig || {}) as Record<string, unknown>;
   const audio = (cfg.audio || {}) as Record<string, unknown>;
@@ -236,10 +233,6 @@ export function AudioModelPage() {
 
   /* ---------- Derived ---------- */
 
-  const currentModel = registry.find((m) => m.id === provider);
-  const currentName = currentModel
-    ? localizedModelFields(currentModel, i18n.language).name
-    : provider;
   const isModelDownloaded = (m: RegistryModel) =>
     m.type === "online" ||
     downloaded.includes(m.id) ||
@@ -266,26 +259,6 @@ export function AudioModelPage() {
 
   return (
     <PageLayout>
-      <PageHeader
-        title={t("ui.audio.title")}
-        description={t("ui.audio.current", { name: currentName })}
-      >
-        <div className="flex items-center gap-4 mt-2 text-xs text-text-muted">
-          <span className="flex items-center gap-1">
-            <Badge variant="ghost">
-              <CircleCheck size={16} className="fill-success text-surface" />
-            </Badge>
-            {t("ui.audio.native")}
-          </span>
-          <span className="flex items-center gap-1">
-            <Badge variant="ghost">
-              <CircleCheck size={16} className="fill-text-muted text-surface" />
-            </Badge>
-            {t("ui.audio.other")}
-          </span>
-        </div>
-      </PageHeader>
-
       <div className="flex items-center justify-between gap-3">
         <div data-tour="asr-mode" className="shrink-0">
           <SegmentedControl
