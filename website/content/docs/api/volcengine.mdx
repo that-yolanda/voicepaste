@@ -4,8 +4,6 @@ title: "Volcengine (Doubao speech)"
 
 This guide connects Doubao speech recognition to VoicePaste. It is not setup for the Doubao chat app or text-to-speech service.
 
-These screenshots come from the earlier guide. Layouts may differ in the current version; follow the field names. Select an image to open it at full size.
-
 ## 1. Activate speech recognition
 
 1. Sign in to [service activation in the Doubao speech console](https://console.volcengine.com/speech/new/setting/activate).
@@ -24,7 +22,7 @@ These screenshots come from the earlier guide. Layouts may differ in the current
 
 ## 3. Configure VoicePaste
 
-1. Open Settings → Audio Models → Online Models and find the Volcengine Doubao streaming recognizer.
+1. Open Settings → Speech models → Online Models and find the Volcengine Doubao streaming recognizer.
 2. Enter the API key in its parameter settings. If legacy credentials already exist and the authentication selector is shown, choose the new mode.
 3. Keep other defaults, save, and enable the model.
 
@@ -56,20 +54,6 @@ Existing accounts can use legacy `App ID` and `Access Token` credentials. New us
 
 ## Common questions
 
-### What if the service is not active?
-
-Return to service activation and check that Streaming Speech Recognition 2.0 is active in the current project.
-
-### What if the API key belongs to a different project?
-
-Check that the key and recognition service belong to the same project. Keys and resources from different projects cannot be mixed.
-
-### What if authentication fails?
-
-Check the complete credentials and matching authentication mode: an API key for the new mode, or App ID and Access Token for legacy mode. Do not include a full key in screenshots or error reports.
-
-### What if quota is insufficient or the connection fails?
-
-Check account quota and service usage in the console, then check connectivity to the recognition service.
+- [Service activation, project matching, authentication, and quota](/en/docs/faq#online-recognition)
 
 Official references: [Console guide](https://docs.volcengine.com/docs/DoubaoVoice/console-guidance?lang=zh) · [Speech recognition API](https://docs.volcengine.com/docs/DoubaoVoice/LargemodelstreamingautomaticspeechrecognitionAPI?lang=zh)

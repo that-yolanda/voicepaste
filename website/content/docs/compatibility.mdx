@@ -13,7 +13,7 @@ These tables reflect the built-in configuration. Each recognition model has its 
 ## Understanding recognition features
 
 - **Native streaming** means the current VoicePaste integration receives ongoing recognition results. Both Zipformer variants stream locally.
-- **Simulated preview** is available for SenseVoice, FunASR-Nano and Qwen3-ASR through the app’s offline recognizer integration. It is distinct from native streaming.
+- **Segmented output** recognizes and displays SenseVoice, FunASR-Nano and Qwen3-ASR results in segments based on pauses. Enable Simulate streaming output in Custom Configuration. This differs from native streaming.
 - **Hotwords** require support from both the model and its configuration. Enable the relevant keyterm setting for ElevenLabs. VAD and punctuation models are supporting components, rather than separate transcription services.
 - **Doubao dialects** depend on the API mode and model version. The official documentation distinguishes bidirectional streaming from streaming input; capabilities vary between modes. Configure the service using its API documentation.
 
@@ -21,13 +21,9 @@ These tables reflect the built-in configuration. Each recognition model has its 
 
 Online recognition sends audio to your chosen service. Online polishing sends the text to be processed. To keep both on your device, use local recognition with local polishing, or turn polishing off.
 
-Ollama runs local models; install a model and enable its compatible endpoint. SiliconFlow and OpenRouter are model platforms: use your own API key and a model name provided by the platform. Custom services must expose an OpenAI-compatible Chat Completions endpoint; arbitrary APIs are not interchangeable. The Anthropic preset uses its compatibility endpoint and requires supported models and parameters.
-
 [Configure recognition](/en/docs/models) · [Configure polishing and templates](/en/docs/templates)
 
-## Official capability references
-
-These references describe the upstream models and APIs. VoicePaste’s current integration may expose a subset of those capabilities.
+## References
 
 - [Doubao speech models and API modes](https://docs.volcengine.com/docs/DoubaoVoice/model-list?lang=zh)
 - [ElevenLabs Scribe v2 Realtime](https://elevenlabs.io/blog/introducing-scribe-v2-realtime)

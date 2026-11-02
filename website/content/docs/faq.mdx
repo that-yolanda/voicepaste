@@ -1,0 +1,174 @@
+---
+title: "Frequently asked questions"
+---
+
+Find setup and troubleshooting answers here. Step-by-step instructions remain in the linked guides.
+
+## Basic use
+
+<span id="pricing" />
+
+### Is VoicePaste free? Do models cost extra?
+
+VoicePaste is free and open source. Local recognition does not require an API subscription. Online recognition and polishing use your own API credentials; any subscriptions or usage charges are paid directly to the provider. Check its current pricing and quota before use.
+
+<span id="systems" />
+
+### Which operating systems and processors are supported?
+
+VoicePaste provides macOS builds for Apple Silicon and Intel, and Windows x64 builds. Choose the matching installer on the [download page](/en/downloads). Local model acceleration varies by model and backend; see [Model compatibility](/en/docs/compatibility).
+
+<span id="first-use" />
+
+### What do I need to configure before my first input?
+
+Follow the in-app setup guide to grant microphone access (and Accessibility permission on macOS), enable a recognition model, and check the shortcut. Then speak a sentence into a focused text field. A language model is optional for plain transcription. Seeing text pasted into the field verifies the full path; opening system settings alone does not grant permission. Follow the [Quick start](/en/docs).
+
+<span id="offline" />
+
+### Can I use VoicePaste completely offline?
+
+Yes. Download and enable a local recognition model, then use plain transcription or a language model running on your own computer, such as Ollama. Download and configure all required models first. Local recognition with online polishing still sends text to the polishing provider. See [Local processing and privacy](/en/docs/privacy).
+
+## Installation and permissions
+
+<span id="microphone" />
+
+### What if macOS cannot record or I previously denied microphone access?
+
+Open System Settings → Privacy & Security → Microphone and enable VoicePaste. Return to the app and check microphone access again. If permission is granted but recording still fails, check the selected input device and whether the microphone is muted.
+
+If access still cannot be requested, quit VoicePaste, run the following command in Terminal, then reopen the app and request access again:
+
+```bash
+tccutil reset Microphone com.yolanda.voicepaste
+```
+
+This resets VoicePaste's microphone permission; it does not grant access by itself. See [System permissions](/en/docs/permissions).
+
+<span id="paste" />
+
+### What if macOS recognizes speech but does not paste the text?
+
+Check System Settings → Privacy & Security → Accessibility and enable the currently installed VoicePaste app. If it is missing, add it from Applications. Focus an editable field before finishing recording, then test in an app’s input field. If there is no recognized text either, also check [recognition settings](#online-recognition) and [microphone access](#microphone).
+
+Keep Clipboard controls whether the result stays in the clipboard after automatic paste; it does not turn automatic paste on or off. See [More settings](/en/docs/sounds).
+
+<span id="reinstall" />
+
+### Why does macOS need permission again after reinstalling?
+
+The Accessibility entry may still refer to an older installation. Check the current app's permission status; if automatic paste fails, remove the old entry from the system Accessibility list, add the currently installed VoicePaste, and enable it. Recheck microphone access as well. See [System permissions](/en/docs/permissions).
+
+<span id="windows-install" />
+
+### What if Windows SmartScreen blocks installation?
+
+Windows builds are currently unsigned and may trigger a SmartScreen notice. Confirm that the installer came from the [official download page](/en/downloads) or [GitHub Releases](https://github.com/that-yolanda/voicepaste/releases/latest). If you choose to proceed, use “More info → Run anyway.” If this option is unavailable or the device is managed by an organization, contact its administrator. Do not disable system protection globally.
+
+<span id="windows-permissions" />
+
+### What if Windows cannot use the microphone or shows a firewall prompt?
+
+Search for “microphone” in Windows Settings, open microphone privacy settings, and allow access for apps and desktop apps. Check the input device and mute status, then recheck access in VoicePaste.
+
+For a firewall prompt, confirm it names VoicePaste and allow the app only if needed. Do not disable the firewall or open arbitrary ports; see [Microsoft's firewall guidance](https://support.microsoft.com/en-us/windows/security/firewall/risks-of-allowing-apps-through-windows-firewall).
+
+## Models and recognition
+
+<span id="choose-model" />
+
+### Should I use an online or a local recognition model?
+
+Online models send audio to the selected service and require network access, credentials, and available quota. Local models need an initial download and use your computer's memory and processing resources. Choose according to your language, hardware, and privacy needs. Compare supported models and features in [Model compatibility](/en/docs/compatibility).
+
+<span id="online-recognition" />
+
+### Why does recognition fail after I enter an API key?
+
+Confirm that the credentials were saved and that the intended model is enabled. Then check service activation, account quota, and connectivity to the provider.
+
+- **Doubao**: The key and activated speech service must belong to the same project. Match the authentication mode: API key for the new mode, or App ID and Access Token for legacy mode. See the [Doubao setup guide](/en/docs/api/volcengine).
+- **ElevenLabs**: The key must have **Speech to Text** access. Check account quota and any service terms shown in the provider console. See the [ElevenLabs guide](/en/docs/api/elevenlabs).
+
+Start with default parameters and record a short sentence. Saving credentials alone does not verify a successful API call.
+
+<span id="model-download" />
+
+### What if a local model download fails?
+
+Check your connection and available disk space, then retry in Speech models → Local Models. Wait until the model and required supporting components finish downloading before enabling it. See [Recognition models](/en/docs/models). If it still fails, include the model name and error message in your feedback.
+
+<span id="streaming" />
+
+### Why does live text behave differently across models?
+
+Native streaming models return recognition results as audio arrives. Supported local models can recognize and display speech in segments based on pauses. To use segmented output, enable Simulate streaming output in Custom Configuration. Display timing and final results can differ. See [Model compatibility](/en/docs/compatibility).
+
+<span id="hotwords" />
+
+### How can I improve names, technical terms, and English abbreviations?
+
+Create a hotword group, add the terms, and enable it; only one group is active at a time. Check the model's hotword support, and enable keyterms when using ElevenLabs. Hotword enhancement can also supply terms to polishing requests, and replacement restores their saved spelling or formatting.
+
+Hotwords are hints, not guarantees. Weights are model-dependent and do not behave identically across providers. Test a short sentence after changes; see [Hotwords](/en/docs/hotwords).
+
+<span id="formatting" />
+
+### Why do punctuation, numbers, or wording differ from what I expected?
+
+Punctuation and spoken-number formatting depend on the recognition model and its settings. Some local models use a separate punctuation model. Polishing templates can further rewrite wording, so compare plain transcription with template output to find which stage changes the text.
+
+Check Remove Trailing Period under [More settings](/en/docs/sounds), the model's parameters, and the [compatibility list](/en/docs/compatibility). For unwanted explanations in polished output, explicitly ask the template to return only the processed text.
+
+## Polishing and shortcuts
+
+<span id="plain-transcription" />
+
+### Can I use plain transcription without polishing?
+
+Yes. Use the plain voice-input shortcut; a language model is not required. In hands-free mode, start and finish with the global main key. In push-to-talk mode, use the plain voice-input shortcut rather than a template shortcut.
+
+If recognition works but polishing fails, check the language provider separately: API key, endpoint, model identifier, and quota. For DeepSeek, verify API billing and use an API model identifier rather than a web chat mode's display name. See [Language models and templates](/en/docs/templates) and the [DeepSeek guide](/en/docs/api/deepseek).
+
+<span id="templates" />
+
+### How do I use translation, email, and other templates?
+
+Configure a language model, add or choose a template, then bind its shortcut. In hands-free mode, start with the global main key and finish with the template's end key. In push-to-talk mode, hold the template's shortcut to record and release to process. Templates use the currently selected language provider. Follow [Language models and templates](/en/docs/templates).
+
+<span id="recording-modes" />
+
+### What is the difference between hands-free and push-to-talk?
+
+Hands-free starts with one press and finishes with another, so you do not need to hold a key. Push-to-talk starts after holding the shortcut for 0.5 seconds and finishes on release; start speaking once it begins. Press `Esc` to cancel either mode without output. See [Shortcuts and input](/en/docs/hotkeys).
+
+<span id="shortcut-conflicts" />
+
+### What if a shortcut does nothing or conflicts with another app?
+
+Check the current recording mode and saved binding. Press the complete combination without extra keys; in push-to-talk mode, hold it long enough to start. If a conflict is reported or another app intercepts it, choose another combination and test in an app’s input field. On macOS, also check the required permissions. See [Shortcuts and input](/en/docs/hotkeys).
+
+## Privacy, resources, and feedback
+
+<span id="privacy" />
+
+### Where are audio, text, and API keys stored or sent?
+
+Configuration, including saved API credentials, and history are stored locally. Online recognition sends audio to the selected provider; online polishing sends the text and prompt, and may include hotwords. The provider's own policies govern its handling and retention. Local recognition does not make online polishing local.
+
+Recording retention depends on Keep Recordings; failed recordings are retained for retry even when it is off. Logs are stored locally and are not automatically uploaded. Feedback sends the information and attachments you choose to submit. Review the [privacy guide](/en/docs/privacy) and do not share API keys or configuration files.
+
+<span id="memory" />
+
+### Why can local models use a lot of memory?
+
+Local recognition loads model data and uses runtime buffers on your computer. Memory use depends on model size, backend, and settings; idle app memory does not represent recognition memory. Choose a smaller model if resources are limited, or use an online service if its data handling meets your needs. See [Model compatibility](/en/docs/compatibility) and the [performance report](https://github.com/that-yolanda/voicepaste/blob/master/docs/tests/performance-report.md).
+
+<span id="feedback" />
+
+### How do I report a problem, and what should I include?
+
+Use the app's feedback entry or the [website feedback form](/en/feedback). Include the app version, operating system, model/provider name, steps to reproduce, and the exact error message. Add relevant logs or screenshots if useful, and leave contact details if you want a reply.
+
+Review attachments yourself and hide API keys and private information. Do not attach recordings or configuration files. For public discussion, use [GitHub Issues](https://github.com/that-yolanda/voicepaste/issues); issue contents are visible to everyone.

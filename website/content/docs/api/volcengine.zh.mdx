@@ -2,9 +2,7 @@
 title: "火山引擎（豆包语音）"
 ---
 
-本指南用于开通豆包语音识别，并将凭证填入 VoicePaste；不是豆包聊天应用或语音合成服务的配置说明。
-
-以下截图沿用旧版指南，界面布局可能与当前版本略有不同，请按字段名称操作。点击图片可查看原图。
+本指南用于开通豆包语音识别，并将凭证填入 VoicePaste。
 
 ## 1. 开通语音识别服务
 
@@ -24,11 +22,11 @@ title: "火山引擎（豆包语音）"
 
 ## 3. 填入 VoicePaste
 
-1. 打开「设置 → 音频模型 → 在线模型」，找到火山引擎的豆包流式语音识别模型。
+1. 打开「设置 → 语音识别模型 → 在线模型」，找到火山引擎的豆包流式语音识别模型。
 2. 在参数配置中填写 API Key。如果已有旧版凭证并显示「鉴权方式」，切换为「新版」。
 3. 保留其他参数的默认值，保存配置并启用模型。
 
-   [![在 VoicePaste 中填写豆包语音 API Key，旧版界面示意](/assets/docs/asr-doubao-new.png)](/assets/docs/asr-doubao-new.png)
+   [![在 VoicePaste 中填写豆包语音 API Key](/assets/docs/asr-doubao-new.png)](/assets/docs/asr-doubao-new.png)
 4. 在输入框中录制一句话，确认文字输出。
 
 ## 已有旧版凭证时
@@ -56,20 +54,6 @@ title: "火山引擎（豆包语音）"
 
 ## 常见问题
 
-### 服务未开通怎么办？
-
-回到开通管理，确认当前项目的「流式语音识别 2.0」已开通。
-
-### 密钥和项目不匹配怎么办？
-
-确认 API Key 与识别服务属于同一项目；不同项目的密钥和资源不能混用。
-
-### 鉴权失败怎么办？
-
-检查凭证是否完整、鉴权方式是否匹配：新版使用 API Key，旧版使用 App ID 和 Access Token。请勿把完整密钥放进截图或错误反馈中。
-
-### 额度不足或网络连接失败怎么办？
-
-在控制台检查账户额度和服务用量，再检查网络能否连接识别服务。
+- [服务开通、项目匹配、鉴权与额度](/zh/docs/faq#online-recognition)
 
 官方参考：[控制台指引](https://docs.volcengine.com/docs/DoubaoVoice/console-guidance?lang=zh) · [语音识别接口](https://docs.volcengine.com/docs/DoubaoVoice/LargemodelstreamingautomaticspeechrecognitionAPI?lang=zh)

@@ -6,8 +6,8 @@ title: "Language models and templates"
 
 Speech recognition turns audio into text. A language model translates, organizes, or polishes that text. It is optional for plain transcription.
 
-1. Open Settings → Large Language Model and choose a provider.
-2. For an online service, enter your own API key. See the [DeepSeek API guide](/en/docs/api/deepseek) for an example.
+1. Open Settings → Language models and choose a provider.
+2. For an online service, enter your own API key. Find supported services and guides in the [compatibility list](/en/docs/compatibility), or see the [DeepSeek API guide](/en/docs/api/deepseek) as an example.
 3. Set the endpoint and model name as required by the provider. Start with app defaults for presets. Custom services need a compatible Chat Completions interface.
 4. Template requests use the single currently selected provider.
 
@@ -15,7 +15,7 @@ For Ollama, install and run it locally and download a language model first. Then
 
 ## 2. Add a text template
 
-1. In the Text Polishing section on the same page, add a template or choose one from the built-in prompts.
+1. Open Settings → Polishing templates and add a template or choose one from the built-in prompts.
 2. Give it a recognizable name, such as “Translate to English.”
 3. Write a specific instruction, for example:
 
@@ -31,14 +31,7 @@ For Ollama, install and run it locally and download a language model first. Then
 
 ## Common questions
 
-### What if recognition works but polishing fails?
-
-Check the language provider's key, model name, endpoint, and quota separately. Recognition and polishing may use different providers.
-
-### What if the result includes explanations?
-
-Ask for only the processed result in your prompt, then test a short sentence.
-
-### How can I keep all processing local?
-
-Use both local recognition and a local language model, or use plain transcription without polishing.
+- [Plain transcription and polishing failures](/en/docs/faq#plain-transcription)
+- [Use a template](/en/docs/faq#templates)
+- [Unexpected wording or extra explanations](/en/docs/faq#formatting)
+- [Keep processing local](/en/docs/faq#offline)

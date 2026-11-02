@@ -8,13 +8,15 @@ title: "Quick start"
 2. On macOS, choose Apple Silicon or Intel to match your Mac. On Windows, choose the x64 installer.
 3. Finish installation, open VoicePaste, and go to Settings.
 
-**Windows users**: Installation may trigger a system security notice. See [Common questions](#common-questions) at the end of this page for help.
+When you first open VoicePaste, follow the **setup guide** to configure permissions, a recognition model, and shortcuts. The steps below provide more detail whenever you need it.
+
+**Windows users**: Installation may trigger a system security notice. See [FAQ](/en/docs/faq#windows-install) for help.
 
 ## 2. Grant system permissions
 
-1. Open Settings → System Permissions and use the microphone check button. Allow access when prompted.
+1. Open Settings → General settings → Permissions and use the microphone check button. Allow access when prompted.
 2. On macOS, also grant Accessibility permission so VoicePaste can paste text into other apps.
-3. Return to VoicePaste and check that the required permissions show as granted.
+3. Return to VoicePaste and check again and confirm a checkmark appears beside each required permission.
 
 See [System permissions](/en/docs/permissions) for the full steps.
 
@@ -22,31 +24,27 @@ See [System permissions](/en/docs/permissions) for the full steps.
 
 A speech recognition model (ASR) converts audio into text. Choose either an online or a local model.
 
-- **Online**: Get an API key using the [Volcengine (Doubao)](/en/docs/api/volcengine) or [ElevenLabs](/en/docs/api/elevenlabs) guide. In Settings → Audio Models → Online Models, enter your credentials, save, and enable the model.
-- **Local**: In Settings → Audio Models → Local Models, download a model and enable it when ready. No API key is needed.
+- **Online**: Choose an online model and obtain credentials from its provider. Enter them under Settings → Speech models → Online Models, save, and enable the model. See the [compatibility list](/en/docs/compatibility) for setup guides.
+- **Local**: In Settings → Speech models → Local Models, download a model and enable it when ready. No API key is needed.
 
 See [Recognition models](/en/docs/models) for setup and the [compatibility list](/en/docs/compatibility) for supported features.
 
 ## 4. Configure a language model (optional)
 
-For translation or polishing, configure a provider under Settings → Large Language Model and add a text template. Skip this step if you only need transcription.
+For translation or polishing, configure a provider under Settings → Language models and add a text template. Skip this step if you only need transcription.
 
-Start with the [DeepSeek API guide](/en/docs/api/deepseek), then follow [Language models and templates](/en/docs/templates).
+Find supported services and setup guides in the [compatibility list](/en/docs/compatibility), then follow [Language models and templates](/en/docs/templates).
 
 ## 5. Set shortcuts and try your first input
 
 1. Open Settings → Shortcuts, check the bindings, and choose hands-free or push-to-talk mode.
-2. Open a text editor, focus an input field, and start recording with your shortcut.
-3. Say a sentence, finish recording using your chosen mode, and check that the text appears.
+2. Focus an input field in any app and use your shortcut to start speech recognition.
+3. **Hands-free:** press the main key to start, then press the voice input end key when finished. **Push-to-talk:** hold its shortcut for 0.5 seconds to start, then release it when finished. Check that the text appears.
 
 See [Shortcuts and input](/en/docs/hotkeys).
 
 ## Common questions
 
-### What if Windows says “Windows protected your PC”?
-
-Confirm that the installer came from this site's [download page](/en/downloads), then choose “More info → Run anyway.” For other blocks or firewall prompts, see [System permissions: common questions](/en/docs/permissions#common-questions).
-
-### What if no text appears after recording?
-
-Check system permissions, the enabled recognition model, and whether the destination input has focus. See [System permissions](/en/docs/permissions#common-questions) and [Recognition models](/en/docs/models#common-questions) for troubleshooting.
+- [Windows installation notices](/en/docs/faq#windows-install)
+- [No text after recording](/en/docs/faq#paste)
+- [Verify your first input](/en/docs/faq#first-use)

@@ -13,7 +13,7 @@ import { ModelTables } from "@/components/supported-models"
 ## 如何理解识别特性
 
 - **原生流式**：在 VoicePaste 当前接入方式下，模型能够持续返回识别结果。Zipformer 的两个版本均在本地原生流式运行。
-- **模拟预览**：SenseVoice、FunASR-Nano、Qwen3-ASR 当前通过离线识别器运行，可使用应用提供的模拟流式预览；它与模型原生流式不是同一项能力。
+- **分段输出**：SenseVoice、FunASR-Nano、Qwen3-ASR 可根据语音停顿分段识别并显示文字。需在「自定义配置」中启用「模拟流式输出」；这不同于原生流式。
 - **热词**：需要模型和当前配置共同支持；ElevenLabs 需要启用相应热词设置。额外的 VAD 与标点模型属于辅助组件，不是独立的转写服务。
 - **豆包方言**：能力随接口模式与模型版本而异。官方区分双向流式和流式输入，默认接口的能力不能直接套用于所有模式；请按服务端文档配置。
 
@@ -21,13 +21,9 @@ import { ModelTables } from "@/components/supported-models"
 
 在线识别会将音频发送给所选服务，在线润色会发送待处理文本。需要音频与文本均在本机处理时，请同时选择本地识别和本地润色，或关闭润色。
 
-Ollama 是本地模型运行工具，具体模型需自行安装并启用其兼容接口。硅基流动、OpenRouter 是模型服务平台，使用自己申请的密钥和平台提供的模型名称。自定义服务需要提供 OpenAI 兼容的 Chat Completions 接口；并非任意 API 都可直接接入。Anthropic 预设使用其兼容接口，模型与参数需符合服务端要求。
-
 [配置识别模型](/zh/docs/models) · [配置润色与模板](/zh/docs/templates)
 
-## 能力来源
-
-以下为模型与接口的官方资料；本页展示的是 VoicePaste 当前接入范围，不等同于上游模型的全部能力。
+## 参考资料
 
 - [豆包语音模型与接口能力](https://docs.volcengine.com/docs/DoubaoVoice/model-list?lang=zh)
 - [ElevenLabs Scribe v2 Realtime](https://elevenlabs.io/blog/introducing-scribe-v2-realtime)

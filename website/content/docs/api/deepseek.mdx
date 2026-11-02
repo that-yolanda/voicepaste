@@ -12,7 +12,7 @@ DeepSeek handles text translation and polishing in VoicePaste, not speech recogn
 
 ## 2. Configure VoicePaste
 
-1. Open Settings → Large Language Model and select DeepSeek.
+1. Open Settings → Language models and select DeepSeek.
 2. Enter the API key. You can use the app's preset endpoint, `https://api.deepseek.com/v1/chat/completions`.
 3. Use a model identifier currently supported by the API. Start with the app preset.
 4. Finish editing the fields, then configure a text template.
@@ -21,7 +21,7 @@ This field expects the full Chat Completions endpoint, not the website homepage 
 
 ## 3. Verify translation or polishing
 
-1. Add a text template, such as “Translate to English,” and write its instruction.
+1. In Polishing templates, add a template, such as “Translate to English,” and write its instruction.
 2. Bind a shortcut to it in Settings → Shortcuts.
 3. Say a sentence in an input field, finish with the template shortcut, and check the translation.
 
@@ -29,18 +29,4 @@ See [Language models and templates](/en/docs/templates) for the full flow. Savin
 
 ## Common questions
 
-### What if authentication fails?
-
-Check the complete key and which API account owns it.
-
-### What if the balance or quota is insufficient?
-
-Check API billing on the platform. Web chat access does not establish that the API has usable quota.
-
-### What if the model is not found?
-
-Check and update the API model identifier using [DeepSeek's documentation](https://api-docs.deepseek.com/). Do not use a web chat mode's display name.
-
-### What if recognition works but polishing fails?
-
-Recognition and DeepSeek are separate stages; check their settings separately.
+- [Authentication, API model names, quota, and polishing failures](/en/docs/faq#plain-transcription)

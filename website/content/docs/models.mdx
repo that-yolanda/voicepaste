@@ -2,45 +2,56 @@
 title: "Recognition models"
 ---
 
-## Choose online or local recognition
+## Choose an online or local model
 
 - **Online models** require a network connection and your own API credentials. Audio is sent to the selected provider.
 - **Local models** require an initial download, then recognize audio on your device. No API key is needed, but they use local memory and processing resources.
 
 Compare languages, hotwords, and streaming in the [compatibility list](/en/docs/compatibility).
 
-## Configure an online model
+## Online models
 
-1. Open Settings → Audio Models → Online Models and select a provider.
-2. Get credentials using the [Volcengine (Doubao)](/en/docs/api/volcengine) or [ElevenLabs](/en/docs/api/elevenlabs) guide.
+1. Open Settings → Speech models → Online Models and select a provider.
+2. Obtain credentials from your chosen provider. See the [compatibility list](/en/docs/compatibility) for supported services and setup guides.
 3. Enter them in the model card, save, and enable the model.
 4. Record a sentence with a shortcut and check the result.
 
-Fees, quotas, and data processing rules are set by the provider. Start with the default parameters and adjust only after recognition works.
+## Local models
 
-## Download and enable a local model
-
-1. Open Settings → Audio Models → Local Models.
-2. Choose a model for your language and device resources, then download it. Required voice activity detection (VAD) and punctuation components are prepared according to the model configuration.
+1. Open Settings → Speech models → Local Models.
+2. Choose a model for your language and device resources, then download it. Required voice activity detection (VAD) and the punctuation model (Transformer) are prepared according to the model configuration.
 3. Wait for the download to finish, then enable the model.
-4. Complete a voice input to verify it works.
 
 ![Local recognition model settings](/assets/models.jpg)
 
-## Adjust parameters
+## Custom configuration
 
-Adjust the model's parameter settings only when needed. Keep defaults if unsure. Use Custom Configuration when you need to tune local inference further.
+Open Settings → Speech models → Custom Configuration for these advanced settings. The defaults are suitable for most users; effects depend on the model and inference backend. Individual online models can also have their own provider-specific parameters.
+
+### Audio sampling
+
+- **Sample rate:** the number of audio samples captured per second. Check that the model or service supports the rate before changing it.
+- **Channel:** the number of audio channels. Keep the default unless the model or service requires otherwise.
+
+### Recognition enhancement
+
+- **Simulate streaming output:** recognizes and displays supported offline models' results in segments based on pauses. When disabled, recognition waits until recording ends.
+- **Hotword boost:** chooses whether to send hotwords to the polishing model: auto, off, or on. It applies when polishing is used; see [Hotwords](/en/docs/hotwords).
+- **Hotword replacement:** restores recognized hotwords to their saved spelling and format.
+
+### Offline model inference
+
+- **Threads:** the number of computing threads used for local inference. More threads may improve speed but also increase resource use.
+- **Inference backend:** selects how local computation runs. Availability depends on the system, device, and app build.
+- **Punctuation:** controls the separate punctuation model. Auto uses it when the recognition model lacks built-in punctuation; disabled skips it; force attempts to use it even when the recognition model has punctuation. The punctuation model must be downloaded.
+- **VAD threshold:** controls how voice activity detection (VAD) identifies speech. A lower value generally detects speech more readily but can also pick up noise.
+- **VAD min silence:** minimum silence before speech is considered interrupted, in seconds. A longer value can avoid splitting on short pauses but may delay segments.
+- **VAD min speech:** minimum speech duration, in seconds. Increasing it can filter brief noise but may miss short utterances.
+- **VAD max speech:** maximum duration of a speech segment, in seconds. Longer speech is split; changing it can affect segmentation and recognition.
 
 ## Common questions
 
-### What if a local model download fails?
-
-Check the connection and free disk space, then retry.
-
-### What if online recognition fails?
-
-Check saved credentials, service activation, account quota, and the connection. For provider-specific checks, see [Volcengine](/en/docs/api/volcengine#common-questions) and [ElevenLabs](/en/docs/api/elevenlabs#common-questions).
-
-### Why does live text look different across models?
-
-Some models stream natively; others use the app's simulated preview. See the [compatibility list](/en/docs/compatibility).
+- [Choose online or local recognition](/en/docs/faq#choose-model)
+- [Local model download failures](/en/docs/faq#model-download)
+- [Online recognition failures](/en/docs/faq#online-recognition)
+- [Differences in live output](/en/docs/faq#streaming)
