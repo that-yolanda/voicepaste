@@ -56,9 +56,11 @@ flowchart TD
     LoadConfig --> CheckProvider{audio.provider?}
 
     CheckProvider -->|doubao-streaming| Doubao[DoubaoEngine]
+    CheckProvider -->|elevenlabs-realtime| ElevenLabs[ElevenLabsEngine]
     CheckProvider -->|sherpa-onnx model ID| Sherpa[SherpaOnnxEngine]
 
     Doubao --> CreateSession1[create_session]
+    ElevenLabs --> CreateSession1
     Sherpa --> LoadRegistry[Load registry.json]
     LoadRegistry --> FindEntry[Find model entry]
     FindEntry --> CheckStreaming{capabilities.streaming?}
@@ -83,6 +85,18 @@ flowchart TD
 
     CreateSession1 --> Session4[(AsrSession + event_rx)]
 ```
+
+## ElevenLabs WebSocket ASR
+
+`elevenlabs.rs` implements ElevenLabs — Scribe v2 Realtime behind the shared `AsrEngine` / `AsrSession` traits. The registry ID is `elevenlabs-realtime`, with `engine: "elevenlabs"`.
+
+- Connects to the realtime WebSocket API with `model_id=scribe_v2_realtime` and the user's `xi-api-key` header.
+- Sends 16 kHz mono PCM as base64 in JSON `input_audio_chunk` messages.
+- Combines `partial_transcript` previews with confirmed `committed_transcript` segments. Optional transcript edits are matched to their original confirmed segments.
+- Supports VAD or manual commit strategies; finalization waits for confirmed text before completing the session.
+- Passes enabled hotwords as keyterms only when `enable_keyterms` is on. Language, background-audio filtering, disfluency cleanup, and transcript editing are configured per model.
+
+See the [setup guide](https://voicepaste.dev/en/docs/api/elevenlabs) and [official realtime API reference](https://elevenlabs.io/docs/api-reference/speech-to-text/v-1-speech-to-text-realtime).
 
 ## Doubao WebSocket ASR
 

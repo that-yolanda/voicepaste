@@ -35,7 +35,7 @@
 │  │  ASR Engine  │              │   LLM Module    │                │
 │  │  (trait)     │              │   8 providers   │                │
 │  │  ┌──────────┐│              │  OpenAI-compat  │                │
-│  │  │ Doubao   ││              └─────────────────┘                │
+│  │  │ Cloud ASR││              └─────────────────┘                │
 │  │  │ WebSocket││                                                │
 │  │  ├──────────┤│              ┌─────────────────┐                │
 │  │  │ sherpa-  ││              │  Paste + Sound  │                │
@@ -49,6 +49,8 @@
 │  └──────────────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+Cloud ASR includes Doubao Streaming ASR and ElevenLabs — Scribe v2 Realtime; both share the same engine/session interface as local sherpa-onnx recognition. See [ASR Engine System](asr-engine.md) for dispatch and protocol details.
 
 ## State Machine
 
@@ -197,7 +199,7 @@ The app has three window-like surfaces:
 | Decision | Rationale |
 |----------|-----------|
 | **keytap** over `tauri-plugin-global-shortcut` | Supports modifier-only hotkeys and left/right modifier distinction; lower latency via raw keyboard event stream |
-| **Trait-based ASR** (`AsrEngine` / `AsrSession`) | Enables swapping between cloud (Doubao) and local (sherpa-onnx) engines without changing the recording loop |
+| **Trait-based ASR** (`AsrEngine` / `AsrSession`) | Enables swapping between cloud (Doubao / ElevenLabs — Scribe v2 Realtime) and local (sherpa-onnx) engines without changing the recording loop |
 | **Native overlay on macOS, React on Windows** | macOS renders the pill in a WebView-less native `Window` (`NSGlassEffectView` via `overlay/macos.rs`) for OS-grade Liquid Glass legibility and zero resident WKWebView; Windows renders the React overlay in a `WebviewWindow`. Audio is captured in the backend (cpal), so the macOS overlay needs no WebView at all |
 | **Shared overlay layout** (`overlay/shared.rs`) | One `LayoutMetrics` struct drives both the macOS native pill and the Windows React pill (the latter fetches it via `get_overlay_layout_metrics`), keeping the two renderers pixel-aligned without duplicating constants |
 | **serde_norway** for YAML | Preserves YAML structure and comments better than serde_yaml; important for user-editable config files |

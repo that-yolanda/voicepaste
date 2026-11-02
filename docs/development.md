@@ -35,7 +35,7 @@ pnpm lint:ci            # CI strict mode (read-only)
 | Module | Document | Summary |
 |--------|----------|---------|
 | Architecture & State Machine | [architecture.md](architecture.md) | High-level architecture, recording state machine, data flow, window management |
-| ASR Engine System | [asr-engine.md](asr-engine.md) | Trait design, Doubao WebSocket protocol, sherpa-onnx architecture, VAD, adding models |
+| ASR Engine System | [asr-engine.md](asr-engine.md) | Trait design, Doubao and ElevenLabs WebSocket integrations, sherpa-onnx architecture, VAD, adding models |
 | Frontend & IPC | [frontend-ipc.md](frontend-ipc.md) | React component tree, IPC bridge, event system, audio capture, overlay window, paste |
 | Configuration System | [configuration.md](configuration.md) | ConfigManager, config.yaml structure, model registry, hotwords, prompts |
 | LLM Text Polishing | [llm-integration.md](llm-integration.md) | Provider system (8 backends), configuration layering, polishing flow |
@@ -60,6 +60,7 @@ voicepaste/
 │   │   ├── asr/         #   ASR engine implementations
 │   │   │   ├── mod.rs               #   AsrEngine / AsrSession / AsrEvent traits
 │   │   │   ├── doubao.rs            #   Doubao streaming ASR (WebSocket binary protocol)
+│   │   │   ├── elevenlabs.rs        #   ElevenLabs — Scribe v2 Realtime (WebSocket JSON)
 │   │   │   └── sherpa_onnx/         #   Local ASR (sherpa-onnx)
 │   │   │       ├── mod.rs           #     SherpaOnnxEngine entry point + shared helpers
 │   │   │       ├── online.rs        #     Streaming transducer + hotwords
@@ -110,7 +111,7 @@ voicepaste/
 
 - **Frontend**: React 19, TypeScript, Vite, Tailwind CSS 4
 - **Backend**: Tauri v2 (Rust)
-- **ASR**: ByteDance Doubao streaming ASR over WebSocket (gzip-compressed binary framing), plus sherpa-onnx local models (SenseVoice, Zipformer, FunASR-Nano, Qwen3-ASR)
+- **ASR**: ByteDance Doubao streaming ASR over WebSocket (gzip-compressed binary framing), ElevenLabs — Scribe v2 Realtime over WebSocket JSON, plus sherpa-onnx local models (SenseVoice, Zipformer, FunASR-Nano, Qwen3-ASR)
 - **Lint & Format**: Biome (TS/TSX/JSON/CSS), cargo fmt + clippy (Rust)
 - **Testing**: Vitest (frontend), cargo test (Rust)
 - **Paste**: AppleScript on macOS, PowerShell on Windows

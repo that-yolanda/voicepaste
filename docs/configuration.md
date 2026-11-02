@@ -139,6 +139,7 @@ Platform-specific hotkey defaults are resolved by the backend rather than set in
 | `provider` | string | — | Active ASR model ID (e.g. `doubao-streaming`, `sherpa-onnx-streaming-zipformer-zh-en`) |
 | `asr_defaults` | object | `registry.json → defaults.asr` | User overrides for shared defaults (rate, channel, num_threads, vad, provider, etc.) |
 | `doubao-streaming` | object | `registry.json → doubao-streaming.default_config` | Doubao credentials + parameter overrides (url, app_id, show_utterances, etc.) |
+| `elevenlabs-realtime` | object | `registry.json → elevenlabs-realtime.default_config` | ElevenLabs — Scribe v2 Realtime credentials and overrides (api_key, language, commit_strategy, enable_keyterms, etc.) |
 | `<model-id>` | object | `registry.json → <model>.default_config` | Per-model overrides for any registered model |
 
 Per-model configs are keyed by model ID (matching `registry.json`). Each model can override any field from its `default_config`.
@@ -190,7 +191,7 @@ ModelEntry
 When `audio.provider` is set to a model ID, the engine:
 1. Loads `registry.json`
 2. Finds the entry matching the ID
-3. Reads `entry.engine` to choose Doubao vs. sherpa-onnx
+3. Reads `entry.engine` to choose Doubao, ElevenLabs, or sherpa-onnx
 4. For sherpa-onnx: reads `entry.architecture` and `entry.capabilities.streaming` to dispatch to the correct recognizer builder
 
 ### Model Download

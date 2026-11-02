@@ -35,7 +35,7 @@ pnpm lint:ci            # CI 严格模式（只读）
 | 模块 | 文档 | 简介 |
 |------|------|------|
 | 架构与状态机 | [architecture.md](architecture.md) | 整体架构、录音状态机、数据流、窗口管理 |
-| ASR 引擎系统 | [asr-engine.md](asr-engine.md) | Trait 设计、豆包 WebSocket 协议、sherpa-onnx 架构、VAD、新增模型 |
+| ASR 引擎系统 | [asr-engine.md](asr-engine.md) | Trait 设计、豆包与 ElevenLabs WebSocket 接入、sherpa-onnx 架构、VAD、新增模型 |
 | 前端与 IPC | [frontend-ipc.md](frontend-ipc.md) | React 组件树、IPC 桥接、事件系统、音频采集、悬浮窗、粘贴 |
 | 配置系统 | [configuration.md](configuration.md) | ConfigManager、config.yaml 结构、模型注册表、热词、提示词 |
 | LLM 文本润色 | [llm-integration.md](llm-integration.md) | 8 家提供商系统、配置分层、润色流程 |
@@ -60,6 +60,7 @@ voicepaste/
 │   │   ├── asr/         #   ASR 引擎实现
 │   │   │   ├── mod.rs               #   AsrEngine / AsrSession / AsrEvent 特质
 │   │   │   ├── doubao.rs            #   豆包流式 ASR（WebSocket 二进制协议）
+│   │   │   ├── elevenlabs.rs        #   ElevenLabs — Scribe v2 Realtime（WebSocket JSON 协议）
 │   │   │   └── sherpa_onnx/         #   离线 ASR（sherpa-onnx）
 │   │   │       ├── mod.rs           #     SherpaOnnxEngine 入口 + 共享工具
 │   │   │       ├── online.rs        #     Streaming transducer + 热词
@@ -110,7 +111,7 @@ voicepaste/
 
 - **前端**：React 19、TypeScript、Vite、Tailwind CSS 4
 - **后端**：Tauri v2（Rust）
-- **ASR**：字节跳动豆包流式 ASR（WebSocket + gzip 压缩二进制帧），以及 sherpa-onnx 本地模型（SenseVoice、Zipformer、FunASR-Nano、Qwen3-ASR）
+- **ASR**：字节跳动豆包流式 ASR（WebSocket + gzip 压缩二进制帧）、ElevenLabs — Scribe v2 Realtime（WebSocket JSON），以及 sherpa-onnx 本地模型（SenseVoice、Zipformer、FunASR-Nano、Qwen3-ASR）
 - **代码检查**：Biome（TS/TSX/JSON/CSS）、cargo fmt + clippy（Rust）
 - **测试**：Vitest（前端）、cargo test（Rust）
 - **粘贴**：macOS 使用 AppleScript、Windows 使用 PowerShell
