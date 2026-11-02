@@ -1,9 +1,12 @@
+import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Section, SectionContent, SectionHeader } from "@/settings/layout/PageLayout";
+import { formatCompact } from "@/settings/lib/format";
 
 /* ---------- constants ---------- */
 
-const WEEKS = 26;
+const WEEKS = 53;
 
 /* ---------- helpers ---------- */
 
@@ -44,6 +47,29 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
   const locale = i18n.language ?? "zh-CN";
   const monthFormat = new Intl.DateTimeFormat(locale, { month: "short" });
   const weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: "narrow" });
+  const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "long" });
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState<{ text: string; rect: DOMRect } | null>(null);
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!hovered || !tooltipRef.current) return;
+    const tooltip = tooltipRef.current.getBoundingClientRect();
+    const margin = 8;
+    const below = hovered.rect.bottom + margin;
+    setPosition({
+      left: Math.max(
+        margin,
+        Math.min(hovered.rect.left, window.innerWidth - tooltip.width - margin),
+      ),
+      top: Math.max(
+        margin,
+        below + tooltip.height <= window.innerHeight - margin
+          ? below
+          : hovered.rect.top - tooltip.height - margin,
+      ),
+    });
+  }, [hovered]);
 
   const now = new Date();
   const start = new Date(now);
@@ -69,26 +95,25 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
   }
 
   // Month label positions
-  const mPos: Record<number, number> = {};
+  const mPos: { month: number; week: number }[] = [];
   let cm = -1;
   for (let w = 0; w < WEEKS; w++) {
     const dt = new Date(start);
     dt.setDate(dt.getDate() + w * 7);
     const m = dt.getMonth();
     if (m !== cm) {
-      mPos[m] = w;
+      mPos.push({ month: m, week: w });
       cm = m;
     }
   }
 
   // Month label spans: each label starts at its month's first week and runs
-  // until the next month begins, expressed on the same 26-column grid as the
+  // until the next month begins, expressed on the same grid as the
   // cells so labels stay aligned whatever the column width.
-  const monthEntries = Object.entries(mPos).sort((a, b) => a[1] - b[1]);
-  const monthSpans = monthEntries.map(([m, w], i) => ({
-    month: Number(m),
-    from: w,
-    span: (monthEntries[i + 1]?.[1] ?? WEEKS) - w,
+  const monthSpans = mPos.map(({ month, week }, i) => ({
+    month,
+    from: week,
+    span: (mPos[i + 1]?.week ?? WEEKS) - week,
   }));
 
   return (
@@ -99,12 +124,16 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
         <div className="w-full">
           {/* Month labels */}
           <div
-            className="grid gap-0.75 ml-5.5 mb-1 h-3.5 text-[10px] text-text-muted"
+            className="grid gap-px ml-5.5 mb-1 h-3.5 text-[10px] text-text-muted"
             style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}
           >
             {monthSpans.map((m) => (
-              <span key={m.month} style={{ gridColumn: `${m.from + 1} / span ${m.span}` }}>
-                {monthFormat.format(new Date(2024, m.month, 1))}
+              <span
+                key={m.from}
+                className="overflow-hidden whitespace-nowrap"
+                style={{ gridColumn: `${m.from + 1} / span ${m.span}` }}
+              >
+                {m.span >= 2 ? monthFormat.format(new Date(2024, m.month, 1)) : ""}
               </span>
             ))}
           </div>
@@ -113,7 +142,7 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
           <div className="flex gap-2">
             {/* Day-of-week labels */}
             <div
-              className="grid gap-0.75 text-[10px] text-text-muted w-3.5 shrink-0"
+              className="grid gap-px text-[10px] text-text-muted w-3.5 shrink-0"
               style={{ gridTemplateRows: "repeat(7, 1fr)" }}
             >
               {DAY_KEYS.map((day, index) => (
@@ -125,38 +154,62 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
 
             {/* Day labels stretch to match the seven square-cell rows. */}
             <div
-              className="grid gap-0.75 w-full"
+              className="grid gap-px w-full min-w-0"
               style={{
                 gridTemplateRows: "repeat(7, 1fr)",
                 gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`,
                 gridAutoFlow: "column",
               }}
             >
-              {cells.map((c) => (
-                <div
-                  key={c.key}
-                  className={`aspect-square rounded-xs transition-colors duration-250 motion-reduce:transition-none ${!loading ? "heatmap-reveal" : ""} ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
-                  title={
-                    c.future
-                      ? ""
-                      : t("ui.heatmap.cell_title", {
-                          month: c.date.getMonth() + 1,
-                          day: c.date.getDate(),
-                          count: c.count,
-                        })
-                  }
-                />
-              ))}
+              {cells.map((c) => {
+                const text = t("ui.heatmap.cell_title", {
+                  date: dateFormat.format(c.date),
+                  count: c.count.toLocaleString(locale),
+                });
+                const show = (element: HTMLElement) => {
+                  setPosition(null);
+                  setHovered({ text, rect: element.getBoundingClientRect() });
+                };
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    aria-label={text}
+                    tabIndex={c.future ? -1 : 0}
+                    className={`aspect-square min-w-0 border-0 p-0 rounded-xs focus-visible:outline focus-visible:outline-1 focus-visible:outline-text transition-colors duration-250 motion-reduce:transition-none ${!loading ? "heatmap-reveal" : ""} ${c.future ? "invisible" : HEAT_BG[heatLevel(c.count, counts)] || "bg-heatmap-0"}`}
+                    onMouseEnter={(event) => show(event.currentTarget)}
+                    onMouseLeave={() => setHovered(null)}
+                    onFocus={(event) => show(event.currentTarget)}
+                    onBlur={() => setHovered(null)}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
 
         <div className="flex justify-end text-xs font-normal text-text-muted">
           <span>
-            {loading ? t("ui.loading") : t("ui.heatmap.summary", { count: total.toLocaleString() })}
+            {loading ? t("ui.loading") : t("ui.heatmap.summary", { count: formatCompact(total) })}
           </span>
         </div>
       </SectionContent>
+      {hovered &&
+        createPortal(
+          <div
+            ref={tooltipRef}
+            role="tooltip"
+            className="pointer-events-none fixed z-50 whitespace-pre rounded-lg border border-border bg-surface-card px-3 py-2 text-xs text-text shadow-lg"
+            style={{
+              left: position?.left ?? 0,
+              top: position?.top ?? 0,
+              visibility: position ? "visible" : "hidden",
+            }}
+          >
+            {hovered.text}
+          </div>,
+          document.body,
+        )}
     </Section>
   );
 }

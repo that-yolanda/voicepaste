@@ -13,7 +13,7 @@ These tables reflect the built-in configuration. Each recognition model has its 
 ## Understanding recognition features
 
 - **Native streaming** means the current VoicePaste integration receives ongoing recognition results. Both Zipformer variants stream locally.
-- **Segmented output** recognizes and displays SenseVoice, FunASR-Nano and Qwen3-ASR results in segments based on pauses. Enable Simulate streaming output in Custom Configuration. This differs from native streaming.
+- **Segmented output** recognizes and displays SenseVoice, FunASR-Nano and Qwen3-ASR results in segments based on pauses. Enable Segmented output in Custom Configuration. This differs from native streaming.
 - **Hotwords** require support from both the model and its configuration. Enable the relevant keyterm setting for ElevenLabs. VAD and punctuation models are supporting components, rather than separate transcription services.
 - **Doubao dialects** depend on the API mode and model version. The official documentation distinguishes bidirectional streaming from streaming input; capabilities vary between modes. Configure the service using its API documentation.
 

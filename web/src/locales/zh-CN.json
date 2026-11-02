@@ -127,7 +127,7 @@
     }
   },
   "field": {
-    "stream_simulate": "模拟流式输出",
+    "stream_simulate": "分段输出",
     "hotword_llm_mode": "热词强化",
     "hotword_replace": "热词替换",
     "num_threads": "线程数",
@@ -275,10 +275,10 @@
     },
     "heatmap": {
       "title": "使用统计",
-      "range": "过去 26 周",
+      "range": "过去 53 周",
       "total": "共输入 <count>{{count}}</count> 字",
-      "cell_title": "{{month}}月{{day}}日: {{count}} 字",
-      "summary": "过去 26 周 · 共输入 {{count}} 字"
+      "cell_title": "{{date}}\n输入 {{count}} 字",
+      "summary": "过去 53 周 · 共输入 {{count}} 字"
     },
     "app_settings": {
       "title": "设置",

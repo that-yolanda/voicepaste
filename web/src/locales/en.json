@@ -127,7 +127,7 @@
     }
   },
   "field": {
-    "stream_simulate": "Simulate streaming output",
+    "stream_simulate": "Segmented output",
     "hotword_llm_mode": "Hotword boost",
     "hotword_replace": "Hotword replacement",
     "num_threads": "Threads",
@@ -275,10 +275,10 @@
     },
     "heatmap": {
       "title": "Usage",
-      "range": "Past 26 weeks",
+      "range": "Past 53 weeks",
       "total": "<count>{{count}}</count> characters entered",
-      "cell_title": "{{month}}/{{day}}: {{count}} chars",
-      "summary": "Past 26 weeks · {{count}} characters entered"
+      "cell_title": "{{date}}\n{{count}} characters entered",
+      "summary": "Past 53 weeks · {{count}} characters entered"
     },
     "app_settings": {
       "title": "Settings",

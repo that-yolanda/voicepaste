@@ -216,11 +216,10 @@ export function HomePage({ onOpenSettings }: { onOpenSettings?: () => void }) {
   /* —— achievements —— */
   const charTotal = stats?.totalCharacters || 0;
   const saved = formatDurationParts(Math.round(charTotal * 0.67), t);
-  // Only the "time saved" card carries a unit — bare numbers read cleaner on
-  // the first three, and days/sessions/chars are already in the card labels.
   const cards = [
     {
       v: formatCompact(Object.keys(stats?.dailyCounts || {}).length),
+      u: "days",
       label: t("ui.home.card_used"),
     },
     {

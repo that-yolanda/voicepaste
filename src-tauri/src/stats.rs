@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const MAX_DAILY_COUNTS_DAYS: i64 = 182;
+const MAX_DAILY_COUNTS_DAYS: i64 = 370;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Stats {
@@ -530,10 +530,15 @@ mod tests {
         svc.stats.daily_counts.insert("2000-01-01".to_string(), 5);
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         svc.stats.daily_counts.insert(today.clone(), 3);
+        let last_year = (chrono::Local::now() - chrono::Duration::days(365))
+            .format("%Y-%m-%d")
+            .to_string();
+        svc.stats.daily_counts.insert(last_year.clone(), 7);
         svc.prune_daily_counts();
         let stats = svc.get_stats();
         assert!(!stats.daily_counts.contains_key("2000-01-01"));
         assert!(stats.daily_counts.contains_key(&today));
+        assert!(stats.daily_counts.contains_key(&last_year));
     }
 
     #[test]
