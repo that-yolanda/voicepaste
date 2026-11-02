@@ -1,5 +1,6 @@
 import Link from "next/link"
 import Image from "next/image"
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { ArrowUpRight } from "lucide-react"
 import { FeedbackForm } from "@/components/feedback-form"
@@ -9,7 +10,7 @@ import { pageMetadata } from "@/lib/seo"
 
 type Props = { params: Promise<{ lang: string }> }
 
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { lang } = await params
   if (!isLocale(lang)) notFound()
   const copy = feedbackCopy[lang]

@@ -1,7 +1,22 @@
 import type { Metadata } from "next"
+import faqItems from "./faq.json"
 import type { Locale } from "./i18n"
 export const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
+export function faqJsonLd(locale: Locale) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqItems.map((item) => ({
+      "@type": "Question",
+      name: item.question[locale],
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer[locale],
+      },
+    })),
+  }
+}
 export function pageMetadata(
   locale: Locale,
   path: string,
