@@ -21,15 +21,12 @@ export function pageMetadata(
   locale: Locale,
   path: string,
   title: string,
-  description: string,
-  opts: { ogBrandImage?: boolean } = {}
+  description: string
 ): Metadata {
-  // Latin-only titles render with the OG route's bundled font; other
-  // scripts would draw as tofu, so localized pages keep the brand card.
+  // Shared brand banner, 1280x640 (2:1); platforms that crop to 1.91:1
+  // only trim the empty side margins.
   const ogImage =
-    locale === "en" && !opts.ogBrandImage
-      ? `/og?title=${encodeURIComponent(title)}`
-      : "/og"
+    locale === "zh" ? "/assets/banner-zh.png" : "/assets/banner-en.png"
   return {
     metadataBase: new URL(siteUrl),
     title,
@@ -53,8 +50,8 @@ export function pageMetadata(
       images: [
         {
           url: ogImage,
-          width: 1200,
-          height: 630,
+          width: 1280,
+          height: 640,
           alt: `${title} — VoicePaste`,
         },
       ],

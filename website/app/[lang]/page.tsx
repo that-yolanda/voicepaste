@@ -41,8 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     lang,
     "",
     homeCopy[lang].title,
-    homeCopy[lang].description,
-    { ogBrandImage: true }
+    homeCopy[lang].description
   )
 }
 export default async function Home({ params }: Props) {
