@@ -1,10 +1,12 @@
 <div align="center">
 
-![VoicePaste Demo](docs/screenshots/banner.png)
+![VoicePaste Demo](docs/screenshots/banner-en.png)
 
 # VoicePaste
 
-A voice input tool for macOS & Windows — trigger with a hotkey, speak, auto-paste.
+VoicePaste is a free, open-source, lightweight voice typing app for macOS and Windows.
+
+**[Download](https://voicepaste.dev/en/downloads)** · **[Quick start](https://voicepaste.dev/en/docs)**
 
 [![Downloads](https://img.shields.io/github/downloads/that-yolanda/voicepaste/total?style=flat&logo=github)](https://github.com/that-yolanda/voicepaste/releases/latest)
 [![Version](https://img.shields.io/github/v/release/that-yolanda/voicepaste?style=flat&logo=github)](https://github.com/that-yolanda/voicepaste/releases/latest)
@@ -17,99 +19,74 @@ A voice input tool for macOS & Windows — trigger with a hotkey, speak, auto-pa
 
 ## Demo
 
-![VoicePaste Demo](docs/screenshots/demo.gif)
+[![VoicePaste Demo](docs/screenshots/demo-en.gif)](https://voicepaste.dev#demo)
 
 ## Features
 
-- **Lightweight**: ~20 MB installer; ~120 MB idle on macOS packaged builds. Online ASR peaks around ~150 MB; local models load on demand and vary by model/backend.
-- **Data Security**: All data stored locally; API keys are applied by the user, giving you full control.
-- **Fully Customizable**: Ready-to-use defaults with all parameters exposed for fine-tuning.
-- **ASR Dual Engine (Online / Local)**: Online — ByteDance Doubao streaming ASR; Local — powered by sherpa-onnx, with CPU / CUDA / CoreML acceleration and model-dependent memory usage.
-- **LLM Support**: Built-in support for 8 LLM providers — DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, SiliconFlow, Ollama, and OpenAI-compatible APIs.
-- **Streaming Output**: For local models without native streaming, VAD-based segmentation with simulated streaming output delivers results in real time.
-- **Multi-Scenario Text Polishing**: Built-in templates for general cleanup, translation, email drafting, and more — customizable prompts with per-template hotkey bindings.
-- **Hotwords**: Multi-group hotword libraries to boost domain-specific term accuracy; automatically restores original formatting (capitalization, special characters, etc.), no manual corrections needed.
-- **Cross-Platform**: macOS (Apple Silicon / Intel) and Windows.
-- **Customizable Hotkeys**: Bind independent hotkeys for different scenarios (general, translation, formatting, etc.) with support for `toggle` (press to start, press again to stop) and `hold` (hold to speak, release to stop) modes.
-- **Enhanced Experience**: Audio feedback sounds, real-time waveform animation.
-- **Apple Signed & Notarized**: macOS builds are signed and notarized with an Apple Developer certificate — no Gatekeeper warnings on install (Windows builds are currently unsigned).
+- **Free and open source**: MIT-licensed. Use your own API keys for online services and pay providers directly, so you can check their pricing and your usage.
+- **Lightweight**: The installer is about 20 MB, with around 120 MB of idle memory use on macOS. Recognition models load on demand; memory use varies by model and backend.
+- **Online and local recognition**: Use an online service such as Doubao or ElevenLabs, or download a local model to transcribe offline without an API key. Local recognition keeps your audio on your device.
+- **Flexible shortcuts and templates**: Set your preferred shortcuts. In toggle mode, speak first, then choose a template shortcut to turn your words into an email, translate them, or polish them for another task. Use a built-in template or write your own prompt.
+- **Hotwords**: Add names, product names, and technical terms. Organize them into groups and restore saved capitalization and formatting after recognition.
+- **Audio cues**: Hear when VoicePaste is ready for you to speak and when recording has finished. You can turn the cues off or choose your own sounds.
+- **Privacy by design**: Settings, history, and logs stay on your device and aren't uploaded automatically. Online recognition sends audio to your chosen provider; online polishing sends text. Feedback is sent when you choose to submit it.
 
 ## Quick Start
 
 ### Download
 
-Go to [GitHub Releases](https://github.com/that-yolanda/voicepaste/releases/latest) and download the latest version for your platform.
+Download the latest version from [GitHub Releases](https://github.com/that-yolanda/voicepaste/releases/latest) or the [official website](https://voicepaste.dev/downloads).
 
-| Platform               | Installer Filename                                |
-| ---------------------- | ------------------------------------------------- |
-| macOS (Apple Silicon)  | `VoicePaste_{version}_aarch64.dmg`                |
-| macOS (Intel)          | `VoicePaste_{version}_x64.dmg`                    |
-| Windows (x64)          | `VoicePaste_{version}_x64-setup.exe` / `.msi`     |
+| Platform | Installer filename |
+| --- | --- |
+| macOS (Apple Silicon) | `VoicePaste_{version}_aarch64.dmg` |
+| macOS (Intel) | `VoicePaste_{version}_x64.dmg` |
+| Windows (x64) | `VoicePaste_{version}_x64-setup.exe` / `.msi` |
 
-### Configuration Guide
+macOS installers are Apple-signed and notarized. Windows installers are currently unsigned; see the [FAQ](https://voicepaste.dev/docs/faq#windows-install) if you get an installation notice.
 
-| Type                          | Link                                                                  |
-| ----------------------------- | --------------------------------------------------------------------- |
-| General Setup                 | [EN](GUIDANCE.md#quick-start) / [中文](GUIDANCE.zh.md#快速开始)  |
-| Doubao Streaming ASR          | [EN](GUIDANCE.md#volcengine) / [中文](GUIDANCE.zh.md#火山引擎)          |
-| Local Models                  | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)|
+For permissions, model setup, and your first input, follow the [quick start guide](https://voicepaste.dev/en/docs).
 
-## Model Support & Capabilities
+## Supported Models
 
-### ASR Models
+### Online speech recognition
 
-| Type   | Model                         | Guide                                                                 | Size    | Peak Memory (macOS Activity Monitor) | Languages                             | Streaming               | Hotwords                    | Punctuation                       | ITN                    | Model ID                                                   |
-| ------ | ----------------------------- | --------------------------------------------------------------------- | ------- | ----------- | ------------------------------------- | ----------------------- | --------------------------- | --------------------------------- | ---------------------- | ---------------------------------------------------------- |
-| Online | Doubao Streaming ASR 2.0      | [EN](GUIDANCE.md#volcengine) / [中文](GUIDANCE.zh.md#火山引擎)          | -       | ~150 MB     | Chinese + English mix, dialects       | ✅️                      | ✅️                          | ✅️                                | ✅️                     | -                                                          |
-| Local  | SenseVoice                    | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)| 158 MB  | ~580 MB     | ZH / EN / JP / KO / Cantonese         | ☑️ Simulated streaming   | ☑️ via LLM                  | ☑️ via punctuation model          | ☑️ via LLM             | sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09    |
-| Local  | Zipformer (ZH + EN bilingual) | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)| 150 MB  | ~465 MB     | Chinese + English                     | ✅️                      | ✅️                          | ☑️ via punctuation model          | ☑️ via LLM             | sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20 |
-| Local  | FunASR-Nano                   | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)| 948 MB  | ~2.5 GB     | Chinese + English, 7 dialects         | ☑️ Simulated streaming   | ✅️                          | ✅️                                | ✅️                     | sherpa-onnx-funasr-nano-int8-2025-12-30                    |
-| Local  | Qwen3-ASR-0.6B                | [EN](GUIDANCE.md#local-models) / [中文](GUIDANCE.zh.md#本地模型)| 938 MB  | Not tested  | 30 languages, Chinese dialects, lyrics, rap | ☑️ Simulated streaming   | ✅️                          | ✅️                                | ✅️                     | sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25                 |
+| Model and setup guide | Languages | Streaming | Hotwords |
+| --- | --- | --- | --- |
+| [Doubao Streaming ASR 2.0](https://voicepaste.dev/docs/api/volcengine) | Chinese–English speech; dialect support varies by API mode | Native | Supported |
+| [ElevenLabs — Scribe v2 Realtime](https://voicepaste.dev/docs/api/elevenlabs) | Multilingual; automatic language detection | Native | Enable keyterms in model settings |
 
-**Notes**
+Online recognition needs an internet connection and your own API credentials. Check your provider for pricing and available quota.
 
-- ✅️ Native model capability, ☑️ Achieved through software composition
-- Idle memory is ~120 MB on macOS packaged builds, measured from the Activity Monitor `Memory` column across the VoicePaste process group. Models are loaded on demand during recognition.
-- Local models without native streaming output use built-in VAD (Voice Activity Detection) for audio segmentation with simulated streaming; optional punctuation restoration model available.
-- Memory data was measured locally on Mac mini (Apple Silicon). Results may vary with system load, macOS memory compression, restart state, backend, and cache state. See the [performance test report](docs/tests/performance-report.md) for full details.
+### Local speech recognition
 
-### LLM
+| Model | Languages | Download | Peak memory | Live output | Native hotwords |
+| --- | --- | --- | --- | --- | --- |
+| SenseVoice INT8 | Chinese / English / Japanese / Korean / Cantonese | 158 MB | ~580 MB | Chunked | No |
+| Zipformer Chinese–English | Chinese / English | 150 MB | ~465 MB | Native streaming | Yes |
+| Zipformer Chinese INT8 | Chinese | 160 MB | - | Native streaming | Yes |
+| FunASR-Nano INT8 | Chinese / English / Japanese; Chinese dialects | 948 MB | ~2.5 GB | Chunked | Yes |
+| Qwen3-ASR 0.6B INT8 | Multilingual; Chinese dialects | 938 MB | - | Chunked | Yes |
 
-| Provider          | Supported |
-| ----------------- | --------- |
-| OpenAI            | ✅️        |
-| DeepSeek          | ✅️        |
-| Anthropic         | ✅️        |
-| OpenRouter        | ✅️        |
-| SiliconFlow       | ✅️        |
-| Gemini            | ✅️        |
-| Ollama            | ✅️        |
-| OpenAI-Compatible | ✅️        |
+- Local recognition runs on sherpa-onnx. CPU / CUDA / CoreML support depends on the model.
+- Chunked output uses voice activity detection (VAD) to split audio into segments, then transcribes each segment while you record.
+- For models without native hotwords, a language model can help handle terms during polishing. Hotword replacement restores saved spelling and formatting. Punctuation and number formatting vary by model and settings.
+- Memory figures are local Mac mini (Apple Silicon) measurements from Activity Monitor across the VoicePaste process group. System load, memory compression, backend, and cache state can affect results. Online recognition was measured at about 150 MB using Doubao; see the [performance report](docs/tests/performance-report.md).
 
-## FAQ
+See the [model compatibility list](https://voicepaste.dev/docs/compatibility) for supported features and the [local model guide](https://voicepaste.dev/docs/models) for setup.
 
-### Not working on macOS?
+### Language models
 
-VoicePaste requires **Microphone** and **Accessibility** permissions to function.
+DeepSeek · OpenAI · Anthropic · Gemini · OpenRouter · SiliconFlow · Ollama · OpenAI-compatible services
 
-**Microphone Permission**
-
-1. Settings page → System Permissions → Click "Request Permission"
-2. System Settings → Privacy & Security → Microphone, ensure VoicePaste is authorized
-3. If previously denied, reset via Terminal and re-authorize:
-
-```bash
-tccutil reset Microphone com.yolanda.voicepaste
-```
-
-**Accessibility Permission**
-
-1. System Settings → Privacy & Security → Accessibility, ensure VoicePaste is authorized
-2. If reinstalled after deletion, re-add it manually
+Language models are optional and used for polishing and translation.
 
 ## Docs
 
-- [Development Guide](docs/development.md)
+- [User documentation](https://voicepaste.dev/docs)
+- [FAQ](https://voicepaste.dev/docs/faq)
+- [Send feedback](https://voicepaste.dev/feedback)
+- [Development guide](docs/development.md)
 - [Changelog](CHANGELOG.md)
 
 ## License
