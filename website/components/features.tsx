@@ -79,7 +79,7 @@ export function Features({ locale }: { locale: Locale }) {
   return (
     <section
       id="features"
-      className="section-space features-section"
+      className="features-section section-space"
       aria-labelledby="features-title"
     >
       <div className="wrap">

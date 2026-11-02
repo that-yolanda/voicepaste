@@ -403,14 +403,16 @@ export function AutoVideo({ locale }: { locale: Locale }) {
       document.removeEventListener("visibilitychange", sync)
       motion.removeEventListener("change", sync)
     }
-  }, [])
+  }, [locale])
   return (
     <video
+      key={locale}
+      id="demo"
       ref={ref}
       className="reveal mx-auto mt-12 block aspect-video h-auto w-full max-w-5xl rounded-2xl object-contain"
       width={1920}
       height={1080}
-      poster="/assets/demo-poster.jpg"
+      poster={`/assets/demo-${locale}-poster.jpg`}
       preload="metadata"
       muted
       controls
@@ -422,7 +424,7 @@ export function AutoVideo({ locale }: { locale: Locale }) {
           : "VoicePaste 语音输入、翻译与润色演示"
       }
     >
-      <source src="/assets/demo.mp4" type="video/mp4" />
+      <source src={`/assets/demo-${locale}.mp4`} type="video/mp4" />
     </video>
   )
 }

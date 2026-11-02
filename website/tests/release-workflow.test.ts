@@ -117,13 +117,7 @@ test("sync rejects draft, wrong tag, incomplete assets and missing source notes"
   }
   assert.throws(
     () =>
-      syncWebsiteRelease(
-        config,
-        fixture(),
-        futureVersion,
-        source.en,
-        chinese
-      ),
+      syncWebsiteRelease(config, fixture(), futureVersion, source.en, chinese),
     /Missing bilingual/
   )
 })
