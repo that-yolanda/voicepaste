@@ -70,7 +70,9 @@ export function breadcrumbJsonLd(
   title: string,
   slug: string[]
 ) {
-  const items: { name: string; item?: string }[] = [
+  // Google requires an item URL on every step except the last, so the
+  // API folder is not listed as a step — it has no page of its own.
+  const items = [
     {
       name: locale === "zh" ? "首页" : "Home",
       item: `${siteUrl}/${locale}`,
@@ -79,15 +81,11 @@ export function breadcrumbJsonLd(
       name: locale === "zh" ? "配置文档" : "Docs",
       item: `${siteUrl}/${locale}/docs`,
     },
+    {
+      name: title,
+      item: `${siteUrl}/${locale}/docs/${slug.join("/")}`,
+    },
   ]
-  if (slug.length > 1 && slug[0] === "api") {
-    // The API folder groups provider guides but has no page of its own.
-    items.push({ name: locale === "zh" ? "模型 API 申请" : "Model API setup" })
-  }
-  items.push({
-    name: title,
-    item: `${siteUrl}/${locale}/docs/${slug.join("/")}`,
-  })
   return {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -95,7 +93,7 @@ export function breadcrumbJsonLd(
       "@type": "ListItem",
       position: index + 1,
       name: entry.name,
-      ...(entry.item ? { item: entry.item } : {}),
+      item: entry.item,
     })),
   }
 }
