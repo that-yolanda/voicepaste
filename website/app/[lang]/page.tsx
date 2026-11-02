@@ -76,12 +76,35 @@ export default async function Home({ params }: Props) {
     },
     sameAs: ["https://github.com/that-yolanda/voicepaste"],
   }
+  // VideoObject ties the home-page demo video to a watch page so video
+  // search indexes it with a title and thumbnail instead of treating
+  // the bare mp4 URL as an empty page.
+  const videoStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    name:
+      lang === "zh" ? "VoicePaste 语音输入演示" : "VoicePaste voice input demo",
+    description:
+      lang === "zh"
+        ? "演示如何用全局快捷键语音输入，并用模板翻译与润色文本。"
+        : "A demo of dictating with a global shortcut and polishing text with templates.",
+    thumbnailUrl: [`${siteUrl}/assets/demo-${lang}-poster.jpg`],
+    uploadDate: latest.date,
+    contentUrl: `${siteUrl}/assets/demo-${lang}.mp4`,
+    embedUrl: `${siteUrl}/${lang}`,
+  }
 
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(videoStructuredData),
+        }}
       />
       <script
         type="application/ld+json"
