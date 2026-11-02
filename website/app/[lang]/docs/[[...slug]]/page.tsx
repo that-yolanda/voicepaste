@@ -3,7 +3,7 @@ import { source } from "@/lib/source"
 import { notFound } from "next/navigation"
 import { ViewTransition } from "react"
 import { isLocale } from "@/lib/i18n"
-import { faqJsonLd, pageMetadata } from "@/lib/seo"
+import { faqJsonLd, breadcrumbJsonLd, pageMetadata } from "@/lib/seo"
 import { DocsBody, DocsPage, DocsTitle } from "fumadocs-ui/page"
 import defaultMdxComponents from "fumadocs-ui/mdx"
 type Props = { params: Promise<{ lang: string; slug?: string[] }> }
@@ -30,17 +30,24 @@ export default async function Page({ params }: Props) {
   const page = source.getPage(slug, lang)
   if (!page) notFound()
   const MDX = page.data.body
-  const isFaqPage = isLocale(lang) && slug.length === 1 && slug[0] === "faq"
+  // The docs index is the breadcrumb root; deeper pages get a trail.
+  const jsonLdItems = !isLocale(lang)
+    ? []
+    : [
+        ...(slug.length > 0
+          ? [breadcrumbJsonLd(lang, page.data.title, slug)]
+          : []),
+        ...(slug.length === 1 && slug[0] === "faq" ? [faqJsonLd(lang)] : []),
+      ]
   return (
     <>
-      {isFaqPage && (
+      {jsonLdItems.map((data) => (
         <script
+          key={data["@type"]}
           type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(faqJsonLd(lang)),
-          }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
         />
-      )}
+      ))}
       <ViewTransition
         key={page.url}
         enter="page-fade"

@@ -1,6 +1,35 @@
 import { ImageResponse } from "next/og"
 const size = { width: 1200, height: 630 }
-export function GET() {
+export function GET(request: Request) {
+  // With ?title= the card shows the page headline (Latin scripts only —
+  // other scripts would render as tofu without an embedded font).
+  // Without it, the card falls back to the brand tagline.
+  const title = new URL(request.url).searchParams.get("title")?.slice(0, 80)
+  const headline = title ? (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        fontSize: 60,
+        lineHeight: 1.15,
+        maxWidth: 1040,
+      }}
+    >
+      {title}
+    </div>
+  ) : (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        fontSize: 76,
+        lineHeight: 1.1,
+      }}
+    >
+      <span>Think freely.</span>
+      <span>Speak naturally.</span>
+    </div>
+  )
   return new ImageResponse(
     <div
       style={{
@@ -16,17 +45,7 @@ export function GET() {
       }}
     >
       <div style={{ fontSize: 36 }}>VoicePaste</div>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          fontSize: 76,
-          lineHeight: 1.1,
-        }}
-      >
-        <span>Think freely.</span>
-        <span>Speak naturally.</span>
-      </div>
+      {headline}
       <div style={{ fontSize: 26 }}>Free. Lightweight. Open source.</div>
     </div>,
     size
