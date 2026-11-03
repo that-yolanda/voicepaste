@@ -101,7 +101,7 @@ describe("ElevenLabs model settings", () => {
     expect(change).toHaveBeenCalledWith(150);
   });
 
-  it("preserves Doubao credentials and advanced language layout", () => {
+  it("preserves Doubao credentials and hides language in live mode", () => {
     card(doubao);
     expect(screen.getByPlaceholderText("输入 API Key")).toBeVisible();
     expect(screen.queryByText("语言")).not.toBeInTheDocument();
@@ -110,7 +110,7 @@ describe("ElevenLabs model settings", () => {
       "https://voicepaste.dev/docs/api/volcengine",
     );
     fireEvent.click(screen.getByText("更多参数"));
-    expect(screen.getByText("语言")).toBeVisible();
+    expect(screen.queryByText("识别语言")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "热词库说明" })).not.toBeInTheDocument();
   });
   it("orders basic and advanced fields exactly as requested", () => {

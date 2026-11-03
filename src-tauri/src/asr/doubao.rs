@@ -106,7 +106,17 @@ fn encode_audio_only_request(audio: &[u8], is_last: bool) -> Vec<u8> {
 
 /// Parse a binary server response frame.
 pub(crate) fn parse_server_response(buffer: &[u8]) -> Option<Value> {
-    if buffer.len() < 12 {
+    let mut payload = parse_server_payload(buffer)?;
+    if buffer[1] >> 4 == MSG_TYPE_ACK && buffer[1] & 0x02 != 0 {
+        payload
+            .as_object_mut()?
+            .insert("is_last_package".to_string(), json!(true));
+    }
+    Some(payload)
+}
+
+fn parse_server_payload(buffer: &[u8]) -> Option<Value> {
+    if buffer.len() < 8 || buffer[0] >> 4 != 1 || buffer[0] & 0x0f == 0 {
         return None;
     }
 
@@ -160,8 +170,11 @@ pub(crate) fn parse_server_response(buffer: &[u8]) -> Option<Value> {
         };
     }
 
-    // Ack message type and message flags both skip 4 bytes
-    if message_type == MSG_TYPE_ACK || message_flags == 0x01 || message_flags == 0x03 {
+    // Sequence and event fields are present only when their flag bits are set.
+    if message_flags & 0x01 != 0 {
+        offset += 4;
+    }
+    if message_flags & 0x04 != 0 {
         offset += 4;
     }
 
@@ -292,7 +305,35 @@ pub(crate) fn build_api_request_body(
         .map(str::trim)
         .filter(|v| !v.is_empty())
     {
-        request.insert("language".to_string(), json!(language));
+        let language = match language {
+            "zh" | "zho" | "cmn" => "zh-CN",
+            "en" | "eng" => "en-US",
+            "ja" | "jpn" => "ja-JP",
+            "ko" | "kor" => "ko-KR",
+            "yue" => "yue-CN",
+            "pl" | "pol" => "pl-PL",
+            "id" | "ind" => "id-ID",
+            "es" | "spa" => "es-MX",
+            "pt" | "por" => "pt-BR",
+            "de" | "deu" => "de-DE",
+            "fr" | "fra" => "fr-FR",
+            "fil" => "fil-PH",
+            "ms" | "msa" => "ms-MY",
+            "th" | "tha" => "th-TH",
+            "ar" | "ara" => "ar-SA",
+            "it" | "ita" => "it-IT",
+            "bn" | "ben" => "bn-BD",
+            "el" | "ell" => "el-GR",
+            "nl" | "nld" => "nl-NL",
+            "ru" | "rus" => "ru-RU",
+            "tr" | "tur" => "tr-TR",
+            "vi" | "vie" => "vi-VN",
+            "ro" | "ron" => "ro-RO",
+            "ne" | "nep" => "ne-NP",
+            "uk" | "ukr" => "uk-UA",
+            other => other,
+        };
+        audio.insert("language".to_string(), json!(language));
     }
     request.insert("enable_itn".to_string(), json!(request_config.enable_itn));
     request.insert("enable_punc".to_string(), json!(request_config.enable_punc));
@@ -301,7 +342,8 @@ pub(crate) fn build_api_request_body(
         "show_utterances".to_string(),
         json!(request_config.show_utterances),
     );
-    request.insert("result_type".to_string(), json!(request_config.result_type));
+    // The receiver consumes cumulative snapshots, including for saved legacy configs.
+    request.insert("result_type".to_string(), json!("full"));
 
     if let Some(v) = request_config.end_window_size {
         request.insert("end_window_size".to_string(), json!(v));
@@ -312,22 +354,16 @@ pub(crate) fn build_api_request_body(
     if let Some(v) = request_config.accelerate_score {
         request.insert("accelerate_score".to_string(), json!(v));
     }
-    if let Some(v) = request_config.vad_segment_duration {
-        request.insert("vad_segment_duration".to_string(), json!(v));
+    if request_config.end_window_size.is_none() {
+        if let Some(v) = request_config.vad_segment_duration {
+            request.insert("vad_segment_duration".to_string(), json!(v));
+        }
     }
     if let Some(v) = request_config.enable_nonstream {
         request.insert("enable_nonstream".to_string(), json!(v));
     }
     if let Some(v) = request_config.enable_accelerate_text {
         request.insert("enable_accelerate_text".to_string(), json!(v));
-    }
-    if let Some(v) = request_config
-        .ssd_version
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
-        request.insert("ssd_version".to_string(), json!(v));
     }
     // "off" means no conversion → omit the field so the server keeps simplified output.
     if let Some(v) = request_config
@@ -354,9 +390,7 @@ pub(crate) fn build_api_request_body(
                     continue;
                 };
                 if key == "context_hotwords" {
-                    if context_hotwords.is_empty() {
-                        context_hotwords = parse_context_hotwords(value);
-                    }
+                    context_hotwords.extend(parse_context_hotwords(value));
                     continue;
                 }
                 if is_empty_yaml_value(value) {
@@ -380,10 +414,27 @@ pub(crate) fn build_api_request_body(
             .entry("corpus".to_string())
             .or_insert_with(|| Value::Object(serde_json::Map::new()));
         if let Some(corpus_json) = corpus.as_object_mut() {
-            corpus_json.insert(
-                "context".to_string(),
-                json!(serde_json::json!({ "hotwords": context_hotwords }).to_string()),
-            );
+            // Context is a serialized JSON object; preserve its other hints.
+            let mut context = corpus_json
+                .get("context")
+                .and_then(Value::as_str)
+                .and_then(|text| serde_json::from_str::<Value>(text).ok())
+                .filter(Value::is_object)
+                .unwrap_or_else(|| json!({}));
+            let mut words = context
+                .get("hotwords")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            words.extend(context_hotwords);
+            let mut seen = std::collections::HashSet::new();
+            words.retain(|item| {
+                item.get("word")
+                    .and_then(Value::as_str)
+                    .is_some_and(|word| seen.insert(word.trim().to_string()))
+            });
+            context["hotwords"] = json!(words);
+            corpus_json.insert("context".to_string(), json!(context.to_string()));
         }
     }
 
@@ -598,11 +649,11 @@ impl AsrEngine for DoubaoEngine {
             self.connection.resource_id.parse().unwrap(),
         );
         headers.insert("X-Api-Connect-Id", connect_id.parse().unwrap());
+        headers.insert("X-Api-Request-Id", connect_id.parse().unwrap());
 
         if mode == "v2" {
             // New Volcengine console: single API Key auth.
             headers.insert("X-Api-Key", self.connection.api_key.parse().unwrap());
-            headers.insert("X-Api-Request-Id", connect_id.parse().unwrap());
             headers.insert("X-Api-Sequence", "-1".parse().unwrap());
             log_asr!(info, "ASR auth mode: v2 (X-Api-Key)");
         } else {
@@ -634,8 +685,15 @@ impl AsrEngine for DoubaoEngine {
         let (sink, mut stream) = ws_stream.split();
 
         // Send initial request
-        let request_body =
-            build_api_request_body(&self.audio_config, &self.request_config, hotwords);
+        let mut request_config = self.request_config.clone();
+        if url.path().ends_with("/bigmodel_nostream") {
+            request_config.enable_nonstream = None;
+            request_config.enable_accelerate_text = None;
+            request_config.accelerate_score = None;
+        } else {
+            request_config.language = None;
+        }
+        let request_body = build_api_request_body(&self.audio_config, &request_config, hotwords);
         log_asr!(
             debug,
             "ASR init request: {}",
@@ -703,6 +761,7 @@ impl AsrEngine for DoubaoEngine {
         };
 
         // Spawn message handler task
+        let response_writer_tx = session.writer_tx.clone();
         let event_tx_clone = event_tx.clone();
         tokio::spawn(async move {
             while let Some(msg) = stream.next().await {
@@ -710,6 +769,10 @@ impl AsrEngine for DoubaoEngine {
                     Ok(Message::Binary(data)) => {
                         let buffer = data.as_ref();
                         if let Some(payload) = parse_server_response(buffer) {
+                            let is_last = payload
+                                .get("is_last_package")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(false);
                             // Debug: log non-audio response payloads to diagnose ASR errors
                             if payload.get("raw_text").is_none() {
                                 log_asr!(
@@ -726,6 +789,7 @@ impl AsrEngine for DoubaoEngine {
                                 && payload.get("result").is_none()
                                 && payload.get("raw_text").is_none()
                                 && payload.get("code").is_none()
+                                && !is_last
                             {
                                 // Non-result frame, skip
                                 continue;
@@ -756,7 +820,9 @@ impl AsrEngine for DoubaoEngine {
                                         });
                                     }
                                 }
-                                continue;
+                                if !is_last {
+                                    continue;
+                                }
                             }
 
                             // Error response
@@ -897,29 +963,20 @@ impl AsrEngine for DoubaoEngine {
                                         });
                                     }
                                 }
-
-                                // Check for commit resolution
-                                if committed {
-                                    if let Some(arr) = utterances {
-                                        if let Some(last) = arr.last() {
-                                            if last
-                                                .get("definite")
-                                                .and_then(|v| v.as_bool())
-                                                .unwrap_or(false)
-                                            {
-                                                let text = latest_result_text.lock().await.clone();
-                                                *final_text.lock().await = text.clone();
-                                                *partial_text.lock().await = String::new();
-                                                // Do NOT resolve the commit here: doubao keeps
-                                                // emitting final segments after the first
-                                                // definite one, only closing with "finish last
-                                                // sequence". Resolving on the first definite
-                                                // truncates the tail (e.g. "是哪一个？"); the
-                                                // close-frame handler resolves with full text.
-                                            }
-                                        }
-                                    }
+                            }
+                            if is_last {
+                                is_ready.store(false, Ordering::SeqCst);
+                                let latest = latest_result_text.lock().await.clone();
+                                let text = if latest.is_empty() {
+                                    final_text.lock().await.clone()
+                                } else {
+                                    latest
+                                };
+                                if let Some(tx) = commit_tx.lock().await.take() {
+                                    let _ = tx.send(text);
                                 }
+                                let _ = response_writer_tx.send(WsWrite::Close);
+                                break;
                             }
                         }
                     }
@@ -1050,14 +1107,13 @@ impl AsrSession for DoubaoSession {
         // Because all prior audio was enqueued before this call (the renderer
         // flushes and acks before stop proceeds) and the writer is FIFO, the
         // last packet is guaranteed to be written after every audio frame.
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        *self.commit_tx.lock().await = Some(tx);
         self.is_committed.store(true, Ordering::SeqCst);
         let frame = encode_audio_only_request(&[], true);
         let _ = self.writer_tx.send(WsWrite::Last(frame));
 
-        // Wait for final result with timeout
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        *self.commit_tx.lock().await = Some(tx);
-
+        // Wait for the final protocol packet, with close/error fallback.
         match tokio::time::timeout(std::time::Duration::from_secs(15), rx).await {
             Ok(Ok(text)) => Ok(text),
             _ => Err(AppError::new(AppErrorCode::AsrFinalTimeout)),
@@ -1078,6 +1134,92 @@ impl AsrSession for DoubaoSession {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn modes_and_auth_finish_on_final_packet_without_waiting_for_server_close() {
+        for (mode, path, empty_final) in [
+            ("legacy", "/bigmodel_nostream", false),
+            ("v2", "/bigmodel_async", true),
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let endpoint = format!("ws://{}{path}", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                let mut socket = tokio_tungstenite::accept_hdr_async(stream,
+                    |request: &tokio_tungstenite::tungstenite::handshake::server::Request,
+                     response: tokio_tungstenite::tungstenite::handshake::server::Response| {
+                        assert!(request.headers().contains_key("X-Api-Request-Id"));
+                        assert_eq!(request.headers().contains_key("X-Api-Key"), mode == "v2");
+                        assert_eq!(request.headers().contains_key("X-Api-App-Key"), mode == "legacy");
+                        Ok(response)
+                    }).await.unwrap();
+                let init = socket.next().await.unwrap().unwrap().into_data();
+                let body = parse_server_response(&init).unwrap();
+                assert_eq!(body["request"]["result_type"], "full");
+                if path.ends_with("nostream") {
+                    assert_eq!(body["audio"]["language"], "pl-PL");
+                    assert!(body["request"].get("enable_nonstream").is_none());
+                    assert!(body["request"].get("enable_accelerate_text").is_none());
+                } else {
+                    assert!(body["audio"].get("language").is_none());
+                    assert_eq!(body["request"]["enable_nonstream"], true);
+                }
+                let last = socket.next().await.unwrap().unwrap().into_data();
+                assert_ne!(last[1] & 2, 0);
+                let full_text = "First sentence. Second sentence.";
+                for (flags, payload) in [
+                    (
+                        1_u8,
+                        json!({"result": {"text": full_text, "utterances": [{"text": full_text, "definite": true}]}}),
+                    ),
+                    (
+                        3_u8,
+                        if empty_final {
+                            json!({})
+                        } else {
+                            json!({"result": {"text": full_text}})
+                        },
+                    ),
+                ] {
+                    let payload = serde_json::to_vec(&payload).unwrap();
+                    let mut frame = build_header(MSG_TYPE_ACK, flags, 1, 0).to_vec();
+                    frame.extend_from_slice(&(if flags == 3 { -2_i32 } else { 1 }).to_be_bytes());
+                    frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+                    frame.extend_from_slice(&payload);
+                    socket.send(Message::Binary(frame.into())).await.unwrap();
+                }
+                // Keep the server open until the client acknowledges completion.
+                assert!(matches!(socket.next().await, Some(Ok(Message::Close(_)))));
+            });
+            let mut request: RequestConfig = serde_json::from_value(json!({})).unwrap();
+            request.language = Some("pol".into());
+            request.result_type = "single".into();
+            request.enable_nonstream = Some(true);
+            request.enable_accelerate_text = Some(true);
+            let engine = DoubaoEngine::new(
+                ConnectionConfig {
+                    url: endpoint,
+                    auth_mode: mode.into(),
+                    app_id: "test-app".into(),
+                    access_token: "test-token".into(),
+                    resource_id: "test-resource".into(),
+                    api_key: "test-key".into(),
+                },
+                serde_json::from_value(json!({})).unwrap(),
+                request,
+            );
+            let (session, _events) = engine.create_session(&[]).await.unwrap();
+            let text = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                session.commit_and_await_final(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(text, "First sentence. Second sentence.");
+            server.await.unwrap();
+        }
+    }
 
     #[tokio::test]
     async fn provider_error_events_do_not_expose_credentials() {

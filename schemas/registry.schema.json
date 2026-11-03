@@ -28,7 +28,7 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "type", "category", "engine", "name", "description", "tags"],
+        "required": ["id", "type", "category", "engine", "name", "description", "languages"],
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string" },
@@ -44,15 +44,6 @@
           "description_en": {
             "type": "string",
             "description": "Optional English description; falls back to description."
-          },
-          "tags": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "tags_en": {
-            "type": "array",
-            "description": "Optional English tags; falls back to tags.",
-            "items": { "type": "string" }
           },
           "languages": {
             "type": "array",

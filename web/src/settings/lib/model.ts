@@ -24,12 +24,12 @@ export const ELEVENLABS_MODEL_ID = "elevenlabs-realtime";
 export function localizedModelFields(
   model: RegistryModel,
   language: string,
-): { name: string; description?: string; tags: string[] } {
+): { name: string; description?: string; languages: string[] } {
   const en = language.toLowerCase().startsWith("en");
   return {
     name: (en ? model.name_en : undefined) || model.name,
     description: (en ? model.description_en : undefined) || model.description,
-    tags: (en ? model.tags_en : undefined) || model.tags || [],
+    languages: model.languages ?? [],
   };
 }
 
@@ -41,6 +41,7 @@ export type ControlType =
   | "number"
   | "toggle"
   | "segment"
+  | "select"
   | "textarea"
   | "list";
 
@@ -284,6 +285,48 @@ export const FIELD_META: Record<string, FieldMeta> = {
   },
 };
 
+const DOUBAO_FIELDS: Record<string, Partial<FieldMeta>> = {
+  url: {
+    label: "field.doubao.mode",
+    type: "select",
+    group: "basic",
+    tooltip: "field.doubao.mode.tooltip",
+    options: [
+      {
+        value: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream",
+        label: "field.doubao.mode.sentence",
+      },
+      {
+        value: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+        label: "field.doubao.mode.realtime",
+      },
+    ],
+  },
+  resource_id: {
+    label: "field.doubao.resource",
+    type: "select",
+    tooltip: "field.doubao.resource.tooltip",
+    options: [
+      { value: "volc.seedasr.sauc.duration", label: "field.doubao.resource.duration" },
+      { value: "volc.seedasr.sauc.concurrent", label: "field.doubao.resource.concurrent" },
+    ],
+  },
+  language: {
+    label: "field.doubao.language",
+    type: "select",
+    group: "basic",
+    tooltip: "field.doubao.language.tooltip",
+  },
+  enable_nonstream: {
+    label: "field.doubao.two_pass",
+    group: "basic",
+    tooltip: "field.doubao.two_pass.tooltip",
+  },
+  end_window_size: { min: 300, max: 5000, step: 1, tooltip: "field.doubao.end_window.tooltip" },
+  force_to_speech_time: { tooltip: "field.doubao.force_speech.tooltip" },
+  enable_accelerate_text: { tooltip: "field.doubao.accelerate.tooltip" },
+};
+
 const ELEVENLABS_FIELDS: Record<string, Partial<FieldMeta>> = {
   api_key: {},
   enable_ddc: {
@@ -384,6 +427,24 @@ export function isModelFieldVisible(
   key: string,
   config: Record<string, unknown>,
 ): boolean {
+  if (modelId === DOUBAO_MODEL_ID) {
+    if (
+      [
+        "result_type",
+        "model_name",
+        "model_version",
+        "operation",
+        "sequence",
+        "ssd_version",
+      ].includes(key)
+    )
+      return false;
+    const sentence = String(config.url ?? "").endsWith("/bigmodel_nostream");
+    if (key === "language") return sentence;
+    if (["enable_nonstream", "enable_accelerate_text"].includes(key)) return !sentence;
+    if (key === "accelerate_score") return !sentence && config.enable_accelerate_text === true;
+    if (key === "vad_segment_duration") return config.end_window_size == null;
+  }
   return (
     modelId !== ELEVENLABS_MODEL_ID ||
     config.commit_strategy !== "manual" ||
@@ -416,7 +477,12 @@ export function getFieldMeta(key: string, value: unknown, modelId?: string): Fie
   // Try the full key first, then the last segment after a dot
   // (e.g. "vad.threshold" → "threshold") so nested asr_defaults keys resolve.
   const meta = FIELD_META[key] ?? FIELD_META[key.split(".").pop() ?? ""];
-  const override = modelId === ELEVENLABS_MODEL_ID ? ELEVENLABS_FIELDS[key] : undefined;
+  const override =
+    modelId === DOUBAO_MODEL_ID
+      ? DOUBAO_FIELDS[key]
+      : modelId === ELEVENLABS_MODEL_ID
+        ? ELEVENLABS_FIELDS[key]
+        : undefined;
   if (meta || override) return { ...(meta ?? { label: key }), ...override };
   return {
     label: key.replace(/_/g, " "),
@@ -531,7 +597,12 @@ export function getMergedAsrConfig(
     if ("rate" in merged) merged.rate = asrDefaults.rate;
     if ("channel" in merged) merged.channel = asrDefaults.channel;
   }
-  for (const [k, v] of Object.entries(user)) merged[k] = v;
+  for (const [k, v] of Object.entries(user)) {
+    merged[k] =
+      v && typeof v === "object" && !Array.isArray(v)
+        ? { ...asRecord(merged[k]), ...asRecord(v) }
+        : v;
+  }
 
   // Flatten one level of nested objects (e.g. corpus → corpus.boosting_table_id).
   const fields: MergedField[] = [];

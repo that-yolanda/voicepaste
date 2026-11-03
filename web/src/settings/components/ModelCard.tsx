@@ -25,8 +25,10 @@ import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
 import { Input } from "@/settings/components/Input";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
+import { Select } from "@/settings/components/Select";
 import { Textarea } from "@/settings/components/Textarea";
 import { Toggle } from "@/settings/components/Toggle";
+import { Tooltip } from "@/settings/components/Tooltip";
 import {
   Section,
   SectionContent,
@@ -34,6 +36,7 @@ import {
   SectionItem,
   SectionItemList,
 } from "@/settings/layout/PageLayout";
+import { DOUBAO_LANGUAGE_CODES, languageName } from "@/settings/lib/languages";
 import {
   type AsrDefaults,
   type ControlType,
@@ -111,6 +114,22 @@ export function renderControl(
         />
       );
     }
+    case "select": {
+      const current = String(value ?? "");
+      const options = meta.options ?? [];
+      return (
+        <Select
+          aria-label={meta.label}
+          value={current}
+          onChange={onChange}
+          options={
+            options.some((option) => option.value === current)
+              ? options
+              : [...options, { value: current, label: current }]
+          }
+        />
+      );
+    }
     case "segment":
       return (
         <SegmentedControl
@@ -183,7 +202,7 @@ export function ModelCard({
   onResetConfig,
 }: ModelCardProps) {
   const { t, i18n } = useTranslation();
-  const { name, description, tags } = localizedModelFields(model, i18n.language);
+  const { name, description, languages } = localizedModelFields(model, i18n.language);
   const [configExpanded, setConfigExpanded] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -292,6 +311,21 @@ export function ModelCard({
 
   const renderField = (field: MergedField) => {
     const meta = resolveFieldMeta(fieldMeta(field), t);
+    if (isDoubao && field.key === "language") {
+      meta.options = [
+        { value: "", label: t("field.doubao.language.default") },
+        ...Object.entries(DOUBAO_LANGUAGE_CODES).map(([code, value]) => ({
+          value,
+          label: languageName(code, i18n.language),
+        })),
+      ];
+    }
+    if (isDoubao && field.key === "resource_id") {
+      meta.options = meta.options?.map((option) => ({
+        ...option,
+        label: `${option.label} (${option.value})`,
+      }));
+    }
     const control = renderControl(meta, field.value, (value) => {
       setConfigError(null);
       Promise.resolve(onConfigChange(model.id, patchFromFlatKey(field.key, value))).catch((error) =>
@@ -335,15 +369,31 @@ export function ModelCard({
           </div>
         )}
 
-        {/* Meta row: tags + capabilities + config toggle */}
-        <div className="flex flex-wrap items-center gap-2">
-          {tags.map((tag) => (
-            <Badge key={tag} variant="accent" size="xs">
-              {tag}
-            </Badge>
-          ))}
+        <div className="flex min-w-0 items-center gap-2">
+          {languages.length > 0 && (
+            <div className="min-w-0 flex-1">
+              <Tooltip
+                label={t("ui.model.languages", {
+                  languages: languages.map((code) => languageName(code, i18n.language)).join(" · "),
+                })}
+                className="block w-full min-w-0 rounded text-left text-xs text-text-muted"
+                content={
+                  <>
+                    {languages.map((code) => languageName(code, i18n.language)).join(" · ")}
+                    {isDoubao && (
+                      <p className="mt-2 text-text-muted">{t("ui.model.doubao_languages_note")}</p>
+                    )}
+                  </>
+                }
+              >
+                <span className="block truncate">
+                  {languages.map((code) => languageName(code, i18n.language)).join(" · ")}
+                </span>
+              </Tooltip>
+            </div>
+          )}
           {memStr && model.category === "asr" && (
-            <div className="flex gap-1 items-center text-text-muted">
+            <div className="flex shrink-0 gap-1 items-center text-text-muted">
               <ChartNoAxesCombined size={16} />
               <span className="text-xs">{t("ui.model.memory_peak", { size: memStr })}</span>
             </div>
@@ -368,7 +418,6 @@ export function ModelCard({
               </p>
             )}
             <SectionItemList>{visibleFields.map(renderField)}</SectionItemList>
-
             {advancedFields.length > 0 && (
               <div className="space-y-2">
                 {advancedExpanded && (

@@ -10,8 +10,7 @@ export interface RegistryModel {
   engine?: string;
   description?: string;
   description_en?: string;
-  tags?: string[];
-  tags_en?: string[];
+  languages?: string[];
   mem_size?: number;
   file_size?: number;
   capabilities?: Record<string, boolean>;

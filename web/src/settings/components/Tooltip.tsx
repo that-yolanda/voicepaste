@@ -5,10 +5,12 @@ export function Tooltip({
   content,
   label,
   children,
+  className = "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-fill-hover",
 }: {
   content: ReactNode;
   label: string;
   children: ReactNode;
+  className?: string;
 }) {
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -79,7 +81,7 @@ export function Tooltip({
         type="button"
         aria-label={label}
         aria-describedby={open ? id : undefined}
-        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-fill-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim"
+        className={`${className} focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent-dim`}
         onMouseEnter={show}
         onMouseLeave={scheduleClose}
         onFocus={show}
@@ -95,7 +97,7 @@ export function Tooltip({
             role="tooltip"
             onMouseEnter={cancelClose}
             onMouseLeave={scheduleClose}
-            className="fixed z-50 w-max max-w-[min(320px,calc(100vw-16px))] whitespace-pre-line break-words rounded-lg border border-border bg-surface-card px-3 py-2 text-xs leading-relaxed text-text shadow-lg"
+            className="fixed z-50 w-max max-w-[min(320px,calc(100vw-16px))] max-h-[calc(100vh-32px)] overflow-y-auto whitespace-pre-line break-words rounded-lg border border-border bg-surface-card px-3 py-2 text-xs leading-relaxed text-text shadow-lg"
             style={{
               left: position?.left ?? 0,
               top: position?.top ?? 0,

@@ -5,6 +5,7 @@ import {
   getFieldMeta,
   getMergedAsrConfig,
   inferControlType,
+  isModelFieldVisible,
   localizedModelFields,
 } from "@/settings/lib/model";
 import { soundFileName } from "@/settings/lib/sound";
@@ -144,21 +145,42 @@ describe("localizedModelFields", () => {
     name_en: "Test model",
     description: "中文描述",
     description_en: "English description",
-    tags: ["标签"],
-    tags_en: ["Tag"],
+    languages: ["zh", "en"],
   } satisfies Parameters<typeof localizedModelFields>[0];
 
   it("uses English fields when the UI language is English", () => {
     const fields = localizedModelFields(model, "en");
     expect(fields.name).toBe("Test model");
     expect(fields.description).toBe("English description");
-    expect(fields.tags).toEqual(["Tag"]);
+    expect(fields.languages).toEqual(["zh", "en"]);
   });
 
   it("falls back to the Chinese base fields for Chinese and when *_en is absent", () => {
     expect(localizedModelFields(model, "zh-CN").name).toBe("测试模型");
     const bare = localizedModelFields({ id: "x", type: "online", name: "只有中文" }, "en");
     expect(bare.name).toBe("只有中文");
-    expect(bare.tags).toEqual([]);
+    expect(bare.languages).toEqual([]);
+  });
+});
+
+describe("Doubao mode-specific controls", () => {
+  const sentence = { url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream" };
+  const live = {
+    url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+    end_window_size: 800,
+  };
+  it("uses named choices only for Doubao", () => {
+    expect(getFieldMeta("url", "", "doubao-streaming").type).toBe("select");
+    expect(getFieldMeta("resource_id", "", "doubao-streaming").options).toHaveLength(2);
+    expect(getFieldMeta("url", "", "another-provider").type).toBe("text");
+  });
+  it("shows language only for sentence recognition and refinement only for live recognition", () => {
+    expect(isModelFieldVisible("doubao-streaming", "language", sentence)).toBe(true);
+    expect(isModelFieldVisible("doubao-streaming", "language", live)).toBe(false);
+    expect(isModelFieldVisible("doubao-streaming", "enable_nonstream", sentence)).toBe(false);
+    expect(isModelFieldVisible("doubao-streaming", "enable_nonstream", live)).toBe(true);
+    expect(isModelFieldVisible("doubao-streaming", "vad_segment_duration", live)).toBe(false);
+    expect(isModelFieldVisible("doubao-streaming", "result_type", live)).toBe(false);
+    expect(isModelFieldVisible("doubao-streaming", "ssd_version", live)).toBe(false);
   });
 });

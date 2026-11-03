@@ -15,6 +15,7 @@ import { Button } from "@/settings/components/Button";
 import { Modal } from "@/settings/components/Modal";
 import { ModelCard, type ModelCardProps, renderControl } from "@/settings/components/ModelCard";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
+import { Select } from "@/settings/components/Select";
 import {
   PageLayout,
   Section,
@@ -24,6 +25,7 @@ import {
   SectionItemList,
 } from "@/settings/layout/PageLayout";
 import { clonePlain } from "@/settings/lib/clone";
+import { languageName } from "@/settings/lib/languages";
 import {
   type AsrDefaults,
   DOUBAO_MODEL_ID,
@@ -64,13 +66,14 @@ const ASR_DEFAULT_SECTIONS: { title: string; fields: string[] }[] = [
 ];
 
 export function AudioModelPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { settings, refresh } = useSettings();
   const cfg = (settings?.parsedConfig || {}) as Record<string, unknown>;
   const audio = (cfg.audio || {}) as Record<string, unknown>;
   const provider = (audio.provider as string) || DOUBAO_MODEL_ID;
 
   const [tab, setTab] = useState<"online" | "offline">("online");
+  const [selectedLanguage, setSelectedLanguage] = useState("");
   const [customConfigOpen, setCustomConfigOpen] = useState(false);
   const [registry, setRegistry] = useState<RegistryModel[]>([]);
   const [downloaded, setDownloaded] = useState<string[]>([]);
@@ -167,7 +170,13 @@ export function AudioModelPage() {
       const next = { ...current };
       for (const [key, value] of Object.entries(updates)) {
         if (value === undefined) delete next[key];
-        else next[key] = key === "provider" ? String(value).toLowerCase() : value;
+        else
+          next[key] =
+            isRecord(value) && isRecord(current[key])
+              ? { ...current[key], ...value }
+              : key === "provider"
+                ? String(value).toLowerCase()
+                : value;
       }
       const nextAudio = { ...audio };
       if (Object.keys(next).length > 0) nextAudio[modelId] = next;
@@ -238,8 +247,26 @@ export function AudioModelPage() {
     downloaded.includes(m.id) ||
     downloadProgress[m.id]?.status === "completed";
 
-  const onlineModels = registry.filter((m) => m.type === "online" && m.category === "asr");
-  const offlineAsrModels = registry.filter((m) => m.type === "offline" && m.category === "asr");
+  const languages = [
+    ...new Set(registry.filter((m) => m.category === "asr").flatMap((m) => m.languages ?? [])),
+  ]
+    .map((code) => ({ value: code, label: languageName(code, i18n.language) }))
+    .sort((a, b) => {
+      const priority = (code: string) => (code === "zh" ? 0 : code === "en" ? 1 : 2);
+      return priority(a.value) - priority(b.value) || a.label.localeCompare(b.label, i18n.language);
+    });
+  const onlineModels = registry.filter(
+    (m) =>
+      m.type === "online" &&
+      m.category === "asr" &&
+      (!selectedLanguage || m.languages?.includes(selectedLanguage)),
+  );
+  const offlineAsrModels = registry.filter(
+    (m) =>
+      m.type === "offline" &&
+      m.category === "asr" &&
+      (!selectedLanguage || m.languages?.includes(selectedLanguage)),
+  );
   const baseModels = registry.filter(
     (m) => m.type === "offline" && (m.category === "vad" || m.category === "punctuation"),
   );
@@ -259,7 +286,7 @@ export function AudioModelPage() {
 
   return (
     <PageLayout>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div data-tour="asr-mode" className="shrink-0">
           <SegmentedControl
             options={[
@@ -270,7 +297,14 @@ export function AudioModelPage() {
             onChange={(value) => setTab(value === "offline" ? "offline" : "online")}
           />
         </div>
-        <Button variant="ghost" onClick={() => setCustomConfigOpen(true)}>
+        <Select
+          aria-label={t("ui.audio.language_filter")}
+          className="max-w-40 shrink-0"
+          value={selectedLanguage}
+          onChange={setSelectedLanguage}
+          options={[{ value: "", label: t("ui.audio.language_all") }, ...languages]}
+        />
+        <Button className="ml-auto" variant="ghost" onClick={() => setCustomConfigOpen(true)}>
           <Cog size={16} />
           {t("ui.audio.custom_config")}
         </Button>
@@ -285,12 +319,16 @@ export function AudioModelPage() {
       />
 
       <div data-tour="asr-models" data-model-kind={tab} className="space-y-5">
+        {(tab === "online" ? onlineModels : offlineAsrModels).length === 0 &&
+          selectedLanguage !== "" && (
+            <p className="text-sm text-text-muted">{t("ui.audio.language_no_models")}</p>
+          )}
         {tab === "online" &&
           onlineModels.map((m) => <ModelCard key={m.id} model={m} {...cardProps(m)} />)}
 
         {tab === "offline" && (
           <>
-            {offlineAsrModels.length === 0 && (
+            {offlineAsrModels.length === 0 && selectedLanguage === "" && (
               <p className="text-sm text-text-muted">{t("ui.audio.no_offline_models")}</p>
             )}
             {offlineAsrModels.map((m) => (

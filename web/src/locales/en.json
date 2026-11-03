@@ -164,8 +164,8 @@
     "accelerate_score": "First-token speed",
     "ssd_version": "SSD large-model version",
     "output_zh_variant": "Traditional Chinese",
-    "end_window_size": "Force-stop window (ms)",
-    "force_to_speech_time": "Min force-stop (ms)",
+    "end_window_size": "Sentence silence threshold (ms)",
+    "force_to_speech_time": "Initial speech protection (ms)",
     "vad_segment_duration": "Semantic segmentation silence (ms)",
     "use_itn": "Number formatting (ITN)",
     "itn": "ITN",
@@ -233,7 +233,23 @@
     "output_zh_variant.options.tw": "Traditional (Taiwan)",
     "output_zh_variant.options.hk": "Traditional (Hong Kong)",
     "commit_strategy.options.manual": "Manual",
-    "commit_strategy.options.vad": "VAD segments"
+    "commit_strategy.options.vad": "VAD segments",
+    "doubao.mode": "Recognition mode",
+    "doubao.mode.tooltip": "Sentence recognition: returns stable text after each sentence. Prioritizes accuracy and supports multiple languages, suitable for dictation and voice messages.\nLive recognition: displays text as you speak. Prioritizes speed; temporary text may change. Supports Chinese, Chinese dialects and English.",
+    "doubao.mode.sentence": "Sentence recognition",
+    "doubao.mode.realtime": "Live recognition",
+    "doubao.resource": "Resource type",
+    "doubao.resource.tooltip": "Match the ASR 2.0 resource type enabled in your Volcengine console. Existing legacy types are preserved until you select a replacement.",
+    "doubao.resource.duration": "Hourly",
+    "doubao.resource.concurrent": "Concurrent",
+    "doubao.language": "Recognition language",
+    "doubao.language.tooltip": "The default recognizes Chinese, Chinese dialects and English. Select a specific language for other languages. Automatic language detection, which conflicts with hotwords, is not enabled.",
+    "doubao.language.default": "Default (Chinese, English and dialects)",
+    "doubao.two_pass": "Two-pass refinement",
+    "doubao.two_pass.tooltip": "Displays live text first, then recognizes each completed sentence again to improve the final transcript.",
+    "doubao.end_window.tooltip": "Ends a sentence after this much continuous silence. Range: 300–5000 ms; recommended: 800–1000 ms. Overrides the semantic segmentation silence threshold.",
+    "doubao.force_speech.tooltip": "Treats the start of the audio as speech even during silence, preventing premature segmentation. Recommended: 1000 ms.",
+    "doubao.accelerate.tooltip": "Displays the first character sooner, but may reduce its accuracy."
   },
   "ui": {
     "hotkey": {
@@ -476,7 +492,9 @@
         "hotwords": "Hotwords",
         "punctuation": "Auto punctuation",
         "itn": "Number formatting"
-      }
+      },
+      "languages": "Supported languages: {{languages}}",
+      "doubao_languages_note": "Live mode supports Chinese, Chinese dialects and English. For other languages, use sentence recognition and select the language."
     },
     "audio": {
       "title": "Speech models",
@@ -490,7 +508,10 @@
       "base_models": "Base models",
       "section_sample": "Audio sampling",
       "section_enhance": "Recognition",
-      "section_offline": "Offline inference"
+      "section_offline": "Offline inference",
+      "language_all": "Language: all",
+      "language_filter": "Filter by supported language",
+      "language_no_models": "No models support the selected language. Adjust the language filter."
     },
     "feedback": {
       "title": "Feedback",

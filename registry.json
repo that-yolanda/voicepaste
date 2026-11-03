@@ -1,6 +1,6 @@
 {
-  "version": 19,
-  "updated_at": "2026-10-15",
+  "version": 20,
+  "updated_at": "2026-11-03",
   "defaults": {
     "asr": {
       "rate": 16000,
@@ -28,8 +28,7 @@
       "category": "asr",
       "engine": "volcengine",
       "name": "火山引擎 - 豆包流式语音识别模型2.0",
-      "description": "¥1 / 小时，中文用户首选",
-      "tags": ["流式输出", "免费试用额度", "热词库", "中英文,方言"],
+      "description": "实时出字与分句识别可选，支持热词和二遍校正",
       "capabilities": {
         "streaming": true,
         "hotwords": true,
@@ -60,7 +59,6 @@
         "result_type": "full",
         "enable_accelerate_text": true,
         "accelerate_score": 10,
-        "ssd_version": "200",
         "output_zh_variant": "off",
         "end_window_size": 800,
         "force_to_speech_time": 1000,
@@ -71,8 +69,34 @@
         }
       },
       "name_en": "Volcano Engine — Doubao streaming ASR 2.0",
-      "description_en": "¥1/hour, first choice for Chinese",
-      "tags_en": ["Streaming", "Free trial", "Hotwords", "Chinese + English, dialects"]
+      "description_en": "Live or sentence recognition, with hotwords and two-pass refinement",
+      "languages": [
+        "zh",
+        "yue",
+        "en",
+        "ja",
+        "id",
+        "es",
+        "pt",
+        "de",
+        "fr",
+        "ko",
+        "fil",
+        "ms",
+        "th",
+        "ar",
+        "it",
+        "bn",
+        "el",
+        "nl",
+        "ru",
+        "tr",
+        "vi",
+        "pl",
+        "ro",
+        "ne",
+        "uk"
+      ]
     },
     {
       "id": "elevenlabs-realtime",
@@ -80,8 +104,7 @@
       "category": "asr",
       "engine": "elevenlabs",
       "name": "ElevenLabs - Scribe v2 Realtime",
-      "description": "$0.39 / 小时",
-      "tags": ["流式输出", "90+多语言", "按量计费"],
+      "description": "多语种实时转写，支持自动语种检测",
       "capabilities": {
         "streaming": true,
         "hotwords": true,
@@ -104,8 +127,109 @@
         "enable_keyterms": false
       },
       "name_en": "ElevenLabs — Scribe v2 Realtime",
-      "description_en": "$0.39/hour",
-      "tags_en": ["Streaming", "90+ languages", "Pay-as-you-go"]
+      "description_en": "Multilingual live transcription with automatic language detection",
+      "languages": [
+        "zh",
+        "en",
+        "ja",
+        "ko",
+        "fr",
+        "de",
+        "es",
+        "pt",
+        "ru",
+        "ar",
+        "hi",
+        "it",
+        "yue",
+        "id",
+        "vi",
+        "th",
+        "tr",
+        "ms",
+        "nl",
+        "pl",
+        "uk",
+        "fa",
+        "bn",
+        "ur",
+        "pa",
+        "ta",
+        "te",
+        "mr",
+        "sw",
+        "fil",
+        "jv",
+        "gu",
+        "sv",
+        "da",
+        "no",
+        "fi",
+        "cs",
+        "ro",
+        "el",
+        "hu",
+        "he",
+        "af",
+        "am",
+        "hy",
+        "as",
+        "ast",
+        "az",
+        "be",
+        "bs",
+        "bg",
+        "my",
+        "ca",
+        "ceb",
+        "ny",
+        "hr",
+        "et",
+        "ff",
+        "gl",
+        "lg",
+        "ka",
+        "ha",
+        "is",
+        "ig",
+        "ga",
+        "kea",
+        "kn",
+        "kk",
+        "km",
+        "ku",
+        "ky",
+        "lo",
+        "lv",
+        "ln",
+        "lt",
+        "luo",
+        "lb",
+        "mk",
+        "ml",
+        "mt",
+        "mi",
+        "mn",
+        "ne",
+        "nso",
+        "oc",
+        "or",
+        "ps",
+        "sr",
+        "sn",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "so",
+        "tg",
+        "umb",
+        "uz",
+        "cy",
+        "wo",
+        "xh",
+        "zu"
+      ]
     },
     {
       "id": "silero-vad",
@@ -113,8 +237,7 @@
       "category": "vad",
       "engine": "sherpa-onnx",
       "name": "Silero VAD",
-      "description": "语音活动检测模型，语音分段的基础依赖",
-      "tags": ["基础模型"],
+      "description": "语音活动检测，供本地模型进行语音分段",
       "architecture": "vad",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
       "file_size": 2,
@@ -129,8 +252,8 @@
         "max_speech_duration": 10.0
       },
       "name_en": "Silero VAD",
-      "description_en": "Voice activity detection model, the basis for speech segmentation",
-      "tags_en": ["Base model"]
+      "description_en": "Voice activity detection for local speech segmentation",
+      "languages": []
     },
     {
       "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8",
@@ -138,8 +261,7 @@
       "category": "asr",
       "engine": "sherpa-onnx",
       "name": "SenseVoice 多语言",
-      "description": "高精度离线模型，支持中英日韩粤 5种语言",
-      "tags": ["中文识别率高", "低延时", "低内存占用"],
+      "description": "轻量离线识别，支持中、英、日、韩、粤语",
       "capabilities": {
         "streaming": false,
         "hotwords": false,
@@ -159,8 +281,8 @@
         "language": "auto"
       },
       "name_en": "SenseVoice multilingual",
-      "description_en": "High-accuracy offline model for Chinese, English, Japanese, Korean, and Cantonese",
-      "tags_en": ["High Chinese accuracy", "Low latency", "Low memory"]
+      "description_en": "Lightweight offline recognition for Chinese, English, Japanese, Korean and Cantonese",
+      "languages": ["zh", "en", "ja", "ko", "yue"]
     },
     {
       "id": "sherpa-onnx-funasr-nano-zh-en-ja-int8",
@@ -168,8 +290,7 @@
       "category": "asr",
       "engine": "sherpa-onnx",
       "name": "FunASR-Nano 中英日三语",
-      "description": "基于 FunASR-Nano-2512 的高精度离线模型，支持中英日三语、多种方言及歌词识别",
-      "tags": ["中英日, 方言", "歌词识别", "中文识别高"],
+      "description": "中英日离线识别，兼顾中文方言与歌词",
       "capabilities": {
         "streaming": false,
         "hotwords": true,
@@ -197,8 +318,8 @@
         "itn": true
       },
       "name_en": "FunASR-Nano Chinese/English/Japanese",
-      "description_en": "High-accuracy offline model based on FunASR-Nano-2512; Chinese, English, Japanese, dialects, and lyrics",
-      "tags_en": ["Chinese/English/Japanese, dialects", "Lyrics", "High Chinese accuracy"]
+      "description_en": "Offline Chinese, English and Japanese recognition, including Chinese dialects and lyrics",
+      "languages": ["zh", "en", "ja", "yue", "wuu", "nan", "hak", "gan", "hsn", "cjy"]
     },
     {
       "id": "sherpa-onnx-streaming-zipformer-zh-en",
@@ -206,8 +327,7 @@
       "category": "asr",
       "engine": "sherpa-onnx",
       "name": "Zipformer 流式中英双语",
-      "description": "实时流式本地模型，支持中英双语低延迟识别",
-      "tags": ["中英混说", "低延时", "低内存占用"],
+      "description": "中英混说实时识别，资源占用较低",
       "capabilities": {
         "streaming": true,
         "hotwords": true,
@@ -234,8 +354,8 @@
         "rule3_min_utterance_length": 20
       },
       "name_en": "Zipformer streaming Chinese/English",
-      "description_en": "Real-time local streaming model for Chinese and English with low latency",
-      "tags_en": ["Mixed Chinese/English", "Low latency", "Low memory"]
+      "description_en": "Local live recognition for mixed Chinese and English with low resource usage",
+      "languages": ["zh", "en"]
     },
     {
       "id": "sherpa-onnx-streaming-zipformer-zh-int8",
@@ -243,8 +363,7 @@
       "category": "asr",
       "engine": "sherpa-onnx",
       "name": "Zipformer 流式中文",
-      "description": "实时流式本地模型，中文高精度低延迟识别",
-      "tags": ["低延时", "低内存占用"],
+      "description": "中文实时识别，资源占用较低",
       "capabilities": {
         "streaming": true,
         "hotwords": true,
@@ -270,8 +389,8 @@
         "rule3_min_utterance_length": 0
       },
       "name_en": "Zipformer streaming Chinese",
-      "description_en": "Real-time local streaming model for high-accuracy, low-latency Chinese",
-      "tags_en": ["Low latency", "Low memory"]
+      "description_en": "Local live Chinese recognition with low resource usage",
+      "languages": ["zh"]
     },
     {
       "id": "sherpa-onnx-qwen3-asr-0.6B-int8",
@@ -279,8 +398,7 @@
       "category": "asr",
       "engine": "sherpa-onnx",
       "name": "Qwen3 ASR 多语言",
-      "description": "基于 Qwen3-ASR-0.6B 的多语言语音识别模型，支持31种语言及20种中文方言、歌词/说唱识别",
-      "tags": ["多语言", "中英混说", "中文识别率高"],
+      "description": "30 种语言离线识别，支持 22 种中文方言与歌词",
       "capabilities": {
         "streaming": false,
         "hotwords": true,
@@ -305,8 +423,39 @@
         "seed": 42
       },
       "name_en": "Qwen3 ASR multilingual",
-      "description_en": "Multilingual ASR based on Qwen3-ASR-0.6B: 31 languages, 20 Chinese dialects, lyrics/rap",
-      "tags_en": ["Multilingual", "Mixed Chinese/English", "High Chinese accuracy"]
+      "description_en": "Offline recognition in 30 languages, including 22 Chinese dialects and lyrics",
+      "languages": [
+        "zh",
+        "en",
+        "yue",
+        "ar",
+        "de",
+        "fr",
+        "es",
+        "pt",
+        "id",
+        "it",
+        "ko",
+        "ru",
+        "th",
+        "vi",
+        "ja",
+        "tr",
+        "hi",
+        "ms",
+        "nl",
+        "sv",
+        "da",
+        "fi",
+        "pl",
+        "cs",
+        "fil",
+        "fa",
+        "el",
+        "hu",
+        "mk",
+        "ro"
+      ]
     },
     {
       "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12",
@@ -314,8 +463,7 @@
       "category": "punctuation",
       "engine": "sherpa-onnx",
       "name": "CT-Transformer 标点恢复",
-      "description": "中英双语标点恢复模型，为不支持自动标点的 ASR 模型添加标点符号，下载后自动生效",
-      "tags": ["基础模型"],
+      "description": "为本地识别结果恢复中英文标点，下载后自动生效",
       "architecture": "punct_ct_transformer",
       "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
       "file_size": 20,
@@ -324,8 +472,8 @@
         "model": "model.int8.onnx"
       },
       "name_en": "CT-Transformer punctuation",
-      "description_en": "Chinese/English punctuation restoration; auto-applies to ASR models without punctuation",
-      "tags_en": ["Base model"]
+      "description_en": "Restores Chinese and English punctuation to local transcripts automatically",
+      "languages": ["zh", "en"]
     }
   ]
 }

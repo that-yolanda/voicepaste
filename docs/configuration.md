@@ -170,7 +170,7 @@ ModelEntry
 ├── engine: "volcengine" | "sherpa-onnx"
 ├── name: "Display Name"
 ├── description: "..."
-├── tags: ["tag1", "tag2"]
+├── languages: ["zh", "en"]
 ├── capabilities:
 │   ├── streaming: bool
 │   ├── hotwords: bool

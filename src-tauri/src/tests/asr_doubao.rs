@@ -75,7 +75,7 @@ fn make_error_frame(code: u32, message: &str) -> Vec<u8> {
 
 /// Encode an ack frame (message_type=0x09).
 fn make_ack_frame(seq: u32, payload: &[u8]) -> Vec<u8> {
-    let header = build_header(0x09, 0x00, 0x00, 0x00);
+    let header = build_header(0x09, 0x01, 0x00, 0x00);
     // offset = 4, then +4 for ack → offset = 8
     let seq_bytes = seq.to_be_bytes();
     let size = (payload.len() as u32).to_be_bytes();
@@ -682,12 +682,12 @@ fn make_request_config() -> RequestConfig {
 }
 
 #[test]
-fn request_ssd_version_emitted_when_set() {
+fn request_ignores_saved_ssd_version_without_speaker_separation() {
     let mut cfg = make_request_config();
     cfg.ssd_version = Some("200".into());
     let body = crate::asr::doubao::build_api_request_body(&make_audio_config(), &cfg, &[]);
     let req = body.get("request").unwrap();
-    assert_eq!(req.get("ssd_version").and_then(|v| v.as_str()), Some("200"));
+    assert!(req.get("ssd_version").is_none());
 }
 
 #[test]
@@ -791,4 +791,81 @@ fn request_with_hotwords_includes_corpus() {
     assert_eq!(hw.len(), 2);
     assert_eq!(hw[0]["word"], "Claude Code");
     assert_eq!(hw[1]["word"], "OpenAI");
+}
+
+#[test]
+fn sentence_language_uses_audio_and_normalizes_legacy_code() {
+    let mut cfg = make_request_config();
+    cfg.language = Some("pol".into());
+    cfg.result_type = "single".into();
+    let body = crate::asr::doubao::build_api_request_body(&make_audio_config(), &cfg, &[]);
+    assert_eq!(body["audio"]["language"], "pl-PL");
+    assert!(body["request"].get("language").is_none());
+    assert_eq!(body["request"]["result_type"], "full");
+}
+
+#[test]
+fn hotwords_merge_with_context_without_losing_history_or_tables() {
+    let mut cfg = make_request_config();
+    let context = json!({
+        "context_type": "dialog_ctx",
+        "context_data": [{"text": "Recent conversation"}],
+        "hotwords": [{"word": "VoicePaste"}]
+    })
+    .to_string();
+    cfg.corpus = Some(
+        serde_norway::to_value(json!({
+            "context": context,
+            "context_hotwords": ["VoicePaste", "Rust"],
+            "boosting_table_id": "table-id",
+            "correct_table_id": "corrections-id"
+        }))
+        .unwrap(),
+    );
+    let body = crate::asr::doubao::build_api_request_body(
+        &make_audio_config(),
+        &cfg,
+        &["VoicePaste".into(), "Tauri".into()],
+    );
+    let corpus = &body["request"]["corpus"];
+    assert_eq!(corpus["boosting_table_id"], "table-id");
+    assert_eq!(corpus["correct_table_id"], "corrections-id");
+    let context: Value = serde_json::from_str(corpus["context"].as_str().unwrap()).unwrap();
+    assert_eq!(context["context_type"], "dialog_ctx");
+    assert_eq!(context["context_data"][0]["text"], "Recent conversation");
+    assert_eq!(
+        context["hotwords"],
+        json!([
+            {"word": "VoicePaste"}, {"word": "Tauri"}, {"word": "Rust"}
+        ])
+    );
+}
+
+#[test]
+fn vad_threshold_overrides_semantic_silence_threshold() {
+    let mut cfg = make_request_config();
+    cfg.end_window_size = Some(800);
+    cfg.vad_segment_duration = Some(3000);
+    let body = crate::asr::doubao::build_api_request_body(&make_audio_config(), &cfg, &[]);
+    assert_eq!(body["request"]["end_window_size"], 800);
+    assert!(body["request"].get("vad_segment_duration").is_none());
+}
+
+#[test]
+fn final_packet_flags_work_with_or_without_sequence() {
+    for flags in [0x02, 0x03, 0x07] {
+        let payload = br#"{"result":{"text":"complete"}}"#;
+        let mut frame = build_header(0x09, flags, 0x01, 0x00).to_vec();
+        if flags & 1 != 0 {
+            frame.extend_from_slice(&(-2_i32).to_be_bytes());
+        }
+        if flags & 4 != 0 {
+            frame.extend_from_slice(&1_u32.to_be_bytes());
+        }
+        frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        frame.extend_from_slice(payload);
+        let parsed = crate::asr::doubao::parse_server_response(&frame).unwrap();
+        assert_eq!(parsed["result"]["text"], "complete");
+        assert_eq!(parsed["is_last_package"], true);
+    }
 }

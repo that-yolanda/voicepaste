@@ -48,12 +48,6 @@ pub struct ModelEntry {
     /// English description; the UI falls back to `description` when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description_en: Option<String>,
-    /// Feature tags beyond capabilities.
-    #[serde(default)]
-    pub tags: Vec<String>,
-    /// English tags; the UI falls back to `tags` when absent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tags_en: Option<Vec<String>>,
     /// Capabilities.
     #[serde(default)]
     pub capabilities: Capabilities,
@@ -199,15 +193,8 @@ fn minimal_registry() -> ModelRegistry {
             engine: "volcengine".to_string(),
             name: "火山引擎 - 豆包流式输出大模型".to_string(),
             description: "基于豆包大模型的流式语音识别服务".to_string(),
-            tags: vec![
-                "流式输出".to_string(),
-                "免费可用".to_string(),
-                "热词库".to_string(),
-                "中文,英文,方言".to_string(),
-            ],
             name_en: None,
             description_en: None,
-            tags_en: None,
             capabilities: Capabilities {
                 streaming: true,
                 hotwords: true,
@@ -483,10 +470,8 @@ mod tests {
             engine: "sherpa-onnx".to_string(),
             name: "Test".to_string(),
             description: "Test model".to_string(),
-            tags: vec![],
             name_en: None,
             description_en: None,
-            tags_en: None,
             capabilities: Capabilities {
                 streaming: false,
                 hotwords: false,
@@ -514,10 +499,8 @@ mod tests {
             engine: "volcengine".to_string(),
             name: "Doubao".to_string(),
             description: "Online ASR".to_string(),
-            tags: vec![],
             name_en: None,
             description_en: None,
-            tags_en: None,
             capabilities: Capabilities {
                 streaming: true,
                 hotwords: true,
@@ -537,12 +520,12 @@ mod tests {
     }
 
     #[test]
-    fn embedded_registry_is_version_19() {
+    fn embedded_registry_is_version_20() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 19,
-            "EMBEDDED_REGISTRY version should be 19, got {}",
+            registry.version, 20,
+            "EMBEDDED_REGISTRY version should be 20, got {}",
             registry.version
         );
         assert!(
@@ -562,8 +545,8 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 19,
-            "bundled_registry should return version 19 from embedded, got {}",
+            registry.version, 20,
+            "bundled_registry should return version 20 from embedded, got {}",
             registry.version
         );
     }
@@ -583,7 +566,9 @@ mod tests {
             .find(|m| m.id == "doubao-streaming")
             .expect("doubao entry present");
         assert!(
-            entry.name_en.is_some() && entry.description_en.is_some() && entry.tags_en.is_some(),
+            entry.name_en.is_some()
+                && entry.description_en.is_some()
+                && !entry.languages.is_empty(),
             "English fallback fields must survive the bundled → app-data copy"
         );
     }
@@ -617,10 +602,8 @@ mod tests {
             engine: "sherpa-onnx".to_string(),
             name: "New Model".to_string(),
             description: "A new model".to_string(),
-            tags: vec![],
             name_en: None,
             description_en: None,
-            tags_en: None,
             capabilities: Capabilities {
                 streaming: false,
                 hotwords: false,

@@ -164,8 +164,8 @@
     "accelerate_score": "首字加速率",
     "ssd_version": "SSD 大模型版本",
     "output_zh_variant": "繁体输出",
-    "end_window_size": "强制判停时长 (ms)",
-    "force_to_speech_time": "最短强制判停 (ms)",
+    "end_window_size": "静音判停时长 (ms)",
+    "force_to_speech_time": "起始保护时长 (ms)",
     "vad_segment_duration": "语义切句静音阈值 (ms)",
     "use_itn": "数字格式化 (ITN)",
     "itn": "ITN",
@@ -233,7 +233,23 @@
     "output_zh_variant.options.tw": "台湾正体",
     "output_zh_variant.options.hk": "香港繁体",
     "commit_strategy.options.manual": "手动提交",
-    "commit_strategy.options.vad": "VAD分段"
+    "commit_strategy.options.vad": "VAD分段",
+    "doubao.mode": "识别方式",
+    "doubao.mode.tooltip": "一句话识别：一句话结束后返回稳定文本，准确率优先；支持多语种，适合语音输入和消息转写。\n实时语音识别：边说边显示文字，响应更快；临时结果可能修正，支持中文、方言和英语。",
+    "doubao.mode.sentence": "一句话识别",
+    "doubao.mode.realtime": "实时语音识别",
+    "doubao.resource": "资源类型",
+    "doubao.resource.tooltip": "请选择与火山引擎控制台开通的 2.0 服务一致的资源类型。已有的旧类型会保留，选择新类型后才会修改。",
+    "doubao.resource.duration": "小时版",
+    "doubao.resource.concurrent": "并发版",
+    "doubao.language": "识别语言",
+    "doubao.language.tooltip": "默认识别中文、中文方言和英语。识别其他语言时，请明确选择对应语种；当前不会启用与热词冲突的自动语种检测。",
+    "doubao.language.default": "默认（中英及方言）",
+    "doubao.two_pass": "二遍校正",
+    "doubao.two_pass.tooltip": "先实时显示文字，句子结束后重新识别并修正，提高最终结果的准确率。",
+    "doubao.end_window.tooltip": "连续静音达到此时长后判定一句结束；300–5000 ms，建议 800–1000 ms。设置后，语义切句静音阈值不再生效。",
+    "doubao.force_speech.tooltip": "音频开始后的这段时间内，即使静音也按有声处理，避免过早判停；建议 1000 ms。",
+    "doubao.accelerate.tooltip": "加快第一个字的显示，但可能降低首字准确率。"
   },
   "ui": {
     "hotkey": {
@@ -476,7 +492,9 @@
         "hotwords": "热词库",
         "punctuation": "自动标点",
         "itn": "数字格式化"
-      }
+      },
+      "languages": "支持语言：{{languages}}",
+      "doubao_languages_note": "实时模式支持中文、方言和英语；其他语种需选择一句话识别并指定语言。"
     },
     "audio": {
       "title": "语音识别模型",
@@ -490,7 +508,10 @@
       "base_models": "基础模型",
       "section_sample": "音频采样",
       "section_enhance": "识别强化",
-      "section_offline": "离线模型推理"
+      "section_offline": "离线模型推理",
+      "language_all": "语言：全部",
+      "language_filter": "按支持的语言筛选",
+      "language_no_models": "没有支持所选语言的模型，请调整语言筛选。"
     },
     "feedback": {
       "title": "问题与建议",
