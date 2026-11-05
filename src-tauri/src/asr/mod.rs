@@ -214,6 +214,9 @@ pub async fn test_asr_connection(
         Ok(result) => result,
         Err(_) => Err(AppError::new(AppErrorCode::AsrTestFailed)
             .with_param("provider", provider_id)
-            .with_detail(format!("no lifecycle event within {}s", PROBE_TIMEOUT.as_secs()))),
+            .with_detail(format!(
+                "no lifecycle event within {}s",
+                PROBE_TIMEOUT.as_secs()
+            ))),
     }
 }

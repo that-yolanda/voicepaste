@@ -61,6 +61,11 @@ pub struct ProviderEntry {
     pub name_en: Option<String>,
     pub kind: ProviderKind,
     pub capabilities: Vec<CapabilityKind>,
+    /// Default chat-completions endpoint for LLM-capability providers; shown
+    /// as the placeholder in the credential card and used by llm.rs as the
+    /// fallback when the user leaves the URL empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_llm_url: Option<String>,
     /// "How to apply" documentation URL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub docs_url: Option<String>,
@@ -634,7 +639,10 @@ mod tests {
             .expect("bytedance provider");
         assert!(bytedance.capabilities.contains(&CapabilityKind::Asr));
         assert!(bytedance.capabilities.contains(&CapabilityKind::Llm));
-        let creds = bytedance.credentials.as_ref().expect("bytedance credentials");
+        let creds = bytedance
+            .credentials
+            .as_ref()
+            .expect("bytedance credentials");
         assert!(creds.contains_key("asr") && creds.contains_key("llm"));
         // LLM models exist and are category llm.
         let llm_models = registry
@@ -642,7 +650,10 @@ mod tests {
             .iter()
             .filter(|m| m.category == ModelCategory::Llm)
             .count();
-        assert!(llm_models >= 8, "expected LLM preset models, got {llm_models}");
+        assert!(
+            llm_models >= 8,
+            "expected LLM preset models, got {llm_models}"
+        );
     }
 
     #[test]
@@ -756,6 +767,7 @@ mod tests {
             name_en: None,
             kind: ProviderKind::Online,
             capabilities: vec![CapabilityKind::Llm],
+            default_llm_url: None,
             docs_url: None,
             credentials: None,
         }];

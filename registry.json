@@ -8,19 +8,40 @@
       "name_en": "ByteDance",
       "kind": "online",
       "capabilities": ["asr", "llm"],
+      "default_llm_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
       "docs_url": "https://voicepaste.dev/docs/api/volcengine",
       "credentials": {
         "asr": {
           "fields": [
-            { "key": "url" },
-            { "key": "api_key", "type": "password" },
-            { "key": "app_id" },
-            { "key": "access_token", "type": "password" },
-            { "key": "auth_mode" }
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            },
+            {
+              "key": "app_id"
+            },
+            {
+              "key": "access_token",
+              "type": "password"
+            },
+            {
+              "key": "auth_mode"
+            }
           ]
         },
         "llm": {
-          "fields": [{ "key": "url" }, { "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     },
@@ -32,7 +53,12 @@
       "docs_url": "https://voicepaste.dev/docs/api/elevenlabs",
       "credentials": {
         "asr": {
-          "fields": [{ "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     },
@@ -48,10 +74,19 @@
       "name": "DeepSeek",
       "kind": "online",
       "capabilities": ["llm"],
+      "default_llm_url": "https://api.deepseek.com/v1/chat/completions",
       "docs_url": "https://platform.deepseek.com/api_keys",
       "credentials": {
         "llm": {
-          "fields": [{ "key": "url" }, { "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     },
@@ -60,10 +95,19 @@
       "name": "OpenAI",
       "kind": "online",
       "capabilities": ["llm"],
+      "default_llm_url": "https://api.openai.com/v1/chat/completions",
       "docs_url": "https://platform.openai.com/api-keys",
       "credentials": {
         "llm": {
-          "fields": [{ "key": "url" }, { "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     },
@@ -72,10 +116,19 @@
       "name": "Anthropic",
       "kind": "online",
       "capabilities": ["llm"],
+      "default_llm_url": "https://api.anthropic.com/v1/chat/completions",
       "docs_url": "https://console.anthropic.com/settings/keys",
       "credentials": {
         "llm": {
-          "fields": [{ "key": "url" }, { "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     },
@@ -85,10 +138,19 @@
       "name_en": "Google Gemini",
       "kind": "online",
       "capabilities": ["llm"],
+      "default_llm_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       "docs_url": "https://aistudio.google.com/app/apikey",
       "credentials": {
         "llm": {
-          "fields": [{ "key": "url" }, { "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     },
@@ -97,10 +159,19 @@
       "name": "OpenRouter",
       "kind": "online",
       "capabilities": ["llm"],
+      "default_llm_url": "https://openrouter.ai/api/v1/chat/completions",
       "docs_url": "https://openrouter.ai/settings/keys",
       "credentials": {
         "llm": {
-          "fields": [{ "key": "url" }, { "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     },
@@ -110,10 +181,19 @@
       "name_en": "SiliconFlow",
       "kind": "online",
       "capabilities": ["llm"],
+      "default_llm_url": "https://api.siliconflow.cn/v1/chat/completions",
       "docs_url": "https://cloud.siliconflow.cn/account/ak",
       "credentials": {
         "llm": {
-          "fields": [{ "key": "url" }, { "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     },
@@ -122,9 +202,14 @@
       "name": "Ollama",
       "kind": "local",
       "capabilities": ["llm"],
+      "default_llm_url": "http://localhost:11434/v1/chat/completions",
       "credentials": {
         "llm": {
-          "fields": [{ "key": "url" }]
+          "fields": [
+            {
+              "key": "url"
+            }
+          ]
         }
       }
     },
@@ -136,7 +221,15 @@
       "capabilities": ["llm"],
       "credentials": {
         "llm": {
-          "fields": [{ "key": "url" }, { "key": "api_key", "type": "password" }]
+          "fields": [
+            {
+              "key": "url"
+            },
+            {
+              "key": "api_key",
+              "type": "password"
+            }
+          ]
         }
       }
     }

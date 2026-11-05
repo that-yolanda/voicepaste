@@ -333,13 +333,21 @@ export function onEvent(listener: (event: SettingsEvent) => void): () => void {
 
 // ---- Model management ----
 
-export async function getModelRegistry(): Promise<unknown[]> {
-  const result = await invoke<{ models?: unknown[] } | unknown[]>("get_model_registry");
-  // Backend returns { version, models: [...] }; extract the models array.
-  if (result && typeof result === "object" && "models" in result && Array.isArray(result.models)) {
-    return result.models;
+export interface RegistryPayload {
+  providers: unknown[];
+  models: unknown[];
+}
+
+export async function getModelRegistry(): Promise<RegistryPayload> {
+  const result = await invoke<Partial<RegistryPayload> | unknown[]>("get_model_registry");
+  // Backend returns { version, providers, models }.
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    return {
+      providers: Array.isArray(result.providers) ? result.providers : [],
+      models: Array.isArray(result.models) ? result.models : [],
+    };
   }
-  return Array.isArray(result) ? result : [];
+  return { providers: [], models: Array.isArray(result) ? result : [] };
 }
 
 export async function getDownloadedModels(): Promise<string[]> {
@@ -353,6 +361,14 @@ export async function getDownloadedModels(): Promise<string[]> {
 
 export async function downloadModel(modelId: string): Promise<void> {
   return invoke("download_model", { modelId });
+}
+
+/** Manually probe one provider's connection (settings "测试" button). */
+export async function testProviderConnection(
+  providerId: string,
+  capability: "asr" | "llm",
+): Promise<void> {
+  return invoke("test_provider_connection", { providerId, capability });
 }
 
 export function onModelDownloadProgress(listener: (p: ModelDownloadProgress) => void): () => void {

@@ -68,7 +68,6 @@ import { getSteps, waitForTarget } from "@/settings/onboarding/steps";
 import { useOnboarding } from "@/settings/onboarding/useOnboarding";
 
 function Harness() {
-  const [mode, setMode] = useState("online");
   const [voiceMode, setVoiceMode] = useState("toggle");
   const [section, navigate] = useState<SectionId>("home");
   const onboarding = useOnboarding(navigate);
@@ -80,8 +79,10 @@ function Harness() {
       <span>{section}</span>
       <div data-tour="microphone" />
       <div data-tour="accessibility" />
-      <div data-tour="llm-provider" />
-      <div data-tour="llm-api-key" />
+      <div data-tour="models-defaults" />
+      <div data-tour="models-providers">
+        <input aria-label="API Key" />
+      </div>
       <div data-tour="llm-library">
         <button type="button">模板库</button>
       </div>
@@ -109,17 +110,7 @@ function Harness() {
         <button type="button">结束录音键</button>
       </div>
       <div data-tour="hotkey-templates" />
-      <div data-tour="asr-mode">
-        <button type="button" onClick={() => setMode("online")}>
-          在线模型
-        </button>
-        <button type="button" onClick={() => setMode("offline")}>
-          本地模型
-        </button>
-      </div>
-      <div data-tour="asr-models" data-model-kind={mode}>
-        <input aria-label="API Key" />
-      </div>
+
       {onboarding.guide}
       {onboarding.overlay}
     </>
@@ -192,13 +183,15 @@ describe("setup onboarding", () => {
     render(<Harness />);
     await begin();
     fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择服务商" });
-    const targets = ["llm-provider", "llm-api-key", "llm-library", "llm-add-template"];
+    await screen.findByRole("heading", { name: "选择默认模型" });
+    const targets = ["models-defaults", "models-providers", "llm-library", "llm-add-template"];
     for (let step = 0; step < index; step++) {
       fireEvent.click(await screen.findByRole("button", { name: "下一步" }));
       await waitFor(() => expect(lastDriver().drive).toHaveBeenCalledWith(step + 1));
     }
-    expect(screen.getByText(index >= 2 ? "templates" : "llm", { exact: true })).toBeInTheDocument();
+    expect(
+      screen.getByText(index >= 2 ? "templates" : "models", { exact: true }),
+    ).toBeInTheDocument();
     expect(lastDriver().config.steps?.[index].element).toBe(
       document.querySelector(`[data-tour="${targets[index]}"]`),
     );
@@ -218,12 +211,12 @@ describe("setup onboarding", () => {
     await waitFor(() => expect(mocks.drivers).toHaveLength(1));
     act(() => lastDriver().config.onDoneClick?.(undefined, {} as never, {} as never));
     fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择服务商" });
+    await screen.findByRole("heading", { name: "选择默认模型" });
     try {
       await act(async () => {
         await i18next.changeLanguage("en");
       });
-      await screen.findByRole("heading", { name: "Choose a provider" });
+      await screen.findByRole("heading", { name: "Pick default models" });
       for (let index = 0; index < 3; index++) {
         fireEvent.click(await screen.findByRole("button", { name: "Next" }));
       }
@@ -263,9 +256,9 @@ describe("setup onboarding", () => {
     render(<Harness />);
     await begin();
     fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择服务商" });
+    await screen.findByRole("heading", { name: "选择默认模型" });
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-    await screen.findByRole("heading", { name: "填写 API Key" });
+    await screen.findByRole("heading", { name: "进入供应商配置" });
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
     await screen.findByRole("heading", { name: "从模板库添加" });
     expect(screen.getByRole("button", { name: "模板库" })).toHaveFocus();
@@ -344,30 +337,26 @@ describe("setup onboarding", () => {
     await waitFor(() => expect(document.querySelector(".voicepaste-checklist")).toBeNull());
   });
 
-  it("keeps ASR configuration interactive and updates instructions when switching modes", async () => {
+  it("keeps ASR guidance interactive while the provider list stays on screen", async () => {
     render(<Harness />);
     await begin();
     fireEvent.click(screen.getByRole("button", { name: "语音识别模型" }));
     await waitFor(() => expect(mocks.drivers).toHaveLength(1));
     act(() => lastDriver().config.onNextClick?.(undefined, {} as never, {} as never));
-    await screen.findByRole("heading", { name: "启用在线模型" });
+    await screen.findByRole("heading", { name: "进入供应商配置" });
     expect(mocks.drivers).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "收起说明" }));
     expect(screen.queryByRole("button", { name: "完成此项" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "本地模型" }));
-    await screen.findByRole("heading", { name: "启用本地模型" });
     fireEvent.click(screen.getByRole("button", { name: "展开说明" }));
     expect(screen.getByRole("button", { name: "完成此项" })).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "在线模型" }));
-    await screen.findByRole("heading", { name: "启用在线模型" });
     const input = screen.getByRole("textbox", { name: "API Key" });
     fireEvent.change(input, { target: { value: "test-key" } });
     fireEvent.keyUp(input, { key: "ArrowRight" });
     expect(input).toHaveValue("test-key");
-    expect(screen.getByRole("heading", { name: "启用在线模型" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "进入供应商配置" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "上一步" }));
     await waitFor(() => expect(mocks.drivers).toHaveLength(2));
-    expect(screen.queryByRole("heading", { name: "启用在线模型" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "进入供应商配置" })).not.toBeInTheDocument();
     act(() => lastDriver().config.onNextClick?.(undefined, {} as never, {} as never));
     fireEvent.click(await screen.findByRole("button", { name: "完成此项" }));
     expect(document.querySelectorAll(".driver-checklist-item-done")).toHaveLength(1);
@@ -378,9 +367,9 @@ describe("setup onboarding", () => {
     await begin();
     const openConfig = async () => {
       fireEvent.click(screen.getByRole("button", { name: "语音识别模型" }));
-      await screen.findByRole("heading", { name: "选择语音识别方式" });
+      await screen.findByRole("heading", { name: "选择默认模型" });
       fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-      await screen.findByRole("heading", { name: "启用在线模型" });
+      await screen.findByRole("heading", { name: "进入供应商配置" });
     };
     await openConfig();
     fireEvent.click(screen.getByRole("button", { name: "返回配置清单" }));
@@ -388,7 +377,7 @@ describe("setup onboarding", () => {
     expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
     await openConfig();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("heading", { name: "启用在线模型" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "进入供应商配置" })).not.toBeInTheDocument();
   });
 
   it("unmount cancels an outstanding target wait and removes the checklist", async () => {

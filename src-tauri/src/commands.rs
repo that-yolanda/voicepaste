@@ -839,8 +839,14 @@ pub async fn test_provider_connection(
             crate::llm::test_provider_connection(&probe, &registry).await?;
         }
         "asr" => {
-            crate::asr::test_asr_connection(&config, &registry, data_dir, resource_dir, &provider_id)
-                .await?;
+            crate::asr::test_asr_connection(
+                &config,
+                &registry,
+                data_dir,
+                resource_dir,
+                &provider_id,
+            )
+            .await?;
         }
         _ => {
             return Err(AppError::new(AppErrorCode::InvalidConfig)

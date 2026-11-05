@@ -23,6 +23,10 @@
             "type": "array",
             "items": { "type": "string", "enum": ["asr", "llm"] }
           },
+          "default_llm_url": {
+            "type": "string",
+            "description": "Default chat-completions endpoint for LLM-capability providers."
+          },
           "docs_url": { "type": "string" },
           "credentials": {
             "type": "object",

@@ -457,12 +457,6 @@ export function isModelFieldVisible(
   );
 }
 
-export function credentialHelpUrl(modelId: string): string {
-  return modelId === ELEVENLABS_MODEL_ID
-    ? "https://voicepaste.dev/docs/api/elevenlabs"
-    : "https://voicepaste.dev/docs/api/volcengine";
-}
-
 /** Infer a control type from the value when FIELD_META omits `type`. */
 export function inferControlType(key: string, value: unknown): ControlType {
   if (typeof value === "boolean") return "toggle";

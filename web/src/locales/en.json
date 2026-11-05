@@ -277,8 +277,6 @@
       "app": "Settings",
       "permissions": "Permissions",
       "hotkey": "Hotkeys",
-      "audio": "Speech models",
-      "llm": "Language models",
       "hotwords": "Hotwords",
       "feedback": "Feedback",
       "help": "Help",
@@ -289,7 +287,8 @@
       "templates": "Polishing templates",
       "support": "Help & feedback",
       "navigation": "Navigation",
-      "general": "General settings"
+      "general": "General settings",
+      "models_service": "Model Services"
     },
     "heatmap": {
       "title": "Usage",
@@ -339,14 +338,6 @@
       "add": "Add"
     },
     "llm": {
-      "title": "Text polishing",
-      "description": "Refine and structure your transcript. Set template shortcuts in Hotkeys.",
-      "api_config": "Provider",
-      "model": "Provider",
-      "url": "URL",
-      "api_key": "API Key",
-      "model_id": "Model ID",
-      "prompts": "Templates",
       "add_template": "Add",
       "builtin_prompts": "Template library",
       "new_template": "New template",
@@ -356,18 +347,7 @@
       "no_builtin": "No preset templates.",
       "empty_content": "(Empty)",
       "untitled": "Untitled template",
-      "add": "Add",
-      "provider": {
-        "deepseek": "DeepSeek",
-        "openai": "OpenAI",
-        "openrouter": "OpenRouter",
-        "siliconflow": "SiliconFlow",
-        "gemini": "Gemini",
-        "anthropic": "Anthropic",
-        "ollama": "Ollama (local)",
-        "custom": "Custom"
-      },
-      "model_description": "Configure the provider and model used for text polishing."
+      "add": "Add"
     },
     "hotkey_page": {
       "title": "Hotkeys",
@@ -483,10 +463,6 @@
       "tooltip_help": "{{title}} help"
     },
     "model": {
-      "how_to_get_credentials": "API setup guide",
-      "model_file": "Model file {{size}}",
-      "memory_peak": "Peak memory {{size}}",
-      "config": "Configure",
       "reset": "Reset",
       "more_params": "More options",
       "capability": {
@@ -494,26 +470,14 @@
         "hotwords": "Hotwords",
         "punctuation": "Auto punctuation",
         "itn": "Number formatting"
-      },
-      "languages": "Supported languages: {{languages}}",
-      "doubao_languages_note": "Live mode supports Chinese, Chinese dialects and English. For other languages, use sentence recognition and select the language."
+      }
     },
     "audio": {
-      "title": "Speech models",
-      "current": "Current: {{name}}",
-      "native": "Native support",
-      "other": "Available via other methods",
-      "online": "Online",
-      "offline": "Local",
       "custom_config": "Configuration",
-      "no_offline_models": "No local models available",
       "base_models": "Base models",
       "section_sample": "Audio sampling",
       "section_enhance": "Recognition",
-      "section_offline": "Offline inference",
-      "language_all": "Language: all",
-      "language_filter": "Filter by supported language",
-      "language_no_models": "No models support the selected language. Adjust the language filter."
+      "section_offline": "Offline inference"
     },
     "feedback": {
       "title": "Feedback",
@@ -643,18 +607,6 @@
           "title": "Allow Accessibility access",
           "description": "Enable VoicePaste under Accessibility in system settings. Return and click Check."
         },
-        "asrMode": {
-          "title": "Choose a speech model",
-          "description": "Online models require your own API key. Local models work after download."
-        },
-        "asrOnline": {
-          "title": "Enable an online model",
-          "description": "Choose a model. Open Configure, enter your API key and any other required details, then turn it on. See API setup guide for help."
-        },
-        "asrOffline": {
-          "title": "Enable a local model",
-          "description": "Choose a model and click the download icon. Once downloaded, turn it on. You can keep the default settings."
-        },
         "hotkeyMain": {
           "title": "Recording hotkey",
           "description": "Voice input and all polishing templates share this start key in Tap (hands-free) mode."
@@ -662,14 +614,6 @@
         "hotkeyVoice": {
           "title": "Choose a voice input mode",
           "description": "Tap: press the recording hotkey to start, then the stop key to finish. Hold: hold the shortcut to record and release to finish. Press Esc anytime while recording to cancel."
-        },
-        "llmProvider": {
-          "title": "Choose a provider",
-          "description": "Choose a provider for translation or polishing. Skip this task if you only need transcription."
-        },
-        "llmApiKey": {
-          "title": "Enter an API key",
-          "description": "Enter your provider’s API key, then click outside to save."
         },
         "llmLibrary": {
           "title": "Browse templates",
@@ -698,11 +642,78 @@
         "hotkeyTemplates": {
           "title": "Set template shortcuts",
           "description": "Each template has its own mode. Tap shares the recording hotkey and has an editable stop key that applies the template. Hold uses the template’s own shortcut."
+        },
+        "modelsDefaults": {
+          "title": "Pick default models",
+          "description": "Choose the default speech and text-polish models at the top of Model Services."
+        },
+        "modelsProviders": {
+          "title": "Open a provider",
+          "description": "Click a provider to fill in its credentials and manage its models."
         }
       }
     },
     "loading": "Loading…",
     "load_failed": "Could not load. Please retry.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "models": {
+      "current_defaults": "Current defaults",
+      "provider_list": "Providers",
+      "no_providers": "No providers under this filter",
+      "filter_all": "All",
+      "filter_online": "Online",
+      "filter_local": "Local",
+      "tag_asr": "Speech",
+      "tag_llm": "Text",
+      "tag_local": "Local",
+      "tab_asr": "Speech recognition",
+      "tab_llm": "LLM",
+      "add_provider": "Add provider",
+      "add_provider_empty": "Every built-in provider is already added",
+      "back_to_services": "Model services",
+      "capabilities": "Capability",
+      "how_to_apply": "How to apply",
+      "remove_provider": "Remove",
+      "remove_provider_confirm": "This removes {provider} and all of its configuration (including API keys). Downloaded local model files are kept. Remove it?",
+      "credentials": "Credentials",
+      "credentials_filled": "Credentials configured",
+      "test": "Test",
+      "test_ok": "{provider} connection succeeded",
+      "asr_models": "Speech recognition models",
+      "llm_models": "LLM models",
+      "no_models": "No models yet — add one to get started",
+      "add_model": "Add model",
+      "add_model_presets": "Restore preset models",
+      "add_model_custom": "Add a custom model",
+      "add_model_empty": "No preset models to restore",
+      "restore": "Restore",
+      "add": "Add",
+      "hint": "Tip",
+      "custom_model_hint": "Custom models must match the provider's OpenAI-compatible API; use the model id your service expects.",
+      "model_id": "Model ID",
+      "model_id_placeholder": "e.g. qwen3.5:8b",
+      "model_id_description": "The model string actually sent; leave empty to use the preset value.",
+      "model_name": "Display name",
+      "model_name_placeholder": "Shown name for this model",
+      "model_config": "Model configuration",
+      "done": "Done",
+      "remove_model": "Remove model",
+      "delete_files": "Delete model files",
+      "no_config_fields": "No configurable parameters for this model",
+      "default_badge": "Default",
+      "custom_model": "Custom",
+      "downloaded": "Downloaded",
+      "not_downloaded": "Not downloaded",
+      "download": "Download",
+      "configure_model": "Configure {model}",
+      "inference_params": "Inference parameters",
+      "inference_params_hint": "Only explicitly set values are sent; empty fields use the service defaults.",
+      "param_temperature": "Temperature",
+      "param_temperature.tooltip": "Lower is more stable, higher more creative.",
+      "param_max_tokens": "Max tokens",
+      "param_max_tokens.tooltip": "Maximum tokens per response.",
+      "param_top_p": "Top P",
+      "param_top_p.tooltip": "Nucleus sampling range, 0–1."
+    }
   }
 }

@@ -9,12 +9,11 @@ import { applyTheme, initialTheme, isThemePref } from "@/settings/lib/theme";
 import { useOnboarding } from "@/settings/onboarding/useOnboarding";
 import { AboutPage } from "@/settings/pages/AboutPage";
 import { AppSettingsPage } from "@/settings/pages/AppSettingsPage";
-import { AudioModelPage } from "@/settings/pages/AudioModelPage";
 import { FeedbackPage } from "@/settings/pages/FeedbackPage";
 import { HomePage } from "@/settings/pages/HomePage";
 import { HotkeyPage } from "@/settings/pages/HotkeyPage";
 import { HotwordsPage } from "@/settings/pages/HotwordsPage";
-import { LLMPage } from "@/settings/pages/LLMPage";
+import { ModelServicesPage } from "@/settings/pages/models/ModelServicesPage";
 import { TemplatesPage } from "@/settings/pages/TemplatesPage";
 import { SettingsProvider, useSettings } from "@/settings/SettingsProvider";
 
@@ -84,8 +83,7 @@ function SettingsShell() {
                   {section === "app" && <AppSettingsPage />}
                   {section === "templates" && <TemplatesPage />}
                   {section === "hotkey" && <HotkeyPage />}
-                  {section === "service" && <AudioModelPage />}
-                  {section === "llm" && <LLMPage />}
+                  {section === "models" && <ModelServicesPage />}
                   {section === "hotwords" && <HotwordsPage />}
                   {section === "about" && <AboutPage />}
                   {section === "feedback" && <FeedbackPage feedback={feedback} />}

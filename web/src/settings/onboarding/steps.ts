@@ -6,8 +6,8 @@ export const TASKS = ["permissions", "asr", "llm", "hotkey"] as const;
 export type TaskId = (typeof TASKS)[number];
 export const TASK_SECTION: Record<TaskId, SectionId> = {
   permissions: "app",
-  asr: "service",
-  llm: "llm",
+  asr: "models",
+  llm: "models",
   hotkey: "hotkey",
 };
 
@@ -33,11 +33,14 @@ export function getSteps(
         ...(isMac ? [step("accessibility", "accessibility")] : []),
       ];
     case "asr":
-      return [step("asr-mode", "asrMode"), step("asr-models", "asrOnline")];
+      return [
+        step("models-defaults", "modelsDefaults"),
+        step("models-providers", "modelsProviders"),
+      ];
     case "llm":
       return [
-        step("llm-provider", "llmProvider"),
-        step("llm-api-key", "llmApiKey"),
+        step("models-defaults", "modelsDefaults"),
+        step("models-providers", "modelsProviders"),
         step("llm-library", "llmLibrary"),
         step("llm-add-template", "llmTemplateCreate"),
       ];
@@ -60,7 +63,8 @@ export function waitForTarget(selector: string, signal: AbortSignal): Promise<El
   return new Promise((resolve, reject) => {
     const find = () => {
       const target = document.querySelector(selector);
-      return target?.getAttribute("data-tour") === "asr-models" && !target.children.length
+      // A provider list that is still loading renders no children.
+      return target?.getAttribute("data-tour") === "models-providers" && !target.children.length
         ? null
         : target;
     };

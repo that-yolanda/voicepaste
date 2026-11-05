@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::config::{AppConfig, LlmConfig, LlmModelParams, ProviderConfig, PromptItem};
+use crate::config::{AppConfig, LlmConfig, LlmModelParams, PromptItem, ProviderConfig};
 use crate::errors::{AppError, AppErrorCode};
 use crate::model::{ModelCategory, ModelRegistry};
 
@@ -96,7 +96,11 @@ fn preset_request_id(registry: &ModelRegistry, provider: &str, model_id: &str) -
 /// Models visible for a provider. When the config carries a `models` list
 /// (even empty), that list is the truth — removals included; otherwise the
 /// registry presets for the provider are shown.
-fn visible_models(config: &LlmConfig, registry: &ModelRegistry, provider: &str) -> Vec<VisibleModel> {
+fn visible_models(
+    config: &LlmConfig,
+    registry: &ModelRegistry,
+    provider: &str,
+) -> Vec<VisibleModel> {
     if let Some(entries) = provider_config(config, provider).and_then(|p| p.models.as_ref()) {
         return entries
             .iter()
@@ -114,9 +118,7 @@ fn visible_models(config: &LlmConfig, registry: &ModelRegistry, provider: &str) 
     registry
         .models
         .iter()
-        .filter(|m| {
-            m.provider.as_deref() == Some(provider) && m.category == ModelCategory::Llm
-        })
+        .filter(|m| m.provider.as_deref() == Some(provider) && m.category == ModelCategory::Llm)
         .map(|m| VisibleModel {
             id: m.id.clone(),
             request_id: preset_request_id(registry, provider, &m.id)
@@ -173,10 +175,7 @@ fn resolve_active_model(
 /// Validate that LLM configuration has the minimum required fields. The error
 /// carries `llm.<provider>.<field>` as the `field` param so the receiving side
 /// can point the user at the exact setting.
-pub fn validate_llm_config(
-    config: &LlmConfig,
-    registry: &ModelRegistry,
-) -> Result<(), AppError> {
+pub fn validate_llm_config(config: &LlmConfig, registry: &ModelRegistry) -> Result<(), AppError> {
     let resolved = resolve_endpoint(config, registry)?;
     if resolved.api_key.is_empty() && config.provider != "ollama" {
         return Err(llm_config_error(&config.provider, "api_key"));
@@ -796,8 +795,7 @@ pub async fn test_provider_connection(
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        let body =
-            crate::logger::redact_credentials(&body, &[&resolved.api_key, &resolved.url]);
+        let body = crate::logger::redact_credentials(&body, &[&resolved.api_key, &resolved.url]);
         return Err(classify_http_error(status.as_u16(), &body));
     }
     Ok(())
@@ -1173,7 +1171,9 @@ mod tests {
         let mut config = make_llm_config("openai");
         config.url = Some(server.uri());
         config.api_key = Some(api_key.into());
-        let error = call_llm_once(&config, &empty_registry(), "text", "prompt").await.unwrap_err();
+        let error = call_llm_once(&config, &empty_registry(), "text", "prompt")
+            .await
+            .unwrap_err();
         assert_eq!(error.code, AppErrorCode::LlmAuthInvalid);
         assert_eq!(error.detail.as_deref(), Some("Invalid API key: [REDACTED]"));
         assert!(!error.to_string().contains(api_key));
@@ -1190,7 +1190,9 @@ mod tests {
         let mut config = make_llm_config("gemini");
         config.url = Some(endpoint);
         config.api_key = Some("private-gemini-credential".into());
-        let error = call_llm_once(&config, &empty_registry(), "text", "prompt").await.unwrap_err();
+        let error = call_llm_once(&config, &empty_registry(), "text", "prompt")
+            .await
+            .unwrap_err();
         assert_eq!(error.code, AppErrorCode::LlmNetwork);
         let detail = error.detail.as_deref().unwrap_or_default();
         assert!(!detail.contains("private-"));
@@ -1242,7 +1244,10 @@ mod tests {
     #[test]
     fn new_defaults_preserve_saved_models_and_legacy_request_parameters() {
         let config = make_openai_config();
-        assert_eq!(resolve_endpoint(&config, &empty_registry()).unwrap().model, "gpt-4.1-mini");
+        assert_eq!(
+            resolve_endpoint(&config, &empty_registry()).unwrap().model,
+            "gpt-4.1-mini"
+        );
         for (provider, model) in [
             ("openai", "gpt-4.1-mini"),
             ("openrouter", "openai/gpt-4o-mini"),
@@ -1270,9 +1275,11 @@ mod tests {
     #[test]
     fn openai_reasoning_param_is_gated_on_the_model() {
         // gpt-4.1 rejects reasoning_effort with a 400; o-series accepts it.
-        assert!(build_request_body("openai", "gpt-4.1-mini", "sys", "hi", None)
-            .get("reasoning_effort")
-            .is_none());
+        assert!(
+            build_request_body("openai", "gpt-4.1-mini", "sys", "hi", None)
+                .get("reasoning_effort")
+                .is_none()
+        );
         assert_eq!(
             build_request_body("openai", "o3-mini", "sys", "hi", None)["reasoning_effort"],
             json!("minimal")
@@ -1393,22 +1400,10 @@ mod tests {
 
     #[test]
     fn bytedance_seed_models_disable_thinking() {
-        let body = build_request_body(
-            "bytedance",
-            "doubao-seed-1-6-250615",
-            "sys",
-            "hi",
-            None,
-        );
+        let body = build_request_body("bytedance", "doubao-seed-1-6-250615", "sys", "hi", None);
         assert_eq!(body["thinking"]["type"], json!("disabled"));
         // Older 1.5 models reject unknown params — no thinking switch for them.
-        let body = build_request_body(
-            "bytedance",
-            "doubao-1-5-pro-32k-250115",
-            "sys",
-            "hi",
-            None,
-        );
+        let body = build_request_body("bytedance", "doubao-1-5-pro-32k-250115", "sys", "hi", None);
         assert!(body.get("thinking").is_none());
     }
 
@@ -1427,7 +1422,9 @@ mod tests {
         let mut config = make_llm_config("openai");
         config.url = Some(server.uri());
         config.api_key = Some("probe-key".into());
-        assert!(test_provider_connection(&config, &empty_registry()).await.is_ok());
+        assert!(test_provider_connection(&config, &empty_registry())
+            .await
+            .is_ok());
     }
 
     #[tokio::test]

@@ -277,8 +277,6 @@
       "app": "设置",
       "permissions": "系统权限",
       "hotkey": "快捷键",
-      "audio": "语音识别模型",
-      "llm": "大语言模型",
       "hotwords": "热词库",
       "feedback": "问题与建议",
       "help": "帮助说明",
@@ -289,7 +287,8 @@
       "templates": "润色模板",
       "support": "帮助与反馈",
       "navigation": "导航",
-      "general": "通用设置"
+      "general": "通用设置",
+      "models_service": "模型服务"
     },
     "heatmap": {
       "title": "使用统计",
@@ -339,14 +338,6 @@
       "add": "添加"
     },
     "llm": {
-      "title": "文本润色",
-      "description": "用于语音识别后的文本润色与文本结构化，触发请前往「快捷键」页面配置对应提示词的快捷键",
-      "api_config": "供应商",
-      "model": "服务商",
-      "url": "URL",
-      "api_key": "API Key",
-      "model_id": "模型ID",
-      "prompts": "文本润色模板",
       "add_template": "添加",
       "builtin_prompts": "模板库",
       "new_template": "新建润色模板",
@@ -356,18 +347,7 @@
       "no_builtin": "暂无内置润色模板。",
       "empty_content": "（无内容）",
       "untitled": "未命名模板",
-      "add": "添加",
-      "provider": {
-        "deepseek": "DeepSeek",
-        "openai": "OpenAI",
-        "openrouter": "OpenRouter",
-        "siliconflow": "硅基流动",
-        "gemini": "Gemini",
-        "anthropic": "Anthropic",
-        "ollama": "Ollama 本地",
-        "custom": "自定义"
-      },
-      "model_description": "配置文本润色使用的服务商与模型。"
+      "add": "添加"
     },
     "hotkey_page": {
       "title": "快捷键",
@@ -483,10 +463,6 @@
       "tooltip_help": "{{title}}说明"
     },
     "model": {
-      "how_to_get_credentials": "API 申请指南",
-      "model_file": "模型文件 {{size}}",
-      "memory_peak": "内存峰值 {{size}}",
-      "config": "参数配置",
       "reset": "恢复默认",
       "more_params": "更多参数",
       "capability": {
@@ -494,26 +470,14 @@
         "hotwords": "热词库",
         "punctuation": "自动标点",
         "itn": "数字格式化"
-      },
-      "languages": "支持语言：{{languages}}",
-      "doubao_languages_note": "实时模式支持中文、方言和英语；其他语种需选择一句话识别并指定语言。"
+      }
     },
     "audio": {
-      "title": "语音识别模型",
-      "current": "当前：{{name}}",
-      "native": "原生支持",
-      "other": "其他方式支持",
-      "online": "在线模型",
-      "offline": "本地模型",
       "custom_config": "自定义配置",
-      "no_offline_models": "暂无可用本地模型",
       "base_models": "基础模型",
       "section_sample": "音频采样",
       "section_enhance": "识别强化",
-      "section_offline": "离线模型推理",
-      "language_all": "语言：全部",
-      "language_filter": "按支持的语言筛选",
-      "language_no_models": "没有支持所选语言的模型，请调整语言筛选。"
+      "section_offline": "离线模型推理"
     },
     "feedback": {
       "title": "问题与建议",
@@ -643,18 +607,6 @@
           "title": "开启辅助功能权限",
           "description": "前往系统设置，开启 VoicePaste 的辅助功能权限。返回后点击「检测」确认。"
         },
-        "asrMode": {
-          "title": "选择语音识别方式",
-          "description": "在线模型需自行申请 API Key；本地模型下载后即可使用。"
-        },
-        "asrOnline": {
-          "title": "启用在线模型",
-          "description": "选择一个模型，在「参数配置」中填写 API Key 等信息，再打开右上角开关。申请方法见「API 申请指南」。"
-        },
-        "asrOffline": {
-          "title": "启用本地模型",
-          "description": "选择一个模型，点击下载图标，下载完成后打开右上角开关。参数可保持默认。"
-        },
         "hotkeyMain": {
           "title": "了解语音唤醒键",
           "description": "语音输入和各个润色模板在免提模式下，都用这个按键开始录音。"
@@ -662,14 +614,6 @@
         "hotkeyVoice": {
           "title": "选择语音输入模式",
           "description": "免提：按一下唤醒键开始录音，再按结束键停止。按住说话：按住快捷键录音，松开即结束。录音中按 Esc 可随时取消。"
-        },
-        "llmProvider": {
-          "title": "选择服务商",
-          "description": "选择你要使用的服务商。翻译和润色需要大语言模型；只需语音转文字可跳过此项。"
-        },
-        "llmApiKey": {
-          "title": "填写 API Key",
-          "description": "填写所选服务商的 API Key，点击其他位置保存。"
         },
         "llmLibrary": {
           "title": "从模板库添加",
@@ -698,11 +642,78 @@
         "hotkeyTemplates": {
           "title": "为润色模板设置快捷键",
           "description": "每个模板都可单独选择模式。免提共用语音唤醒键，结束键可单独修改，按下后结束录音并按该模板处理文字；按住说话则使用该模板自己的快捷键。"
+        },
+        "modelsDefaults": {
+          "title": "选择默认模型",
+          "description": "在「模型服务」顶部选择语音识别与文本润色的默认模型。"
+        },
+        "modelsProviders": {
+          "title": "进入供应商配置",
+          "description": "点击供应商进入详情，填写接入凭证并管理它的模型列表。"
         }
       }
     },
     "loading": "加载中…",
     "load_failed": "加载失败，请重试。",
-    "retry": "重试"
+    "retry": "重试",
+    "models": {
+      "current_defaults": "当前默认",
+      "provider_list": "供应商列表",
+      "no_providers": "该筛选下没有供应商",
+      "filter_all": "全部",
+      "filter_online": "在线",
+      "filter_local": "本地",
+      "tag_asr": "语音",
+      "tag_llm": "文本",
+      "tag_local": "本地",
+      "tab_asr": "语音识别",
+      "tab_llm": "大语言",
+      "add_provider": "添加供应商",
+      "add_provider_empty": "所有内置供应商都已添加",
+      "back_to_services": "模型服务",
+      "capabilities": "能力类型",
+      "how_to_apply": "如何申请",
+      "remove_provider": "移除",
+      "remove_provider_confirm": "将移除「{provider}」及其全部配置（含 API Key）。已下载的本地模型文件会保留。确定移除吗？",
+      "credentials": "接入凭证",
+      "credentials_filled": "凭证已配置",
+      "test": "测试",
+      "test_ok": "{provider} 连接成功",
+      "asr_models": "语音识别模型",
+      "llm_models": "大语言模型",
+      "no_models": "暂无模型，点击「添加模型」加入",
+      "add_model": "添加模型",
+      "add_model_presets": "恢复预置模型",
+      "add_model_custom": "添加自定义模型",
+      "add_model_empty": "没有可恢复的预置模型",
+      "restore": "恢复",
+      "add": "添加",
+      "hint": "提示",
+      "custom_model_hint": "自定义模型需与该服务的 OpenAI 兼容接口匹配，model id 以实际服务为准。",
+      "model_id": "Model ID",
+      "model_id_placeholder": "例如 qwen3.5:8b",
+      "model_id_description": "实际请求的模型标识；留空使用预置值。",
+      "model_name": "显示名称",
+      "model_name_placeholder": "模型的显示名称",
+      "model_config": "模型配置",
+      "done": "完成",
+      "remove_model": "移除模型",
+      "delete_files": "删除模型文件",
+      "no_config_fields": "该模型暂无可配置参数",
+      "default_badge": "默认",
+      "custom_model": "自定义",
+      "downloaded": "已下载",
+      "not_downloaded": "未下载",
+      "download": "下载",
+      "configure_model": "配置 {model}",
+      "inference_params": "推理参数",
+      "inference_params_hint": "仅显式设置的参数会随请求发送，留空使用服务默认值。",
+      "param_temperature": "温度",
+      "param_temperature.tooltip": "越低越稳定，越高越发散。",
+      "param_max_tokens": "最大输出长度",
+      "param_max_tokens.tooltip": "单次回复的最大 token 数。",
+      "param_top_p": "Top P",
+      "param_top_p.tooltip": "核采样范围，0–1。"
+    }
   }
 }

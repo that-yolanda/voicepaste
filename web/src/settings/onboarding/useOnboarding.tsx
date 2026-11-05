@@ -213,7 +213,7 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
           setGuide({
             task,
             index,
-            key: target.getAttribute("data-model-kind") === "offline" ? "asrOffline" : "asrOnline",
+            key: "modelsProviders",
             previous: () => void run(task, index - 1),
             next: index === steps.length - 1 ? complete : () => void run(task, index + 1),
             close: stop,
@@ -339,22 +339,13 @@ export function useOnboarding(navigate: (section: SectionId) => void) {
         records.some((record) => record.attributeName === "data-voice-mode")
       ) {
         void run("hotkey", 3);
-      } else if (inlineActive && current.current?.task === "asr") {
-        const key =
-          document.querySelector('[data-tour="asr-models"]')?.getAttribute("data-model-kind") ===
-          "offline"
-            ? "asrOffline"
-            : "asrOnline";
-        setGuide((previous) =>
-          previous && previous.key !== key ? { ...previous, key } : previous,
-        );
       }
     });
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["data-model-kind", "data-voice-mode"],
+      attributeFilter: ["data-voice-mode"],
     });
     const onEscape = (event: KeyboardEvent) => {
       if (document.querySelector("[data-settings-dialog]")) return;

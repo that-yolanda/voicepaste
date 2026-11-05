@@ -138,4 +138,7 @@ Controls whether hotwords are appended to the LLM system prompt (useful when the
 
 4. **Add auth logic** in `call_llm_api()` if the provider uses non-standard authentication.
 
-5. **Update frontend** `LLMPage.tsx` to show the new provider option.
+5. **Registry data**: add a provider entry (`credentials.llm` field declarations +
+   `default_llm_url`) and its preset LLM models to `registry.json` — the settings
+   UI (Model Services) picks them up without frontend code changes. Only a
+   provider with non-standard auth needs code (step 4).

@@ -29,16 +29,21 @@ web/
 │   │   │   ├── Modal.tsx · SegmentedControl.tsx · Badge.tsx
 │   │   │   ├── Heatmap.tsx       #   Calendar heatmap (stats)
 │   │   │   ├── KeyCap.tsx        #   Keyboard key display (native modifier glyphs)
-│   │   │   └── ModelCard.tsx · ThemeSelector.tsx
+│   │   │   ├── Drawer.tsx        #   Right-side sheet (model config)
+│   │   │   └── ThemeSelector.tsx
+│   │   │   models/             #   Model-services subcomponents
+│   │   │   ├── AddProviderModal.tsx · AddModelModal.tsx
+│   │   │   ├── ModelConfigDrawer.tsx · FieldControl.tsx
 │   │   ├── layout/
 │   │   │   ├── PageLayout.tsx    #   Page wrapper
 │   │   │   └── Sidebar.tsx       #   Navigation sidebar
 │   │   ├── lib/                  #   Pure utilities (format, hotkey, hotwords, model, sound, clone)
-│   │   ├── pages/                #   Settings pages (9 tabs)
+│   │   ├── pages/                #   Settings pages (8 tabs)
 │   │   │   ├── HomePage.tsx      #   Stats + heatmap
-│   │   │   ├── AudioModelPage.tsx #  ASR provider + model management
 │   │   │   ├── HotkeyPage.tsx    #   Hotkey configuration + recording
-│   │   │   ├── LLMPage.tsx       #   LLM provider + prompt config
+│   │   │   ├── models/           #   Model services (provider → capability → models)
+│   │   │   │   ├── ModelServicesPage.tsx    # provider list + defaults
+│   │   │   │   └── ProviderDetailPage.tsx   # credentials + model list
 │   │   │   ├── AppSettingsPage.tsx #  Theme, overlay style, sounds
 │   │   │   ├── HotwordsPage.tsx  #   Hotword library management
 │   │   │   ├── PermissionsPage.tsx #  Mic + accessibility checks
@@ -64,9 +69,8 @@ SettingsApp
         ├── Sidebar (navigation tabs)
         └── Active Page
             ├── HomePage
-            ├── AudioModelPage
             ├── HotkeyPage
-            ├── LLMPage
+            ├── ModelServicesPage
             ├── AppSettingsPage
             ├── HotwordsPage
             ├── PermissionsPage
