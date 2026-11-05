@@ -350,11 +350,11 @@ pub(crate) async fn repolish_history_entry(
         .config_manager
         .load_config()
         .map_err(|_| AppError::new(AppErrorCode::InvalidConfig))?;
-    crate::llm::validate_llm_config(&config.llm)?;
+    let registry = load_registry(&app_handle);
+    crate::llm::validate_llm_config(&config.llm, &registry)?;
 
     let prompts = app_inner.config_manager.load_prompts();
     let hotwords = app_inner.hotword_manager.active_words();
-    let registry = load_registry(&app_handle);
 
     let polished = match crate::llm::polish_transcript(
         &config,

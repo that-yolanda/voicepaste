@@ -7,6 +7,49 @@
   "properties": {
     "version": { "type": "integer" },
     "updated_at": { "type": "string" },
+    "providers": {
+      "type": "array",
+      "description": "Provider layer (v21+). Absent in v20 data.",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "kind", "capabilities"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "name_en": { "type": "string" },
+          "kind": { "type": "string", "enum": ["online", "local"] },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["asr", "llm"] }
+          },
+          "docs_url": { "type": "string" },
+          "credentials": {
+            "type": "object",
+            "description": "Credential field declarations keyed by scope: shared | asr | llm.",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["fields"],
+              "additionalProperties": false,
+              "properties": {
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["key"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": { "type": "string" },
+                      "type": { "type": "string", "enum": ["text", "password"] }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "defaults": {
       "type": "object",
       "additionalProperties": false,
@@ -33,8 +76,12 @@
         "properties": {
           "id": { "type": "string" },
           "type": { "type": "string", "enum": ["online", "offline"] },
-          "category": { "type": "string", "enum": ["asr", "vad", "punctuation"] },
+          "category": { "type": "string", "enum": ["asr", "vad", "punctuation", "llm"] },
           "engine": { "type": "string" },
+          "provider": {
+            "type": "string",
+            "description": "Owning provider id (see providers[].id). Absent in legacy v20 data."
+          },
           "name": { "type": "string" },
           "name_en": {
             "type": "string",

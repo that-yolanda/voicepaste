@@ -100,6 +100,9 @@ pub struct AppConfig {
     pub audio: BTreeMap<String, serde_norway::Value>,
     #[serde(default)]
     pub llm: LlmConfig,
+    /// Provider visibility + shared credentials (model services page).
+    #[serde(default)]
+    pub model_providers: ModelProvidersConfig,
 }
 
 /// User-overridable VAD parameters stored in config.yaml.
@@ -331,6 +334,9 @@ pub struct RequestConfig {
 pub struct LlmConfig {
     #[serde(default = "default_llm_provider")]
     pub provider: String,
+    /// Default model id within the active provider. Empty = first visible model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
     #[serde(default)]
     pub deepseek: Option<ProviderConfig>,
     #[serde(default)]
@@ -345,6 +351,8 @@ pub struct LlmConfig {
     pub siliconflow: Option<ProviderConfig>,
     #[serde(default)]
     pub ollama: Option<ProviderConfig>,
+    #[serde(default)]
+    pub bytedance: Option<ProviderConfig>,
     #[serde(default)]
     pub openai_compatible: Option<ProviderConfig>,
     #[serde(default)]
@@ -363,8 +371,68 @@ pub struct ProviderConfig {
     pub url: String,
     #[serde(default)]
     pub api_key: String,
+    /// Legacy single-model field. Still honored when the provider has no
+    /// `models` list (see llm.rs model resolution); the settings UI writes
+    /// `models` + `llm.default_model` instead.
     #[serde(default)]
     pub model: String,
+    /// Positive model list. Absent = show all registry presets for the
+    /// provider; present = the list is the truth (removals included).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub models: Option<Vec<LlmModelEntry>>,
+}
+
+/// Per-model inference parameter overrides. Only fields the user explicitly
+/// set are carried into the request body; absent fields fall back to the
+/// request-building defaults in llm.rs.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct LlmModelParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f64>,
+}
+
+/// One entry of a provider's positive model list (`llm.<provider>.models`).
+/// Preset entries reference a registry model by id and carry only the user's
+/// delta; custom entries use `id` itself as the request model string.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LlmModelEntry {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Overrides the request model string (preset id → vendor string, e.g.
+    /// doubao-seed-1-6 → doubao-seed-1-6-250615).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<LlmModelParams>,
+}
+
+/// Shared (provider-wide) credentials stored under
+/// `model_providers.credentials.<provider_id>`. No built-in provider uses
+/// this scope yet; the structure serves aggregator/gateway providers where
+/// one key covers both capabilities.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProviderSharedCredentials {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+}
+
+/// `model_providers` config section: which providers the model services page
+/// shows (positive list) plus provider-wide shared credentials.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ModelProvidersConfig {
+    /// Absent = default set (bytedance + local_asr). Mirrored by the frontend
+    /// in `web/src/settings/lib/providers.ts`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials: Option<BTreeMap<String, ProviderSharedCredentials>>,
 }
 
 /// `true` only for built-in templates auto-seeded into a new user's library on
@@ -477,7 +545,7 @@ fn default_result_type() -> String {
     "full".to_string()
 }
 fn default_llm_provider() -> String {
-    "deepseek".to_string()
+    "bytedance".to_string()
 }
 fn default_doubao_url() -> String {
     "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".to_string()
@@ -657,10 +725,14 @@ impl AppConfig {
             .unwrap_or(DOUBAO_STREAMING_ID)
     }
 
-    /// Resolve effective config for any engine by merging three layers:
+    /// Resolve effective config for any engine by merging four layers:
     ///   1. registry.json → defaults.asr  (shared defaults)
     ///   2. registry.json → <model>.default_config  (model-specific defaults)
-    ///   3. config.yaml → audio.<model_id>  (user overrides)
+    ///   3. config.yaml → audio.<model_id>  (user overrides; legacy
+    ///      per-model credentials also live here)
+    ///   4. config.yaml → audio.credentials.<provider>  (capability-scope
+    ///      credentials — the canonical location. Layered last so a migrated
+    ///      credential beats a stale legacy copy left under audio.<model_id>.)
     ///
     /// This is the single config resolution path for ALL engine types
     /// (doubao, sherpa-onnx, VAD, punctuation).
@@ -698,6 +770,27 @@ impl AppConfig {
             if let Some(target) = merged.as_object_mut() {
                 for (k, v) in user_config {
                     target.insert(k, v);
+                }
+            }
+        }
+
+        // Layer 4: capability credentials from audio.credentials.<provider>
+        let provider_id = registry
+            .models
+            .iter()
+            .find(|m| m.id == model_id)
+            .and_then(|m| m.provider.as_deref());
+        if let Some(provider_id) = provider_id {
+            if let Some(creds) = user_audio
+                .get("credentials")
+                .and_then(|c| c.get(provider_id))
+                .and_then(profile_to_json)
+                .and_then(|v| v.as_object().cloned())
+            {
+                if let Some(target) = merged.as_object_mut() {
+                    for (k, v) in creds {
+                        target.insert(k, v);
+                    }
                 }
             }
         }
@@ -956,6 +1049,7 @@ impl Default for AppConfig {
             audio: default_audio_settings(),
             llm: LlmConfig {
                 provider: default_llm_provider(),
+                default_model: None,
                 deepseek: None,
                 openai: None,
                 anthropic: None,
@@ -963,12 +1057,14 @@ impl Default for AppConfig {
                 openrouter: None,
                 siliconflow: None,
                 ollama: None,
+                bytedance: None,
                 openai_compatible: None,
                 url: None,
                 api_key: None,
                 model: None,
                 base_url: None,
             },
+            model_providers: ModelProvidersConfig::default(),
         }
     }
 }
@@ -1938,5 +2034,128 @@ mod hotkey_tests {
         )
         .1
         .is_empty());
+    }
+}
+
+#[cfg(test)]
+mod provider_layer_tests {
+    use super::*;
+
+    /// ConfigManager over a temp dir with the embedded (v21) registry seeded.
+    fn manager_with_registry() -> (tempfile::TempDir, tempfile::TempDir, ConfigManager) {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let manager = ConfigManager::new(data.path(), resources.path());
+        manager
+            .save_config(&serde_norway::to_value(manager.load_config().unwrap()).unwrap())
+            .unwrap();
+        (data, resources, manager)
+    }
+
+    #[test]
+    fn capability_credentials_override_legacy_model_location() {
+        let (data, resources, manager) = manager_with_registry();
+        let mut config = manager.get_editable_config().unwrap();
+        // Legacy shape: credentials stored under audio[doubao-streaming].
+        config["audio"][DOUBAO_STREAMING_ID] = serde_norway::from_str(
+            "app_id: legacy-app\naccess_token: legacy-token\nlanguage: ja\n",
+        )
+        .unwrap();
+        // Canonical shape: capability credentials under audio.credentials.bytedance.
+        config["audio"]["credentials"]["bytedance"] =
+            serde_norway::from_str("api_key: new-key\n").unwrap();
+        manager.save_config(&config).unwrap();
+
+        let loaded = manager.load_config().unwrap();
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        let resolved =
+            AppConfig::resolve_model_config(&registry, DOUBAO_STREAMING_ID, &loaded.audio);
+
+        // Non-credential model params keep coming from the model section.
+        assert_eq!(resolved["language"], serde_json::json!("ja"));
+        // The canonical credential wins over the stale legacy copy.
+        assert_eq!(resolved["api_key"], serde_json::json!("new-key"));
+        // Legacy fields remain readable until the UI rewrites them (lazy migration).
+        assert_eq!(resolved["app_id"], serde_json::json!("legacy-app"));
+    }
+
+    #[test]
+    fn legacy_credentials_still_resolve_without_canonical_block() {
+        let (data, resources, manager) = manager_with_registry();
+        let mut config = manager.get_editable_config().unwrap();
+        config["audio"][ELEVENLABS_REALTIME_ID] =
+            serde_norway::from_str("api_key: legacy-key\nvad_threshold: 0.55\n").unwrap();
+        manager.save_config(&config).unwrap();
+
+        let loaded = manager.load_config().unwrap();
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        let resolved =
+            AppConfig::resolve_model_config(&registry, ELEVENLABS_REALTIME_ID, &loaded.audio);
+        assert_eq!(resolved["api_key"], serde_json::json!("legacy-key"));
+        assert_eq!(resolved["vad_threshold"], serde_json::json!(0.55));
+    }
+
+    #[test]
+    fn elevenlabs_credentials_resolve_from_canonical_block() {
+        let (data, resources, manager) = manager_with_registry();
+        let mut config = manager.get_editable_config().unwrap();
+        config["audio"]["credentials"]["elevenlabs"] =
+            serde_norway::from_str("api_key: canon-key\n").unwrap();
+        manager.save_config(&config).unwrap();
+
+        let loaded = manager.load_config().unwrap();
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        let resolved =
+            AppConfig::resolve_model_config(&registry, ELEVENLABS_REALTIME_ID, &loaded.audio);
+        assert_eq!(resolved["api_key"], serde_json::json!("canon-key"));
+    }
+
+    #[test]
+    fn llm_config_parses_model_lists_and_default_model() {
+        let yaml = r#"
+provider: bytedance
+default_model: doubao-seed-1-6-flash
+bytedance:
+  url: https://ark.example/api/v3
+  api_key: sk-1
+  model: ""
+  models:
+    - id: doubao-seed-1-6
+      params:
+        temperature: 0.4
+    - id: my-model
+      name: 我的模型
+"#;
+        let cfg: LlmConfig = serde_norway::from_str(yaml).unwrap();
+        assert_eq!(cfg.default_model.as_deref(), Some("doubao-seed-1-6-flash"));
+        let models = cfg.bytedance.unwrap().models.unwrap();
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].params.as_ref().unwrap().temperature, Some(0.4));
+        assert_eq!(models[1].name.as_deref(), Some("我的模型"));
+        assert_eq!(models[1].model_id, None);
+    }
+
+    #[test]
+    fn llm_config_defaults_provider_to_bytedance() {
+        let cfg: LlmConfig = serde_norway::from_str("{}").unwrap();
+        assert_eq!(cfg.provider, "bytedance");
+        assert!(cfg.default_model.is_none());
+    }
+
+    #[test]
+    fn legacy_llm_config_without_models_still_parses() {
+        let yaml = "provider: deepseek\ndeepseek:\n  url: https://x\n  api_key: k\n  model: deepseek-chat\n";
+        let cfg: LlmConfig = serde_norway::from_str(yaml).unwrap();
+        assert_eq!(cfg.deepseek.unwrap().model, "deepseek-chat");
+    }
+
+    #[test]
+    fn model_providers_section_parses() {
+        let mp: ModelProvidersConfig =
+            serde_norway::from_str("added: [bytedance, local_asr, deepseek]").unwrap();
+        assert_eq!(mp.added.as_ref().map(|v| v.len()), Some(3));
+        let empty: ModelProvidersConfig = serde_norway::from_str("{}").unwrap();
+        assert!(empty.added.is_none());
+        assert!(empty.credentials.is_none());
     }
 }

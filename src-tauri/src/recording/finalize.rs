@@ -150,7 +150,7 @@ pub(super) async fn finalize_and_paste(
     // exactly what would have been polished), instead of downgrading to a
     // one-frame warning followed by an unpolished paste.
     if let (Some(ref cfg), Some(prompt_id)) = (&config, &active_prompt_id) {
-        if let Err(e) = crate::llm::validate_llm_config(&cfg.llm) {
+        if let Err(e) = crate::llm::validate_llm_config(&cfg.llm, &registry) {
             log_rec!(
                 warn,
                 "LLM config invalid, holding text for polish retry: {}",

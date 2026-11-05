@@ -12,6 +12,63 @@ pub enum ModelCategory {
     Asr,
     Vad,
     Punctuation,
+    Llm,
+}
+
+/// Provider connectivity kind.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ProviderKind {
+    Online,
+    Local,
+}
+
+/// Capability a provider offers. Mirrors the model categories it can host,
+/// minus the internal vad/punctuation helpers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CapabilityKind {
+    Asr,
+    Llm,
+}
+
+/// One credential input rendered in the provider detail page.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialField {
+    /// Config key (url / api_key / app_id / …). Labels and conditional
+    /// visibility live in the frontend FIELD_META table.
+    pub key: String,
+    /// "text" (default) or "password".
+    #[serde(default)]
+    pub r#type: String,
+}
+
+/// Credential fields for one scope ("shared" | "asr" | "llm").
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialSpec {
+    #[serde(default)]
+    pub fields: Vec<CredentialField>,
+}
+
+/// Provider entry in the registry: owns display metadata, capabilities,
+/// credential field declarations and the "how to apply" docs link.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderEntry {
+    pub id: String,
+    pub name: String,
+    /// English display name; the UI falls back to `name` when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name_en: Option<String>,
+    pub kind: ProviderKind,
+    pub capabilities: Vec<CapabilityKind>,
+    /// "How to apply" documentation URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docs_url: Option<String>,
+    /// Credential declarations keyed by scope: "shared" (provider-wide,
+    /// rendered above the capability tabs), "asr" / "llm" (capability-wide,
+    /// rendered inside the matching tab).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials: Option<std::collections::HashMap<String, CredentialSpec>>,
 }
 
 /// Engine capabilities.
@@ -36,8 +93,11 @@ pub struct ModelEntry {
     pub model_type: String,
     /// "asr" | "vad" | "punctuation"
     pub category: ModelCategory,
-    /// Runtime engine: "volcengine" | "sherpa-onnx"
+    /// Runtime engine: "volcengine" | "sherpa-onnx" | "elevenlabs" | "openai_compat"
     pub engine: String,
+    /// Owning provider id (see ProviderEntry.id). Absent in legacy v20 data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
     /// Display name in the UI.
     pub name: String,
     /// English display name; the UI falls back to `name` when absent.
@@ -101,6 +161,9 @@ pub struct ModelRegistry {
     /// Shared defaults applied before model-specific defaults.
     #[serde(default)]
     pub defaults: Option<RegistryDefaults>,
+    /// Provider layer (v21+). Absent in v20 data, so defaulted.
+    #[serde(default)]
+    pub providers: Vec<ProviderEntry>,
     pub models: Vec<ModelEntry>,
 }
 
@@ -175,6 +238,8 @@ fn merge_registry(mut current: ModelRegistry, bundled: ModelRegistry) -> ModelRe
             current.models.push(bundled_model);
         }
     }
+    // Providers are not user-editable data: the bundled list is authoritative.
+    current.providers = bundled.providers;
     current.version = bundled.version;
     current.updated_at = bundled.updated_at;
     current.defaults = bundled.defaults;
@@ -186,11 +251,13 @@ fn minimal_registry() -> ModelRegistry {
         version: 1,
         updated_at: String::new(),
         defaults: None,
+        providers: vec![],
         models: vec![ModelEntry {
             id: "doubao-streaming".to_string(),
             model_type: "online".to_string(),
             category: ModelCategory::Asr,
             engine: "volcengine".to_string(),
+            provider: Some("bytedance".to_string()),
             name: "火山引擎 - 豆包流式输出大模型".to_string(),
             description: "基于豆包大模型的流式语音识别服务".to_string(),
             name_en: None,
@@ -468,6 +535,7 @@ mod tests {
             model_type: "offline".to_string(),
             category: ModelCategory::Asr,
             engine: "sherpa-onnx".to_string(),
+            provider: None,
             name: "Test".to_string(),
             description: "Test model".to_string(),
             name_en: None,
@@ -497,6 +565,7 @@ mod tests {
             model_type: "online".to_string(),
             category: ModelCategory::Asr,
             engine: "volcengine".to_string(),
+            provider: None,
             name: "Doubao".to_string(),
             description: "Online ASR".to_string(),
             name_en: None,
@@ -520,12 +589,12 @@ mod tests {
     }
 
     #[test]
-    fn embedded_registry_is_version_20() {
+    fn embedded_registry_is_version_21() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 20,
-            "EMBEDDED_REGISTRY version should be 20, got {}",
+            registry.version, 21,
+            "EMBEDDED_REGISTRY version should be 21, got {}",
             registry.version
         );
         assert!(
@@ -540,13 +609,66 @@ mod tests {
     }
 
     #[test]
+    fn embedded_registry_has_provider_layer() {
+        let registry: ModelRegistry =
+            serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
+        assert!(
+            registry.providers.iter().any(|p| p.id == "bytedance"),
+            "bytedance provider should exist"
+        );
+        // Every model should reference a known provider.
+        for model in &registry.models {
+            let provider = model.provider.as_deref().unwrap_or_default();
+            assert!(
+                registry.providers.iter().any(|p| p.id == provider),
+                "model {} references unknown provider {:?}",
+                model.id,
+                model.provider
+            );
+        }
+        // Bytedance exposes both capabilities with capability-scoped credentials.
+        let bytedance = registry
+            .providers
+            .iter()
+            .find(|p| p.id == "bytedance")
+            .expect("bytedance provider");
+        assert!(bytedance.capabilities.contains(&CapabilityKind::Asr));
+        assert!(bytedance.capabilities.contains(&CapabilityKind::Llm));
+        let creds = bytedance.credentials.as_ref().expect("bytedance credentials");
+        assert!(creds.contains_key("asr") && creds.contains_key("llm"));
+        // LLM models exist and are category llm.
+        let llm_models = registry
+            .models
+            .iter()
+            .filter(|m| m.category == ModelCategory::Llm)
+            .count();
+        assert!(llm_models >= 8, "expected LLM preset models, got {llm_models}");
+    }
+
+    #[test]
+    fn v20_registry_without_providers_parses_with_default() {
+        let v20 = serde_json::json!({
+            "version": 20,
+            "updated_at": "",
+            "models": [
+                { "id": "doubao-streaming", "type": "online", "category": "asr",
+                  "engine": "volcengine", "name": "doubao", "description": "d",
+                  "languages": [] }
+            ]
+        });
+        let registry: ModelRegistry = serde_json::from_value(v20).expect("v20 parses");
+        assert!(registry.providers.is_empty());
+        assert_eq!(registry.models[0].provider, None);
+    }
+
+    #[test]
     fn bundled_registry_uses_embedded_fallback() {
         // When the resource directory has no registry.json, should fall back to embedded
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 20,
-            "bundled_registry should return version 20 from embedded, got {}",
+            registry.version, 21,
+            "bundled_registry should return version 21 from embedded, got {}",
             registry.version
         );
     }
@@ -600,6 +722,7 @@ mod tests {
             model_type: "offline".to_string(),
             category: ModelCategory::Asr,
             engine: "sherpa-onnx".to_string(),
+            provider: Some("local_asr".to_string()),
             name: "New Model".to_string(),
             description: "A new model".to_string(),
             name_en: None,
@@ -622,5 +745,25 @@ mod tests {
         let merged = merge_registry(current, bundled);
         assert!(merged.models.iter().any(|m| m.id == "new-model"));
         assert!(merged.models.iter().any(|m| m.id == "doubao-streaming"));
+    }
+
+    #[test]
+    fn merge_registry_replaces_providers_from_bundled() {
+        let mut current = minimal_registry();
+        current.providers = vec![ProviderEntry {
+            id: "stale".to_string(),
+            name: "Stale".to_string(),
+            name_en: None,
+            kind: ProviderKind::Online,
+            capabilities: vec![CapabilityKind::Llm],
+            docs_url: None,
+            credentials: None,
+        }];
+        let bundled = minimal_registry();
+        let merged = merge_registry(current, bundled);
+        assert!(
+            merged.providers.iter().all(|p| p.id != "stale"),
+            "bundled provider list is authoritative"
+        );
     }
 }
