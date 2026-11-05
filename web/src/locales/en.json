@@ -30,7 +30,8 @@
       "empty_response": "The model returned no content",
       "parse_failed": "Could not parse the model response",
       "prompt_missing": "Choose a template first",
-      "prompt_unavailable": "Template unavailable. Check Polishing templates in Settings"
+      "prompt_unavailable": "Template unavailable. Check Polishing templates in Settings",
+      "test_failed": "Connection test failed: {{provider}}"
     },
     "stats": {
       "entry_not_found": "History entry not found",
@@ -87,7 +88,8 @@
       "finalize_incomplete": "The speech service could not finish recognition. Please retry",
       "empty_result": "No transcript text came back. Check the network",
       "reconnecting": "Reconnecting…",
-      "reconnected": "Reconnected"
+      "reconnected": "Reconnected",
+      "test_failed": "Connection test failed: {{provider}}"
     },
     "config": {
       "invalid": "Invalid configuration",

@@ -728,6 +728,88 @@ async fn call_llm_once(
     parse_completion(&response_json, &[&api_key, &url])
 }
 
+/// Wall-clock budget for a connectivity probe — the "测试" button should feel
+/// immediate, so a provider that cannot answer within this is reported as
+/// unreachable rather than leaving the user watching a spinner.
+const TEST_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Probe one LLM provider with a minimal completion (manual "测试" button in
+/// the settings UI; never triggered automatically on page open).
+///
+/// Classified provider failures (auth_invalid / model_not_found / …) are
+/// returned verbatim so the toast can point at the exact field; transport
+/// failures reuse the timeout / network codes.
+pub async fn test_provider_connection(
+    config: &LlmConfig,
+    registry: &ModelRegistry,
+) -> Result<(), AppError> {
+    let provider_id = config.provider.clone();
+    let resolved = resolve_endpoint(config, registry)?;
+    if resolved.api_key.is_empty() && provider_id != "ollama" {
+        return Err(llm_config_error(&provider_id, "api_key"));
+    }
+
+    let mut body = build_request_body(
+        &provider_id,
+        &resolved.model,
+        "connectivity probe",
+        "hi",
+        resolved.params.as_ref(),
+    );
+    // Keep the probe cheap: one token of output budget.
+    if body.get("max_completion_tokens").is_some() {
+        body["max_completion_tokens"] = json!(1);
+    } else {
+        body["max_tokens"] = json!(1);
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(TEST_REQUEST_TIMEOUT)
+        .build()
+        .map_err(|e| test_failed_error(&provider_id, e.to_string()))?;
+
+    let mut request = client.post(&resolved.url).json(&body);
+    if !resolved.api_key.is_empty() {
+        if provider_id == "anthropic" {
+            request = request
+                .header("x-api-key", &resolved.api_key)
+                .header("anthropic-version", "2023-06-01");
+        } else if provider_id == "gemini" {
+            request = request.query(&[("key", &resolved.api_key)]);
+        } else {
+            request = request.header("Authorization", format!("Bearer {}", resolved.api_key));
+        }
+    }
+
+    let response = request.send().await.map_err(|e| {
+        let code = if e.is_timeout() {
+            AppErrorCode::LlmTimeout
+        } else {
+            AppErrorCode::LlmNetwork
+        };
+        AppError::new(code).with_detail(clamp_detail(crate::logger::redact_credentials(
+            &e.without_url().to_string(),
+            &[&resolved.api_key],
+        )))
+    })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        let body =
+            crate::logger::redact_credentials(&body, &[&resolved.api_key, &resolved.url]);
+        return Err(classify_http_error(status.as_u16(), &body));
+    }
+    Ok(())
+}
+
+/// `llm.test_failed` with the provider name for the toast interpolation.
+fn test_failed_error(provider_id: &str, detail: String) -> AppError {
+    AppError::new(AppErrorCode::LlmTestFailed)
+        .with_param("provider", provider_id)
+        .with_detail(clamp_detail(detail))
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -1328,6 +1410,53 @@ mod tests {
             None,
         );
         assert!(body.get("thinking").is_none());
+    }
+
+    // ── connectivity probe tests ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn llm_probe_success_on_http_200() {
+        use wiremock::{matchers::method, Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]
+            })))
+            .mount(&server)
+            .await;
+        let mut config = make_llm_config("openai");
+        config.url = Some(server.uri());
+        config.api_key = Some("probe-key".into());
+        assert!(test_provider_connection(&config, &empty_registry()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn llm_probe_reports_classified_auth_failure() {
+        use wiremock::{matchers::method, Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(json!({
+                "error": {"message": "bad key"}
+            })))
+            .mount(&server)
+            .await;
+        let mut config = make_llm_config("openai");
+        config.url = Some(server.uri());
+        config.api_key = Some("probe-key".into());
+        let error = test_provider_connection(&config, &empty_registry())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, AppErrorCode::LlmAuthInvalid);
+    }
+
+    #[tokio::test]
+    async fn llm_probe_requires_api_key_for_remote_providers() {
+        let config = make_llm_config("openai");
+        let error = test_provider_connection(&config, &empty_registry())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, AppErrorCode::LlmConfigIncomplete);
+        assert!(error.params["field"].contains("api_key"));
     }
 
     // ── validate_llm_config tests ──────────────────────────────────────────

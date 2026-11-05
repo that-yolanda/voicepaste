@@ -73,6 +73,7 @@ app_error_codes! {
     LlmParseFailed => "llm.parse_failed",
     LlmPromptMissing => "llm.prompt_missing",
     LlmPromptUnavailable => "llm.prompt_unavailable",
+    LlmTestFailed => "llm.test_failed",
     // stats — history entry operations
     StatsEntryNotFound => "stats.entry_not_found",
     StatsEntryNotPolishable => "stats.entry_not_polishable",
@@ -85,6 +86,7 @@ app_error_codes! {
     // asr — speech recognition (engine-agnostic)
     AsrConfigMissing => "asr.config_missing",
     AsrConfigInvalid => "asr.config_invalid",
+    AsrTestFailed => "asr.test_failed",
     AsrAuthFailed => "asr.auth_failed",
     AsrNetwork => "asr.network",
     AsrTimeout => "asr.timeout",
@@ -230,6 +232,10 @@ impl AppErrorCode {
             (En, Self::LlmPromptUnavailable) => {
                 "Polish template unavailable. Check template settings"
             }
+            // Settings-UI-only codes: the probe toasts them, the overlay never
+            // renders them, but the match stays exhaustive by design.
+            (ZhCn, Self::LlmTestFailed) => "连接测试失败：{{provider}}",
+            (En, Self::LlmTestFailed) => "Connection test failed: {{provider}}",
             // asr — engine-agnostic
             (ZhCn, Self::AsrConfigMissing) => "语音识别模型还未配置，缺少 {{field}}",
             (En, Self::AsrConfigMissing) => "Speech model is not configured: missing {{field}}",
@@ -237,6 +243,8 @@ impl AppErrorCode {
             (En, Self::AsrConfigInvalid) => {
                 "Invalid ElevenLabs parameters. Check the model configuration"
             }
+            (ZhCn, Self::AsrTestFailed) => "连接测试失败：{{provider}}",
+            (En, Self::AsrTestFailed) => "Connection test failed: {{provider}}",
             (ZhCn, Self::AsrAuthFailed) => "ASR 鉴权失败，请检查 AppID / Token / Resource ID",
             (En, Self::AsrAuthFailed) => {
                 "ASR authentication failed. Check the App ID / Token / Resource ID"

@@ -30,7 +30,8 @@
       "empty_response": "模型没有返回任何内容",
       "parse_failed": "无法解析模型返回内容",
       "prompt_missing": "请选择润色模板",
-      "prompt_unavailable": "模板不可用，请在设置的润色模板中检查"
+      "prompt_unavailable": "模板不可用，请在设置的润色模板中检查",
+      "test_failed": "连接测试失败：{{provider}}"
     },
     "stats": {
       "entry_not_found": "未找到输入记录",
@@ -87,7 +88,8 @@
       "finalize_incomplete": "语音服务未能完成最终确认，请重试",
       "empty_result": "没有得到转写文本，请检查网络连接",
       "reconnecting": "正在重连…",
-      "reconnected": "已重连"
+      "reconnected": "已重连",
+      "test_failed": "连接测试失败：{{provider}}"
     },
     "config": {
       "invalid": "配置格式错误",

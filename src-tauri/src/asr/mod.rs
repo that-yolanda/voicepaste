@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
-use crate::errors::AppError;
+use crate::errors::{AppError, AppErrorCode};
 
 /// Unified ASR events sent from any engine to the app layer.
 #[derive(Debug, Clone)]
@@ -133,4 +133,87 @@ pub async fn create_engine_session(
 /// text-processing internals.
 pub fn apply_post_asr_corrections(text: &str, hotwords: &[String]) -> String {
     crate::hotword::restore_hotword_case(text, hotwords)
+}
+
+/// How long the "测试" probe waits for the engine's first lifecycle event
+/// before reporting the provider as unreachable.
+const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Probe one ASR provider's credentials by opening a throwaway engine session
+/// and waiting for its first lifecycle event (manual "测试" button; never
+/// triggered automatically). A session that opens proves endpoint + auth.
+/// Engine-level failures (auth, network, protocol) return their classified
+/// codes verbatim; only a silent provider maps to `asr.test_failed`.
+/// Local providers have no network path — report success without touching
+/// model files (the settings UI does not offer the button for them).
+pub async fn test_asr_connection(
+    config: &crate::config::AppConfig,
+    registry: &crate::model::ModelRegistry,
+    data_dir: PathBuf,
+    resource_dir: PathBuf,
+    provider_id: &str,
+) -> Result<(), AppError> {
+    use crate::model::{ModelCategory, ProviderKind};
+
+    if registry
+        .providers
+        .iter()
+        .any(|p| p.id == provider_id && p.kind == ProviderKind::Local)
+    {
+        return Ok(());
+    }
+
+    // Probe with the provider's first online ASR model, without touching the
+    // saved default-model selection.
+    let model_id = registry
+        .models
+        .iter()
+        .find(|m| {
+            m.provider.as_deref() == Some(provider_id)
+                && m.category == ModelCategory::Asr
+                && m.model_type == "online"
+        })
+        .map(|m| m.id.clone())
+        .ok_or_else(|| {
+            AppError::new(AppErrorCode::AsrModelNotInRegistry).with_param("model", provider_id)
+        })?;
+    let mut probe_config = config.clone();
+    probe_config.audio.insert(
+        "provider".to_string(),
+        serde_norway::Value::String(model_id.clone()),
+    );
+
+    let (session, mut event_rx, _show_hint) =
+        create_engine_session(&probe_config, registry, data_dir, resource_dir, &[]).await?;
+
+    let outcome = tokio::time::timeout(PROBE_TIMEOUT, async {
+        loop {
+            match event_rx.recv().await {
+                // Session accepted + authenticated: the probe succeeded.
+                Some(AsrEvent::Open) | Some(AsrEvent::Transcript { .. }) => break Ok(()),
+                Some(AsrEvent::Error { error, .. }) => break Err(error),
+                Some(AsrEvent::Warning { .. }) => continue,
+                // Socket closed (or dropped) before opening: handshake rejected.
+                Some(AsrEvent::Close { code, reason }) => {
+                    break Err(AppError::new(AppErrorCode::AsrTestFailed)
+                        .with_param("provider", provider_id)
+                        .with_detail(format!("close code={code:?} reason={reason}")));
+                }
+                None => {
+                    break Err(AppError::new(AppErrorCode::AsrTestFailed)
+                        .with_param("provider", provider_id)
+                        .with_detail("event stream ended before the session opened"));
+                }
+            }
+        }
+    })
+    .await;
+
+    session.close();
+    match outcome {
+        Ok(result) => result,
+        Err(_) => Err(AppError::new(AppErrorCode::AsrTestFailed)
+            .with_param("provider", provider_id)
+            .with_detail(format!("no lifecycle event within {}s", PROBE_TIMEOUT.as_secs()))),
+    }
 }
