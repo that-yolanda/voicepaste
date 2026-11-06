@@ -215,8 +215,8 @@
     },
     {
       "id": "custom_openai",
-      "name": "自定义兼容服务",
-      "name_en": "Custom OpenAI-compatible",
+      "name": "OpenAI 兼容协议",
+      "name_en": "OpenAI-compatible API",
       "kind": "online",
       "capabilities": ["llm"],
       "credentials": {

@@ -219,7 +219,7 @@ export function HomePage({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const cards = [
     {
       v: formatCompact(Object.keys(stats?.dailyCounts || {}).length),
-      u: "days",
+      u: t("ui.home.duration.days"),
       label: t("ui.home.card_used"),
     },
     {

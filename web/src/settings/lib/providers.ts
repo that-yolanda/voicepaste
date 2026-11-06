@@ -339,6 +339,23 @@ export function withAddedProvider(
 ): Rec {
   const next = cloneConfig(config);
   const added = new Set(addedProviderIds(config, models));
+  if (added.has(providerId)) return next;
+  const audio = asRecord(next.audio);
+  const existingAsr =
+    stringList(audio.models) ?? models.filter((m) => m.category === "asr").map((m) => m.id);
+  const newProviderModels = new Set(
+    models.filter((m) => m.provider === providerId && m.category === "asr").map((m) => m.id),
+  );
+  audio.models = existingAsr.filter((id) => !newProviderModels.has(id));
+  next.audio = audio;
+  const llm = asRecord(next.llm);
+  if (
+    llm[providerId] == null &&
+    !(providerId === "custom_openai" && llm.openai_compatible != null)
+  ) {
+    llm[providerId] = { models: [] };
+  }
+  next.llm = llm;
   added.add(providerId);
   next.model_providers = { ...asRecord(next.model_providers), added: [...added] };
   return next;
@@ -543,6 +560,35 @@ export function withAsrCredential(
       next.audio = { ...audioNow, [m.id]: rest };
     }
   }
+  return next;
+}
+
+/** Update Doubao's base while preserving the effective legacy recognition mode. */
+export function withDoubaoBaseUrl(config: Rec, value: string): Rec {
+  const next = cloneConfig(config);
+  const audio = asRecord(next.audio);
+  const credentials = asRecord(audio.credentials);
+  const bytedance = { ...asRecord(credentials.bytedance) };
+  const model = { ...asRecord(audio[DOUBAO_FALLBACK_MODEL_ID]) };
+  const previous = String(
+    bytedance.url_base ? model.url || bytedance.url || "" : bytedance.url || model.url || "",
+  );
+  if (previous) {
+    const mode = previous.replace(/\/$/, "").endsWith("/bigmodel_nostream")
+      ? "bigmodel_nostream"
+      : "bigmodel_async";
+    model.url = `wss://openspeech.bytedance.com/api/v3/sauc/${mode}`;
+  }
+  delete bytedance.url;
+  bytedance.url_base = value
+    .trim()
+    .replace(/\/bigmodel_(async|nostream)\/?$/, "")
+    .replace(/\/$/, "");
+  next.audio = {
+    ...audio,
+    [DOUBAO_FALLBACK_MODEL_ID]: model,
+    credentials: { ...credentials, bytedance },
+  };
   return next;
 }
 

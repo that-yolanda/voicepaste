@@ -106,6 +106,10 @@ export async function openHelpGuide(): Promise<void> {
   });
 }
 
+export async function openExternalUrl(path: string): Promise<void> {
+  return invoke("plugin:shell|open", { path });
+}
+
 export async function getData(): Promise<SettingsData> {
   return invoke("get_settings_data");
 }

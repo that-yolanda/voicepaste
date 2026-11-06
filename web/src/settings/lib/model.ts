@@ -232,7 +232,7 @@ export const FIELD_META: Record<string, FieldMeta> = {
   },
   output_zh_variant: {
     label: "field.output_zh_variant",
-    type: "segment",
+    type: "select",
     options: [
       { value: "off", label: "field.output_zh_variant.options.off" },
       { value: "traditional", label: "field.output_zh_variant.options.traditional" },

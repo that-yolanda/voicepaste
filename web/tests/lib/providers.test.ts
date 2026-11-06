@@ -446,6 +446,20 @@ describe("config patches", () => {
     expect(config.model_providers.added).toEqual(["bytedance"]);
   });
 
+  test("adding a provider leaves its models empty and keeps existing models", () => {
+    const config = {
+      model_providers: { added: ["bytedance"] },
+      audio: {},
+      llm: { provider: "bytedance" },
+    };
+    const next = withAddedProvider(config, "elevenlabs", MODELS);
+    expect(visibleAsrModels(rec(next.audio), "elevenlabs", MODELS)).toEqual([]);
+    expect(visibleAsrModels(rec(next.audio), "bytedance", MODELS).length).toBeGreaterThan(0);
+    const llmNext = withAddedProvider(config, "deepseek", MODELS);
+    expect(visibleLlmModels(rec(llmNext.llm), "deepseek", MODELS)).toEqual([]);
+    expect(visibleLlmModels(rec(llmNext.llm), "bytedance", MODELS).length).toBeGreaterThan(0);
+  });
+
   test("withLlmModels clears the legacy model field", () => {
     const config = { llm: { bytedance: { url: "u", model: "old" } } };
     const next = withLlmModels(config, "bytedance", [{ id: "my-model" }]);

@@ -288,7 +288,7 @@
       "support": "Help & feedback",
       "navigation": "Navigation",
       "general": "General settings",
-      "models_service": "Model Services"
+      "models_service": "Model Configuration"
     },
     "heatmap": {
       "title": "Usage",
@@ -375,6 +375,7 @@
         "evening": "Good evening"
       },
       "duration": {
+        "days": "days",
         "seconds": "s",
         "minutes": "min",
         "hours": "h"
@@ -645,7 +646,7 @@
         },
         "modelsDefaults": {
           "title": "Pick default models",
-          "description": "Choose the default speech and text-polish models at the top of Model Services."
+          "description": "Choose the default speech and text-polish models at the top of Model Configuration."
         },
         "modelsProviders": {
           "title": "Open a provider",
@@ -670,15 +671,16 @@
       "tab_llm": "LLM",
       "add_provider": "Add provider",
       "add_provider_empty": "Every built-in provider is already added",
-      "back_to_services": "Model services",
+      "back_to_services": "Model configuration",
       "capabilities": "Capability",
+      "api_url": "API URL",
       "how_to_apply": "How to apply",
       "remove_provider": "Remove",
-      "remove_provider_confirm": "This removes {provider} and all of its configuration (including API keys). Downloaded local model files are kept. Remove it?",
+      "remove_provider_confirm": "This removes {{provider}} and all of its configuration (including API keys). Downloaded local model files are kept. Remove it?",
       "credentials": "Credentials",
       "credentials_filled": "Credentials configured",
       "test": "Test",
-      "test_ok": "{provider} connection succeeded",
+      "test_ok": "{{provider}} connection succeeded",
       "asr_models": "Speech recognition models",
       "llm_models": "LLM models",
       "no_models": "No models yet — add one to get started",
@@ -705,7 +707,7 @@
       "downloaded": "Downloaded",
       "not_downloaded": "Not downloaded",
       "download": "Download",
-      "configure_model": "Configure {model}",
+      "configure_model": "Configure {{model}}",
       "inference_params": "Inference parameters",
       "inference_params_hint": "Only explicitly set values are sent; empty fields use the service defaults.",
       "param_temperature": "Temperature",

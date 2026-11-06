@@ -1,10 +1,10 @@
 /**
- * Right-side model configuration drawers.
+ * Right-side model configuration modelModals.
  *
- * - AsrModelConfigDrawer: FIELD_META-driven fields (common directly visible,
+ * - AsrModelConfigModal: FIELD_META-driven fields (common directly visible,
  *   advanced collapsed), matching the previous ModelCard expand panel minus
  *   credential fields (those live in the provider credential card).
- * - LlmModelConfigDrawer: model id / display name + inference params
+ * - LlmModelConfigModal: model id / display name + inference params
  *   (temperature / max_tokens / top_p, only user-set values are sent).
  *
  * Footer follows the design: 移除模型 (left) · 恢复默认 · 完成.
@@ -14,8 +14,8 @@ import { ChevronsUp, RotateCcw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/settings/components/Button";
-import { Drawer } from "@/settings/components/Drawer";
 import { Input } from "@/settings/components/Input";
+import { Modal } from "@/settings/components/Modal";
 import { renderControl } from "@/settings/components/models/FieldControl";
 import { SectionItem, SectionItemList } from "@/settings/layout/PageLayout";
 import { DOUBAO_LANGUAGE_CODES, languageName } from "@/settings/lib/languages";
@@ -25,7 +25,6 @@ import {
   getFieldMeta,
   getMergedAsrConfig,
   isModelFieldVisible,
-  localizedModelFields,
   type MergedField,
   resolveFieldMeta,
 } from "@/settings/lib/model";
@@ -41,10 +40,10 @@ function patchFromFlatKey(flatKey: string, value: unknown): Record<string, unkno
 }
 
 /* ======================================================================
-   ASR drawer
+   ASR modelModal
    ====================================================================== */
 
-interface AsrModelConfigDrawerProps {
+interface AsrModelConfigModalProps {
   model: RegistryModel;
   onClose: () => void;
   userConfig: Record<string, unknown> | undefined;
@@ -56,7 +55,7 @@ interface AsrModelConfigDrawerProps {
   removeLabel: string;
 }
 
-export function AsrModelConfigDrawer({
+export function AsrModelConfigModal({
   model,
   onClose,
   userConfig,
@@ -65,10 +64,9 @@ export function AsrModelConfigDrawer({
   onReset,
   onRemove,
   removeLabel,
-}: AsrModelConfigDrawerProps) {
+}: AsrModelConfigModalProps) {
   const { t, i18n } = useTranslation();
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
-  const { name, description } = localizedModelFields(model, i18n.language);
   const isVad = model.category === "vad";
 
   const fields = useMemo(() => {
@@ -133,11 +131,10 @@ export function AsrModelConfigDrawer({
   };
 
   return (
-    <Drawer
+    <Modal
       open
       onClose={onClose}
       title={t("ui.models.model_config")}
-      subtitle={`${description || name}`}
       footer={
         <>
           <Button variant="ghost" className="mr-auto" onClick={() => onRemove(model)}>
@@ -171,12 +168,12 @@ export function AsrModelConfigDrawer({
           </Button>
         </div>
       )}
-    </Drawer>
+    </Modal>
   );
 }
 
 /* ======================================================================
-   LLM drawer
+   LLM modelModal
    ====================================================================== */
 
 const PARAM_FIELDS: {
@@ -206,7 +203,7 @@ const PARAM_FIELDS: {
   { key: "top_p", label: "ui.models.param_top_p", min: 0, max: 1, step: 0.05, placeholder: "—" },
 ];
 
-interface LlmModelConfigDrawerProps {
+interface LlmModelConfigModalProps {
   /** Current entry values (id / name / model_id override / params). */
   entry: LlmModelEntry;
   /** Registry preset display name, when this entry references one. */
@@ -219,7 +216,7 @@ interface LlmModelConfigDrawerProps {
   onRemove: () => void;
 }
 
-export function LlmModelConfigDrawer({
+export function LlmModelConfigModal({
   entry,
   presetName,
   requestDefault,
@@ -227,10 +224,9 @@ export function LlmModelConfigDrawer({
   onClose,
   onChange,
   onRemove,
-}: LlmModelConfigDrawerProps) {
+}: LlmModelConfigModalProps) {
   const { t } = useTranslation();
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
-  const displayName = entry.name ?? presetName ?? entry.id;
 
   const setParams = (key: keyof LlmModelParams, raw: string) => {
     const trimmed = raw.trim();
@@ -246,11 +242,10 @@ export function LlmModelConfigDrawer({
   };
 
   return (
-    <Drawer
+    <Modal
       open
       onClose={onClose}
       title={t("ui.models.model_config")}
-      subtitle={displayName}
       footer={
         <>
           <Button variant="ghost" className="mr-auto" onClick={onRemove}>
@@ -338,7 +333,7 @@ export function LlmModelConfigDrawer({
           {t("ui.models.inference_params_hint")}
         </p>
       </div>
-    </Drawer>
+    </Modal>
   );
 }
 

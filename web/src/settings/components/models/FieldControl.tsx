@@ -2,7 +2,7 @@
  * Data-driven field control rendering: maps a FIELD_META entry to the right
  * wrapped control (toggle / number / select / segment / list / textarea /
  * text). Extracted from the old ModelCard so both the credential card and
- * the model config drawer share one rendering path.
+ * the model config modal share one rendering path.
  */
 
 import type { ReactNode } from "react";

@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { AsrModelConfigDrawer } from "@/settings/components/models/ModelConfigDrawer";
+import { AsrModelConfigModal } from "@/settings/components/models/ModelConfigModal";
 import type { AsrDefaults } from "@/settings/lib/model";
 import { ProviderDetailPage } from "@/settings/pages/models/ProviderDetailPage";
 import type { RegistryModel, RegistryProvider } from "@/settings/types/models";
@@ -61,29 +61,50 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-test("ByteDance uses separate URL controls even when its ASR preset is hidden", () => {
+test("ByteDance exposes distinct ASR and LLM addresses with their defaults", () => {
   detail(bytedance);
-  expect(
-    within(screen.getByRole("combobox")).getByRole("option", { name: "实时语音识别" }),
-  ).toBeInTheDocument();
-  fireEvent.change(screen.getByRole("combobox"), {
-    target: { value: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async" },
-  });
-  expect(mocks.save.mock.calls.at(-1)?.[0].audio.credentials.bytedance.url).toContain(
-    "bigmodel_async",
+  const url = screen.getByRole("textbox");
+  expect(url).toHaveValue("wss://openspeech.bytedance.com/api/v3/sauc");
+  expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  fireEvent.change(url, { target: { value: "wss://example.com/sauc" } });
+  fireEvent.blur(url);
+  expect(mocks.save.mock.calls.at(-1)?.[0].audio.credentials.bytedance.url_base).toBe(
+    "wss://example.com/sauc",
   );
   fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
-  expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-  const url = screen.getByRole("textbox");
-  fireEvent.change(url, { target: { value: "https://example.com/v1" } });
-  fireEvent.blur(url);
+  const llmUrl = screen.getByRole("textbox");
+  expect(llmUrl).toHaveValue("https://ark.cn-beijing.volces.com/api/v3/chat/completions");
+  fireEvent.change(llmUrl, { target: { value: "https://example.com/v1" } });
+  fireEvent.blur(llmUrl);
   expect(mocks.save.mock.calls.at(-1)?.[0].llm.bytedance.url).toBe("https://example.com/v1");
 });
 
-test("Doubao resource ID remains editable in the model drawer", () => {
+test("changing recognition mode migrates a legacy custom URL without losing its prefix", () => {
+  mocks.config = {
+    audio: {
+      provider: "doubao-streaming",
+      models: ["doubao-streaming"],
+      credentials: { bytedance: { url: "wss://example.test/sauc/bigmodel_nostream" } },
+    },
+  };
+  detail(bytedance);
+  expect(screen.getByRole("textbox")).toHaveValue("wss://example.test/sauc");
+  fireEvent.click(screen.getByRole("button", { name: /配置 豆包/ }));
+  const mode = screen.getByRole("combobox", { name: "识别方式" });
+  expect(mode).toHaveValue("wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream");
+  fireEvent.change(mode, {
+    target: { value: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async" },
+  });
+  const audio = mocks.save.mock.calls.at(-1)?.[0].audio;
+  expect(audio.credentials.bytedance.url_base).toBe("wss://example.test/sauc");
+  expect(audio.credentials.bytedance.url).toBeUndefined();
+  expect(audio["doubao-streaming"].url).toContain("bigmodel_async");
+});
+
+test("Doubao resource ID remains editable in the model modelModal", () => {
   const onConfigChange = vi.fn();
   render(
-    <AsrModelConfigDrawer
+    <AsrModelConfigModal
       model={models.find((m) => m.id === "doubao-streaming") as RegistryModel}
       asrDefaults={null}
       userConfig={{}}
@@ -106,7 +127,7 @@ test("Doubao resource ID remains editable in the model drawer", () => {
 test("VAD reads shared values, writes there and resets without losing other defaults", async () => {
   detail(local);
   const row = screen.getByText("Silero VAD").closest(".flex.min-h-14") as HTMLElement;
-  fireEvent.click(within(row).getByRole("button"));
+  fireEvent.click(row);
   const threshold = screen
     .getAllByRole("spinbutton")
     .find((input) => (input as HTMLInputElement).value === "0.7") as HTMLElement;

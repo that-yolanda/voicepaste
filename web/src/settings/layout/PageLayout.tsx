@@ -92,6 +92,11 @@ export function SectionContent({
   return <div className={`px-4 space-y-2 ${className}`}>{children}</div>;
 }
 
+/* Full-width rows without the spacing used by form sections. */
+export function SectionRows({ children }: { children: ReactNode }) {
+  return <div className="overflow-hidden rounded-[inherit] -my-2">{children}</div>;
+}
+
 /* ---------- SectionItemList — vertical list of items with 4px top/bottom padding ---------- */
 
 export function SectionItemList({
@@ -132,8 +137,8 @@ export function SectionItem({
         last ? "" : "border-b border-border-subtle pb-2"
       }`}
     >
-      <div className="flex justify-between w-full gap-2 items-center">
-        <div>
+      <div className="section-item-row flex justify-between w-full gap-2 items-center">
+        <div className="section-item-label min-w-0">
           <div className="flex items-center gap-1">
             {htmlFor ? <label htmlFor={htmlFor}>{title}</label> : <span>{title}</span>}
             {tooltip && (
@@ -146,7 +151,7 @@ export function SectionItem({
         </div>
         {action && (
           <div
-            className={`flex justify-end max-w-3/4 ${className} ${description ? "mb-auto" : ""}`}
+            className={`section-item-action flex min-w-0 justify-end max-w-3/4 ${className} ${description ? "mb-auto" : ""}`}
           >
             {action}
           </div>

@@ -1,14 +1,14 @@
-import { Cloud, Cpu, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/settings/components/Badge";
 import { Modal } from "@/settings/components/Modal";
+import { ProviderIcon } from "@/settings/components/models/ProviderIcon";
 import type { RegistryProvider } from "@/settings/types/models";
 
 interface AddProviderModalProps {
   open: boolean;
   onClose: () => void;
   catalog: RegistryProvider[];
-  onAdd: (providerId: string) => void;
+  onAdd: (providerId: string) => Promise<void>;
 }
 
 /** Localized provider display fields (mirrors localizedModelFields). */
@@ -37,35 +37,27 @@ export function AddProviderModal({ open, onClose, catalog, onAdd }: AddProviderM
               <button
                 key={provider.id}
                 type="button"
-                className="flex min-h-16 items-center gap-2.5 rounded-lg border border-border-subtle bg-fill px-2.5 py-2.5 text-left transition-colors hover:border-accent hover:bg-fill-hover"
+                className="flex min-h-16 items-center gap-2.5 rounded-lg border border-border-subtle bg-fill px-2.5 py-2.5 text-left transition-colors hover:bg-fill-hover"
                 onClick={() => {
-                  onAdd(provider.id);
-                  onClose();
+                  void onAdd(provider.id).then(onClose);
                 }}
               >
-                <span
-                  className={`grid size-8 shrink-0 place-items-center rounded-lg border border-border-subtle bg-surface ${
-                    provider.kind === "local" ? "text-text-dim" : "text-accent"
-                  }`}
-                >
-                  {provider.kind === "local" ? <Cpu size={17} /> : <Cloud size={17} />}
-                </span>
+                <ProviderIcon provider={provider} />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-sm font-semibold text-text">{name}</span>
                   <span className="flex items-center gap-1">
                     {provider.kind === "local" && (
-                      <Badge variant="ghost" size="xs">
+                      <Badge variant="success" size="xs">
                         {t("ui.models.tag_local")}
                       </Badge>
                     )}
                     {provider.capabilities.map((cap) => (
-                      <Badge key={cap} variant="accent" size="xs">
+                      <Badge key={cap} variant="default" size="xs">
                         {t(cap === "asr" ? "ui.models.tag_asr" : "ui.models.tag_llm")}
                       </Badge>
                     ))}
                   </span>
                 </span>
-                <Plus size={14} className="shrink-0 text-text-muted" />
               </button>
             );
           })}

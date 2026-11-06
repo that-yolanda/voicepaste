@@ -5,7 +5,7 @@
  * navigation; the detail page renders in place of the list.
  */
 
-import { Activity, ChevronRight, Cloud, Cog, Cpu, Plus, Sparkles } from "lucide-react";
+import { ChevronRight, Cog, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -22,9 +22,10 @@ import {
   AddProviderModal,
   localizedProviderFields,
 } from "@/settings/components/models/AddProviderModal";
+import { ProviderIcon } from "@/settings/components/models/ProviderIcon";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
 import { Select } from "@/settings/components/Select";
-import { PageLayout, Section, SectionContent } from "@/settings/layout/PageLayout";
+import { PageLayout, Section, SectionContent, SectionRows } from "@/settings/layout/PageLayout";
 import { clonePlain } from "@/settings/lib/clone";
 import { type AsrDefaults, localizedModelFields } from "@/settings/lib/model";
 import {
@@ -214,7 +215,6 @@ export function ModelServicesPage() {
       <Section aria-label={t("ui.models.current_defaults")} data-tour="models-defaults">
         <SectionContent>
           <DefaultsRow
-            icon={<Activity size={16} />}
             label={t("ui.models.tab_asr")}
             value={activeAsrId}
             options={asrCandidates.map(({ provider, model }) => ({
@@ -226,7 +226,6 @@ export function ModelServicesPage() {
             }
           />
           <DefaultsRow
-            icon={<Sparkles size={16} />}
             label={t("ui.models.tab_llm")}
             value={defaultLlm ? `${defaultLlm.provider.id}::${defaultLlm.model.id}` : ""}
             options={llmCandidates.map(({ provider, model }) => ({
@@ -269,7 +268,7 @@ export function ModelServicesPage() {
 
       {/* provider list */}
       <Section aria-label={t("ui.models.provider_list")} data-tour="models-providers">
-        <SectionContent className="px-0 pb-0">
+        <SectionRows>
           {filtered.map((provider) => {
             const { name } = localizedProviderFields(provider, i18n.language);
             return (
@@ -279,18 +278,12 @@ export function ModelServicesPage() {
                 className="flex w-full min-h-14 items-center gap-3 border-b border-border-subtle px-4 py-2.5 text-left last:border-b-0 hover:bg-fill-hover/40"
                 onClick={() => setDetailProviderId(provider.id)}
               >
-                <span
-                  className={`grid size-8.5 shrink-0 place-items-center rounded-lg border border-border-subtle ${
-                    provider.kind === "local" ? "text-text-dim" : "text-accent"
-                  }`}
-                >
-                  {provider.kind === "local" ? <Cpu size={17} /> : <Cloud size={17} />}
-                </span>
+                <ProviderIcon provider={provider} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold text-text">{name}</span>
                   <span className="mt-0.5 flex items-center gap-1">
                     {provider.capabilities.map((cap) => (
-                      <Badge key={cap} variant="ghost" size="xs">
+                      <Badge key={cap} variant="default" size="xs">
                         {t(cap === "asr" ? "ui.models.tag_asr" : "ui.models.tag_llm")}
                       </Badge>
                     ))}
@@ -308,7 +301,7 @@ export function ModelServicesPage() {
           {filtered.length === 0 && (
             <p className="px-4 py-3 text-sm text-text-muted">{t("ui.models.no_providers")}</p>
           )}
-        </SectionContent>
+        </SectionRows>
       </Section>
 
       <CustomConfigModal
@@ -323,34 +316,31 @@ export function ModelServicesPage() {
         open={addProviderOpen}
         onClose={() => setAddProviderOpen(false)}
         catalog={catalog}
-        onAdd={(providerId) => void save(withAddedProvider(clonePlain(config), providerId, models))}
+        onAdd={async (providerId) => {
+          await save(withAddedProvider(clonePlain(config), providerId, models));
+          setDetailProviderId(providerId);
+        }}
       />
     </PageLayout>
   );
 }
 
 function DefaultsRow({
-  icon,
   label,
   value,
   options,
   onChange,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex min-h-12 items-center gap-2.5 border-b border-border-subtle py-1.5 last:border-b-0">
-      <span className="grid size-7.5 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent">
-        {icon}
-      </span>
+    <div className="grid min-h-12 grid-cols-2 items-center gap-2 border-b border-border-subtle py-1.5 last:border-b-0">
       <span className="flex-1 text-sm font-semibold text-text">{label}</span>
       <Select
         aria-label={label}
-        className="max-w-75"
         value={options.some((o) => o.value === value) ? value : ""}
         options={
           options.some((o) => o.value === value) ? options : [{ value: "", label: "—" }, ...options]

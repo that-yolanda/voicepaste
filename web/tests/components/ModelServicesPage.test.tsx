@@ -55,14 +55,17 @@ test("deleting local files refreshes the row and removes the model from default 
   fireEvent.click(screen.getByRole("button", { name: /本地语音识别模型/ }));
   const name = screen.getByText(localModel.name, { exact: true });
   const row = name.closest(".flex.min-h-14") as HTMLElement;
-  fireEvent.click(within(row).getByRole("button"));
+  fireEvent.click(row);
   fireEvent.click(screen.getByRole("button", { name: "删除模型文件" }));
-  await waitFor(() =>
-    expect(within(row).getByRole("button", { name: "下载" })).toBeInTheDocument(),
-  );
-  fireEvent.click(within(row).getByRole("button", { name: "下载" }));
+  const download = await waitFor(() => {
+    const updatedRow = screen
+      .getByText(localModel.name, { exact: true })
+      .closest(".flex.min-h-14") as HTMLElement;
+    return within(updatedRow).getByRole("button", { name: "下载" });
+  });
+  fireEvent.click(download);
   expect(mocks.downloadModel).toHaveBeenCalledWith(localModel.id);
-  fireEvent.click(screen.getByRole("button", { name: "模型服务" }));
+  fireEvent.click(screen.getByRole("button", { name: "模型配置" }));
   expect(
     within(screen.getByRole("combobox", { name: "语音识别" })).queryByRole("option", {
       name: new RegExp(localModel.name),

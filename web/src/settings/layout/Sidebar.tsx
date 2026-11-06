@@ -2,13 +2,13 @@ import {
   BookOpen,
   Home,
   Info,
+  Key,
   Keyboard,
   ListChecks,
   MessageSquare,
   NotebookText,
   Settings2,
   Sparkles,
-  Waves,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,7 +27,7 @@ export type SectionId =
   | "feedback"
   | "about";
 
-const MODEL_ITEMS = [{ id: "models", icon: Waves, label: "ui.nav.models_service" }] as const;
+const MODEL_ITEMS = [{ id: "models", icon: Key, label: "ui.nav.models_service" }] as const;
 const USAGE_ITEMS = [
   { id: "hotkey", icon: Keyboard, label: "ui.nav.hotkey" },
   { id: "hotwords", icon: NotebookText, label: "ui.nav.hotwords" },

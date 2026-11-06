@@ -797,6 +797,38 @@ impl AppConfig {
             }
         }
 
+        // A provider base URL is combined with the model's selected mode. Older
+        // configurations without url_base keep their original full URL precedence.
+        if model_id == DOUBAO_STREAMING_ID {
+            let base = user_audio
+                .get("credentials")
+                .and_then(|c| c.get("bytedance"))
+                .and_then(|c| c.get("url_base"))
+                .and_then(|v| v.as_str())
+                .filter(|v| !v.trim().is_empty());
+            if let Some(base) = base {
+                let model_url = user_audio
+                    .get(model_id)
+                    .and_then(|v| v.get("url"))
+                    .and_then(|v| v.as_str())
+                    .or_else(|| merged.get("url").and_then(|v| v.as_str()))
+                    .unwrap_or("");
+                let suffix = if model_url
+                    .trim_end_matches('/')
+                    .ends_with("/bigmodel_nostream")
+                {
+                    "bigmodel_nostream"
+                } else {
+                    "bigmodel_async"
+                };
+                if let Some(target) = merged.as_object_mut() {
+                    target.insert(
+                        "url".to_string(),
+                        serde_json::json!(format!("{}/{}", base.trim_end_matches('/'), suffix)),
+                    );
+                }
+            }
+        }
         merged
     }
 
@@ -2080,6 +2112,35 @@ mod provider_layer_tests {
         assert_eq!(resolved["api_key"], serde_json::json!("new-key"));
         // Legacy fields remain readable until the UI rewrites them (lazy migration).
         assert_eq!(resolved["app_id"], serde_json::json!("legacy-app"));
+    }
+
+    #[test]
+    fn doubao_base_url_preserves_mode_and_legacy_full_urls() {
+        let (data, resources, manager) = manager_with_registry();
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        let mut config = manager.get_editable_config().unwrap();
+        config["audio"][DOUBAO_STREAMING_ID] = serde_norway::from_str(
+            "url: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream\n",
+        )
+        .unwrap();
+        config["audio"]["credentials"]["bytedance"] =
+            serde_norway::from_str("url_base: wss://example.test/custom\n").unwrap();
+        manager.save_config(&config).unwrap();
+        let loaded = manager.load_config().unwrap();
+        let resolved =
+            AppConfig::resolve_model_config(&registry, DOUBAO_STREAMING_ID, &loaded.audio);
+        assert_eq!(
+            resolved["url"],
+            "wss://example.test/custom/bigmodel_nostream"
+        );
+
+        config["audio"]["credentials"]["bytedance"] =
+            serde_norway::from_str("url: wss://legacy.test/custom/bigmodel_async\n").unwrap();
+        manager.save_config(&config).unwrap();
+        let loaded = manager.load_config().unwrap();
+        let resolved =
+            AppConfig::resolve_model_config(&registry, DOUBAO_STREAMING_ID, &loaded.audio);
+        assert_eq!(resolved["url"], "wss://legacy.test/custom/bigmodel_async");
     }
 
     #[test]

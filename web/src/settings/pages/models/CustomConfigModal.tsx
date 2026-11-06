@@ -89,13 +89,14 @@ export function CustomConfigModal({
             <SectionHeader title={t(section.title)} />
             <SectionContent>
               <SectionItemList>
-                {section.fields.map((flatKey) => {
+                {section.fields.map((flatKey, index) => {
                   const value = getValue(flatKey);
                   const meta = resolveFieldMeta(getFieldMeta(flatKey, value), t);
                   return (
                     <SectionItem
                       key={flatKey}
                       title={meta.label}
+                      last={index === section.fields.length - 1}
                       action={renderControl(meta, value, (v) => handleChange(flatKey, v))}
                     />
                   );

@@ -7,9 +7,17 @@ interface ModalProps {
   title?: string;
   closeLabel?: string;
   children: ReactNode;
+  footer?: ReactNode;
 }
 
-export function Modal({ open, onClose, title, closeLabel = "Close modal", children }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  closeLabel = "Close modal",
+  children,
+  footer,
+}: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -33,7 +41,7 @@ export function Modal({ open, onClose, title, closeLabel = "Close modal", childr
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative bg-surface-card border border-border rounded-xl shadow-lg max-w-lg w-full mx-4"
+        className="relative bg-surface-solid border border-border rounded-xl shadow-lg max-w-lg w-full mx-4"
       >
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
@@ -48,7 +56,12 @@ export function Modal({ open, onClose, title, closeLabel = "Close modal", childr
             </button>
           </div>
         )}
-        <div className="p-5 text-sm text-text-dim  max-h-[80vh] overflow-auto">{children}</div>
+        <div className="p-5 text-sm text-text-dim max-h-[70vh] overflow-auto">{children}</div>
+        {footer && (
+          <div className="flex items-center gap-2 border-t border-border-subtle px-5 py-3">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

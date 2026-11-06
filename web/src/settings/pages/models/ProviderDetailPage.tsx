@@ -9,9 +9,7 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
-  Cloud,
   CloudDownload,
-  Cpu,
   ExternalLink,
   LoaderCircle,
   Plus,
@@ -24,6 +22,7 @@ import {
   deleteModel,
   downloadModel,
   type ModelDownloadProgress,
+  openExternalUrl,
   saveConfigObject,
   testProviderConnection,
 } from "@/settings/bridge";
@@ -34,9 +33,10 @@ import { AddModelModal } from "@/settings/components/models/AddModelModal";
 import { localizedProviderFields } from "@/settings/components/models/AddProviderModal";
 import { renderControl } from "@/settings/components/models/FieldControl";
 import {
-  AsrModelConfigDrawer,
-  LlmModelConfigDrawer,
-} from "@/settings/components/models/ModelConfigDrawer";
+  AsrModelConfigModal,
+  LlmModelConfigModal,
+} from "@/settings/components/models/ModelConfigModal";
+import { ProviderIcon } from "@/settings/components/models/ProviderIcon";
 import { Toast, useToast } from "@/settings/components/Toast";
 import {
   Section,
@@ -44,6 +44,7 @@ import {
   SectionHeader,
   SectionItem,
   SectionItemList,
+  SectionRows,
 } from "@/settings/layout/PageLayout";
 import { clonePlain } from "@/settings/lib/clone";
 import { languageName } from "@/settings/lib/languages";
@@ -68,6 +69,7 @@ import {
   visibleLlmModels,
   withAsrCredential,
   withAsrModelVisible,
+  withDoubaoBaseUrl,
   withLlmCredential,
   withLlmModels,
   withoutProvider,
@@ -83,7 +85,10 @@ import type {
 } from "@/settings/types/models";
 
 type Config = Record<string, unknown>;
-type DrawerState = { kind: "asr"; model: RegistryModel } | { kind: "llm"; entryId: string } | null;
+type ModelModalState =
+  | { kind: "asr"; model: RegistryModel }
+  | { kind: "llm"; entryId: string }
+  | null;
 
 interface ProviderDetailPageProps {
   provider: RegistryProvider;
@@ -112,7 +117,7 @@ export function ProviderDetailPage({
 
   const config = (settings?.parsedConfig || {}) as Config;
   const [tab, setTab] = useState<CapabilityKind>(provider.capabilities[0] ?? "asr");
-  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [modelModal, setModelModal] = useState<ModelModalState>(null);
   const [addModelOpen, setAddModelOpen] = useState(false);
   const [removeProviderOpen, setRemoveProviderOpen] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -200,7 +205,7 @@ export function ProviderDetailPage({
   };
 
   const removeAsrModel = async (model: RegistryModel) => {
-    setDrawer(null);
+    setModelModal(null);
     if (model.type === "offline") {
       // Local model removal deletes the downloaded files; the row stays.
       try {
@@ -220,10 +225,10 @@ export function ProviderDetailPage({
     await save(withLlmModels(config, provider.id, entries, models));
   };
 
-  const drawerEntry =
-    drawer?.kind === "llm"
+  const modelEntry =
+    modelModal?.kind === "llm"
       ? (() => {
-          const view = llmModels.find((v) => v.id === drawer.entryId);
+          const view = llmModels.find((v) => v.id === modelModal.entryId);
           if (!view) return null;
           const entry: LlmModelEntry = {
             id: view.id,
@@ -248,7 +253,18 @@ export function ProviderDetailPage({
         : scope === "llm"
           ? llmCredentialValues(config, provider.id)
           : asrCredentialValues(config, provider.id, models);
-    const filled = credentialsFilled(values, fields);
+    const filled = credentialsFilled(
+      {
+        ...values,
+        url:
+          values.url_base ||
+          values.url ||
+          (scope === "llm"
+            ? provider.default_llm_url
+            : asrCredentialDefault(models, provider.id, "url")),
+      },
+      fields,
+    );
 
     // Doubao auth-mode aware visibility (legacy App ID/Token vs v2 API Key).
     const doubaoMode = provider.id === "bytedance" ? effectiveDoubaoAuthMode(values) : null;
@@ -286,8 +302,21 @@ export function ProviderDetailPage({
         />
         <SectionContent>
           <SectionItemList>
-            {visibleFields.map((field) => {
-              const raw = String(values[field.key] ?? "");
+            {visibleFields.map((field, index) => {
+              const isDoubaoUrl =
+                scope === "asr" && provider.id === "bytedance" && field.key === "url";
+              const configuredUrl = String(values.url_base || values.url || "");
+              const raw = isDoubaoUrl
+                ? (configuredUrl || asrCredentialDefault(models, provider.id, "url")).replace(
+                    /\/bigmodel_(async|nostream)\/?$/,
+                    "",
+                  )
+                : String(
+                    values[field.key] ||
+                      (scope === "llm" && field.key === "url"
+                        ? provider.default_llm_url || ""
+                        : ""),
+                  );
               const placeholder =
                 scope === "asr" && field.key === "url"
                   ? asrCredentialDefault(models, provider.id, "url")
@@ -299,9 +328,14 @@ export function ProviderDetailPage({
                 (m) => m.provider === provider.id && m.category === "asr",
               );
               const meta = resolveFieldMeta(
-                getFieldMeta(field.key, raw, scope === "asr" ? asrModel?.id : undefined),
+                getFieldMeta(
+                  field.key,
+                  raw,
+                  scope === "asr" && !isDoubaoUrl ? asrModel?.id : undefined,
+                ),
                 t,
               );
+              if (scope === "llm" && field.key === "url") meta.label = t("ui.models.api_url");
               if (field.type === "password") meta.type = "password";
               meta.placeholder = meta.placeholder ?? placeholder;
               const control = renderControl(meta, raw, (value) => {
@@ -310,13 +344,16 @@ export function ProviderDetailPage({
                     ? withSharedCredential(config, provider.id, "url", String(value))
                     : scope === "llm"
                       ? withLlmCredential(config, provider.id, field.key as "url", String(value))
-                      : withAsrCredential(config, provider.id, field.key, String(value), models);
+                      : isDoubaoUrl
+                        ? withDoubaoBaseUrl(config, String(value))
+                        : withAsrCredential(config, provider.id, field.key, String(value), models);
                 void save(next);
               });
               return (
                 <SectionItem
                   key={field.key}
                   title={meta.label}
+                  last={index === visibleFields.length - 1}
                   tooltip={meta.tooltip}
                   action={control}
                 />
@@ -353,61 +390,66 @@ export function ProviderDetailPage({
       typeof progress?.progress === "number"
         ? Math.max(0, Math.min(100, Math.round(progress.progress)))
         : 0;
-    return (
-      <div
-        key={model.id}
-        className="flex min-h-14 items-center gap-3 border-b border-border-subtle py-2 last:border-b-0 hover:bg-fill-hover/40"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+    const canConfigure = model.type !== "offline" || downloadedNow;
+    const content = (
+      <>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
             <span className="text-sm font-semibold text-text">{name}</span>
             {activeAsrId === model.id && (
               <Badge variant="accent" size="xs">
                 {t("ui.models.default_badge")}
               </Badge>
             )}
-          </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-text-muted">
-            {model.type === "offline" &&
-              (downloadedNow ? (
-                <span className="text-success">{t("ui.models.downloaded")}</span>
-              ) : (
-                <span>{t("ui.models.not_downloaded")}</span>
-              ))}
+          </span>
+          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-text-muted">
+            {model.type === "offline" && (
+              <Badge variant={downloadedNow ? "success" : "default"} size="xs">
+                {t(downloadedNow ? "ui.models.downloaded" : "ui.models.not_downloaded")}
+              </Badge>
+            )}
             <span className="truncate">{renderModelMeta(model)}</span>
-          </div>
+          </span>
           {isDownloading(model.id) && (
-            <div className="mt-1 h-1.5 w-40 overflow-hidden rounded-full bg-fill-track">
-              <div
-                className="h-full rounded-full bg-accent transition-[width]"
+            <span className="mt-1 block h-1.5 w-40 overflow-hidden rounded-full bg-fill-track">
+              <span
+                className="block h-full rounded-full bg-accent transition-[width]"
                 style={{ width: `${percent}%` }}
               />
-            </div>
+            </span>
           )}
-        </div>
-        {model.type === "offline" && !downloadedNow ? (
-          <Button
-            variant="accent"
-            disabled={isDownloading(model.id)}
-            onClick={() => void downloadModel(model.id)}
-          >
-            {isDownloading(model.id) ? (
-              <LoaderCircle size={14} className="animate-spin" />
-            ) : (
-              <CloudDownload size={14} />
-            )}
-            {t("ui.models.download")}
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t("ui.models.configure_model", { model: name })}
-            onClick={() => setDrawer({ kind: "asr", model })}
-          >
-            <ChevronRight size={15} />
-          </Button>
-        )}
+        </span>
+      </>
+    );
+    return canConfigure ? (
+      <button
+        key={model.id}
+        type="button"
+        aria-label={t("ui.models.configure_model", { model: name })}
+        className="flex min-h-14 w-full items-center gap-3 border-b border-border-subtle px-4 py-2 text-left last:border-b-0 hover:bg-fill-hover/40"
+        onClick={() => setModelModal({ kind: "asr", model })}
+      >
+        {content}
+        <ChevronRight size={15} className="shrink-0 text-text-muted" />
+      </button>
+    ) : (
+      <div
+        key={model.id}
+        className="flex min-h-14 items-center gap-3 border-b border-border-subtle px-4 py-2 last:border-b-0"
+      >
+        {content}
+        <Button
+          variant="accent"
+          disabled={isDownloading(model.id)}
+          onClick={() => void downloadModel(model.id)}
+        >
+          {isDownloading(model.id) ? (
+            <LoaderCircle size={14} className="animate-spin" />
+          ) : (
+            <CloudDownload size={14} />
+          )}
+          {t("ui.models.download")}
+        </Button>
       </div>
     );
   };
@@ -425,78 +467,70 @@ export function ProviderDetailPage({
       ).name;
     const isDefault = defaultLlm?.id === view.id;
     return (
-      <div
+      <button
         key={view.id}
-        className="flex min-h-14 items-center gap-3 border-b border-border-subtle py-2 last:border-b-0 hover:bg-fill-hover/40"
+        type="button"
+        aria-label={t("ui.models.configure_model", { model: displayName })}
+        className="flex min-h-14 w-full items-center gap-3 border-b border-border-subtle px-4 py-2 text-left last:border-b-0 hover:bg-fill-hover/40"
+        onClick={() => setModelModal({ kind: "llm", entryId: view.id })}
       >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
             <span className="text-sm font-semibold text-text">{displayName}</span>
             {isDefault && (
               <Badge variant="accent" size="xs">
                 {t("ui.models.default_badge")}
               </Badge>
             )}
-            {!view.preset && (
-              <Badge variant="ghost" size="xs">
-                {t("ui.models.custom_model")}
-              </Badge>
-            )}
-          </div>
-          <div className="mt-0.5 truncate text-xs text-text-muted">{viewRequestId(view)}</div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t("ui.models.configure_model", { model: displayName })}
-          onClick={() => setDrawer({ kind: "llm", entryId: view.id })}
-        >
-          <ChevronRight size={15} />
-        </Button>
-      </div>
+            {!view.preset && <Badge size="xs">{t("ui.models.custom_model")}</Badge>}
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-text-muted">
+            {viewRequestId(view)}
+          </span>
+        </span>
+        <ChevronRight size={15} className="shrink-0 text-text-muted" />
+      </button>
     );
   };
 
   const renderModelSection = (cap: CapabilityKind) => {
     if (cap === "asr") {
       return (
-        <Section aria-label={t("ui.models.asr_models")}>
-          <SectionHeader
-            title={t("ui.models.asr_models")}
-            action={
-              <Button variant="ghost" onClick={() => setAddModelOpen(true)}>
-                <Plus size={14} />
-                {t("ui.models.add_model")}
-              </Button>
-            }
-          />
-          <SectionContent className="px-0 pb-0">
-            {asrModels.map(renderAsrRow)}
-            {asrModels.length === 0 && (
-              <p className="px-4 py-3 text-sm text-text-muted">{t("ui.models.no_models")}</p>
-            )}
-          </SectionContent>
-        </Section>
-      );
-    }
-    return (
-      <Section aria-label={t("ui.models.llm_models")}>
-        <SectionHeader
-          title={t("ui.models.llm_models")}
-          action={
+        <div className="space-y-2">
+          <div className="flex justify-end">
             <Button variant="ghost" onClick={() => setAddModelOpen(true)}>
               <Plus size={14} />
               {t("ui.models.add_model")}
             </Button>
-          }
-        />
-        <SectionContent className="px-0 pb-0">
-          {llmModels.map(renderLlmRow)}
-          {llmModels.length === 0 && (
-            <p className="px-4 py-3 text-sm text-text-muted">{t("ui.models.no_models")}</p>
-          )}
-        </SectionContent>
-      </Section>
+          </div>
+          <Section aria-label={t("ui.models.asr_models")}>
+            <SectionRows>
+              {asrModels.map(renderAsrRow)}
+              {asrModels.length === 0 && (
+                <p className="px-4 py-3 text-sm text-text-muted">{t("ui.models.no_models")}</p>
+              )}
+            </SectionRows>
+          </Section>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        <div className="flex justify-end">
+          <Button variant="ghost" onClick={() => setAddModelOpen(true)}>
+            <Plus size={14} />
+            {t("ui.models.add_model")}
+          </Button>
+        </div>
+        <Section aria-label={t("ui.models.llm_models")}>
+          <SectionRows>
+            {llmModels.map(renderLlmRow)}
+            {llmModels.length === 0 && (
+              <p className="px-4 py-3 text-sm text-text-muted">{t("ui.models.no_models")}</p>
+            )}
+          </SectionRows>
+        </Section>
+      </div>
     );
   };
 
@@ -515,25 +549,17 @@ export function ProviderDetailPage({
       </button>
 
       <header className="flex items-center gap-3">
-        <span
-          className={`grid size-11 place-items-center rounded-xl border border-border-subtle ${
-            provider.kind === "local" ? "text-text-dim" : "text-accent"
-          }`}
-        >
-          {provider.kind === "local" ? <Cpu size={22} /> : <Cloud size={22} />}
-        </span>
+        <ProviderIcon provider={provider} size="large" />
         <h1 className="flex-1 text-xl font-semibold text-text">{providerName}</h1>
         <div className="flex items-center gap-3">
           {provider.docs_url && (
-            <a
-              className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
-              href={provider.docs_url}
-              target="_blank"
-              rel="noreferrer"
+            <Button
+              variant="ghost"
+              onClick={() => void openExternalUrl(provider.docs_url as string)}
             >
-              <ExternalLink size={12} />
+              <ExternalLink size={14} />
               {t("ui.models.how_to_apply")}
-            </a>
+            </Button>
           )}
           <Button variant="ghost" onClick={() => setRemoveProviderOpen(true)}>
             <Trash2 size={14} />
@@ -576,21 +602,41 @@ export function ProviderDetailPage({
       {baseModels.length > 0 && (tab === "asr" || !showTabs) && (
         <Section aria-label={t("ui.audio.base_models")}>
           <SectionHeader title={t("ui.audio.base_models")} />
-          <SectionContent className="px-0 pb-0">{baseModels.map(renderAsrRow)}</SectionContent>
+          <SectionRows>{baseModels.map(renderAsrRow)}</SectionRows>
         </Section>
       )}
       {hasLlm && (tab === "llm" || !showTabs) && renderModelSection("llm")}
 
-      {/* Drawer */}
-      {drawer?.kind === "asr" && (
-        <AsrModelConfigDrawer
-          model={drawer.model}
-          onClose={() => setDrawer(null)}
-          userConfig={asRecord(asRecord(config.audio)[drawer.model.id])}
+      {/* Modal */}
+      {modelModal?.kind === "asr" && (
+        <AsrModelConfigModal
+          model={modelModal.model}
+          onClose={() => setModelModal(null)}
+          userConfig={(() => {
+            const audio = asRecord(config.audio);
+            const modelConfig = asRecord(audio[modelModal.model.id]);
+            if (modelModal.model.id !== "doubao-streaming") return modelConfig;
+            const credentials = asRecord(asRecord(audio.credentials).bytedance);
+            const url = String(
+              credentials.url_base
+                ? modelConfig.url || credentials.url || ""
+                : credentials.url || modelConfig.url || "",
+            );
+            return {
+              ...modelConfig,
+              ...(url
+                ? {
+                    url: url.endsWith("/bigmodel_nostream")
+                      ? "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
+                      : "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+                  }
+                : {}),
+            };
+          })()}
           asrDefaults={asrDefaults}
           onConfigChange={(modelId, patch) => {
-            const audio = asRecord(config.audio);
-            if (drawer.model.category === "vad") {
+            const audio = clonePlain(asRecord(config.audio));
+            if (modelModal.model.category === "vad") {
               const defaults = asRecord(audio.asr_defaults);
               const vad = { ...asRecord(defaults.vad), ...asRecord(patch.vad) };
               void save({
@@ -598,6 +644,16 @@ export function ProviderDetailPage({
                 audio: { ...audio, asr_defaults: { ...defaults, vad } },
               });
               return;
+            }
+            if (modelId === "doubao-streaming" && typeof patch.url === "string") {
+              const credentials = asRecord(audio.credentials);
+              const bytedance = { ...asRecord(credentials.bytedance) };
+              const legacyUrl = bytedance.url || asRecord(audio[modelId]).url;
+              if (!bytedance.url_base && typeof legacyUrl === "string") {
+                bytedance.url_base = legacyUrl.replace(/\/bigmodel_(async|nostream)\/?$/, "");
+              }
+              delete bytedance.url;
+              audio.credentials = { ...credentials, bytedance };
             }
             const current = asRecord(audio[modelId]);
             const next = { ...current };
@@ -613,7 +669,7 @@ export function ProviderDetailPage({
           }}
           onReset={(modelId) => {
             const audio = { ...asRecord(config.audio) };
-            if (drawer.model.category === "vad") {
+            if (modelModal.model.category === "vad") {
               const defaults = { ...asRecord(audio.asr_defaults) };
               delete defaults.vad;
               audio.asr_defaults = defaults;
@@ -625,23 +681,23 @@ export function ProviderDetailPage({
           }}
           onRemove={(model) => void removeAsrModel(model)}
           removeLabel={
-            drawer.model.type === "offline"
+            modelModal.model.type === "offline"
               ? t("ui.models.delete_files")
               : t("ui.models.remove_model")
           }
         />
       )}
-      {drawerEntry && (
-        <LlmModelConfigDrawer
-          entry={drawerEntry.entry}
+      {modelEntry && (
+        <LlmModelConfigModal
+          entry={modelEntry.entry}
           presetName={
-            drawerEntry.view.preset
-              ? localizedModelFields(drawerEntry.view.preset, i18n.language).name
+            modelEntry.view.preset
+              ? localizedModelFields(modelEntry.view.preset, i18n.language).name
               : undefined
           }
-          requestDefault={viewRequestId(drawerEntry.view)}
-          isCustom={!drawerEntry.view.preset}
-          onClose={() => setDrawer(null)}
+          requestDefault={viewRequestId(modelEntry.view)}
+          isCustom={!modelEntry.view.preset}
+          onClose={() => setModelModal(null)}
           onChange={(entry) => {
             const entries = llmModels.map((v) =>
               v.id === entry.id
@@ -656,10 +712,10 @@ export function ProviderDetailPage({
             void changeLlmModels(entries);
           }}
           onRemove={() => {
-            setDrawer(null);
+            setModelModal(null);
             void changeLlmModels(
               llmModels
-                .filter((v) => v.id !== drawerEntry.entry.id)
+                .filter((v) => v.id !== modelEntry.entry.id)
                 .map((v) => ({
                   id: v.id,
                   name: v.name,
@@ -705,9 +761,6 @@ export function ProviderDetailPage({
           {t("ui.models.remove_provider_confirm", { provider: providerName })}
         </p>
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setRemoveProviderOpen(false)}>
-            {t("ui.common.cancel")}
-          </Button>
           <Button variant="accent" onClick={() => void removeProvider()}>
             <Trash2 size={14} />
             {t("ui.models.remove_provider")}

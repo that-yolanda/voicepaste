@@ -12,6 +12,7 @@
   --color-surface: rgba(20, 20, 19, 0.7);
   --color-surface-main: rgba(28, 28, 26, 0.82);
   --color-surface-card: rgba(34, 34, 32, 0.86);
+  --color-surface-solid: #222220;
   --color-input-bg: rgba(40, 40, 38, 0.5);
 
   --color-border: #30302e;
@@ -88,6 +89,7 @@ body {
   --color-surface: rgba(250, 249, 245, 0.62);
   --color-surface-main: rgba(245, 244, 237, 0.82);
   --color-surface-card: rgba(255, 255, 255, 0.84);
+  --color-surface-solid: #fff;
   --color-input-bg: rgba(0, 0, 0, 0.06);
 
   --color-border: #e5e5e5;
@@ -177,4 +179,23 @@ main {
   .heatmap-reveal {
     animation: none;
   }
+}
+
+/* Keep form labels and editable fields aligned without changing switches or buttons. */
+.section-item-row:has(
+    .section-item-action :is(select, input:not([type="checkbox"]):not([type="radio"]))
+  ) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.section-item-row:has(
+    .section-item-action :is(select, input:not([type="checkbox"]):not([type="radio"]))
+  )
+  .section-item-action {
+  width: 100%;
+  max-width: none;
+}
+.section-item-action > div:has(> :is(select, input:not([type="checkbox"]):not([type="radio"]))) {
+  width: 100%;
+  max-width: none;
 }
