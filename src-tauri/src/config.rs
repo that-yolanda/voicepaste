@@ -353,7 +353,9 @@ pub struct LlmConfig {
     pub ollama: Option<ProviderConfig>,
     #[serde(default)]
     pub bytedance: Option<ProviderConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_openai: Option<ProviderConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub openai_compatible: Option<ProviderConfig>,
     #[serde(default)]
     pub url: Option<String>,
@@ -1058,6 +1060,7 @@ impl Default for AppConfig {
                 siliconflow: None,
                 ollama: None,
                 bytedance: None,
+                custom_openai: None,
                 openai_compatible: None,
                 url: None,
                 api_key: None,

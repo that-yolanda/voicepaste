@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   addedProviderIds,
   allVisibleLlmModels,
+  asRecord,
   asrCredentialValues,
   catalogProviders,
   credentialsFilled,
@@ -17,6 +18,7 @@ import {
   withAsrCredential,
   withAsrModelVisible,
   withDefaultLlmModel,
+  withLlmCredential,
   withLlmModels,
   withoutProvider,
 } from "@/settings/lib/providers";
@@ -246,6 +248,197 @@ describe("credentials", () => {
 });
 
 describe("config patches", () => {
+  test("adding preserves an active legacy ASR provider", () => {
+    const next = withAddedProvider(
+      { audio: { provider: "elevenlabs-realtime" } },
+      "deepseek",
+      MODELS,
+    );
+    expect(asRecord(next.model_providers).added).toContain("elevenlabs");
+  });
+
+  test("editing models migrates legacy defaults including preset request ids", () => {
+    for (const legacy of ["doubao-seed-1-6-flash-250715", "custom-model"]) {
+      const config = { llm: { provider: "bytedance", model: legacy, bytedance: {} } };
+      const entries = visibleLlmModels(config.llm, "bytedance", MODELS).map((v) => ({ id: v.id }));
+      const next = withLlmModels(config, "bytedance", entries, MODELS);
+      expect(asRecord(next.llm).default_model).toBe(
+        legacy === "custom-model" ? legacy : "doubao-seed-1-6-flash",
+      );
+      expect(asRecord(next.llm).model).toBeUndefined();
+    }
+  });
+
+  test("editing another provider preserves the implicit bytedance default", () => {
+    const config = {
+      llm: {
+        default_model: "doubao-seed-1-6-flash",
+        model: "old-top",
+        deepseek: { model: "deepseek-flash" },
+      },
+    };
+    const next = withLlmModels(config, "deepseek", [{ id: "deepseek-flash" }], MODELS);
+    expect(asRecord(next.llm).default_model).toBe("doubao-seed-1-6-flash");
+    expect(asRecord(next.llm).model).toBe("old-top");
+  });
+
+  test("custom provider reads canonical section first and migrates legacy on writes", () => {
+    const legacy = {
+      llm: {
+        provider: "openai_compatible",
+        openai_compatible: { url: "old", api_key: "secret", model: "custom-model" },
+      },
+    };
+    expect(addedProviderIds(legacy, MODELS)).toContain("custom_openai");
+    expect(resolveDefaultLlmModel(legacy.llm, "custom_openai", MODELS)?.id).toBe("custom-model");
+    const migrated = withLlmCredential(legacy, "custom_openai", "url", "new");
+    expect(asRecord(migrated.llm).provider).toBe("custom_openai");
+    expect(asRecord(migrated.llm).openai_compatible).toBeUndefined();
+    expect(llmCredentialValues(migrated, "custom_openai")).toEqual({
+      url: "new",
+      api_key: "secret",
+    });
+    const both = {
+      llm: {
+        openai_compatible: { url: "old", api_key: "old" },
+        custom_openai: { url: "", api_key: "" },
+      },
+    };
+    expect(llmCredentialValues(both, "custom_openai")).toEqual({ url: "", api_key: "" });
+    expect(visibleLlmModels(both.llm, "custom_openai", MODELS)).toEqual([]);
+    const top = {
+      llm: {
+        provider: "openai_compatible",
+        url: "top-url",
+        api_key: "top-key",
+        openai_compatible: {},
+      },
+    };
+    const cleared = withLlmCredential(top, "custom_openai", "url", "");
+    expect(llmCredentialValues(cleared, "custom_openai")).toEqual({ url: "", api_key: "top-key" });
+    expect(asRecord(cleared.llm)).not.toHaveProperty("url");
+    expect(asRecord(cleared.llm)).not.toHaveProperty("api_key");
+    const partial = {
+      llm: {
+        provider: "openai_compatible",
+        url: "top-url",
+        api_key: "top-key",
+        custom_openai: null,
+        openai_compatible: { url: "legacy-url", api_key: "", model: "legacy-model" },
+      },
+    };
+    expect(llmCredentialValues(partial, "custom_openai")).toEqual({
+      url: "legacy-url",
+      api_key: "top-key",
+    });
+    const migratedPartial = withLlmCredential(partial, "custom_openai", "url", "edited");
+    expect(asRecord(asRecord(migratedPartial.llm).custom_openai)).toEqual({
+      url: "edited",
+      api_key: "top-key",
+      model: "legacy-model",
+    });
+    const canonical = {
+      llm: {
+        provider: "custom_openai",
+        url: "top-url",
+        api_key: "top-key",
+        openai_compatible: { url: "legacy-url", api_key: "legacy-key" },
+        custom_openai: { url: "", api_key: "" },
+      },
+    };
+    expect(llmCredentialValues(canonical, "custom_openai")).toEqual({ url: "", api_key: "" });
+    const editedCanonical = withLlmCredential(canonical, "custom_openai", "url", "edited");
+    expect(llmCredentialValues(editedCanonical, "custom_openai")).toEqual({
+      url: "edited",
+      api_key: "",
+    });
+  });
+
+  test("removing a provider clears only its declared legacy secrets and active top-level fields", () => {
+    const config = {
+      llm: {
+        provider: "openai_compatible",
+        url: "top",
+        api_key: "top-secret",
+        model: "top-model",
+        openai_compatible: { api_key: "old" },
+        custom_openai: { api_key: "new" },
+        deepseek: { api_key: "keep" },
+      },
+      audio: {
+        "doubao-streaming": { api_key: "remove", url: "remove", language: "keep" },
+        "elevenlabs-realtime": { api_key: "keep" },
+      },
+      model_providers: {
+        added: ["custom_openai", "bytedance", "deepseek"],
+        credentials: { custom_openai: { api_key: "new" }, openai_compatible: { api_key: "old" } },
+      },
+    };
+    const custom = withoutProvider(config, "custom_openai", PROVIDERS, MODELS);
+    expect(asRecord(custom.llm)).not.toHaveProperty("api_key");
+    expect(asRecord(custom.llm)).not.toHaveProperty("model");
+    expect(asRecord(custom.llm)).not.toHaveProperty("openai_compatible");
+    expect(asRecord(custom.llm)).not.toHaveProperty("custom_openai");
+    expect(asRecord(asRecord(custom.llm).deepseek).api_key).toBe("keep");
+    expect(asRecord(asRecord(custom.model_providers).credentials)).toEqual({});
+    const asr = withoutProvider(config, "bytedance", PROVIDERS, MODELS);
+    expect(asRecord(asRecord(asr.audio)["doubao-streaming"])).toEqual({ language: "keep" });
+    expect(asRecord(asRecord(asr.audio)["elevenlabs-realtime"]).api_key).toBe("keep");
+    expect(asRecord(asr.llm).api_key).toBe("top-secret");
+  });
+
+  test("ASR fallback respects visibility and downloaded status", () => {
+    const config = {
+      audio: { provider: "doubao-streaming" },
+      model_providers: { added: ["bytedance", "local_asr"] },
+    };
+    expect(
+      asRecord(withAsrModelVisible(config, "doubao-streaming", false, MODELS).audio).provider,
+    ).toBe("");
+    expect(
+      asRecord(
+        withAsrModelVisible(
+          config,
+          "doubao-streaming",
+          false,
+          MODELS,
+          (m) => m.id === "sherpa-sense-voice",
+        ).audio,
+      ).provider,
+    ).toBe("sherpa-sense-voice");
+    expect(asRecord(withoutProvider(config, "bytedance", PROVIDERS, MODELS).audio).provider).toBe(
+      "",
+    );
+  });
+
+  test("missing ASR provider uses the implicit doubao default when removing it", () => {
+    const config = { audio: {}, model_providers: { added: ["bytedance", "elevenlabs"] } };
+    expect(asRecord(withoutProvider(config, "bytedance", PROVIDERS, MODELS).audio).provider).toBe(
+      "elevenlabs-realtime",
+    );
+    expect(
+      asRecord(withAsrModelVisible(config, "doubao-streaming", false, MODELS).audio).provider,
+    ).toBe("elevenlabs-realtime");
+    const explicitEmpty = { ...config, audio: { provider: "" } };
+    expect(
+      asRecord(withAsrModelVisible(explicitEmpty, "doubao-streaming", false, MODELS).audio)
+        .provider,
+    ).toBe("");
+  });
+
+  test("removing the implicit LLM provider clears its credentials and selects a remaining provider", () => {
+    const next = withoutProvider(
+      {
+        llm: { default_model: "doubao-seed-1-6-flash", api_key: "bytedance-key" },
+        model_providers: { added: ["bytedance", "deepseek"] },
+      },
+      "bytedance",
+      PROVIDERS,
+      MODELS,
+    );
+    expect(asRecord(next.llm)).toEqual({ provider: "deepseek", default_model: "" });
+  });
+
   test("withAddedProvider appends and keeps the original untouched", () => {
     const config = { model_providers: { added: ["bytedance"] } };
     const next = withAddedProvider(config, "deepseek");
@@ -275,7 +468,7 @@ describe("config patches", () => {
     const config = { audio: { provider: "doubao-streaming" } };
     const next = withAsrModelVisible(config, "doubao-streaming", false, MODELS);
     expect(rec(next.audio).models).not.toContain("doubao-streaming");
-    expect(rec(next.audio).provider).toBe("elevenlabs-realtime");
+    expect(rec(next.audio).provider).toBe("");
   });
 
   test("withAsrCredential writes canonical and strips the legacy copy", () => {
@@ -283,9 +476,9 @@ describe("config patches", () => {
       audio: { "doubao-streaming": { api_key: "legacy", language: "ja" } },
     };
     const next = withAsrCredential(config, "bytedance", "api_key", "new", MODELS);
-    expect(rec(next.audio).credentials.bytedance.api_key).toBe("new");
-    expect(next.audio["doubao-streaming"].api_key).toBeUndefined();
-    expect(next.audio["doubao-streaming"].language).toBe("ja");
+    expect(asRecord(asRecord(asRecord(next.audio).credentials).bytedance).api_key).toBe("new");
+    expect(asRecord(asRecord(next.audio)["doubao-streaming"]).api_key).toBeUndefined();
+    expect(asRecord(asRecord(next.audio)["doubao-streaming"]).language).toBe("ja");
   });
 
   test("withoutProvider clears sections and falls back defaults", () => {
@@ -305,11 +498,10 @@ describe("config patches", () => {
     // Provider gone from list
     expect(rec(next.model_providers).added).not.toContain("bytedance");
     // ASR credentials cleared
-    expect(rec(next.audio).credentials.bytedance).toBeUndefined();
+    expect(asRecord(asRecord(next.audio).credentials).bytedance).toBeUndefined();
     // Active ASR model belonged to the removed provider → falls back to the
-    // only remaining visible ASR model (elevenlabs is not in this config's
-    // added list; the default predicate treats offline models as selectable)
-    expect(rec(next.audio).provider).toBe("sherpa-sense-voice");
+    // offline models are unavailable unless explicitly confirmed downloaded.
+    expect(rec(next.audio).provider).toBe("");
 
     const nextLlm = withoutProvider(config, "deepseek", PROVIDERS, MODELS);
     expect(rec(nextLlm.llm).deepseek).toBeUndefined();

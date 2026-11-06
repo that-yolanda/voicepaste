@@ -32,6 +32,7 @@ import {
   allVisibleLlmModels,
   asRecord,
   catalogProviders,
+  resolveDefaultLlmModel,
   visibleProviders,
   withAddedProvider,
   withDefaultLlmModel,
@@ -146,17 +147,25 @@ export function ModelServicesPage() {
     [config, providers, models],
   );
 
-  const activeAsrId = (audio.provider as string) || "doubao-streaming";
+  const activeAsrId = typeof audio.provider === "string" ? audio.provider : "doubao-streaming";
   const llm = asRecord(config.llm);
+  const activeLlmProvider =
+    typeof llm.provider !== "string"
+      ? "bytedance"
+      : llm.provider === "openai_compatible"
+        ? "custom_openai"
+        : llm.provider;
+  const resolvedLlm =
+    typeof activeLlmProvider === "string"
+      ? resolveDefaultLlmModel(llm, activeLlmProvider, models)
+      : null;
   const defaultLlmEntry = llmCandidates.find(
-    ({ provider, model }) =>
-      provider.id === llm.provider &&
-      model.id === (typeof llm.default_model === "string" ? llm.default_model : model.id),
+    ({ provider, model }) => provider.id === activeLlmProvider && model.id === resolvedLlm?.id,
   );
   // Fallback for legacy configs: first visible entry of the active provider.
   const defaultLlm =
     defaultLlmEntry ??
-    llmCandidates.find(({ provider }) => provider.id === llm.provider) ??
+    llmCandidates.find(({ provider }) => provider.id === activeLlmProvider) ??
     llmCandidates[0];
 
   const detailProvider = detailProviderId ? providers.find((p) => p.id === detailProviderId) : null;
@@ -192,6 +201,7 @@ export function ModelServicesPage() {
           asrDefaults={asrDefaults}
           downloaded={downloaded}
           downloadProgress={downloadProgress}
+          onDownloadedChange={refreshDownloaded}
           onBack={() => setDetailProviderId(null)}
         />
       </PageLayout>
@@ -313,7 +323,7 @@ export function ModelServicesPage() {
         open={addProviderOpen}
         onClose={() => setAddProviderOpen(false)}
         catalog={catalog}
-        onAdd={(providerId) => void save(withAddedProvider(clonePlain(config), providerId))}
+        onAdd={(providerId) => void save(withAddedProvider(clonePlain(config), providerId, models))}
       />
     </PageLayout>
   );
@@ -342,7 +352,9 @@ function DefaultsRow({
         aria-label={label}
         className="max-w-75"
         value={options.some((o) => o.value === value) ? value : ""}
-        options={options}
+        options={
+          options.some((o) => o.value === value) ? options : [{ value: "", label: "—" }, ...options]
+        }
         onChange={onChange}
       />
     </div>

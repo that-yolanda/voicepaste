@@ -68,7 +68,10 @@ fn provider_config<'a>(config: &'a LlmConfig, provider: &str) -> Option<&'a Prov
         "siliconflow" => config.siliconflow.as_ref(),
         "ollama" => config.ollama.as_ref(),
         "bytedance" => config.bytedance.as_ref(),
-        _ => config.openai_compatible.as_ref(),
+        _ => config
+            .custom_openai
+            .as_ref()
+            .or(config.openai_compatible.as_ref()),
     }
 }
 
@@ -83,6 +86,7 @@ struct VisibleModel {
 /// Request model string for a registry preset (registry id → vendor string,
 /// e.g. doubao-seed-1-6 → doubao-seed-1-6-250615).
 fn preset_request_id(registry: &ModelRegistry, provider: &str, model_id: &str) -> Option<String> {
+    let provider = canonical_provider(provider);
     registry
         .models
         .iter()
@@ -101,6 +105,7 @@ fn visible_models(
     registry: &ModelRegistry,
     provider: &str,
 ) -> Vec<VisibleModel> {
+    let provider = canonical_provider(provider);
     if let Some(entries) = provider_config(config, provider).and_then(|p| p.models.as_ref()) {
         return entries
             .iter()
@@ -126,6 +131,14 @@ fn visible_models(
             params: None,
         })
         .collect()
+}
+
+fn canonical_provider(provider: &str) -> &str {
+    if provider == "openai_compatible" {
+        "custom_openai"
+    } else {
+        provider
+    }
 }
 
 /// Resolve the active model for a provider into its request string and
@@ -332,20 +345,21 @@ struct ResolvedLlm {
 /// Resolve the endpoint, credentials and model for the active provider,
 /// falling back to the provider defaults for blank fields.
 fn resolve_endpoint(config: &LlmConfig, registry: &ModelRegistry) -> Result<ResolvedLlm, AppError> {
-    let provider_id = config.provider.as_str();
+    let provider_id = canonical_provider(&config.provider);
     let defaults = get_provider_defaults(provider_id);
 
     let (model, params) = resolve_active_model(config, registry, provider_id, &defaults)?;
 
     let provider_cfg = provider_config(config, provider_id);
+    let custom_section_present = provider_id == "custom_openai" && config.custom_openai.is_some();
     let provider_url = provider_cfg
         .map(|p| p.url.clone())
-        .filter(|u| !u.trim().is_empty())
+        .filter(|u| custom_section_present || !u.trim().is_empty())
         .or_else(|| config.url.clone())
         .unwrap_or_default();
     let api_key = provider_cfg
         .map(|p| p.api_key.clone())
-        .filter(|k| !k.is_empty())
+        .filter(|k| custom_section_present || !k.is_empty())
         .or_else(|| config.api_key.clone())
         .unwrap_or_default();
 
@@ -863,6 +877,7 @@ mod tests {
             siliconflow: None,
             ollama: None,
             bytedance: None,
+            custom_openai: None,
             openai_compatible: None,
         }
     }
@@ -888,6 +903,7 @@ mod tests {
             siliconflow: None,
             ollama: None,
             bytedance: None,
+            custom_openai: None,
             openai_compatible: None,
         }
     }
@@ -913,6 +929,7 @@ mod tests {
             siliconflow: None,
             ollama: None,
             bytedance: None,
+            custom_openai: None,
             openai_compatible: None,
         }
     }
@@ -1542,5 +1559,85 @@ mod tests {
     fn validate_provider_config_overrides_top_level() {
         let result = validate_llm_config(&make_openai_config(), &empty_registry());
         assert!(result.is_ok());
+    }
+}
+
+#[cfg(test)]
+mod custom_provider_alias_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn custom_segment_is_authoritative_and_legacy_is_supported() {
+        let registry: ModelRegistry =
+            serde_json::from_str(include_str!("../../registry.json")).unwrap();
+        for provider in ["custom_openai", "openai_compatible"] {
+            let old = json!({"url": "https://old.invalid", "api_key": "old", "models": [{"id": "old-model"}]});
+            let new = json!({"url": "https://new.invalid", "api_key": "", "models": [{"id": "new-model"}]});
+            let config: LlmConfig = serde_json::from_value(
+                json!({"provider": provider, "openai_compatible": old, "custom_openai": new, "api_key": "top-secret"}),
+            )
+            .unwrap();
+            let resolved = resolve_endpoint(&config, &registry).unwrap();
+            assert_eq!(resolved.url, "https://new.invalid");
+            assert_eq!(resolved.api_key, "");
+            assert_eq!(resolved.model, "new-model");
+            assert!(validate_llm_config(&config, &registry).is_err());
+            let legacy: LlmConfig = serde_json::from_value(json!({"provider": provider, "openai_compatible": {"url": "https://old.invalid", "api_key": "old", "models": [{"id": "old-model"}]}})).unwrap();
+            assert_eq!(
+                resolve_endpoint(&legacy, &registry).unwrap().model,
+                "old-model"
+            );
+            assert!(validate_llm_config(&legacy, &registry).is_ok());
+        }
+    }
+
+    #[test]
+    fn legacy_provider_uses_canonical_registry_presets() {
+        let mut registry: ModelRegistry =
+            serde_json::from_str(include_str!("../../registry.json")).unwrap();
+        let preset = registry
+            .models
+            .iter_mut()
+            .find(|m| m.id == "doubao-seed-1-6")
+            .unwrap();
+        preset.provider = Some("custom_openai".into());
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": "openai_compatible",
+            "default_model": "doubao-seed-1-6",
+            "custom_openai": {"url": "https://example.invalid", "api_key": "key"}
+        }))
+        .unwrap();
+        assert_eq!(
+            resolve_endpoint(&config, &registry).unwrap().model,
+            "doubao-seed-1-6-250615"
+        );
+    }
+
+    #[test]
+    fn legacy_partial_credentials_fall_back_to_top_level() {
+        let registry: ModelRegistry =
+            serde_json::from_str(include_str!("../../registry.json")).unwrap();
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": "openai_compatible", "custom_openai": null,
+            "openai_compatible": {"model": "legacy-model", "url": "", "api_key": ""},
+            "url": "https://top.invalid", "api_key": "top-key"
+        }))
+        .unwrap();
+        let resolved = resolve_endpoint(&config, &registry).unwrap();
+        assert_eq!(resolved.url, "https://top.invalid");
+        assert_eq!(resolved.api_key, "top-key");
+    }
+
+    #[test]
+    fn canonical_empty_url_does_not_fall_back_to_top_level() {
+        let registry: ModelRegistry =
+            serde_json::from_str(include_str!("../../registry.json")).unwrap();
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": "custom_openai", "custom_openai": {"model": "test", "url": "", "api_key": ""},
+            "openai_compatible": {"url": "https://old.invalid", "api_key": "old"},
+            "url": "https://top.invalid", "api_key": "top-key"
+        })).unwrap();
+        assert!(resolve_endpoint(&config, &registry).is_err());
     }
 }

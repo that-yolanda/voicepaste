@@ -305,6 +305,7 @@ const DOUBAO_FIELDS: Record<string, Partial<FieldMeta>> = {
   resource_id: {
     label: "field.doubao.resource",
     type: "select",
+    group: "basic",
     tooltip: "field.doubao.resource.tooltip",
     options: [
       { value: "volc.seedasr.sauc.duration", label: "field.doubao.resource.duration" },

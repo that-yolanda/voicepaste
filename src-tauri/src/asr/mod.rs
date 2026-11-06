@@ -74,6 +74,11 @@ pub async fn create_engine_session(
     hotwords: &[String],
 ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>, bool), AppError> {
     let engine_model_id = config.audio_provider();
+    if engine_model_id.trim().is_empty() {
+        return Err(
+            AppError::new(AppErrorCode::AsrModelNotInRegistry).with_param("model", engine_model_id)
+        );
+    }
     let entry = registry.models.iter().find(|m| m.id == engine_model_id);
 
     let (result, show_recording_hint) = match entry {
@@ -165,7 +170,7 @@ pub async fn test_asr_connection(
 
     // Probe with the provider's first online ASR model, without touching the
     // saved default-model selection.
-    let model_id = registry
+    let model = registry
         .models
         .iter()
         .find(|m| {
@@ -173,23 +178,44 @@ pub async fn test_asr_connection(
                 && m.category == ModelCategory::Asr
                 && m.model_type == "online"
         })
-        .map(|m| m.id.clone())
         .ok_or_else(|| {
             AppError::new(AppErrorCode::AsrModelNotInRegistry).with_param("model", provider_id)
         })?;
     let mut probe_config = config.clone();
     probe_config.audio.insert(
         "provider".to_string(),
-        serde_norway::Value::String(model_id.clone()),
+        serde_norway::Value::String(model.id.clone()),
     );
 
-    let (session, mut event_rx, _show_hint) =
-        create_engine_session(&probe_config, registry, data_dir, resource_dir, &[]).await?;
+    let (session, mut event_rx, mut ack_rx) = if model.engine == "volcengine" {
+        let doubao_config = probe_config.doubao_streaming_config(registry);
+        let engine = doubao::DoubaoEngine::new(
+            doubao_config.to_connection_config(),
+            doubao_config.to_audio_config(),
+            doubao_config.to_request_config(),
+        );
+        let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+        let (session, events) = engine.create_session_with_ack(&[], Some(ack_tx)).await?;
+        (session, events, Some(ack_rx))
+    } else {
+        let (session, events, _) =
+            create_engine_session(&probe_config, registry, data_dir, resource_dir, &[]).await?;
+        (session, events, None)
+    };
 
     let outcome = tokio::time::timeout(PROBE_TIMEOUT, async {
         loop {
-            match event_rx.recv().await {
+            let event = tokio::select! {
+                ack = async { ack_rx.as_mut().unwrap().await }, if ack_rx.is_some() => {
+                    if ack.is_ok() { break Ok(()); }
+                    ack_rx = None;
+                    continue;
+                }
+                event = event_rx.recv() => event,
+            };
+            match event {
                 // Session accepted + authenticated: the probe succeeded.
+                Some(AsrEvent::Open) if model.engine == "volcengine" => continue,
                 Some(AsrEvent::Open) | Some(AsrEvent::Transcript { .. }) => break Ok(()),
                 Some(AsrEvent::Error { error, .. }) => break Err(error),
                 Some(AsrEvent::Warning { .. }) => continue,
@@ -218,5 +244,76 @@ pub async fn test_asr_connection(
                 "no lifecycle event within {}s",
                 PROBE_TIMEOUT.as_secs()
             ))),
+    }
+}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+    use futures_util::{SinkExt, StreamExt};
+    use serde_json::json;
+    use tokio_tungstenite::{accept_async, tungstenite::Message};
+
+    fn registry() -> crate::model::ModelRegistry {
+        serde_json::from_str(include_str!("../../../registry.json")).unwrap()
+    }
+
+    #[tokio::test]
+    async fn empty_provider_reports_missing_model() {
+        let mut config = crate::config::AppConfig::default();
+        config.audio.insert(
+            "provider".into(),
+            serde_norway::Value::String(String::new()),
+        );
+        let result =
+            create_engine_session(&config, &registry(), PathBuf::new(), PathBuf::new(), &[]).await;
+        assert!(matches!(result, Err(error) if error.code == AppErrorCode::AsrModelNotInRegistry));
+    }
+
+    #[tokio::test]
+    async fn doubao_probe_waits_for_server_ack_or_rejection() {
+        for response in ["json_ack", "empty_ack", "rejection"] {
+            let accepted = response != "rejection";
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = tokio::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                let mut socket = accept_async(stream).await.unwrap();
+                socket.next().await.unwrap().unwrap();
+                if accepted {
+                    let payload: &[u8] = if response == "json_ack" { b"{}" } else { b"" };
+                    let mut frame = vec![0x11, 0x90, 0x10, 0x00];
+                    frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+                    frame.extend_from_slice(payload);
+                    socket.send(Message::Binary(frame.into())).await.unwrap();
+                } else {
+                    socket
+                        .send(Message::Text(
+                            json!({"code": 45000001, "message": "invalid init parameters"})
+                                .to_string()
+                                .into(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                let _ = socket.next().await;
+            });
+            let mut config = crate::config::AppConfig::default();
+            config.audio = serde_json::from_value(json!({"credentials": {"bytedance": {"url": format!("ws://{address}"), "auth_mode": "v2", "api_key": "test-key"}}})).unwrap();
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                test_asr_connection(
+                    &config,
+                    &registry(),
+                    PathBuf::new(),
+                    PathBuf::new(),
+                    "bytedance",
+                ),
+            )
+            .await
+            .unwrap();
+            assert_eq!(result.is_ok(), accepted, "result: {result:?}");
+            server.await.unwrap();
+        }
     }
 }

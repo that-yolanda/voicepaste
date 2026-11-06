@@ -22,6 +22,31 @@ export const DOUBAO_FALLBACK_MODEL_ID = "doubao-streaming";
 
 type Rec = Record<string, unknown>;
 
+function canonicalProviderId(id: string): string {
+  return id === "openai_compatible" ? "custom_openai" : id;
+}
+
+function llmProviderConfig(llm: Rec, providerId: string): Rec {
+  return providerId === "custom_openai"
+    ? asRecord(llm.custom_openai == null ? llm.openai_compatible : llm.custom_openai)
+    : asRecord(llm[providerId]);
+}
+
+function migrateCustomProvider(llm: Rec, providerId: string): void {
+  if (providerId !== "custom_openai") return;
+  const hasCanonical = llm.custom_openai != null;
+  const pc = { ...llmProviderConfig(llm, providerId) };
+  if (typeof llm.provider === "string" && canonicalProviderId(llm.provider) === providerId) {
+    for (const key of ["url", "api_key"]) {
+      if (!hasCanonical && !pc[key] && llm[key]) pc[key] = llm[key];
+      delete llm[key];
+    }
+  }
+  llm.custom_openai = pc;
+  delete llm.openai_compatible;
+  if (llm.provider === "openai_compatible") llm.provider = "custom_openai";
+}
+
 export function asRecord(value: unknown): Rec {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Rec) : {};
 }
@@ -42,7 +67,7 @@ function stringList(value: unknown): string[] | null {
  */
 export function addedProviderIds(config: Rec, models: RegistryModel[] = []): string[] {
   const added = stringList(asRecord(config.model_providers).added);
-  if (added) return added;
+  if (added) return [...new Set(added.map(canonicalProviderId))];
   return deriveAddedProviders(config, models);
 }
 
@@ -52,11 +77,11 @@ export function deriveAddedProviders(config: Rec, models: RegistryModel[] = []):
   const ids = new Set<string>(DEFAULT_ADDED_PROVIDERS);
 
   const activeLlm = typeof llm.provider === "string" ? llm.provider : "";
-  if (activeLlm) ids.add(activeLlm);
+  if (activeLlm) ids.add(canonicalProviderId(activeLlm));
   for (const [key, value] of Object.entries(llm)) {
     const pc = asRecord(value);
-    if (typeof pc.url === "string" && pc.url) ids.add(key);
-    if (typeof pc.api_key === "string" && pc.api_key) ids.add(key);
+    if (typeof pc.url === "string" && pc.url) ids.add(canonicalProviderId(key));
+    if (typeof pc.api_key === "string" && pc.api_key) ids.add(canonicalProviderId(key));
   }
   // Capability credentials imply the provider is in use.
   for (const key of Object.keys(asRecord(audio.credentials))) ids.add(key);
@@ -161,7 +186,7 @@ export function visibleLlmModels(
   models: RegistryModel[],
 ): LlmModelView[] {
   const presets = models.filter((m) => m.provider === providerId && m.category === "llm");
-  const providerCfg = asRecord(llm[providerId]);
+  const providerCfg = llmProviderConfig(llm, providerId);
   const list = Array.isArray(providerCfg.models) ? providerCfg.models : null;
 
   if (!list) {
@@ -222,12 +247,12 @@ export function resolveDefaultLlmModel(
   const byDefault = visible.find((v) => v.id === defaultId);
   if (byDefault) return byDefault;
 
-  const providerCfg = asRecord(llm[providerId]);
+  const providerCfg = llmProviderConfig(llm, providerId);
   const legacy = [
     typeof providerCfg.model === "string" ? providerCfg.model.trim() : "",
     typeof llm.model === "string" ? llm.model.trim() : "",
   ].find((m) => m.length > 0);
-  if (legacy) return visible.find((v) => v.id === legacy) ?? null;
+  if (legacy) return visible.find((v) => v.id === legacy || viewRequestId(v) === legacy) ?? null;
 
   return visible[0] ?? null;
 }
@@ -255,8 +280,11 @@ export function sharedCredentialValues(config: Rec, providerId: string): Rec {
 
 /** LLM capability credentials (llm.<provider>). */
 export function llmCredentialValues(config: Rec, providerId: string): Rec {
-  const pc = asRecord(asRecord(config.llm)[providerId]);
   const legacy = asRecord(config.llm);
+  const pc = llmProviderConfig(legacy, providerId);
+  if (providerId === "custom_openai" && legacy.custom_openai != null) {
+    return { url: pc.url ?? "", api_key: pc.api_key ?? "" };
+  }
   return {
     url: pc.url || legacy.url || "",
     api_key: pc.api_key || legacy.api_key || "",
@@ -304,9 +332,13 @@ function cloneConfig(config: Rec): Rec {
 }
 
 /** Add a provider to the visible list (initializes nothing else). */
-export function withAddedProvider(config: Rec, providerId: string): Rec {
+export function withAddedProvider(
+  config: Rec,
+  providerId: string,
+  models: RegistryModel[] = [],
+): Rec {
   const next = cloneConfig(config);
-  const added = new Set(addedProviderIds(config));
+  const added = new Set(addedProviderIds(config, models));
   added.add(providerId);
   next.model_providers = { ...asRecord(next.model_providers), added: [...added] };
   return next;
@@ -324,22 +356,39 @@ export function withoutProvider(
   providerId: string,
   providers: RegistryProvider[],
   models: RegistryModel[],
-  isAsrModelSelectable: (model: RegistryModel) => boolean = () => true,
+  isAsrModelSelectable: (model: RegistryModel) => boolean = () => false,
 ): Rec {
   const next = cloneConfig(config);
   const added = new Set(addedProviderIds(config, models));
   added.delete(providerId);
   next.model_providers = { ...asRecord(next.model_providers), added: [...added] };
+  const activeLlm = asRecord(next.llm).provider;
+  const activeLlmId = typeof activeLlm === "string" ? canonicalProviderId(activeLlm) : "bytedance";
 
   // Clear LLM section + shared credentials.
   if (next.llm && typeof next.llm === "object") {
-    delete (next.llm as Rec)[providerId];
+    const llm = next.llm as Rec;
+    delete llm[providerId];
+    if (providerId === "custom_openai") delete llm.openai_compatible;
+    if (activeLlmId === providerId) {
+      delete llm.url;
+      delete llm.api_key;
+      delete llm.model;
+    }
   }
   const shared = asRecord(asRecord(next.model_providers).credentials);
-  if (shared[providerId] !== undefined) {
+  if (
+    shared[providerId] !== undefined ||
+    (providerId === "custom_openai" && shared.openai_compatible !== undefined)
+  ) {
     next.model_providers = {
       ...asRecord(next.model_providers),
-      credentials: Object.fromEntries(Object.entries(shared).filter(([key]) => key !== providerId)),
+      credentials: Object.fromEntries(
+        Object.entries(shared).filter(
+          ([key]) =>
+            key !== providerId && !(providerId === "custom_openai" && key === "openai_compatible"),
+        ),
+      ),
     };
   }
 
@@ -352,12 +401,25 @@ export function withoutProvider(
       credentials: Object.fromEntries(Object.entries(creds).filter(([key]) => key !== providerId)),
     };
   }
+  const fields = providers.find((p) => p.id === providerId)?.credentials;
+  const keys = [...(fields?.asr?.fields ?? []), ...(fields?.shared?.fields ?? [])].map(
+    (f) => f.key,
+  );
+  const audioAfterCredentials = asRecord(next.audio);
+  for (const model of models) {
+    if (model.provider !== providerId || model.category !== "asr") continue;
+    const block = audioAfterCredentials[model.id];
+    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    const updated = { ...asRecord(block) };
+    for (const key of keys) delete updated[key];
+    audioAfterCredentials[model.id] = updated;
+  }
 
   const remaining = providers.filter((p) => added.has(p.id));
 
   // LLM default fallback.
   const llm = asRecord(next.llm);
-  if (llm.provider === providerId) {
+  if (activeLlmId === providerId) {
     const fallback =
       remaining.find((p) => p.id === "bytedance" && p.capabilities.includes("llm")) ??
       remaining.find((p) => p.capabilities.includes("llm"));
@@ -368,15 +430,14 @@ export function withoutProvider(
 
   // ASR default fallback: the removed provider's active model reselects.
   const audioNow = asRecord(next.audio);
-  const activeAsr = typeof audioNow.provider === "string" ? audioNow.provider : "";
+  const activeAsr =
+    typeof audioNow.provider === "string" ? audioNow.provider : DOUBAO_FALLBACK_MODEL_ID;
   if (providerOfModel(models, activeAsr) === providerId) {
     const candidates = remaining
       .flatMap((p) => visibleAsrModels(audioNow, p.id, models))
       .filter((m) => m.type === "online" || isAsrModelSelectable(m));
     const fallback = candidates.find((m) => m.id === DOUBAO_FALLBACK_MODEL_ID) ?? candidates[0];
-    if (fallback) {
-      next.audio = { ...audioNow, provider: fallback.id };
-    }
+    next.audio = { ...audioNow, provider: fallback?.id ?? "" };
   }
   return next;
 }
@@ -385,12 +446,28 @@ export function withoutProvider(
  * Replace a provider's LLM model list. Clears the legacy single-model field
  * so it cannot override `default_model` (see llm.rs priority note).
  */
-export function withLlmModels(config: Rec, providerId: string, entries: LlmModelEntry[]): Rec {
+export function withLlmModels(
+  config: Rec,
+  providerId: string,
+  entries: LlmModelEntry[],
+  models: RegistryModel[] = [],
+): Rec {
   const next = cloneConfig(config);
   const llm = asRecord(next.llm);
-  const providerCfg = asRecWithUpdate(llm[providerId]);
+  const active =
+    (typeof llm.provider === "string" ? canonicalProviderId(llm.provider) : "bytedance") ===
+    providerId;
+  const selected = active ? resolveDefaultLlmModel(llm, providerId, models) : null;
+  migrateCustomProvider(llm, providerId);
+  const providerCfg = llmProviderConfig(llm, providerId);
   const updated: Rec = { ...providerCfg, model: "", models: entries };
   next.llm = { ...llm, [providerId]: updated };
+  const nextLlm = asRecord(next.llm);
+  if (active) {
+    if (selected && entries.some((entry) => entry.id === selected.id))
+      nextLlm.default_model = selected.id;
+    delete nextLlm.model;
+  }
   return next;
 }
 
@@ -398,6 +475,7 @@ export function withLlmModels(config: Rec, providerId: string, entries: LlmModel
 export function withDefaultLlmModel(config: Rec, providerId: string, modelId: string): Rec {
   const next = cloneConfig(config);
   const llm = asRecord(next.llm);
+  migrateCustomProvider(llm, providerId);
   next.llm = { ...llm, provider: providerId, default_model: modelId };
   return next;
 }
@@ -408,6 +486,7 @@ export function withAsrModelVisible(
   modelId: string,
   visible: boolean,
   models: RegistryModel[],
+  isAsrModelSelectable: (model: RegistryModel) => boolean = () => false,
 ): Rec {
   const next = cloneConfig(config);
   const audio = asRecord(next.audio);
@@ -417,12 +496,19 @@ export function withAsrModelVisible(
   else current.delete(modelId);
   const updatedAudio: Rec = { ...audio, models: [...current] };
   // Removing the active default model reselects a visible one.
-  if (!visible && audio.provider === modelId) {
-    const candidates = [...current].map((id) => models.find((m) => m.id === id));
-    const fallback =
-      candidates.find((m) => m?.id === DOUBAO_FALLBACK_MODEL_ID) ??
-      candidates.find((m) => m?.type === "online");
-    if (fallback) updatedAudio.provider = fallback.id;
+  const activeAsr = typeof audio.provider === "string" ? audio.provider : DOUBAO_FALLBACK_MODEL_ID;
+  if (!visible && activeAsr === modelId) {
+    const added = new Set(addedProviderIds(config, models));
+    const candidates = models.filter(
+      (m) =>
+        m.category === "asr" &&
+        current.has(m.id) &&
+        !!m.provider &&
+        added.has(m.provider) &&
+        (m.type === "online" || isAsrModelSelectable(m)),
+    );
+    const fallback = candidates.find((m) => m.id === DOUBAO_FALLBACK_MODEL_ID) ?? candidates[0];
+    updatedAudio.provider = fallback?.id ?? "";
   }
   next.audio = updatedAudio;
   return next;
@@ -469,7 +555,8 @@ export function withLlmCredential(
 ): Rec {
   const next = cloneConfig(config);
   const llm = asRecord(next.llm);
-  const providerCfg = asRecord(llm[providerId]);
+  migrateCustomProvider(llm, providerId);
+  const providerCfg = llmProviderConfig(llm, providerId);
   next.llm = { ...llm, [providerId]: { ...providerCfg, [key]: value } };
   return next;
 }
@@ -490,8 +577,4 @@ export function withSharedCredential(
     credentials: { ...creds, [providerId]: { ...providerCreds, [key]: value } },
   };
   return next;
-}
-
-function asRecWithUpdate(value: unknown): Rec {
-  return asRecord(value);
 }

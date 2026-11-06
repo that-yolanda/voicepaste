@@ -71,10 +71,15 @@ export function AsrModelConfigDrawer({
   const { name, description } = localizedModelFields(model, i18n.language);
   const isVad = model.category === "vad";
 
-  const fields = useMemo(
-    () => getMergedAsrConfig(model, userConfig, asrDefaults),
-    [model, userConfig, asrDefaults],
-  );
+  const fields = useMemo(() => {
+    if (isVad) {
+      return Object.entries(asrDefaults?.vad ?? model.default_config ?? {}).map(([key, value]) => ({
+        key: `vad.${key}`,
+        value,
+      }));
+    }
+    return getMergedAsrConfig(model, userConfig, asrDefaults);
+  }, [model, userConfig, asrDefaults, isVad]);
   const fieldMeta = (f: MergedField) => getFieldMeta(f.key, f.value, model.id);
   const effectiveConfig = Object.fromEntries(fields.map((f) => [f.key, f.value]));
 

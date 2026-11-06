@@ -582,6 +582,16 @@ impl AsrEngine for DoubaoEngine {
         &self,
         hotwords: &[String],
     ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), AppError> {
+        self.create_session_with_ack(hotwords, None).await
+    }
+}
+
+impl DoubaoEngine {
+    pub(super) async fn create_session_with_ack(
+        &self,
+        hotwords: &[String],
+        mut ack: Option<tokio::sync::oneshot::Sender<()>>,
+    ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), AppError> {
         // Validate required fields (common to both auth modes)
         if self.connection.url.is_empty() {
             return Err(asr_config_missing("url"));
@@ -784,47 +794,6 @@ impl AsrEngine for DoubaoEngine {
                                 );
                             }
 
-                            // Handle different response types
-                            if payload.get("messageType").is_some()
-                                && payload.get("result").is_none()
-                                && payload.get("raw_text").is_none()
-                                && payload.get("code").is_none()
-                                && !is_last
-                            {
-                                // Non-result frame, skip
-                                continue;
-                            }
-
-                            if let Some(raw_text) = payload.get("raw_text").and_then(|v| v.as_str())
-                            {
-                                let cleaned = clean_asr_text(raw_text.trim());
-                                if is_ignorable_raw_text(&cleaned, &connect_id) {
-                                    continue;
-                                }
-                                if !cleaned.is_empty() {
-                                    let committed =
-                                        is_committed.load(std::sync::atomic::Ordering::SeqCst);
-                                    if committed {
-                                        *final_text.lock().await = cleaned.to_string();
-                                        let _ = event_tx_clone.send(AsrEvent::Transcript {
-                                            final_text: cleaned.to_string(),
-                                            partial_text: String::new(),
-                                        });
-                                    } else {
-                                        *partial_text.lock().await = cleaned.to_string();
-                                        let ft = final_text.lock().await.clone();
-                                        let pt = cleaned.to_string();
-                                        let _ = event_tx_clone.send(AsrEvent::Transcript {
-                                            final_text: ft,
-                                            partial_text: pt,
-                                        });
-                                    }
-                                }
-                                if !is_last {
-                                    continue;
-                                }
-                            }
-
                             // Error response
                             if let Some(code) = payload.get("code").and_then(|v| v.as_u64()) {
                                 if code != 20000000 {
@@ -863,6 +832,53 @@ impl AsrEngine for DoubaoEngine {
                                     }
                                     continue;
                                 }
+                            }
+
+                            if buffer[1] >> 4 == MSG_TYPE_ACK {
+                                if let Some(tx) = ack.take() {
+                                    let _ = tx.send(());
+                                }
+                            }
+
+                            if let Some(raw_text) = payload.get("raw_text").and_then(|v| v.as_str())
+                            {
+                                let cleaned = clean_asr_text(raw_text.trim());
+                                if is_ignorable_raw_text(&cleaned, &connect_id) {
+                                    continue;
+                                }
+                                if !cleaned.is_empty() {
+                                    let committed =
+                                        is_committed.load(std::sync::atomic::Ordering::SeqCst);
+                                    if committed {
+                                        *final_text.lock().await = cleaned.to_string();
+                                        let _ = event_tx_clone.send(AsrEvent::Transcript {
+                                            final_text: cleaned.to_string(),
+                                            partial_text: String::new(),
+                                        });
+                                    } else {
+                                        *partial_text.lock().await = cleaned.to_string();
+                                        let ft = final_text.lock().await.clone();
+                                        let pt = cleaned.to_string();
+                                        let _ = event_tx_clone.send(AsrEvent::Transcript {
+                                            final_text: ft,
+                                            partial_text: pt,
+                                        });
+                                    }
+                                }
+                                if !is_last {
+                                    continue;
+                                }
+                            }
+
+                            // Handle different response types
+                            if payload.get("messageType").is_some()
+                                && payload.get("result").is_none()
+                                && payload.get("raw_text").is_none()
+                                && payload.get("code").is_none()
+                                && !is_last
+                            {
+                                // Non-result frame, skip
+                                continue;
                             }
 
                             // Result response
@@ -984,7 +1000,12 @@ impl AsrEngine for DoubaoEngine {
                         // Handle text messages (error responses)
                         log_asr!(error, "ASR text message received ({} bytes)", text.len());
                         if let Ok(payload) = serde_json::from_str::<Value>(&text) {
-                            if payload.get("type").and_then(|v| v.as_str()) == Some("error") {
+                            if payload.get("type").and_then(|v| v.as_str()) == Some("error")
+                                || payload
+                                    .get("code")
+                                    .and_then(Value::as_u64)
+                                    .is_some_and(|code| code != 20000000)
+                            {
                                 let error = payload
                                     .get("message")
                                     .or_else(|| payload.get("error").and_then(|e| e.get("message")))

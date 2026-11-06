@@ -92,6 +92,7 @@ interface ProviderDetailPageProps {
   asrDefaults: AsrDefaults | null;
   downloaded: string[];
   downloadProgress: Record<string, ModelDownloadProgress>;
+  onDownloadedChange: () => Promise<void>;
   onBack: () => void;
 }
 
@@ -102,6 +103,7 @@ export function ProviderDetailPage({
   asrDefaults,
   downloaded,
   downloadProgress,
+  onDownloadedChange,
   onBack,
 }: ProviderDetailPageProps) {
   const { t, i18n } = useTranslation();
@@ -163,7 +165,8 @@ export function ProviderDetailPage({
     () => resolveDefaultLlmModel(asRecord(config.llm), provider.id, models),
     [config.llm, provider.id, models],
   );
-  const activeAsrId = (asRecord(config.audio).provider as string) || "doubao-streaming";
+  const activeAsr = asRecord(config.audio).provider;
+  const activeAsrId = typeof activeAsr === "string" ? activeAsr : "doubao-streaming";
 
   const isModelDownloaded = (m: RegistryModel) => m.type === "online" || downloaded.includes(m.id);
   const isDownloading = (id: string) => downloadProgress[id]?.status === "downloading";
@@ -206,14 +209,15 @@ export function ProviderDetailPage({
         showToast(errText(error), "error");
         return;
       }
+      await onDownloadedChange();
       await refresh();
       return;
     }
-    await save(withAsrModelVisible(config, model.id, false, models));
+    await save(withAsrModelVisible(config, model.id, false, models, isModelDownloaded));
   };
 
   const changeLlmModels = async (entries: LlmModelEntry[]) => {
-    await save(withLlmModels(config, provider.id, entries));
+    await save(withLlmModels(config, provider.id, entries, models));
   };
 
   const drawerEntry =
@@ -291,7 +295,13 @@ export function ProviderDetailPage({
                     ? (provider.default_llm_url ?? "")
                     : undefined;
               // Doubao URL renders as the mode select via FIELD_META.
-              const meta = resolveFieldMeta(getFieldMeta(field.key, raw, asrModels[0]?.id), t);
+              const asrModel = models.find(
+                (m) => m.provider === provider.id && m.category === "asr",
+              );
+              const meta = resolveFieldMeta(
+                getFieldMeta(field.key, raw, scope === "asr" ? asrModel?.id : undefined),
+                t,
+              );
               if (field.type === "password") meta.type = "password";
               meta.placeholder = meta.placeholder ?? placeholder;
               const control = renderControl(meta, raw, (value) => {
@@ -580,6 +590,15 @@ export function ProviderDetailPage({
           asrDefaults={asrDefaults}
           onConfigChange={(modelId, patch) => {
             const audio = asRecord(config.audio);
+            if (drawer.model.category === "vad") {
+              const defaults = asRecord(audio.asr_defaults);
+              const vad = { ...asRecord(defaults.vad), ...asRecord(patch.vad) };
+              void save({
+                ...clonePlain(config),
+                audio: { ...audio, asr_defaults: { ...defaults, vad } },
+              });
+              return;
+            }
             const current = asRecord(audio[modelId]);
             const next = { ...current };
             for (const [key, value] of Object.entries(patch)) {
@@ -594,6 +613,13 @@ export function ProviderDetailPage({
           }}
           onReset={(modelId) => {
             const audio = { ...asRecord(config.audio) };
+            if (drawer.model.category === "vad") {
+              const defaults = { ...asRecord(audio.asr_defaults) };
+              delete defaults.vad;
+              audio.asr_defaults = defaults;
+              void save({ ...clonePlain(config), audio });
+              return;
+            }
             delete audio[modelId];
             void save({ ...clonePlain(config), audio });
           }}
@@ -653,7 +679,7 @@ export function ProviderDetailPage({
         allowCustom={tab === "llm"}
         onRestorePreset={(modelId) => {
           if (tab === "asr") {
-            void save(withAsrModelVisible(config, modelId, true, models));
+            void save(withAsrModelVisible(config, modelId, true, models, isModelDownloaded));
           } else {
             const entries: LlmModelEntry[] = llmModels.map((v) => ({
               id: v.id,
