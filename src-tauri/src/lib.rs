@@ -205,6 +205,7 @@ pub fn run() {
             commands::download_model,
             commands::delete_model,
             commands::test_provider_connection,
+            commands::list_llm_models,
             #[cfg(desktop)]
             updater::check_for_update,
             #[cfg(desktop)]

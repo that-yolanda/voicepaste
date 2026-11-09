@@ -211,9 +211,12 @@ interface LlmModelConfigModalProps {
   /** Request string used when no override is set (preset default or id). */
   requestDefault: string;
   isCustom: boolean;
+  isNew?: boolean;
+  saving?: boolean;
   onClose: () => void;
   onChange: (entry: LlmModelEntry) => void;
-  onRemove: () => void;
+  onRemove?: () => void;
+  onSave?: () => void;
 }
 
 export function LlmModelConfigModal({
@@ -221,12 +224,14 @@ export function LlmModelConfigModal({
   presetName,
   requestDefault,
   isCustom,
+  isNew = false,
+  saving = false,
   onClose,
   onChange,
   onRemove,
+  onSave,
 }: LlmModelConfigModalProps) {
   const { t } = useTranslation();
-  const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
   const setParams = (key: keyof LlmModelParams, raw: string) => {
     const trimmed = raw.trim();
@@ -248,19 +253,28 @@ export function LlmModelConfigModal({
       title={t("ui.models.model_config")}
       footer={
         <>
-          <Button variant="ghost" className="mr-auto" onClick={onRemove}>
-            <Trash2 size={15} />
-            {t("ui.models.remove_model")}
-          </Button>
+          {onRemove && (
+            <Button variant="ghost" className="mr-auto" onClick={onRemove}>
+              <Trash2 size={15} />
+              {t("ui.models.remove_model")}
+            </Button>
+          )}
+          {isNew && <span className="mr-auto" />}
+          {!isNew && (
+            <Button
+              variant="ghost"
+              onClick={() => onChange({ ...entry, model_id: undefined, params: undefined })}
+            >
+              <RotateCcw size={15} />
+              {t("ui.model.reset")}
+            </Button>
+          )}
           <Button
-            variant="ghost"
-            onClick={() => onChange({ ...entry, model_id: undefined, params: undefined })}
+            variant="accent"
+            onClick={isNew ? onSave : onClose}
+            disabled={saving || (isNew && (!entry.id.trim() || !entry.name?.trim()))}
           >
-            <RotateCcw size={15} />
-            {t("ui.model.reset")}
-          </Button>
-          <Button variant="accent" onClick={onClose}>
-            {t("ui.models.done")}
+            {t(isNew ? "ui.models.save" : "ui.models.done")}
           </Button>
         </>
       }
@@ -271,11 +285,12 @@ export function LlmModelConfigModal({
           action={
             isCustom ? (
               <Input
+                aria-label={t("ui.models.model_name")}
                 className="w-full"
                 value={entry.name ?? ""}
-                placeholder={entry.id}
-                onChange={(v) => onChange({ ...entry, name: v.trim() || undefined })}
-                commitOnBlur
+                placeholder={isNew ? t("ui.models.model_name_placeholder") : entry.id}
+                onChange={(v) => onChange({ ...entry, name: isNew ? v : v.trim() || undefined })}
+                commitOnBlur={!isNew}
               />
             ) : (
               <span className="text-sm text-text">{presetName ?? entry.id}</span>
@@ -286,49 +301,47 @@ export function LlmModelConfigModal({
           title={t("ui.models.model_id")}
           action={
             <Input
+              aria-label={t("ui.models.model_id")}
               className="w-full"
-              value={entry.model_id ?? ""}
-              placeholder={requestDefault}
-              onChange={(v) => onChange({ ...entry, model_id: v.trim() || undefined })}
-              commitOnBlur
+              value={isNew ? entry.id : (entry.model_id ?? "")}
+              placeholder={isNew ? t("ui.models.model_id_placeholder") : requestDefault}
+              onChange={(v) =>
+                onChange(
+                  isNew ? { ...entry, id: v } : { ...entry, model_id: v.trim() || undefined },
+                )
+              }
+              commitOnBlur={!isNew}
             />
           }
-          description={t("ui.models.model_id_description")}
+          description={isNew ? undefined : t("ui.models.model_id_description")}
         />
       </SectionItemList>
 
       <div className="mt-4 space-y-2">
-        {advancedExpanded && (
-          <SectionItemList>
-            {PARAM_FIELDS.map((field) => (
-              <SectionItem
-                key={field.key}
-                title={t(field.label)}
-                tooltip={t(`${field.label}.tooltip`)}
-                action={
-                  <Input
-                    type="number"
-                    className="w-36"
-                    min={field.min}
-                    max={field.max}
-                    step={field.step}
-                    placeholder={field.placeholder}
-                    value={entry.params?.[field.key] ?? ""}
-                    onChange={(v) => setParams(field.key, v)}
-                    commitOnBlur
-                  />
-                }
-              />
-            ))}
-          </SectionItemList>
-        )}
-        <Button variant="ghost" className="w-full" onClick={() => setAdvancedExpanded((v) => !v)}>
-          <ChevronsUp
-            size={15}
-            className={`transition-transform duration-300 ${advancedExpanded ? "rotate-0" : "rotate-180"}`}
-          />
-          {t("ui.models.inference_params")}
-        </Button>
+        <p className="text-sm font-medium text-text">{t("ui.models.inference_params")}</p>
+        <SectionItemList>
+          {PARAM_FIELDS.map((field) => (
+            <SectionItem
+              key={field.key}
+              title={t(field.label)}
+              tooltip={t(`${field.label}.tooltip`)}
+              action={
+                <Input
+                  aria-label={t(field.label)}
+                  type="number"
+                  className="w-36"
+                  min={field.min}
+                  max={field.max}
+                  step={field.step}
+                  placeholder={field.placeholder}
+                  value={entry.params?.[field.key] ?? ""}
+                  onChange={(v) => setParams(field.key, v)}
+                  commitOnBlur={!isNew}
+                />
+              }
+            />
+          ))}
+        </SectionItemList>
         <p className="text-center text-xs text-text-muted">
           {t("ui.models.inference_params_hint")}
         </p>

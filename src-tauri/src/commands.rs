@@ -806,6 +806,18 @@ pub async fn delete_model(
     Ok(serde_json::json!({ "ok": true }))
 }
 
+#[tauri::command]
+pub async fn list_llm_models(
+    state: State<'_, AppState>,
+    provider_id: String,
+) -> Result<serde_json::Value, AppError> {
+    let config = state
+        .config_manager
+        .load_config()
+        .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
+    crate::llm::list_provider_models(&config.llm, &provider_id).await
+}
+
 /// Manually test one provider's connection (settings "测试" button). Probes
 /// are user-triggered only — opening the settings page never fires them.
 #[tauri::command]

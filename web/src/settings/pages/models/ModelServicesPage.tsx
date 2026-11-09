@@ -299,7 +299,9 @@ export function ModelServicesPage() {
             );
           })}
           {filtered.length === 0 && (
-            <p className="px-4 py-3 text-sm text-text-muted">{t("ui.models.no_providers")}</p>
+            <p className="px-4 py-3 text-center text-sm text-text-muted">
+              {t("ui.models.no_providers")}
+            </p>
           )}
         </SectionRows>
       </Section>

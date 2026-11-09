@@ -375,6 +375,12 @@ export async function testProviderConnection(
   return invoke("test_provider_connection", { providerId, capability });
 }
 
+export async function listLlmModels(
+  providerId: string,
+): Promise<{ data: Array<{ id: string; name?: string }> }> {
+  return invoke("list_llm_models", { providerId });
+}
+
 export function onModelDownloadProgress(listener: (p: ModelDownloadProgress) => void): () => void {
   let active = true;
   const unlisten = listen<ModelDownloadProgress>("model:download:progress", (event) => {

@@ -8,7 +8,7 @@
       "name_en": "ByteDance",
       "kind": "online",
       "capabilities": ["asr", "llm"],
-      "default_llm_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+      "default_llm_url": "https://ark.cn-beijing.volces.com/api/v3",
       "docs_url": "https://voicepaste.dev/docs/api/volcengine",
       "credentials": {
         "asr": {
@@ -74,7 +74,7 @@
       "name": "DeepSeek",
       "kind": "online",
       "capabilities": ["llm"],
-      "default_llm_url": "https://api.deepseek.com/v1/chat/completions",
+      "default_llm_url": "https://api.deepseek.com/v1",
       "docs_url": "https://platform.deepseek.com/api_keys",
       "credentials": {
         "llm": {
@@ -95,7 +95,7 @@
       "name": "OpenAI",
       "kind": "online",
       "capabilities": ["llm"],
-      "default_llm_url": "https://api.openai.com/v1/chat/completions",
+      "default_llm_url": "https://api.openai.com/v1",
       "docs_url": "https://platform.openai.com/api-keys",
       "credentials": {
         "llm": {
@@ -116,7 +116,7 @@
       "name": "Anthropic",
       "kind": "online",
       "capabilities": ["llm"],
-      "default_llm_url": "https://api.anthropic.com/v1/chat/completions",
+      "default_llm_url": "https://api.anthropic.com/v1",
       "docs_url": "https://console.anthropic.com/settings/keys",
       "credentials": {
         "llm": {
@@ -138,7 +138,7 @@
       "name_en": "Google Gemini",
       "kind": "online",
       "capabilities": ["llm"],
-      "default_llm_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      "default_llm_url": "https://generativelanguage.googleapis.com/v1beta/openai",
       "docs_url": "https://aistudio.google.com/app/apikey",
       "credentials": {
         "llm": {
@@ -159,7 +159,7 @@
       "name": "OpenRouter",
       "kind": "online",
       "capabilities": ["llm"],
-      "default_llm_url": "https://openrouter.ai/api/v1/chat/completions",
+      "default_llm_url": "https://openrouter.ai/api/v1",
       "docs_url": "https://openrouter.ai/settings/keys",
       "credentials": {
         "llm": {
@@ -181,7 +181,7 @@
       "name_en": "SiliconFlow",
       "kind": "online",
       "capabilities": ["llm"],
-      "default_llm_url": "https://api.siliconflow.cn/v1/chat/completions",
+      "default_llm_url": "https://api.siliconflow.cn/v1",
       "docs_url": "https://cloud.siliconflow.cn/account/ak",
       "credentials": {
         "llm": {
@@ -202,7 +202,7 @@
       "name": "Ollama",
       "kind": "local",
       "capabilities": ["llm"],
-      "default_llm_url": "http://localhost:11434/v1/chat/completions",
+      "default_llm_url": "http://localhost:11434/v1",
       "credentials": {
         "llm": {
           "fields": [
@@ -465,146 +465,6 @@
         "xh",
         "zu"
       ]
-    },
-    {
-      "id": "doubao-seed-1-6",
-      "provider": "bytedance",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "Doubao-Seed-1.6",
-      "description": "通用旗舰模型，256K 上下文，适合高质量润色",
-      "default_config": {
-        "model_id": "doubao-seed-1-6-250615"
-      },
-      "description_en": "Flagship general model with 256K context for high-quality polishing",
-      "languages": []
-    },
-    {
-      "id": "doubao-seed-1-6-flash",
-      "provider": "bytedance",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "Doubao-Seed-1.6-flash",
-      "description": "低延迟低成本，适合语音输入的实时润色",
-      "default_config": {
-        "model_id": "doubao-seed-1-6-flash-250715"
-      },
-      "description_en": "Low latency and cost, ideal for real-time voice polishing",
-      "languages": []
-    },
-    {
-      "id": "doubao-1-5-pro-32k",
-      "provider": "bytedance",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "Doubao-1.5-pro-32k",
-      "description": "上一代稳定模型，32K 上下文",
-      "default_config": {
-        "model_id": "doubao-1-5-pro-32k-250115"
-      },
-      "description_en": "Previous-generation stable model with 32K context",
-      "languages": []
-    },
-    {
-      "id": "deepseek-flash",
-      "provider": "deepseek",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "DeepSeek Flash",
-      "description": "DeepSeek 默认润色模型",
-      "default_config": {
-        "model_id": "deepseek-flash"
-      },
-      "description_en": "Default DeepSeek polishing model",
-      "languages": []
-    },
-    {
-      "id": "gpt-6-luna",
-      "provider": "openai",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "GPT-6 Luna",
-      "description": "OpenAI 默认润色模型",
-      "default_config": {
-        "model_id": "gpt-6-luna"
-      },
-      "description_en": "Default OpenAI polishing model",
-      "languages": []
-    },
-    {
-      "id": "claude-haiku-5-5",
-      "provider": "anthropic",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "Claude Haiku 5.5",
-      "description": "Anthropic 默认润色模型",
-      "default_config": {
-        "model_id": "claude-haiku-5-5"
-      },
-      "description_en": "Default Anthropic polishing model",
-      "languages": []
-    },
-    {
-      "id": "gemini-3-5-flash-lite",
-      "provider": "gemini",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "Gemini 3.5 Flash Lite",
-      "description": "Gemini 默认润色模型",
-      "default_config": {
-        "model_id": "gemini-3.5-flash-lite"
-      },
-      "description_en": "Default Gemini polishing model",
-      "languages": []
-    },
-    {
-      "id": "openrouter-gpt-6-luna",
-      "provider": "openrouter",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "GPT-6 Luna",
-      "description": "OpenRouter 默认润色模型",
-      "default_config": {
-        "model_id": "openai/gpt-6-luna"
-      },
-      "description_en": "Default OpenRouter polishing model",
-      "languages": []
-    },
-    {
-      "id": "qwen3-5-4b",
-      "provider": "siliconflow",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "Qwen3.5 4B",
-      "description": "硅基流动默认润色模型",
-      "default_config": {
-        "model_id": "Qwen/Qwen3.5-4B"
-      },
-      "description_en": "Default SiliconFlow polishing model",
-      "languages": []
-    },
-    {
-      "id": "ollama-qwen3-5-4b",
-      "provider": "ollama",
-      "type": "online",
-      "category": "llm",
-      "engine": "openai_compat",
-      "name": "Qwen3.5 4B",
-      "description": "Ollama 本地模型示例，可替换为你已拉取的任意模型",
-      "default_config": {
-        "model_id": "qwen3.5:4b"
-      },
-      "description_en": "Example Ollama local model; replace with any model you pulled",
-      "languages": []
     },
     {
       "id": "silero-vad",

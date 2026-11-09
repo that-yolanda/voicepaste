@@ -13,47 +13,35 @@ const DEFAULT_STRUCTURE_PROMPT: &str = "整理语音转写内容，仅输出最�
 #[derive(Debug, Clone)]
 struct ProviderDefaults {
     default_url: &'static str,
-    default_model: &'static str,
 }
 
 fn get_provider_defaults(provider: &str) -> ProviderDefaults {
     match provider {
         "deepseek" => ProviderDefaults {
-            default_url: "https://api.deepseek.com/v1/chat/completions",
-            default_model: "deepseek-flash",
+            default_url: "https://api.deepseek.com/v1",
         },
         "openai" => ProviderDefaults {
-            default_url: "https://api.openai.com/v1/chat/completions",
-            default_model: "gpt-6-luna",
+            default_url: "https://api.openai.com/v1",
         },
         "anthropic" => ProviderDefaults {
-            default_url: "https://api.anthropic.com/v1/chat/completions",
-            default_model: "claude-haiku-5-5",
+            default_url: "https://api.anthropic.com/v1",
         },
         "gemini" => ProviderDefaults {
-            default_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-            default_model: "gemini-3.5-flash-lite",
+            default_url: "https://generativelanguage.googleapis.com/v1beta/openai",
         },
         "openrouter" => ProviderDefaults {
-            default_url: "https://openrouter.ai/api/v1/chat/completions",
-            default_model: "openai/gpt-6-luna",
+            default_url: "https://openrouter.ai/api/v1",
         },
         "siliconflow" => ProviderDefaults {
-            default_url: "https://api.siliconflow.cn/v1/chat/completions",
-            default_model: "Qwen/Qwen3.5-4B",
+            default_url: "https://api.siliconflow.cn/v1",
         },
         "ollama" => ProviderDefaults {
-            default_url: "http://localhost:11434/v1/chat/completions",
-            default_model: "qwen3.5:4b",
+            default_url: "http://localhost:11434/v1",
         },
         "bytedance" => ProviderDefaults {
-            default_url: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-            default_model: "doubao-seed-1-6-250615",
+            default_url: "https://ark.cn-beijing.volces.com/api/v3",
         },
-        _ => ProviderDefaults {
-            default_url: "",
-            default_model: "",
-        },
+        _ => ProviderDefaults { default_url: "" },
     }
 }
 
@@ -73,6 +61,56 @@ fn provider_config<'a>(config: &'a LlmConfig, provider: &str) -> Option<&'a Prov
             .as_ref()
             .or(config.openai_compatible.as_ref()),
     }
+}
+
+pub async fn list_provider_models(
+    config: &LlmConfig,
+    provider: &str,
+) -> Result<serde_json::Value, AppError> {
+    let defaults = get_provider_defaults(provider);
+    let pc = provider_config(config, provider);
+    let url = pc
+        .map(|p| p.url.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(defaults.default_url);
+    if url.is_empty() {
+        return Err(llm_config_error(provider, "url"));
+    }
+    let key = pc.map(|p| p.api_key.as_str()).unwrap_or("");
+    if key.is_empty() && provider != "ollama" {
+        return Err(llm_config_error(provider, "api_key"));
+    }
+    let mut request = http_client().get(format!("{}/models", url.trim_end_matches('/')));
+    if !key.is_empty() {
+        if provider == "anthropic" {
+            request = request
+                .header("x-api-key", key)
+                .header("anthropic-version", "2023-06-01");
+        } else {
+            request = request.bearer_auth(key);
+        }
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|e| AppError::new(classify_transport_error(&e)))?;
+    if !response.status().is_success() {
+        return Err(test_failed_error(
+            provider,
+            format!("HTTP {}", response.status()),
+        ));
+    }
+    let result: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|_| test_failed_error(provider, "Invalid model list".to_string()))?;
+    if !result.get("data").is_some_and(|data| data.is_array()) {
+        return Err(test_failed_error(
+            provider,
+            "Invalid model list".to_string(),
+        ));
+    }
+    Ok(result)
 }
 
 /// A model visible for a provider, with its resolved request string.
@@ -147,13 +185,12 @@ fn canonical_provider(provider: &str) -> &str {
 /// Priority: `llm.default_model` (when it names a visible model) → the
 /// legacy `llm.<provider>.model` string (old configs where the user typed a
 /// model id directly; the settings UI clears it once `models`/`default_model`
-/// are written) → the first visible model → the legacy top-level
-/// `llm.model` → the provider default table.
+/// are written) → the first visible model → the legacy top-level `llm.model`.
 fn resolve_active_model(
     config: &LlmConfig,
     registry: &ModelRegistry,
     provider: &str,
-    defaults: &ProviderDefaults,
+    _defaults: &ProviderDefaults,
 ) -> Result<(String, Option<LlmModelParams>), AppError> {
     let visible = visible_models(config, registry, provider);
     if let Some(id) = config.default_model.as_deref() {
@@ -179,10 +216,7 @@ fn resolve_active_model(
     if let Some(first) = visible.first() {
         return Ok((first.request_id.clone(), first.params.clone()));
     }
-    if defaults.default_model.is_empty() {
-        return Err(llm_config_error(provider, "model"));
-    }
-    Ok((defaults.default_model.to_string(), None))
+    Err(llm_config_error(provider, "model"))
 }
 
 /// Validate that LLM configuration has the minimum required fields. The error
@@ -363,10 +397,8 @@ fn resolve_endpoint(config: &LlmConfig, registry: &ModelRegistry) -> Result<Reso
         .or_else(|| config.api_key.clone())
         .unwrap_or_default();
 
-    // The URL is the full chat-completions endpoint, stored verbatim so the
-    // settings UI shows exactly what we POST to. Fall back to the provider
-    // default endpoint only when the field is empty.
-    let url = if provider_url.trim().is_empty() {
+    // The configured URL is the API base; the request path is appended below.
+    let base_url = if provider_url.trim().is_empty() {
         if defaults.default_url.is_empty() {
             return Err(llm_config_error(provider_id, "url"));
         }
@@ -374,6 +406,8 @@ fn resolve_endpoint(config: &LlmConfig, registry: &ModelRegistry) -> Result<Reso
     } else {
         provider_url.trim().trim_end_matches('/').to_string()
     };
+
+    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
 
     Ok(ResolvedLlm {
         url,
@@ -1186,6 +1220,7 @@ mod tests {
             .mount(&server)
             .await;
         let mut config = make_llm_config("openai");
+        config.model = Some("test-model".into());
         config.url = Some(server.uri());
         config.api_key = Some(api_key.into());
         let error = call_llm_once(&config, &empty_registry(), "text", "prompt")
@@ -1205,6 +1240,7 @@ mod tests {
         );
         drop(server);
         let mut config = make_llm_config("gemini");
+        config.model = Some("test-model".into());
         config.url = Some(endpoint);
         config.api_key = Some("private-gemini-credential".into());
         let error = call_llm_once(&config, &empty_registry(), "text", "prompt")
@@ -1377,9 +1413,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_models_list_falls_back_to_provider_default() {
-        // The user removed every model; nothing is visible, so the provider
-        // default table has the final say.
+    fn empty_models_list_requires_model() {
         let mut config = make_llm_config("bytedance");
         config.bytedance = Some(ProviderConfig {
             url: String::new(),
@@ -1387,8 +1421,7 @@ mod tests {
             model: String::new(),
             models: Some(vec![]),
         });
-        let resolved = resolve_endpoint(&config, &bytedance_preset_registry()).unwrap();
-        assert_eq!(resolved.model, "doubao-seed-1-6-250615");
+        assert!(resolve_endpoint(&config, &bytedance_preset_registry()).is_err());
     }
 
     #[test]
@@ -1427,6 +1460,32 @@ mod tests {
     // ── connectivity probe tests ───────────────────────────────────────────
 
     #[tokio::test]
+    async fn model_list_uses_base_url_and_provider_credentials() {
+        use wiremock::{
+            matchers::{header, method, path},
+            Mock, MockServer, ResponseTemplate,
+        };
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/models"))
+            .and(header("authorization", "Bearer test-key"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"data": [{"id": "model-a"}]})),
+            )
+            .mount(&server)
+            .await;
+        let mut config = make_llm_config("openai");
+        config.openai = Some(ProviderConfig {
+            url: format!("{}/v1/", server.uri()),
+            api_key: "test-key".into(),
+            model: String::new(),
+            models: Some(vec![]),
+        });
+        let result = list_provider_models(&config, "openai").await.unwrap();
+        assert_eq!(result["data"][0]["id"], "model-a");
+    }
+
+    #[tokio::test]
     async fn llm_probe_success_on_http_200() {
         use wiremock::{matchers::method, Mock, MockServer, ResponseTemplate};
         let server = MockServer::start().await;
@@ -1437,6 +1496,7 @@ mod tests {
             .mount(&server)
             .await;
         let mut config = make_llm_config("openai");
+        config.model = Some("test-model".into());
         config.url = Some(server.uri());
         config.api_key = Some("probe-key".into());
         assert!(test_provider_connection(&config, &empty_registry())
@@ -1455,6 +1515,7 @@ mod tests {
             .mount(&server)
             .await;
         let mut config = make_llm_config("openai");
+        config.model = Some("test-model".into());
         config.url = Some(server.uri());
         config.api_key = Some("probe-key".into());
         let error = test_provider_connection(&config, &empty_registry())
@@ -1465,7 +1526,8 @@ mod tests {
 
     #[tokio::test]
     async fn llm_probe_requires_api_key_for_remote_providers() {
-        let config = make_llm_config("openai");
+        let mut config = make_llm_config("openai");
+        config.model = Some("test-model".into());
         let error = test_provider_connection(&config, &empty_registry())
             .await
             .unwrap_err();
@@ -1520,7 +1582,7 @@ mod tests {
         let mut config = make_deepseek_config();
         config.model = Some("".to_string());
         let result = validate_llm_config(&config, &empty_registry());
-        assert!(result.is_ok());
+        assert!(result.is_err());
     }
 
     #[test]

@@ -28,7 +28,7 @@ export function AddProviderModal({ open, onClose, catalog, onAdd }: AddProviderM
   return (
     <Modal open={open} onClose={onClose} title={t("ui.models.add_provider")}>
       {catalog.length === 0 ? (
-        <p className="text-sm text-text-muted">{t("ui.models.add_provider_empty")}</p>
+        <p className="text-center text-sm text-text-muted">{t("ui.models.add_provider_empty")}</p>
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {catalog.map((provider) => {

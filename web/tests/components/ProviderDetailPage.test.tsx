@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
   save: vi.fn(),
   refresh: vi.fn(),
+  listModels: vi.fn(),
 }));
 vi.mock("@/settings/SettingsProvider", () => ({
   useSettings: () => ({ settings: { parsedConfig: mocks.config }, refresh: mocks.refresh }),
@@ -20,6 +21,7 @@ vi.mock("@/settings/bridge", () => ({
   deleteModel: vi.fn(),
   downloadModel: vi.fn(),
   testProviderConnection: vi.fn(),
+  listLlmModels: mocks.listModels,
 }));
 const models = registry.models as RegistryModel[];
 const providers = registry.providers as RegistryProvider[];
@@ -58,6 +60,8 @@ beforeEach(() => {
     },
   };
   mocks.refresh.mockResolvedValue(undefined);
+  mocks.listModels.mockReset();
+  mocks.listModels.mockResolvedValue({ data: [{ id: "model-a" }] });
 });
 afterEach(cleanup);
 
@@ -73,10 +77,72 @@ test("ByteDance exposes distinct ASR and LLM addresses with their defaults", () 
   );
   fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
   const llmUrl = screen.getByRole("textbox");
-  expect(llmUrl).toHaveValue("https://ark.cn-beijing.volces.com/api/v3/chat/completions");
+  expect(llmUrl).toHaveValue("https://ark.cn-beijing.volces.com/api/v3");
   fireEvent.change(llmUrl, { target: { value: "https://example.com/v1" } });
   fireEvent.blur(llmUrl);
   expect(mocks.save.mock.calls.at(-1)?.[0].llm.bytedance.url).toBe("https://example.com/v1");
+});
+
+test("opening the LLM model dialog fetches models and refresh retries errors with a toast", async () => {
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
+  expect(mocks.listModels).toHaveBeenCalledWith("bytedance");
+  expect(await screen.findByText("model-a")).toBeInTheDocument();
+  mocks.listModels.mockRejectedValueOnce(new Error("refresh failed"));
+  fireEvent.click(screen.getByRole("button", { name: "刷新模型列表" }));
+  await waitFor(() => expect(mocks.listModels).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText(/refresh failed/)).toBeInTheDocument();
+  expect(screen.getByText("model-a")).toBeInTheDocument();
+});
+
+test("custom model is saved only after configuration and duplicate IDs are rejected", async () => {
+  mocks.config.llm = { provider: "bytedance", bytedance: { models: [{ id: "existing" }] } };
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
+  await screen.findByText("model-a");
+  const custom = screen.getByRole("button", { name: "添加自定义模型" });
+  expect(
+    custom.compareDocumentPosition(screen.getByRole("button", { name: "model-a" })) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  fireEvent.click(custom);
+  expect(screen.queryByRole("button", { name: "移除模型" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+  fireEvent.change(screen.getByRole("textbox", { name: "显示名称" }), {
+    target: { value: "Test model" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Model ID" }), {
+    target: { value: "existing" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  expect(await screen.findByText("该模型 ID 已添加")).toBeInTheDocument();
+  expect(mocks.save).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole("textbox", { name: "Model ID" }), {
+    target: { value: "new-model" },
+  });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "温度" }), { target: { value: "0.5" } });
+  expect(mocks.save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(1));
+  expect(mocks.save.mock.calls[0][0].llm.bytedance.models).toEqual([
+    { id: "existing" },
+    { id: "new-model", name: "Test model", params: { temperature: 0.5 } },
+  ]);
+});
+
+test("closing a new custom model discards its draft", async () => {
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
+  fireEvent.click(screen.getByRole("button", { name: "添加自定义模型" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Model ID" }), {
+    target: { value: "draft" },
+  });
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(mocks.save).not.toHaveBeenCalled();
 });
 
 test("changing recognition mode migrates a legacy custom URL without losing its prefix", () => {

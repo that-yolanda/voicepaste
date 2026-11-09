@@ -15,12 +15,13 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { errText } from "@/i18n/errText";
 import {
   deleteModel,
   downloadModel,
+  listLlmModels,
   type ModelDownloadProgress,
   openExternalUrl,
   saveConfigObject,
@@ -119,8 +120,13 @@ export function ProviderDetailPage({
   const [tab, setTab] = useState<CapabilityKind>(provider.capabilities[0] ?? "asr");
   const [modelModal, setModelModal] = useState<ModelModalState>(null);
   const [addModelOpen, setAddModelOpen] = useState(false);
+  const [newModel, setNewModel] = useState<LlmModelEntry | null>(null);
+  const [savingModel, setSavingModel] = useState(false);
   const [removeProviderOpen, setRemoveProviderOpen] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [remoteModels, setRemoteModels] = useState<Array<{ id: string; name?: string }>>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const modelFetchSequence = useRef(0);
 
   // Full-config save (removals must bypass scheduleSave's deep merge).
   const save = useCallback(
@@ -128,8 +134,10 @@ export function ProviderDetailPage({
       try {
         await saveConfigObject(next as never);
         await refresh();
+        return true;
       } catch (error) {
         showToast(errText(error), "error");
+        return false;
       }
     },
     [refresh, showToast],
@@ -178,6 +186,22 @@ export function ProviderDetailPage({
 
   /* ---------- actions ---------- */
 
+  const fetchModels = async () => {
+    const sequence = ++modelFetchSequence.current;
+    setFetchingModels(true);
+    try {
+      const result = await listLlmModels(provider.id);
+      if (sequence !== modelFetchSequence.current) return;
+      setRemoteModels(
+        Array.isArray(result.data) ? result.data.filter((m) => typeof m.id === "string") : [],
+      );
+    } catch (error) {
+      if (sequence === modelFetchSequence.current) showToast(errText(error), "error");
+    } finally {
+      if (sequence === modelFetchSequence.current) setFetchingModels(false);
+    }
+  };
+
   const runTest = async () => {
     setTesting(true);
     try {
@@ -222,7 +246,7 @@ export function ProviderDetailPage({
   };
 
   const changeLlmModels = async (entries: LlmModelEntry[]) => {
-    await save(withLlmModels(config, provider.id, entries, models));
+    return save(withLlmModels(config, provider.id, entries, models));
   };
 
   const modelEntry =
@@ -335,7 +359,6 @@ export function ProviderDetailPage({
                 ),
                 t,
               );
-              if (scope === "llm" && field.key === "url") meta.label = t("ui.models.api_url");
               if (field.type === "password") meta.type = "password";
               meta.placeholder = meta.placeholder ?? placeholder;
               const control = renderControl(meta, raw, (value) => {
@@ -482,7 +505,6 @@ export function ProviderDetailPage({
                 {t("ui.models.default_badge")}
               </Badge>
             )}
-            {!view.preset && <Badge size="xs">{t("ui.models.custom_model")}</Badge>}
           </span>
           <span className="mt-0.5 block truncate text-xs text-text-muted">
             {viewRequestId(view)}
@@ -507,7 +529,9 @@ export function ProviderDetailPage({
             <SectionRows>
               {asrModels.map(renderAsrRow)}
               {asrModels.length === 0 && (
-                <p className="px-4 py-3 text-sm text-text-muted">{t("ui.models.no_models")}</p>
+                <p className="px-4 py-3 text-center text-sm text-text-muted">
+                  {t("ui.models.no_models")}
+                </p>
               )}
             </SectionRows>
           </Section>
@@ -517,7 +541,13 @@ export function ProviderDetailPage({
     return (
       <div className="space-y-2">
         <div className="flex justify-end">
-          <Button variant="ghost" onClick={() => setAddModelOpen(true)}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setAddModelOpen(true);
+              void fetchModels();
+            }}
+          >
             <Plus size={14} />
             {t("ui.models.add_model")}
           </Button>
@@ -526,7 +556,9 @@ export function ProviderDetailPage({
           <SectionRows>
             {llmModels.map(renderLlmRow)}
             {llmModels.length === 0 && (
-              <p className="px-4 py-3 text-sm text-text-muted">{t("ui.models.no_models")}</p>
+              <p className="px-4 py-3 text-center text-sm text-text-muted">
+                {t("ui.models.no_models")}
+              </p>
             )}
           </SectionRows>
         </Section>
@@ -726,6 +758,32 @@ export function ProviderDetailPage({
           }}
         />
       )}
+      {newModel && (
+        <LlmModelConfigModal
+          entry={newModel}
+          requestDefault=""
+          isCustom
+          isNew
+          saving={savingModel}
+          onClose={() => setNewModel(null)}
+          onChange={setNewModel}
+          onSave={() => {
+            const id = newModel.id.trim();
+            const name = newModel.name?.trim();
+            if (!id || !name || savingModel) return;
+            if (llmModels.some((model) => model.id === id || viewRequestId(model) === id)) {
+              showToast(t("ui.models.duplicate_model"), "error");
+              return;
+            }
+            setSavingModel(true);
+            void changeLlmModels([...llmModels.map(toEntry), { ...newModel, id, name }])
+              .then((success) => {
+                if (success) setNewModel(null);
+              })
+              .finally(() => setSavingModel(false));
+          }}
+        />
+      )}
 
       {/* Add model */}
       <AddModelModal
@@ -733,6 +791,10 @@ export function ProviderDetailPage({
         onClose={() => setAddModelOpen(false)}
         hiddenPresets={tab === "asr" ? hiddenAsrPresets : hiddenLlmPresets}
         allowCustom={tab === "llm"}
+        remoteModels={remoteModels.filter((m) => !llmModels.some((v) => viewRequestId(v) === m.id))}
+        fetching={fetchingModels}
+        onFetch={tab === "llm" ? () => void fetchModels() : undefined}
+        onCreateCustom={() => setNewModel({ id: "", name: "" })}
         onRestorePreset={(modelId) => {
           if (tab === "asr") {
             void save(withAsrModelVisible(config, modelId, true, models, isModelDownloaded));
@@ -747,6 +809,7 @@ export function ProviderDetailPage({
           }
         }}
         onAddCustom={(id, name) => {
+          if (llmModels.some((model) => viewRequestId(model) === id)) return;
           void changeLlmModels([...llmModels.map(toEntry), { id, name }]);
         }}
       />

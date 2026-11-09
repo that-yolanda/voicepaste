@@ -644,16 +644,13 @@ mod tests {
             .as_ref()
             .expect("bytedance credentials");
         assert!(creds.contains_key("asr") && creds.contains_key("llm"));
-        // LLM models exist and are category llm.
+        // LLM models are discovered from providers rather than bundled.
         let llm_models = registry
             .models
             .iter()
             .filter(|m| m.category == ModelCategory::Llm)
             .count();
-        assert!(
-            llm_models >= 8,
-            "expected LLM preset models, got {llm_models}"
-        );
+        assert_eq!(llm_models, 0);
     }
 
     #[test]
