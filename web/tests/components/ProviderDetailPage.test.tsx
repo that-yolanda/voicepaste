@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { AsrModelConfigModal } from "@/settings/components/models/ModelConfigModal";
 import type { AsrDefaults } from "@/settings/lib/model";
@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   refresh: vi.fn(),
   listModels: vi.fn(),
+  testModel: vi.fn(),
+  cancelTest: vi.fn(),
 }));
 vi.mock("@/settings/SettingsProvider", () => ({
   useSettings: () => ({ settings: { parsedConfig: mocks.config }, refresh: mocks.refresh }),
@@ -20,8 +22,9 @@ vi.mock("@/settings/bridge", () => ({
   saveConfigObject: mocks.save,
   deleteModel: vi.fn(),
   downloadModel: vi.fn(),
-  testProviderConnection: vi.fn(),
   listLlmModels: mocks.listModels,
+  testModel: mocks.testModel,
+  cancelModelTest: mocks.cancelTest,
 }));
 const models = registry.models as RegistryModel[];
 const providers = registry.providers as RegistryProvider[];
@@ -62,8 +65,193 @@ beforeEach(() => {
   mocks.refresh.mockResolvedValue(undefined);
   mocks.listModels.mockReset();
   mocks.listModels.mockResolvedValue({ data: [{ id: "model-a" }] });
+  mocks.testModel.mockResolvedValue({ output: "Hello", elapsed_ms: 1000 });
+  mocks.cancelTest.mockResolvedValue(undefined);
 });
 afterEach(cleanup);
+
+test("model header sets both LLM provider and model without a close icon", () => {
+  mocks.config.llm = { provider: "deepseek", bytedance: { models: [{ id: "chosen" }] } };
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "配置 chosen" }));
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.queryByRole("button", { name: "Close modal" })).not.toBeInTheDocument();
+  expect(
+    dialog
+      .getByRole("button", { name: "移除" })
+      .compareDocumentPosition(dialog.getByRole("button", { name: "设为默认" })) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  fireEvent.click(dialog.getByRole("button", { name: "设为默认" }));
+  expect(mocks.save.mock.calls.at(-1)?.[0].llm).toMatchObject({
+    provider: "bytedance",
+    default_model: "chosen",
+  });
+});
+
+test("model ID help opens a toast and redundant model hints are absent", () => {
+  mocks.config.llm = { provider: "bytedance", bytedance: { models: [{ id: "chosen" }] } };
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "配置 chosen" }));
+  const description = "实际请求的模型标识；留空使用预置值。";
+  expect(screen.queryByText(description)).not.toBeInTheDocument();
+  expect(screen.queryByText("推理参数")).not.toBeInTheDocument();
+  expect(screen.queryByText(/仅显式设置的参数/)).not.toBeInTheDocument();
+  const help = screen.getByRole("button", { name: "Model ID说明" });
+  expect(
+    screen.getByText("Model ID", { exact: true }).closest(".section-item-label"),
+  ).toContainElement(help);
+  expect(
+    screen.getByRole("textbox", { name: "Model ID" }).closest(".section-item-action"),
+  ).not.toContainElement(help);
+  fireEvent.click(help);
+  expect(screen.getByRole("dialog")).not.toContainElement(screen.getByText(description));
+});
+
+test("other dialogs close through the backdrop without a header close button", () => {
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
+  expect(
+    within(screen.getByRole("dialog")).queryByRole("button", { name: "Close modal" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Close modal" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+test("ASR can be selected in its dialog while undownloaded models cannot be selected or tested", () => {
+  mocks.config.audio = { provider: "elevenlabs-realtime", models: ["doubao-streaming"] };
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("button", { name: /配置 豆包/ }));
+  fireEvent.click(screen.getByRole("button", { name: "设为默认" }));
+  expect(mocks.save.mock.calls.at(-1)?.[0].audio.provider).toBe("doubao-streaming");
+  cleanup();
+  const model = models.find(
+    (m) => m.provider === "local_asr" && m.category === "asr",
+  ) as RegistryModel;
+  render(
+    <AsrModelConfigModal
+      model={model}
+      asrDefaults={defaults}
+      userConfig={{}}
+      onClose={vi.fn()}
+      onConfigChange={vi.fn()}
+      onReset={vi.fn()}
+      onRemove={vi.fn()}
+      removeLabel="移除"
+      onSetDefault={vi.fn()}
+      defaultDisabled
+      testTarget={{
+        providerId: "local_asr",
+        modelId: model.id,
+        capability: "asr",
+        getConfig: () => mocks.config,
+        showToast: vi.fn(),
+        disabled: true,
+      }}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "设为默认" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "测试" })).toBeDisabled();
+});
+
+test("LLM test uses the latest edited model snapshot without switching the active model", async () => {
+  mocks.config.llm = { provider: "deepseek", bytedance: { models: [{ id: "chosen" }] } };
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "配置 chosen" }));
+  const id = screen.getByRole("textbox", { name: "Model ID" });
+  fireEvent.change(id, { target: { value: "actual-request-model" } });
+  fireEvent.blur(id);
+  const testButton = screen.getByRole("button", { name: "测试" });
+  expect(
+    within(screen.getByRole("dialog"))
+      .getByRole("button", { name: "移除" })
+      .compareDocumentPosition(testButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  fireEvent.click(testButton);
+  const result = await screen.findByText("模型请求成功");
+  expect(screen.queryByText("Hello")).not.toBeInTheDocument();
+  expect(screen.getByRole("dialog")).not.toContainElement(result);
+  expect(mocks.testModel).toHaveBeenCalledWith(
+    expect.objectContaining({
+      llm: expect.objectContaining({
+        provider: "deepseek",
+        bytedance: expect.objectContaining({
+          models: [expect.objectContaining({ id: "chosen", model_id: "actual-request-model" })],
+        }),
+      }),
+    }),
+    "bytedance",
+    "chosen",
+    "llm",
+    expect.any(String),
+  );
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+
+test("model test failures appear in a toast outside the dialog", async () => {
+  mocks.testModel.mockRejectedValueOnce(new Error("test connection failed"));
+  mocks.config.audio = { provider: "doubao-streaming", models: ["doubao-streaming"] };
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("button", { name: /配置 豆包/ }));
+  fireEvent.click(screen.getByRole("button", { name: "测试" }));
+  const error = await screen.findByText(/test connection failed/);
+  expect(screen.getByRole("dialog")).not.toContainElement(error);
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+
+test("closing a model dialog cancels its pending test and ignores late results", async () => {
+  let finish!: (result: { output: string; elapsed_ms: number }) => void;
+  mocks.testModel.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  mocks.config.audio = { provider: "doubao-streaming", models: ["doubao-streaming"] };
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("button", { name: /配置 豆包/ }));
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.queryByRole("button", { name: "当前使用" })).not.toBeInTheDocument();
+  expect(dialog.getByText("当前使用")).toHaveClass("text-success");
+  fireEvent.click(screen.getByRole("button", { name: "测试" }));
+  expect(screen.getByRole("button", { name: "测试中…" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  expect(mocks.cancelTest).toHaveBeenCalledWith(mocks.testModel.mock.calls.at(-1)?.[4]);
+  finish({ output: "late", elapsed_ms: 1000 });
+  await waitFor(() => expect(screen.queryByText("late")).not.toBeInTheDocument());
+});
+
+test("LLM usage badge requires both the selected provider and model", () => {
+  mocks.config.llm = {
+    provider: "bytedance",
+    default_model: "chosen",
+    bytedance: { models: [{ id: "chosen" }, { id: "other" }] },
+    deepseek: { models: [{ id: "chosen" }] },
+  };
+  detail(providers.find((p) => p.id === "deepseek") as RegistryProvider);
+  expect(screen.queryByText("当前使用")).not.toBeInTheDocument();
+  cleanup();
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  expect(screen.getAllByText("当前使用")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "配置 chosen" })).toHaveTextContent("当前使用");
+  expect(screen.getByRole("button", { name: "配置 other" })).not.toHaveTextContent("当前使用");
+});
+
+test("ASR usage badge follows the selected model and provider tests are absent", () => {
+  mocks.config.audio = { provider: "doubao-streaming", models: ["doubao-streaming"] };
+  detail(bytedance);
+  expect(screen.getAllByText("当前使用")).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "测试" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  expect(screen.queryByRole("button", { name: "测试" })).not.toBeInTheDocument();
+  cleanup();
+  detail(providers.find((p) => p.id === "elevenlabs") as RegistryProvider);
+  expect(screen.queryByText("当前使用")).not.toBeInTheDocument();
+});
 
 test("ByteDance exposes distinct ASR and LLM addresses with their defaults", () => {
   detail(bytedance);
@@ -108,7 +296,9 @@ test("custom model is saved only after configuration and duplicate IDs are rejec
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   fireEvent.click(custom);
-  expect(screen.queryByRole("button", { name: "移除模型" })).not.toBeInTheDocument();
+  expect(
+    within(screen.getByRole("dialog")).queryByRole("button", { name: "移除" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
   fireEvent.change(screen.getByRole("textbox", { name: "显示名称" }), {
     target: { value: "Test model" },

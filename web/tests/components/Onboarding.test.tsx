@@ -183,7 +183,7 @@ describe("setup onboarding", () => {
     render(<Harness />);
     await begin();
     fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择默认模型" });
+    await screen.findByRole("heading", { name: "选择使用的模型" });
     const targets = ["models-defaults", "models-providers", "llm-library", "llm-add-template"];
     for (let step = 0; step < index; step++) {
       fireEvent.click(await screen.findByRole("button", { name: "下一步" }));
@@ -211,12 +211,12 @@ describe("setup onboarding", () => {
     await waitFor(() => expect(mocks.drivers).toHaveLength(1));
     act(() => lastDriver().config.onDoneClick?.(undefined, {} as never, {} as never));
     fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择默认模型" });
+    await screen.findByRole("heading", { name: "选择使用的模型" });
     try {
       await act(async () => {
         await i18next.changeLanguage("en");
       });
-      await screen.findByRole("heading", { name: "Pick default models" });
+      await screen.findByRole("heading", { name: "Choose models" });
       for (let index = 0; index < 3; index++) {
         fireEvent.click(await screen.findByRole("button", { name: "Next" }));
       }
@@ -256,7 +256,7 @@ describe("setup onboarding", () => {
     render(<Harness />);
     await begin();
     fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择默认模型" });
+    await screen.findByRole("heading", { name: "选择使用的模型" });
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
     await screen.findByRole("heading", { name: "进入供应商配置" });
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
@@ -367,7 +367,7 @@ describe("setup onboarding", () => {
     await begin();
     const openConfig = async () => {
       fireEvent.click(screen.getByRole("button", { name: "语音识别模型" }));
-      await screen.findByRole("heading", { name: "选择默认模型" });
+      await screen.findByRole("heading", { name: "选择使用的模型" });
       fireEvent.click(screen.getByRole("button", { name: "下一步" }));
       await screen.findByRole("heading", { name: "进入供应商配置" });
     };

@@ -367,12 +367,23 @@ export async function downloadModel(modelId: string): Promise<void> {
   return invoke("download_model", { modelId });
 }
 
-/** Manually probe one provider's connection (settings "测试" button). */
-export async function testProviderConnection(
+export interface ModelTestResult {
+  output: string;
+  elapsed_ms: number;
+}
+
+export async function testModel(
+  config: Record<string, unknown>,
   providerId: string,
+  modelId: string,
   capability: "asr" | "llm",
-): Promise<void> {
-  return invoke("test_provider_connection", { providerId, capability });
+  testId: string,
+): Promise<ModelTestResult> {
+  return invoke("test_model", { config, providerId, modelId, capability, testId });
+}
+
+export async function cancelModelTest(testId: string): Promise<void> {
+  return invoke("cancel_model_test", { testId });
 }
 
 export async function listLlmModels(

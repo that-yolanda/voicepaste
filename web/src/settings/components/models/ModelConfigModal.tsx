@@ -7,16 +7,18 @@
  * - LlmModelConfigModal: model id / display name + inference params
  *   (temperature / max_tokens / top_p, only user-set values are sent).
  *
- * Footer follows the design: 移除模型 (left) · 恢复默认 · 完成.
+ * Header: remove and select; footer: test, reset and done.
  */
 
-import { ChevronsUp, RotateCcw, Trash2 } from "lucide-react";
+import { Check, ChevronsUp, Info, RotateCcw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
 import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
 import { renderControl } from "@/settings/components/models/FieldControl";
+import { type ModelTestTarget, useModelTest } from "@/settings/components/models/ModelTest";
 import { SectionItem, SectionItemList } from "@/settings/layout/PageLayout";
 import { DOUBAO_LANGUAGE_CODES, languageName } from "@/settings/lib/languages";
 import {
@@ -53,6 +55,10 @@ interface AsrModelConfigModalProps {
   /** Preset removal (positive list) or file deletion for local models. */
   onRemove: (model: RegistryModel) => void;
   removeLabel: string;
+  isCurrent?: boolean;
+  onSetDefault?: () => void;
+  defaultDisabled?: boolean;
+  testTarget?: ModelTestTarget;
 }
 
 export function AsrModelConfigModal({
@@ -64,8 +70,13 @@ export function AsrModelConfigModal({
   onReset,
   onRemove,
   removeLabel,
+  isCurrent,
+  onSetDefault,
+  defaultDisabled,
+  testTarget,
 }: AsrModelConfigModalProps) {
   const { t, i18n } = useTranslation();
+  const test = useModelTest(testTarget);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const isVad = model.category === "vad";
 
@@ -135,13 +146,35 @@ export function AsrModelConfigModal({
       open
       onClose={onClose}
       title={t("ui.models.model_config")}
-      footer={
-        <>
-          <Button variant="ghost" className="mr-auto" onClick={() => onRemove(model)}>
+      headerAction={
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" disabled={test.testing} onClick={() => onRemove(model)}>
             <Trash2 size={15} />
             {removeLabel}
           </Button>
-          <Button variant="ghost" onClick={() => onReset(model.id)}>
+          {onSetDefault &&
+            (isCurrent ? (
+              <Badge variant="success">
+                <Check size={14} />
+                {t("ui.models.current_badge")}
+              </Badge>
+            ) : (
+              <Button
+                variant="ghost"
+                disabled={defaultDisabled || test.testing}
+                onClick={onSetDefault}
+              >
+                <Check size={15} />
+                {t("ui.models.set_default")}
+              </Button>
+            ))}
+        </div>
+      }
+      footer={
+        <>
+          {test.button}
+          <span className="mr-auto" />
+          <Button variant="ghost" disabled={test.testing} onClick={() => onReset(model.id)}>
             <RotateCcw size={15} />
             {t("ui.model.reset")}
           </Button>
@@ -217,6 +250,10 @@ interface LlmModelConfigModalProps {
   onChange: (entry: LlmModelEntry) => void;
   onRemove?: () => void;
   onSave?: () => void;
+  onModelIdHelp?: () => void;
+  isCurrent?: boolean;
+  onSetDefault?: () => void;
+  testTarget?: ModelTestTarget;
 }
 
 export function LlmModelConfigModal({
@@ -230,8 +267,13 @@ export function LlmModelConfigModal({
   onChange,
   onRemove,
   onSave,
+  onModelIdHelp,
+  isCurrent,
+  onSetDefault,
+  testTarget,
 }: LlmModelConfigModalProps) {
   const { t } = useTranslation();
+  const test = useModelTest(testTarget);
 
   const setParams = (key: keyof LlmModelParams, raw: string) => {
     const trimmed = raw.trim();
@@ -251,18 +293,36 @@ export function LlmModelConfigModal({
       open
       onClose={onClose}
       title={t("ui.models.model_config")}
-      footer={
-        <>
+      headerAction={
+        <div className="flex items-center gap-2">
           {onRemove && (
-            <Button variant="ghost" className="mr-auto" onClick={onRemove}>
+            <Button variant="ghost" disabled={test.testing} onClick={onRemove}>
               <Trash2 size={15} />
               {t("ui.models.remove_model")}
             </Button>
           )}
-          {isNew && <span className="mr-auto" />}
+          {onSetDefault &&
+            (isCurrent ? (
+              <Badge variant="success">
+                <Check size={14} />
+                {t("ui.models.current_badge")}
+              </Badge>
+            ) : (
+              <Button variant="ghost" disabled={saving || test.testing} onClick={onSetDefault}>
+                <Check size={15} />
+                {t("ui.models.set_default")}
+              </Button>
+            ))}
+        </div>
+      }
+      footer={
+        <>
+          {test.button}
+          <span className="mr-auto" />
           {!isNew && (
             <Button
               variant="ghost"
+              disabled={test.testing}
               onClick={() => onChange({ ...entry, model_id: undefined, params: undefined })}
             >
               <RotateCcw size={15} />
@@ -299,6 +359,18 @@ export function LlmModelConfigModal({
         />
         <SectionItem
           title={t("ui.models.model_id")}
+          titleAction={
+            !isNew && onModelIdHelp ? (
+              <button
+                type="button"
+                aria-label={t("ui.settings.tooltip_help", { title: t("ui.models.model_id") })}
+                className="grid size-6 shrink-0 place-items-center rounded-md text-text-muted hover:bg-fill-hover hover:text-text"
+                onClick={onModelIdHelp}
+              >
+                <Info size={13} />
+              </button>
+            ) : undefined
+          }
           action={
             <Input
               aria-label={t("ui.models.model_id")}
@@ -313,39 +385,29 @@ export function LlmModelConfigModal({
               commitOnBlur={!isNew}
             />
           }
-          description={isNew ? undefined : t("ui.models.model_id_description")}
         />
+        {PARAM_FIELDS.map((field) => (
+          <SectionItem
+            key={field.key}
+            title={t(field.label)}
+            tooltip={t(`${field.label}.tooltip`)}
+            action={
+              <Input
+                aria-label={t(field.label)}
+                type="number"
+                className="w-36"
+                min={field.min}
+                max={field.max}
+                step={field.step}
+                placeholder={field.placeholder}
+                value={entry.params?.[field.key] ?? ""}
+                onChange={(v) => setParams(field.key, v)}
+                commitOnBlur={!isNew}
+              />
+            }
+          />
+        ))}
       </SectionItemList>
-
-      <div className="mt-4 space-y-2">
-        <p className="text-sm font-medium text-text">{t("ui.models.inference_params")}</p>
-        <SectionItemList>
-          {PARAM_FIELDS.map((field) => (
-            <SectionItem
-              key={field.key}
-              title={t(field.label)}
-              tooltip={t(`${field.label}.tooltip`)}
-              action={
-                <Input
-                  aria-label={t(field.label)}
-                  type="number"
-                  className="w-36"
-                  min={field.min}
-                  max={field.max}
-                  step={field.step}
-                  placeholder={field.placeholder}
-                  value={entry.params?.[field.key] ?? ""}
-                  onChange={(v) => setParams(field.key, v)}
-                  commitOnBlur={!isNew}
-                />
-              }
-            />
-          ))}
-        </SectionItemList>
-        <p className="text-center text-xs text-text-muted">
-          {t("ui.models.inference_params_hint")}
-        </p>
-      </div>
     </Modal>
   );
 }

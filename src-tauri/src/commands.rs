@@ -818,56 +818,6 @@ pub async fn list_llm_models(
     crate::llm::list_provider_models(&config.llm, &provider_id).await
 }
 
-/// Manually test one provider's connection (settings "测试" button). Probes
-/// are user-triggered only — opening the settings page never fires them.
-#[tauri::command]
-pub async fn test_provider_connection(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    provider_id: String,
-    capability: String,
-) -> Result<serde_json::Value, AppError> {
-    let config = state
-        .config_manager
-        .load_config()
-        .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::new(AppErrorCode::Unexpected).with_detail(e.to_string()))?;
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| AppError::new(AppErrorCode::Unexpected).with_detail(e.to_string()))?;
-    let registry = model::load_registry(&data_dir, &resource_dir);
-
-    match capability.as_str() {
-        // Probe the named provider even when it is not the active one: swap
-        // the provider selector on a cloned config so its own credentials
-        // and models are resolved.
-        "llm" => {
-            let mut probe = config.llm.clone();
-            probe.provider = provider_id.clone();
-            crate::llm::test_provider_connection(&probe, &registry).await?;
-        }
-        "asr" => {
-            crate::asr::test_asr_connection(
-                &config,
-                &registry,
-                data_dir,
-                resource_dir,
-                &provider_id,
-            )
-            .await?;
-        }
-        _ => {
-            return Err(AppError::new(AppErrorCode::InvalidConfig)
-                .with_detail(format!("unknown capability: {capability}")))
-        }
-    }
-    Ok(serde_json::json!({ "ok": true }))
-}
-
 /// Called after the WebView's exit animation; stale completions cannot hide a new session.
 #[tauri::command]
 pub fn complete_overlay_hide(app: AppHandle, generation: u64) {

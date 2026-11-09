@@ -1,5 +1,5 @@
 /**
- * 模型服务 main page: 当前默认 card (语音识别 / 文本润色 pickers), the
+ * 模型服务 main page: 当前使用 card (语音识别 / 文本润色 pickers), the
  * 全部/在线/本地 filter, 自定义配置 + 添加供应商 actions and the provider
  * list. Owns registry/download state and the main ↔ provider detail
  * navigation; the detail page renders in place of the list.
@@ -211,8 +211,8 @@ export function ModelServicesPage() {
 
   return (
     <PageLayout>
-      {/* 当前默认 */}
-      <Section aria-label={t("ui.models.current_defaults")} data-tour="models-defaults">
+      {/* 当前使用 */}
+      <Section aria-label={t("ui.models.current_models")} data-tour="models-defaults">
         <SectionContent>
           <DefaultsRow
             label={t("ui.models.tab_asr")}

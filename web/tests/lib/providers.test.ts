@@ -5,7 +5,6 @@ import {
   asRecord,
   asrCredentialValues,
   catalogProviders,
-  credentialsFilled,
   DEFAULT_ADDED_PROVIDERS,
   deriveAddedProviders,
   llmCredentialValues,
@@ -237,13 +236,6 @@ describe("credentials", () => {
       url: "https://top",
       api_key: "top-key",
     });
-  });
-
-  test("credentialsFilled requires every declared field", () => {
-    const fields = [{ key: "url" }, { key: "api_key" }];
-    expect(credentialsFilled({ url: "u" }, fields)).toBe(false);
-    expect(credentialsFilled({ url: "u", api_key: "k" }, fields)).toBe(true);
-    expect(credentialsFilled({}, undefined)).toBe(true);
   });
 });
 

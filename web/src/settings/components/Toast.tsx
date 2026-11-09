@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** How long a toast stays on screen before it dismisses itself. */
-const TOAST_DURATION_MS = 2000;
+const TOAST_DURATION_MS = 5000;
 
 export interface ToastState {
   /** Bumped on every show so a repeat of the same message replays the animation. */
@@ -40,10 +40,10 @@ export function useToast() {
 export function Toast({ toast }: { toast: ToastState | null }) {
   if (!toast) return null;
   return (
-    <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
+    <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 w-max max-w-[min(480px,calc(100vw-32px))] -translate-x-1/2">
       <div
         key={toast.id}
-        className={`animate-toast-in max-w-[80vw] truncate rounded-lg px-3 py-1.5 text-xs font-medium text-text-on-accent ${
+        className={`animate-toast-in whitespace-pre-wrap rounded-lg px-3 py-2 text-left text-xs leading-relaxed font-medium text-text-on-accent [overflow-wrap:anywhere] ${
           toast.tone === "error"
             ? "bg-error shadow-[0_4px_16px_var(--color-glow-error)]"
             : "bg-accent shadow-[0_4px_16px_var(--color-accent-glow)]"

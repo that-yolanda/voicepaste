@@ -1,4 +1,3 @@
-import { X } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
 
 interface ModalProps {
@@ -8,6 +7,7 @@ interface ModalProps {
   closeLabel?: string;
   children: ReactNode;
   footer?: ReactNode;
+  headerAction?: ReactNode;
 }
 
 export function Modal({
@@ -17,6 +17,7 @@ export function Modal({
   closeLabel = "Close modal",
   children,
   footer,
+  headerAction,
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -46,14 +47,7 @@ export function Modal({
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
             <h2 className="text-lg font-semibold text-text">{title}</h2>
-            <button
-              type="button"
-              aria-label={closeLabel}
-              className="text-text-muted hover:text-text p-1"
-              onClick={onClose}
-            >
-              <X size={18} />
-            </button>
+            {headerAction}
           </div>
         )}
         <div className="p-5 text-sm text-text-dim max-h-[70vh] overflow-auto">{children}</div>

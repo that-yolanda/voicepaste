@@ -7,7 +7,6 @@
 
 import {
   ArrowLeft,
-  Check,
   ChevronRight,
   CloudDownload,
   ExternalLink,
@@ -25,7 +24,6 @@ import {
   type ModelDownloadProgress,
   openExternalUrl,
   saveConfigObject,
-  testProviderConnection,
 } from "@/settings/bridge";
 import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
@@ -61,7 +59,6 @@ import {
   asRecord,
   asrCredentialDefault,
   asrCredentialValues,
-  credentialsFilled,
   llmCredentialValues,
   resolveDefaultLlmModel,
   sharedCredentialValues,
@@ -70,6 +67,7 @@ import {
   visibleLlmModels,
   withAsrCredential,
   withAsrModelVisible,
+  withDefaultLlmModel,
   withDoubaoBaseUrl,
   withLlmCredential,
   withLlmModels,
@@ -117,13 +115,18 @@ export function ProviderDetailPage({
   const { toast, showToast } = useToast();
 
   const config = (settings?.parsedConfig || {}) as Config;
+  const testConfig = useRef(config);
+  const sourceConfig = useRef(config);
+  if (sourceConfig.current !== config) {
+    sourceConfig.current = config;
+    testConfig.current = config;
+  }
   const [tab, setTab] = useState<CapabilityKind>(provider.capabilities[0] ?? "asr");
   const [modelModal, setModelModal] = useState<ModelModalState>(null);
   const [addModelOpen, setAddModelOpen] = useState(false);
   const [newModel, setNewModel] = useState<LlmModelEntry | null>(null);
   const [savingModel, setSavingModel] = useState(false);
   const [removeProviderOpen, setRemoveProviderOpen] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [remoteModels, setRemoteModels] = useState<Array<{ id: string; name?: string }>>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const modelFetchSequence = useRef(0);
@@ -131,6 +134,7 @@ export function ProviderDetailPage({
   // Full-config save (removals must bypass scheduleSave's deep merge).
   const save = useCallback(
     async (next: Config) => {
+      testConfig.current = next;
       try {
         await saveConfigObject(next as never);
         await refresh();
@@ -174,10 +178,13 @@ export function ProviderDetailPage({
     const all = models.filter((m) => m.provider === provider.id && m.category === "llm");
     return all.filter((m) => !llmModels.some((v) => v.preset?.id === m.id));
   }, [models, provider.id, llmModels]);
-  const defaultLlm = useMemo(
-    () => resolveDefaultLlmModel(asRecord(config.llm), provider.id, models),
-    [config.llm, provider.id, models],
-  );
+  const currentLlm = useMemo(() => {
+    const llm = asRecord(config.llm);
+    const configuredProvider = typeof llm.provider === "string" ? llm.provider : "bytedance";
+    const activeProvider =
+      configuredProvider === "openai_compatible" ? "custom_openai" : configuredProvider;
+    return activeProvider === provider.id ? resolveDefaultLlmModel(llm, provider.id, models) : null;
+  }, [config.llm, provider.id, models]);
   const activeAsr = asRecord(config.audio).provider;
   const activeAsrId = typeof activeAsr === "string" ? activeAsr : "doubao-streaming";
 
@@ -199,18 +206,6 @@ export function ProviderDetailPage({
       if (sequence === modelFetchSequence.current) showToast(errText(error), "error");
     } finally {
       if (sequence === modelFetchSequence.current) setFetchingModels(false);
-    }
-  };
-
-  const runTest = async () => {
-    setTesting(true);
-    try {
-      await testProviderConnection(provider.id, tab);
-      showToast(t("ui.models.test_ok", { provider: providerName }), "success");
-    } catch (error) {
-      showToast(errText(error), "error");
-    } finally {
-      setTesting(false);
     }
   };
 
@@ -277,18 +272,6 @@ export function ProviderDetailPage({
         : scope === "llm"
           ? llmCredentialValues(config, provider.id)
           : asrCredentialValues(config, provider.id, models);
-    const filled = credentialsFilled(
-      {
-        ...values,
-        url:
-          values.url_base ||
-          values.url ||
-          (scope === "llm"
-            ? provider.default_llm_url
-            : asrCredentialDefault(models, provider.id, "url")),
-      },
-      fields,
-    );
 
     // Doubao auth-mode aware visibility (legacy App ID/Token vs v2 API Key).
     const doubaoMode = provider.id === "bytedance" ? effectiveDoubaoAuthMode(values) : null;
@@ -303,27 +286,7 @@ export function ProviderDetailPage({
 
     return (
       <Section aria-label={t("ui.models.credentials")}>
-        <SectionHeader
-          title={t("ui.models.credentials")}
-          action={
-            <div className="flex items-center gap-2">
-              {filled ? (
-                <span
-                  className="grid size-6 place-items-center rounded-md bg-success/10 text-success"
-                  title={t("ui.models.credentials_filled")}
-                >
-                  <Check size={14} />
-                </span>
-              ) : null}
-              {provider.kind === "online" && (
-                <Button variant="ghost" disabled={testing} onClick={() => void runTest()}>
-                  {testing ? <LoaderCircle size={14} className="animate-spin" /> : null}
-                  {t("ui.models.test")}
-                </Button>
-              )}
-            </div>
-          }
-        />
+        <SectionHeader title={t("ui.models.credentials")} />
         <SectionContent>
           <SectionItemList>
             {visibleFields.map((field, index) => {
@@ -421,7 +384,7 @@ export function ProviderDetailPage({
             <span className="text-sm font-semibold text-text">{name}</span>
             {activeAsrId === model.id && (
               <Badge variant="accent" size="xs">
-                {t("ui.models.default_badge")}
+                {t("ui.models.current_badge")}
               </Badge>
             )}
           </span>
@@ -488,7 +451,7 @@ export function ProviderDetailPage({
         },
         i18n.language,
       ).name;
-    const isDefault = defaultLlm?.id === view.id;
+    const isCurrent = currentLlm?.id === view.id;
     return (
       <button
         key={view.id}
@@ -500,9 +463,9 @@ export function ProviderDetailPage({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span className="text-sm font-semibold text-text">{displayName}</span>
-            {isDefault && (
+            {isCurrent && (
               <Badge variant="accent" size="xs">
-                {t("ui.models.default_badge")}
+                {t("ui.models.current_badge")}
               </Badge>
             )}
           </span>
@@ -642,7 +605,32 @@ export function ProviderDetailPage({
       {/* Modal */}
       {modelModal?.kind === "asr" && (
         <AsrModelConfigModal
+          key={modelModal.model.id}
           model={modelModal.model}
+          isCurrent={activeAsrId === modelModal.model.id}
+          defaultDisabled={!isModelDownloaded(modelModal.model)}
+          onSetDefault={
+            modelModal.model.category === "asr"
+              ? () => {
+                  void save({
+                    ...testConfig.current,
+                    audio: { ...asRecord(testConfig.current.audio), provider: modelModal.model.id },
+                  });
+                }
+              : undefined
+          }
+          testTarget={
+            modelModal.model.category === "asr"
+              ? {
+                  providerId: provider.id,
+                  modelId: modelModal.model.id,
+                  capability: "asr",
+                  getConfig: () => testConfig.current,
+                  showToast,
+                  disabled: !isModelDownloaded(modelModal.model),
+                }
+              : undefined
+          }
           onClose={() => setModelModal(null)}
           userConfig={(() => {
             const audio = asRecord(config.audio);
@@ -721,7 +709,20 @@ export function ProviderDetailPage({
       )}
       {modelEntry && (
         <LlmModelConfigModal
+          key={modelEntry.entry.id}
           entry={modelEntry.entry}
+          onModelIdHelp={() => showToast(t("ui.models.model_id_description"), "success")}
+          isCurrent={currentLlm?.id === modelEntry.entry.id}
+          onSetDefault={() =>
+            void save(withDefaultLlmModel(testConfig.current, provider.id, modelEntry.entry.id))
+          }
+          testTarget={{
+            providerId: provider.id,
+            modelId: modelEntry.entry.id,
+            capability: "llm",
+            getConfig: () => testConfig.current,
+            showToast,
+          }}
           presetName={
             modelEntry.view.preset
               ? localizedModelFields(modelEntry.view.preset, i18n.language).name

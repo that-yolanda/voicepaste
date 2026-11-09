@@ -317,12 +317,6 @@ export function asrCredentialDefault(
   return typeof value === "string" ? value : "";
 }
 
-/** Whether every required credential field of a scope has a value. */
-export function credentialsFilled(values: Rec, fields: { key: string }[] | undefined): boolean {
-  if (!fields || fields.length === 0) return true;
-  return fields.every((f) => String(values[f.key] ?? "").trim().length > 0);
-}
-
 /* ======================================================================
    Config patches (immutable updates over the raw config object)
    ====================================================================== */

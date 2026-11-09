@@ -113,6 +113,7 @@ export function SectionItemList({
 
 export function SectionItem({
   title,
+  titleAction,
   htmlFor,
   description,
   tooltip,
@@ -122,6 +123,7 @@ export function SectionItem({
   className = "flex-1",
 }: {
   title: string;
+  titleAction?: ReactNode;
   htmlFor?: string;
   description?: ReactNode;
   tooltip?: ReactNode;
@@ -141,6 +143,7 @@ export function SectionItem({
         <div className="section-item-label min-w-0">
           <div className="flex items-center gap-1">
             {htmlFor ? <label htmlFor={htmlFor}>{title}</label> : <span>{title}</span>}
+            {titleAction}
             {tooltip && (
               <Tooltip content={tooltip} label={t("ui.settings.tooltip_help", { title })}>
                 <Info size={14} aria-hidden="true" />

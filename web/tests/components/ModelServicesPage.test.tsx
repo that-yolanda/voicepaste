@@ -21,7 +21,6 @@ vi.mock("@/settings/bridge", () => ({
   saveConfigObject: mocks.save,
   deleteModel: mocks.deleteModel,
   downloadModel: mocks.downloadModel,
-  testProviderConnection: vi.fn(),
   getAudioConfigDefaults: vi.fn().mockResolvedValue(null),
   getDownloadedModels: mocks.getDownloaded,
   getModelRegistry: vi
@@ -85,7 +84,12 @@ test("shows a migrated custom OpenAI default and preserves an explicitly empty A
 });
 
 test("uses the backend default provider when the saved provider is omitted", async () => {
-  mocks.config = { llm: { default_model: "doubao-seed-1-6-flash" } };
+  mocks.config = {
+    llm: {
+      default_model: "doubao-seed-1-6-flash",
+      bytedance: { models: [{ id: "doubao-seed-1-6-flash" }] },
+    },
+  };
   render(<ModelServicesPage />);
   await waitFor(() =>
     expect(screen.getByRole("combobox", { name: "大语言" })).toHaveValue(

@@ -12,6 +12,7 @@ mod lang;
 mod llm;
 mod migration;
 mod model;
+mod model_test;
 mod overlay;
 mod paste;
 mod permissions;
@@ -204,7 +205,8 @@ pub fn run() {
             commands::get_downloaded_models,
             commands::download_model,
             commands::delete_model,
-            commands::test_provider_connection,
+            model_test::test_model,
+            model_test::cancel_model_test,
             commands::list_llm_models,
             #[cfg(desktop)]
             updater::check_for_update,

@@ -262,7 +262,7 @@
       "category": "asr",
       "engine": "volcengine",
       "name": "豆包流式语音识别模型2.0",
-      "description": "实时出字与分句识别可选，支持热词和二遍校正",
+      "description": "实时出字与分句识别可选，支持热词和二遍识别",
       "capabilities": {
         "streaming": true,
         "hotwords": true,
@@ -303,7 +303,7 @@
         }
       },
       "name_en": "Doubao streaming ASR 2.0",
-      "description_en": "Live or sentence recognition, with hotwords and two-pass refinement",
+      "description_en": "Live or sentence recognition, with hotwords and second-pass recognition",
       "languages": [
         "zh",
         "yue",
