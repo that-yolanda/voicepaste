@@ -184,3 +184,60 @@ describe("Doubao mode-specific controls", () => {
     expect(isModelFieldVisible("doubao-streaming", "ssd_version", live)).toBe(false);
   });
 });
+
+describe("Qwen model settings", () => {
+  it("keeps editable recommendations and hides unsupported fields", () => {
+    const model: RegistryModel = {
+      id: "qwen-asr-message",
+      provider: "qwen",
+      type: "online",
+      category: "asr",
+      name: "Qwen Message",
+      default_config: {
+        intermediate_result_enabled: true,
+        enable_ddc: true,
+        speech_noise_threshold: null,
+      },
+    };
+    const values = Object.fromEntries(
+      getMergedAsrConfig(model, {
+        intermediate_result_enabled: false,
+        speech_noise_threshold: 0.2,
+      }).map((f) => [f.key, f.value]),
+    );
+    expect(values.intermediate_result_enabled).toBe(false);
+    expect(values.enable_ddc).toBe(true);
+    expect(values.speech_noise_threshold).toBe(0.2);
+    expect(isModelFieldVisible(model.id, "intermediate_result_enabled", values)).toBe(true);
+    expect(isModelFieldVisible(model.id, "language_hints", values)).toBe(false);
+    expect(isModelFieldVisible("qwen-asr-streaming", "enable_ddc", {})).toBe(false);
+    expect(isModelFieldVisible("qwen-asr-streaming", "language_hints", {})).toBe(true);
+    expect(isModelFieldVisible(model.id, "format", values)).toBe(false);
+    expect(getFieldMeta("speech_noise_threshold", null, model.id)).toMatchObject({
+      type: "number",
+      nullable: true,
+      min: -1,
+      max: 1,
+    });
+    expect(getFieldMeta("url", "", model.id).tooltip).toBe("field.qwen_url.tooltip");
+  });
+  it("preserves legacy smoothing values while sharing the existing field metadata", () => {
+    const model: RegistryModel = {
+      id: "qwen-asr-message",
+      provider: "qwen",
+      type: "online",
+      category: "asr",
+      name: "Qwen Message",
+      default_config: { enable_ddc: true },
+    };
+    const fields = Object.fromEntries(
+      getMergedAsrConfig(model, { disfluency_removal_enabled: false }).map((f) => [f.key, f.value]),
+    );
+    expect(fields.enable_ddc).toBe(false);
+    expect(fields).not.toHaveProperty("disfluency_removal_enabled");
+    expect(getFieldMeta("enable_ddc", true, model.id).label).toBe(
+      getFieldMeta("enable_ddc", true, "elevenlabs-realtime").label,
+    );
+    expect(getFieldMeta("enable_ddc", true, model.id).tooltip).toBe("field.enable_ddc.tooltip");
+  });
+});

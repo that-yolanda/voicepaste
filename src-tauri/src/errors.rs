@@ -107,6 +107,10 @@ app_error_codes! {
     AsrRecognizerCreateFailed => "asr.recognizer_create_failed",
     AsrHotwordsOverLimit => "asr.hotwords_over_limit",
     AsrHotwordTooLong => "asr.hotword_too_long",
+    AsrQwenAuth => "asr.qwen_auth",
+    AsrQwenQuota => "asr.qwen_quota",
+    AsrQwenRateLimited => "asr.qwen_rate_limited",
+    AsrQwenHotwordsSkipped => "asr.qwen_hotwords_skipped",
     // asr — elevenlabs-specific failures and server mappings
     AsrElAuth => "asr.el_auth",
     AsrElQuotaExhausted => "asr.el_quota_exhausted",
@@ -239,9 +243,9 @@ impl AppErrorCode {
             // asr — engine-agnostic
             (ZhCn, Self::AsrConfigMissing) => "语音识别模型还未配置，缺少 {{field}}",
             (En, Self::AsrConfigMissing) => "Speech model is not configured: missing {{field}}",
-            (ZhCn, Self::AsrConfigInvalid) => "ElevenLabs 参数格式错误，请检查模型配置",
+            (ZhCn, Self::AsrConfigInvalid) => "语音识别参数或连接地址无效，请检查模型配置",
             (En, Self::AsrConfigInvalid) => {
-                "Invalid ElevenLabs parameters. Check the model configuration"
+                "Invalid speech parameters or URL. Check the model configuration"
             }
             (ZhCn, Self::AsrTestFailed) => "连接测试失败：{{provider}}",
             (En, Self::AsrTestFailed) => "Connection test failed: {{provider}}",
@@ -291,6 +295,18 @@ impl AppErrorCode {
             (En, Self::AsrHotwordsOverLimit) => "Server-side hotwords are limited to 50 entries",
             (ZhCn, Self::AsrHotwordTooLong) => "每条服务端热词最多 20 个字符",
             (En, Self::AsrHotwordTooLong) => "Each server-side hotword is limited to 20 characters",
+            (ZhCn, Self::AsrQwenAuth) => "API Key 无效或与连接地址、业务空间不匹配",
+            (En, Self::AsrQwenAuth) => "Invalid API key or endpoint/workspace mismatch",
+            (ZhCn, Self::AsrQwenQuota) => "语音识别额度不足，请检查账号余额",
+            (En, Self::AsrQwenQuota) => {
+                "Speech recognition quota exhausted. Check the account balance"
+            }
+            (ZhCn, Self::AsrQwenRateLimited) => "语音识别请求过于频繁，请稍后重试",
+            (En, Self::AsrQwenRateLimited) => "Too many speech requests. Please retry later",
+            (ZhCn, Self::AsrQwenHotwordsSkipped) => {
+                "已跳过 {{count}} 个格式不符或超出数量限制的热词"
+            }
+            (En, Self::AsrQwenHotwordsSkipped) => "Skipped {{count}} invalid or excess hotwords",
             // asr — elevenlabs-specific
             (ZhCn, Self::AsrElAuth) => "API Key 无效或没有语音识别权限",
             (En, Self::AsrElAuth) => "API key is invalid or lacks speech recognition access",

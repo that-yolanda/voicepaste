@@ -15,6 +15,11 @@ import type { RegistryModel } from "@/settings/types/models";
 
 export const DOUBAO_MODEL_ID = "doubao-streaming";
 export const ELEVENLABS_MODEL_ID = "elevenlabs-realtime";
+export const QWEN_MESSAGE_ID = "qwen-asr-message";
+export const QWEN_STREAMING_ID = "qwen-asr-streaming";
+export const QWEN_DEFAULT_URL = "wss://maas.qianwenaiapi.com/api-ws/v1/inference";
+export const isQwenModel = (id: string | undefined): boolean =>
+  id === QWEN_MESSAGE_ID || id === QWEN_STREAMING_ID;
 
 /**
  * Localized display fields for a registry model: the optional `*_en` values
@@ -69,6 +74,7 @@ export interface FieldMeta {
   maxLength?: number;
   min?: number;
   max?: number;
+  nullable?: boolean;
 }
 
 /** Enum option lists shared across models. `label` stores the i18n key. */
@@ -412,6 +418,79 @@ const ELEVENLABS_FIELDS: Record<string, Partial<FieldMeta>> = {
   },
 };
 
+const QWEN_FIELDS: Record<string, FieldMeta> = {
+  api_key: { label: "field.api_key", type: "password", group: "credentials" },
+  url: {
+    label: "field.qwen_url",
+    type: "text",
+    group: "credentials",
+    tooltip: "field.qwen_url.tooltip",
+  },
+  intermediate_result_enabled: {
+    label: "field.qwen_intermediate",
+    type: "toggle",
+    group: "basic",
+    tooltip: "field.qwen_intermediate.tooltip",
+  },
+  enable_ddc: {
+    ...FIELD_META.enable_ddc,
+    group: "basic",
+    tooltip: "field.enable_ddc.tooltip",
+  },
+  keep_dialect: {
+    label: "field.qwen_dialect",
+    type: "toggle",
+    group: "basic",
+    tooltip: "field.qwen_dialect.tooltip",
+  },
+  vad_model: {
+    label: "field.qwen_vad",
+    type: "select",
+    group: "advanced",
+    options: [
+      { value: "far_field_meeting_16k", label: "field.qwen_vad_far" },
+      { value: "near_meeting_16k", label: "field.qwen_vad_near" },
+    ],
+  },
+  max_sentence_silence: {
+    label: "field.qwen_silence",
+    type: "number",
+    group: "advanced",
+    min: 200,
+    max: 6000,
+    step: 1,
+  },
+  heartbeat: {
+    label: "field.qwen_heartbeat",
+    type: "toggle",
+    group: "advanced",
+    tooltip: "field.qwen_heartbeat.tooltip",
+  },
+  speech_noise_threshold: {
+    label: "field.qwen_noise",
+    type: "number",
+    group: "advanced",
+    min: -1,
+    max: 1,
+    step: 0.1,
+    nullable: true,
+    placeholder: "field.qwen_noise.placeholder",
+    tooltip: "field.qwen_noise.tooltip",
+  },
+  language_hints: {
+    label: "field.qwen_languages",
+    type: "list",
+    group: "advanced",
+    placeholder: "field.qwen_languages.placeholder",
+    tooltip: "field.qwen_languages.tooltip",
+  },
+  multi_threshold_mode_enabled: {
+    label: "field.qwen_multi_threshold",
+    type: "toggle",
+    group: "advanced",
+  },
+};
+
 export function parseLanguageList(value: string): string[] {
   return [
     ...new Set(
@@ -423,11 +502,28 @@ export function parseLanguageList(value: string): string[] {
   ];
 }
 
+/** Preserve overrides saved before Qwen adopted the shared smoothing field. */
+export function normalizeQwenSettings(config: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...config };
+  if (!("enable_ddc" in next) && "disfluency_removal_enabled" in next) {
+    next.enable_ddc = next.disfluency_removal_enabled;
+  }
+  delete next.disfluency_removal_enabled;
+  return next;
+}
+
 export function isModelFieldVisible(
   modelId: string,
   key: string,
   config: Record<string, unknown>,
 ): boolean {
+  if (isQwenModel(modelId)) {
+    if (!(key in QWEN_FIELDS)) return false;
+    if (["intermediate_result_enabled", "enable_ddc"].includes(key))
+      return modelId === QWEN_MESSAGE_ID;
+    if (["language_hints", "multi_threshold_mode_enabled"].includes(key))
+      return modelId === QWEN_STREAMING_ID;
+  }
   if (modelId === DOUBAO_MODEL_ID) {
     if (
       [
@@ -472,8 +568,9 @@ export function getFieldMeta(key: string, value: unknown, modelId?: string): Fie
   // Try the full key first, then the last segment after a dot
   // (e.g. "vad.threshold" → "threshold") so nested asr_defaults keys resolve.
   const meta = FIELD_META[key] ?? FIELD_META[key.split(".").pop() ?? ""];
-  const override =
-    modelId === DOUBAO_MODEL_ID
+  const override = isQwenModel(modelId)
+    ? QWEN_FIELDS[key]
+    : modelId === DOUBAO_MODEL_ID
       ? DOUBAO_FIELDS[key]
       : modelId === ELEVENLABS_MODEL_ID
         ? ELEVENLABS_FIELDS[key]
@@ -583,7 +680,9 @@ export function getMergedAsrConfig(
   asrDefaults?: AsrDefaults | null,
 ): MergedField[] {
   const base = asRecord(model.default_config);
-  const user = asRecord(userConfig);
+  const user = isQwenModel(model.id)
+    ? normalizeQwenSettings(asRecord(userConfig))
+    : asRecord(userConfig);
 
   // Merge: base keeps its natural order; user overrides last.
   const merged: Record<string, unknown> = {};
@@ -614,7 +713,13 @@ export function getMergedAsrConfig(
   // Order by FIELD_META definition order (frontend-controlled, stable) so display
   // order doesn't depend on backend serialization of config.yaml / registry.
   // Keys absent from FIELD_META sort last, preserving their relative order.
-  const fieldOrder = Object.keys(model.id === ELEVENLABS_MODEL_ID ? ELEVENLABS_FIELDS : FIELD_META);
+  const fieldOrder = Object.keys(
+    isQwenModel(model.id)
+      ? QWEN_FIELDS
+      : model.id === ELEVENLABS_MODEL_ID
+        ? ELEVENLABS_FIELDS
+        : FIELD_META,
+  );
   fields.sort((a, b) => {
     const ia = fieldOrder.indexOf(a.key);
     const ib = fieldOrder.indexOf(b.key);

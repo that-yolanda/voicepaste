@@ -52,7 +52,9 @@ import {
   effectiveDoubaoAuthMode,
   getFieldMeta,
   hasLegacyDoubaoCreds,
+  isQwenModel,
   localizedModelFields,
+  normalizeQwenSettings,
   resolveFieldMeta,
 } from "@/settings/lib/model";
 import {
@@ -299,7 +301,10 @@ export function ProviderDetailPage({
                     "",
                   )
                 : String(
-                    values[field.key] ||
+                    (scope === "asr" && provider.id === "qwen" && field.key === "url"
+                      ? String(values.url ?? "").trim() ||
+                        asrCredentialDefault(models, provider.id, "url")
+                      : values[field.key]) ||
                       (scope === "llm" && field.key === "url"
                         ? provider.default_llm_url || ""
                         : ""),
@@ -676,7 +681,7 @@ export function ProviderDetailPage({
               audio.credentials = { ...credentials, bytedance };
             }
             const current = asRecord(audio[modelId]);
-            const next = { ...current };
+            const next = isQwenModel(modelId) ? normalizeQwenSettings(current) : { ...current };
             for (const [key, value] of Object.entries(patch)) {
               if (isNested(value) && isRecordValue(next[key])) {
                 next[key] = { ...(next[key] as Config), ...(value as Config) };

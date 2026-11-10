@@ -594,12 +594,12 @@ mod tests {
     }
 
     #[test]
-    fn embedded_registry_is_version_21() {
+    fn embedded_registry_is_version_23() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 21,
-            "EMBEDDED_REGISTRY version should be 21, got {}",
+            registry.version, 23,
+            "EMBEDDED_REGISTRY version should be 23, got {}",
             registry.version
         );
         assert!(
@@ -675,8 +675,8 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 21,
-            "bundled_registry should return version 21 from embedded, got {}",
+            registry.version, 23,
+            "bundled_registry should return version 23 from embedded, got {}",
             registry.version
         );
     }
@@ -710,6 +710,45 @@ mod tests {
         // upgrades it via merge_registry's version-gated merge.
         assert_eq!(registry.version, 1);
         assert!(registry.models.iter().any(|m| m.id == "doubao-streaming"));
+    }
+
+    #[test]
+    fn registry_upgrade_adds_qwen_and_preserves_custom_models() {
+        let bundled: ModelRegistry = serde_json::from_str(EMBEDDED_REGISTRY).unwrap();
+        let mut current = bundled.clone();
+        current.version = 21;
+        current.providers.retain(|p| p.id != "qwen");
+        current.models.retain(|m| m.engine != "qwen-asr");
+        let mut custom = current.models[0].clone();
+        custom.id = "user-custom-model".into();
+        current.models.push(custom);
+        let merged = merge_registry(current, bundled);
+        assert_eq!(merged.version, 23);
+        let message = merged
+            .models
+            .iter()
+            .find(|m| m.id == "qwen-asr-message")
+            .unwrap();
+        let defaults = message.default_config.as_ref().unwrap();
+        assert_eq!(defaults["vad_model"], "near_meeting_16k");
+        assert_eq!(defaults["enable_ddc"], true);
+        assert!(defaults.get("disfluency_removal_enabled").is_none());
+        let provider = merged.providers.iter().find(|p| p.id == "qwen").unwrap();
+        let fields = &provider.credentials.as_ref().unwrap()["asr"].fields;
+        assert_eq!(
+            fields.iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
+            ["api_key", "url"]
+        );
+        assert_eq!(
+            merged
+                .models
+                .iter()
+                .filter(|m| m.provider.as_deref() == Some("qwen"))
+                .count(),
+            2
+        );
+        assert!(merged.models.iter().any(|m| m.id == "user-custom-model"));
+        assert!(merged.models.iter().any(|m| m.id == "doubao-streaming"));
     }
 
     #[test]

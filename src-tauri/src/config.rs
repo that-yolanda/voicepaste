@@ -764,11 +764,14 @@ impl AppConfig {
         }
 
         // Layer 3: user overrides from config.yaml audio.<model_id>
-        if let Some(user_config) = user_audio
+        if let Some(mut user_config) = user_audio
             .get(model_id)
             .and_then(profile_to_json)
             .and_then(|v| v.as_object().cloned())
         {
+            if crate::asr::qwen::is_qwen_model(model_id) {
+                crate::asr::qwen::normalize_settings(&mut user_config);
+            }
             if let Some(target) = merged.as_object_mut() {
                 for (k, v) in user_config {
                     target.insert(k, v);
@@ -1357,6 +1360,32 @@ impl ConfigManager {
             params
                 .validate()
                 .map_err(|e| AppError::new(AppErrorCode::AsrConfigInvalid).with_detail(e))?;
+        }
+        for id in [crate::asr::qwen::MESSAGE_ID, crate::asr::qwen::STREAMING_ID] {
+            let mut merged = serde_json::Map::new();
+            for raw in [
+                candidate.audio.get(id),
+                candidate
+                    .audio
+                    .get("credentials")
+                    .and_then(|c| c.get("qwen")),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                let value = serde_json::to_value(raw)
+                    .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid))?;
+                let fields = value
+                    .as_object()
+                    .ok_or_else(|| AppError::new(AppErrorCode::AsrConfigInvalid))?;
+                let mut fields = fields.clone();
+                crate::asr::qwen::normalize_settings(&mut fields);
+                merged.extend(fields);
+            }
+            let merged = serde_json::Value::Object(merged);
+            let params: crate::asr::qwen::QwenConfig = serde_json::from_value(merged)
+                .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid))?;
+            params.validate()?;
         }
         let yaml = serde_norway::to_string(&config)
             .map_err(|e| AppError::new(AppErrorCode::ConfigIoWrite).with_detail(e.to_string()))?;
@@ -2221,5 +2250,125 @@ bytedance:
         let empty: ModelProvidersConfig = serde_norway::from_str("{}").unwrap();
         assert!(empty.added.is_none());
         assert!(empty.credentials.is_none());
+    }
+}
+
+#[cfg(test)]
+mod qwen_tests {
+    use super::*;
+    use crate::asr::qwen::{QwenConfig, DEFAULT_URL, MESSAGE_ID, STREAMING_ID};
+
+    #[test]
+    fn qwen_credentials_and_parameters_survive_restart_and_model_reset() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let manager = ConfigManager::new(data.path(), resources.path());
+        manager
+            .save_config(&serde_norway::to_value(manager.load_config().unwrap()).unwrap())
+            .unwrap();
+        let mut config = manager.get_editable_config().unwrap();
+        let original_provider = config["audio"]["provider"].clone();
+        config["audio"]["credentials"] = serde_norway::from_str("qwen:\n  url: wss://workspace.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference\n  api_key: test-key\n").unwrap();
+        config["audio"][MESSAGE_ID] = serde_norway::from_str("intermediate_result_enabled: false\ndisfluency_removal_enabled: false\nspeech_noise_threshold: 0.2\n").unwrap();
+        manager.save_config(&config).unwrap();
+        let restarted = ConfigManager::new(data.path(), resources.path());
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        let loaded = restarted.load_config().unwrap();
+        let params: QwenConfig = serde_json::from_value(AppConfig::resolve_model_config(
+            &registry,
+            MESSAGE_ID,
+            &loaded.audio,
+        ))
+        .unwrap();
+        assert!(!params.intermediate_result_enabled);
+        assert!(!params.enable_ddc);
+        assert_eq!(params.speech_noise_threshold, Some(0.2));
+        assert_eq!(params.api_key, "test-key");
+        assert_eq!(
+            serde_norway::to_value(&loaded.audio["provider"]).unwrap(),
+            original_provider
+        );
+        let mut reset = restarted.get_editable_config().unwrap();
+        reset["audio"]
+            .as_mapping_mut()
+            .unwrap()
+            .remove(serde_norway::Value::String(MESSAGE_ID.into()));
+        restarted.save_config(&reset).unwrap();
+        let loaded = restarted.load_config().unwrap();
+        let params: QwenConfig = serde_json::from_value(AppConfig::resolve_model_config(
+            &registry,
+            MESSAGE_ID,
+            &loaded.audio,
+        ))
+        .unwrap();
+        assert!(params.intermediate_result_enabled);
+        assert!(params.enable_ddc);
+        assert_eq!(params.speech_noise_threshold, None);
+        assert_eq!(params.api_key, "test-key");
+        assert!(params.endpoint().contains("ap-southeast-1"));
+        reset["audio"]["credentials"]["qwen"]["url"] = serde_norway::Value::String("  ".into());
+        restarted.save_config(&reset).unwrap();
+        let loaded = restarted.load_config().unwrap();
+        let params: QwenConfig = serde_json::from_value(AppConfig::resolve_model_config(
+            &registry,
+            MESSAGE_ID,
+            &loaded.audio,
+        ))
+        .unwrap();
+        assert_eq!(params.endpoint(), DEFAULT_URL);
+    }
+
+    #[test]
+    fn qwen_invalid_save_does_not_overwrite_configuration() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let manager = ConfigManager::new(data.path(), resources.path());
+        manager
+            .save_config(&serde_norway::to_value(manager.load_config().unwrap()).unwrap())
+            .unwrap();
+        let config = manager.get_editable_config().unwrap();
+        manager.save_config(&config).unwrap();
+        let before = fs::read(manager.config_path()).unwrap();
+        for raw in [
+            "heartbeat: 'false'",
+            "speech_noise_threshold: 2",
+            "max_sentence_silence: 199",
+            "language_hints: [unknown]",
+        ] {
+            let mut invalid = config.clone();
+            invalid["audio"][STREAMING_ID] = serde_norway::from_str(raw).unwrap();
+            assert!(manager.save_config(&invalid).is_err(), "{raw}");
+            assert_eq!(fs::read(manager.config_path()).unwrap(), before);
+        }
+    }
+
+    #[tokio::test]
+    async fn qwen_missing_key_never_falls_back_to_doubao() {
+        let registry: crate::model::ModelRegistry =
+            serde_json::from_str(include_str!("../../registry.json")).unwrap();
+        for id in [MESSAGE_ID, STREAMING_ID] {
+            let mut config = AppConfig::default();
+            config
+                .audio
+                .insert("provider".into(), serde_norway::Value::String(id.into()));
+            let result = crate::asr::create_engine_session(
+                &config,
+                &registry,
+                PathBuf::new(),
+                PathBuf::new(),
+                &[],
+            )
+            .await;
+            match result {
+                Err(error) => {
+                    assert_eq!(error.code, crate::errors::AppErrorCode::AsrConfigMissing);
+                    assert_eq!(
+                        error.params.get("field").map(String::as_str),
+                        Some("API Key")
+                    );
+                }
+                Ok(_) => panic!("unexpected success"),
+            }
+        }
     }
 }

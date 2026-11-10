@@ -1,6 +1,6 @@
 {
-  "version": 21,
-  "updated_at": "2026-11-05",
+  "version": 23,
+  "updated_at": "2026-11-10",
   "providers": [
     {
       "id": "bytedance",
@@ -57,6 +57,27 @@
             {
               "key": "api_key",
               "type": "password"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "qwen",
+      "name": "千问语音识别",
+      "name_en": "Qwen Speech Recognition",
+      "kind": "online",
+      "capabilities": ["asr"],
+      "docs_url": "https://platform.qianwenai.com/docs/developer-guides/speech/asr-realtime",
+      "credentials": {
+        "asr": {
+          "fields": [
+            {
+              "key": "api_key",
+              "type": "password"
+            },
+            {
+              "key": "url"
             }
           ]
         }
@@ -464,6 +485,128 @@
         "wo",
         "xh",
         "zu"
+      ]
+    },
+    {
+      "id": "qwen-asr-message",
+      "provider": "qwen",
+      "type": "online",
+      "category": "asr",
+      "engine": "qwen-asr",
+      "name": "Qwen ASR 3.1 Message",
+      "name_en": "Qwen ASR 3.1 Message",
+      "description": "实时语音输入，可直接去除口头语并整理句子",
+      "description_en": "Live dictation with optional filler removal and text polishing",
+      "capabilities": {
+        "streaming": true,
+        "hotwords": true,
+        "punctuation": true,
+        "itn": true
+      },
+      "requires_config": ["api_key"],
+      "default_config": {
+        "url": "wss://maas.qianwenaiapi.com/api-ws/v1/inference",
+        "api_key": "",
+        "keep_dialect": false,
+        "vad_model": "near_meeting_16k",
+        "max_sentence_silence": 800,
+        "heartbeat": true,
+        "speech_noise_threshold": null,
+        "intermediate_result_enabled": true,
+        "enable_ddc": true
+      },
+      "languages": [
+        "zh",
+        "en",
+        "ja",
+        "ko",
+        "vi",
+        "th",
+        "id",
+        "ms",
+        "tl",
+        "hi",
+        "ar",
+        "fr",
+        "de",
+        "es",
+        "pt",
+        "ru",
+        "it",
+        "nl",
+        "sv",
+        "da",
+        "fi",
+        "no",
+        "el",
+        "pl",
+        "cs",
+        "hu",
+        "ro",
+        "bg",
+        "hr",
+        "sk"
+      ]
+    },
+    {
+      "id": "qwen-asr-streaming",
+      "provider": "qwen",
+      "type": "online",
+      "category": "asr",
+      "engine": "qwen-asr",
+      "name": "Qwen ASR 3.1 Streaming",
+      "name_en": "Qwen ASR 3.1 Streaming",
+      "description": "多语种持续转写，支持热词与语言提示",
+      "description_en": "Continuous multilingual transcription with hotwords and language hints",
+      "capabilities": {
+        "streaming": true,
+        "hotwords": true,
+        "punctuation": true,
+        "itn": true
+      },
+      "requires_config": ["api_key"],
+      "default_config": {
+        "url": "wss://maas.qianwenaiapi.com/api-ws/v1/inference",
+        "api_key": "",
+        "keep_dialect": false,
+        "vad_model": "near_meeting_16k",
+        "max_sentence_silence": 800,
+        "heartbeat": true,
+        "speech_noise_threshold": null,
+        "language_hints": [],
+        "multi_threshold_mode_enabled": false
+      },
+      "languages": [
+        "zh",
+        "en",
+        "ja",
+        "ko",
+        "vi",
+        "th",
+        "id",
+        "ms",
+        "tl",
+        "hi",
+        "ar",
+        "fr",
+        "de",
+        "es",
+        "pt",
+        "ru",
+        "it",
+        "nl",
+        "sv",
+        "da",
+        "fi",
+        "no",
+        "el",
+        "pl",
+        "cs",
+        "hu",
+        "ro",
+        "bg",
+        "hr",
+        "sk"
       ]
     },
     {

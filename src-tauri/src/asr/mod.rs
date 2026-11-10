@@ -1,5 +1,6 @@
 pub mod doubao;
 pub mod elevenlabs;
+pub mod qwen;
 pub mod sherpa_onnx;
 
 use std::path::PathBuf;
@@ -82,6 +83,18 @@ pub async fn create_engine_session(
     let entry = registry.models.iter().find(|m| m.id == engine_model_id);
 
     let (result, show_recording_hint) = match entry {
+        Some(entry) if entry.engine == "qwen-asr" => {
+            let merged = crate::config::AppConfig::resolve_model_config(
+                registry,
+                engine_model_id,
+                &config.audio,
+            );
+            let params: qwen::QwenConfig = serde_json::from_value(merged)
+                .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid))?;
+            let hint = engine_model_id == qwen::MESSAGE_ID && !params.intermediate_result_enabled;
+            let engine = qwen::QwenEngine::new(params, engine_model_id)?;
+            (engine.create_session(hotwords).await, hint)
+        }
         Some(entry) if entry.engine == "elevenlabs" => {
             let merged = crate::config::AppConfig::resolve_model_config(
                 registry,

@@ -45,7 +45,7 @@
     },
     "asr": {
       "config_missing": "Speech model is not configured: missing {{field}}",
-      "config_invalid": "Invalid ElevenLabs parameters. Check the model configuration",
+      "config_invalid": "Invalid speech parameters or URL. Check the model configuration",
       "auth_failed": "ASR authentication failed. Check the App ID / Token / Resource ID",
       "network": "ASR network connection failed",
       "timeout": "ASR connection timed out",
@@ -89,7 +89,11 @@
       "empty_result": "No transcript text came back. Check the network",
       "reconnecting": "Reconnecting…",
       "reconnected": "Reconnected",
-      "test_failed": "Connection test failed: {{provider}}"
+      "test_failed": "Connection test failed: {{provider}}",
+      "qwen_auth": "Invalid API key or endpoint/workspace mismatch",
+      "qwen_quota": "Speech recognition quota exhausted. Check the account balance",
+      "qwen_rate_limited": "Too many speech requests. Please retry later",
+      "qwen_hotwords_skipped": "Skipped {{count}} invalid or excess hotwords"
     },
     "config": {
       "invalid": "Invalid configuration",
@@ -251,7 +255,26 @@
     "doubao.two_pass.tooltip": "Displays live text first, then recognizes each completed sentence again to improve the final transcript.",
     "doubao.end_window.tooltip": "Ends a sentence after this much continuous silence. Range: 300–5000 ms; recommended: 800–1000 ms. Overrides the semantic segmentation silence threshold.",
     "doubao.force_speech.tooltip": "Treats the start of the audio as speech even during silence, preventing premature segmentation. Recommended: 1000 ms.",
-    "doubao.accelerate.tooltip": "Displays the first character sooner, but may reduce its accuracy."
+    "doubao.accelerate.tooltip": "Displays the first character sooner, but may reduce its accuracy.",
+    "qwen_url": "WebSocket URL",
+    "qwen_url.tooltip": "Default Qwen endpoint:\nwss://maas.qianwenaiapi.com/api-ws/v1/inference\n\nQwen Cloud international (Singapore):\nwss://ap-southeast-1.maas.qwencloudapi.com/api-ws/v1/inference\n\nAlibaba Cloud Model Studio, Beijing:\nwss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference\n\nAlibaba Cloud Model Studio, Singapore:\nwss://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference\n\nReplace {WorkspaceId} with your workspace ID. Use an API key matching the endpoint, region and workspace. Leave blank to restore the default URL.",
+    "qwen_intermediate": "Intermediate results",
+    "qwen_intermediate.tooltip": "Recommended on to show text as you speak. When off, shows recording status and confirmed sentences. The service default is off.",
+    "qwen_dialect": "Preserve dialect",
+    "qwen_dialect.tooltip": "When off, dialect speech is transcribed into standard Chinese.",
+    "qwen_vad": "Speech detection scene",
+    "qwen_vad_far": "Far field",
+    "qwen_vad_near": "Near field (recommended)",
+    "qwen_silence": "Sentence silence (ms)",
+    "qwen_heartbeat": "Keep alive during silence",
+    "qwen_heartbeat.tooltip": "Recommended on to keep the session alive while sending silence. When off, silence may cause a session timeout.",
+    "qwen_noise": "Speech / noise threshold",
+    "qwen_noise.placeholder": "Service default",
+    "qwen_noise.tooltip": "Leave blank for the service default. Range: −1 to 1. Higher values may filter out speech; lower values may transcribe noise.",
+    "qwen_languages": "Language hints",
+    "qwen_languages.placeholder": "Auto; e.g. zh, en",
+    "qwen_languages.tooltip": "Leave blank for automatic detection. Up to 4 comma-separated language codes, e.g. zh, en, ja, pl.",
+    "qwen_multi_threshold": "Multi-threshold segmentation"
   },
   "ui": {
     "hotkey": {

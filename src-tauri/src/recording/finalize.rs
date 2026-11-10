@@ -102,11 +102,6 @@ pub(super) async fn finalize_and_paste(
         "Final text received ({} chars)",
         trimmed.chars().count()
     );
-    log_rec!(
-        debug,
-        "Final text preview: {:?}",
-        trimmed.chars().take(200).collect::<String>()
-    );
 
     // Load config + model registry for LLM / behavior settings.
     let config = app_inner.config_manager.load_config().ok();
@@ -187,11 +182,6 @@ pub(super) async fn finalize_and_paste(
                         info,
                         "LLM polishing succeeded ({} chars)",
                         t.chars().count()
-                    );
-                    log_rec!(
-                        debug,
-                        "LLM polished preview: {:?}",
-                        t.chars().take(200).collect::<String>()
                     );
                     t
                 }

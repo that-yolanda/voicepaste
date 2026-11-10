@@ -38,7 +38,12 @@ export function renderControl(
           max={meta.max}
           className="w-36"
           value={typeof value === "number" ? formatNumber(value) : ""}
+          placeholder={meta.placeholder}
           onChange={(v) => {
+            if (meta.nullable && !v.trim()) {
+              onChange(null);
+              return;
+            }
             const n = Number(v);
             if (
               v.trim() &&

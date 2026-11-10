@@ -77,11 +77,18 @@ pub(super) async fn connect_and_attach(
         return;
     }
 
-    // Retry transient setup failures once; permanent ElevenLabs errors need user action.
+    // Retry transient setup failures once; permanent provider errors need user action.
     let mut result = create_active_session(&app_handle, &config, &hotwords).await;
     if result.as_ref().err().is_some_and(|error| {
-        config.audio_provider() != crate::config::ELEVENLABS_REALTIME_ID
-            || crate::asr::elevenlabs::retryable_start_error(error.code)
+        if crate::asr::qwen::is_qwen_model(config.audio_provider()) {
+            matches!(
+                error.code,
+                AppErrorCode::AsrNetwork | AppErrorCode::AsrTimeout | AppErrorCode::AsrServerError
+            )
+        } else {
+            config.audio_provider() != crate::config::ELEVENLABS_REALTIME_ID
+                || crate::asr::elevenlabs::retryable_start_error(error.code)
+        }
     }) && is_current_epoch(&app_inner, my_epoch)
     {
         // Check again before opening another connection.
@@ -197,12 +204,17 @@ pub(super) async fn manage_asr_session(
 
     let app_inner = app.state::<Arc<app_state::AppInner>>().inner().clone();
     let mut reconnect_attempts: u32 = 0;
-    // Reconnecting ElevenLabs would discard unconfirmed audio/edit state. Fail
+    // Reconnecting these engines would discard unconfirmed audio/edit state. Fail
     // visibly and retain the full WAV for retry rather than paste a partial prefix.
-    let can_reconnect = app_inner
+    let can_reconnect = app_inner.config_manager.load_config().is_ok_and(|config| {
+        config.audio_provider() != crate::config::ELEVENLABS_REALTIME_ID
+            && !crate::asr::qwen::is_qwen_model(config.audio_provider())
+    });
+
+    let mut qwen_hint_pending = app_inner
         .config_manager
         .load_config()
-        .is_ok_and(|config| config.audio_provider() != crate::config::ELEVENLABS_REALTIME_ID);
+        .is_ok_and(|config| crate::asr::qwen::is_qwen_model(config.audio_provider()));
 
     log_events!(debug, "ASR session manager started (epoch {})", my_epoch);
     'outer: loop {
@@ -220,6 +232,15 @@ pub(super) async fn manage_asr_session(
                     // A real transcript means the (possibly reconnected) session is
                     // healthy again: reset the failure counter.
                     reconnect_attempts = 0;
+                    // Final-only Qwen still produces confirmed sentences during recording.
+                    // Yield the recording placeholder (or initial hotword warning) to them.
+                    if qwen_hint_pending
+                        && (!final_text.is_empty() || !partial_text.is_empty())
+                        && is_recording(&app)
+                    {
+                        emit_hint(&app, "", "info", "text");
+                        qwen_hint_pending = false;
+                    }
 
                     // Save this session's transcript (without the cross-reconnect
                     // prefix) so stop_recording can fall back to it.

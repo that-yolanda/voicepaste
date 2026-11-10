@@ -402,3 +402,80 @@ test("VAD reads shared values, writes there and resets without losing other defa
     num_threads: 7,
   });
 });
+
+test("Qwen credentials expose only Key and URL with a default and endpoint help", async () => {
+  const qwen = providers.find((p) => p.id === "qwen") as RegistryProvider;
+  const endpoint = "wss://maas.qianwenaiapi.com/api-ws/v1/inference";
+  mocks.config.audio = {
+    provider: "doubao-streaming",
+    credentials: { qwen: { api_key: "test-key", url: "" } },
+  };
+  detail(qwen);
+  expect(screen.getByDisplayValue("test-key")).toHaveAttribute("type", "password");
+  const url = screen.getByDisplayValue(endpoint);
+  expect(screen.queryByText("接入平台")).not.toBeInTheDocument();
+  fireEvent.focus(screen.getByRole("button", { name: "WebSocket URL说明" }));
+  expect(screen.getByRole("tooltip")).toHaveTextContent(
+    "{WorkspaceId}.cn-beijing.maas.aliyuncs.com",
+  );
+  expect(screen.getByRole("tooltip")).toHaveTextContent(
+    "{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com",
+  );
+  fireEvent.change(url, { target: { value: "wss://custom.example/asr" } });
+  fireEvent.blur(url);
+  await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+  expect(mocks.save.mock.calls.at(-1)?.[0].audio.credentials.qwen).toEqual({
+    api_key: "test-key",
+    url: "wss://custom.example/asr",
+  });
+  expect(mocks.save.mock.calls.at(-1)?.[0].audio.provider).toBe("doubao-streaming");
+  cleanup();
+  mocks.config.audio = { credentials: { qwen: { api_key: "test-key", url: "   " } } };
+  detail(qwen);
+  expect(screen.getByDisplayValue(endpoint)).toBeInTheDocument();
+});
+
+test("Qwen model reset preserves provider credentials and active model", async () => {
+  const qwen = providers.find((p) => p.id === "qwen") as RegistryProvider;
+  const credentials = { qwen: { api_key: "test-key", url: "wss://custom.example/asr" } };
+  mocks.config.audio = {
+    provider: "doubao-streaming",
+    models: ["qwen-asr-message", "qwen-asr-streaming"],
+    credentials,
+    "qwen-asr-message": { intermediate_result_enabled: false, enable_ddc: false },
+  };
+  detail(qwen);
+  fireEvent.click(screen.getByRole("button", { name: "配置 Qwen ASR 3.1 Message" }));
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.getByText("实时中间结果")).toBeInTheDocument();
+  expect(dialog.getByText("语义顺滑")).toBeInTheDocument();
+  expect(dialog.queryByText("识别语言提示")).not.toBeInTheDocument();
+  const reset = dialog.getByRole("button", { name: "恢复默认" });
+  fireEvent.click(reset);
+  await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+  const saved = mocks.save.mock.calls.at(-1)?.[0];
+  expect(saved.audio.credentials).toEqual(credentials);
+  expect(saved.audio.provider).toBe("doubao-streaming");
+  expect(saved.audio["qwen-asr-message"]).toBeUndefined();
+});
+
+test("editing Qwen settings keeps legacy smoothing off and stores the shared field", async () => {
+  const qwen = providers.find((p) => p.id === "qwen") as RegistryProvider;
+  mocks.config.audio = {
+    provider: "doubao-streaming",
+    models: ["qwen-asr-message"],
+    "qwen-asr-message": { disfluency_removal_enabled: false },
+  };
+  detail(qwen);
+  fireEvent.click(screen.getByRole("button", { name: "配置 Qwen ASR 3.1 Message" }));
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.getByText("语义顺滑")).toBeInTheDocument();
+  expect(dialog.queryByText("内置整理")).not.toBeInTheDocument();
+  const toggles = dialog.getAllByRole("checkbox");
+  expect(toggles[1]).not.toBeChecked();
+  fireEvent.click(toggles[2]);
+  await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+  const saved = mocks.save.mock.calls.at(-1)?.[0].audio["qwen-asr-message"];
+  expect(saved).toMatchObject({ enable_ddc: false, keep_dialect: true });
+  expect(saved).not.toHaveProperty("disfluency_removal_enabled");
+});

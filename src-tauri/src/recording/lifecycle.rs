@@ -144,10 +144,10 @@ pub(super) async fn stop_recording(app_handle: AppHandle) {
     let my_epoch = app_inner
         .session_epoch
         .load(std::sync::atomic::Ordering::SeqCst);
-    let server_final_only = app_inner
-        .config_manager
-        .load_config()
-        .is_ok_and(|config| config.audio_provider() == crate::config::ELEVENLABS_REALTIME_ID);
+    let server_final_only = app_inner.config_manager.load_config().is_ok_and(|config| {
+        config.audio_provider() == crate::config::ELEVENLABS_REALTIME_ID
+            || crate::asr::qwen::is_qwen_model(config.audio_provider())
+    });
 
     // 1. Set state to finishing
     set_app_state(&app_handle, &app_inner, app_state::AppState::Finishing).await;
@@ -286,9 +286,8 @@ pub(super) async fn stop_recording(app_handle: AppHandle) {
         }
         log_rec!(
             debug,
-            "ASR commit final text ({} chars): {:?}",
-            session_text.chars().count(),
-            session_text.chars().take(200).collect::<String>()
+            "ASR commit final text ({} chars)",
+            session_text.chars().count()
         );
 
         // Prepend any text accumulated across reconnects in this recording.
