@@ -414,7 +414,7 @@ test("Qwen credentials expose only Key and URL with a default and endpoint help"
   expect(screen.getByDisplayValue("test-key")).toHaveAttribute("type", "password");
   const url = screen.getByDisplayValue(endpoint);
   expect(screen.queryByText("接入平台")).not.toBeInTheDocument();
-  fireEvent.focus(screen.getByRole("button", { name: "WebSocket URL说明" }));
+  fireEvent.focus(screen.getByRole("button", { name: "URL说明" }));
   expect(screen.getByRole("tooltip")).toHaveTextContent(
     "{WorkspaceId}.cn-beijing.maas.aliyuncs.com",
   );
@@ -478,4 +478,82 @@ test("editing Qwen settings keeps legacy smoothing off and stores the shared fie
   const saved = mocks.save.mock.calls.at(-1)?.[0].audio["qwen-asr-message"];
   expect(saved).toMatchObject({ enable_ddc: false, keep_dialect: true });
   expect(saved).not.toHaveProperty("disfluency_removal_enabled");
+});
+
+test("Qwen LLM credentials show endpoint help and save independently of ASR", async () => {
+  const qwen = providers.find((p) => p.id === "qwen") as RegistryProvider;
+  mocks.config.audio = {
+    provider: "qwen-asr-message",
+    credentials: { qwen: { api_key: "asr-key", url: "wss://asr.example/inference" } },
+  };
+  const audio = mocks.config.audio;
+  mocks.config.llm = { provider: "deepseek", qwen: { api_key: "llm-key", models: [] } };
+  detail(qwen);
+  expect(screen.getByRole("heading", { name: "千问" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  expect(screen.getByDisplayValue("llm-key")).toHaveAttribute("type", "password");
+  const url = screen.getByDisplayValue("https://maas.qianwenaiapi.com/compatible-mode/v1");
+  fireEvent.focus(screen.getByRole("button", { name: "URL说明" }));
+  expect(screen.getByRole("tooltip")).toHaveTextContent("ap-southeast-1.maas.qwencloudapi.com");
+  expect(screen.getByRole("tooltip")).toHaveTextContent(
+    "{WorkspaceId}.cn-beijing.maas.aliyuncs.com",
+  );
+  expect(screen.queryByText("接入平台")).not.toBeInTheDocument();
+  fireEvent.change(url, {
+    target: { value: "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1" },
+  });
+  fireEvent.blur(url);
+  await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+  const saved = mocks.save.mock.calls.at(-1)?.[0];
+  expect(saved.audio).toEqual(audio);
+  expect(saved.llm.provider).toBe("deepseek");
+  expect(saved.llm.qwen).toEqual({
+    api_key: "llm-key",
+    models: [],
+    url: "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+  });
+});
+
+test("Qwen LLM discovers and saves models through the existing add-model flow", async () => {
+  const qwen = providers.find((p) => p.id === "qwen") as RegistryProvider;
+  mocks.config.llm = { provider: "deepseek", qwen: { api_key: "llm-key", models: [] } };
+  mocks.listModels.mockResolvedValue({ data: [{ id: "qwen3.8-flash", name: "Flash" }] });
+  const audio = mocks.config.audio;
+  detail(qwen);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Flash" }));
+  expect(mocks.listModels).toHaveBeenCalledWith("qwen");
+  await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+  const saved = mocks.save.mock.calls.at(-1)?.[0];
+  expect(saved.llm.qwen.models).toEqual([{ id: "qwen3.8-flash", name: "Flash" }]);
+  expect(saved.llm.qwen.api_key).toBe("llm-key");
+  expect(saved.audio).toEqual(audio);
+});
+
+test("Qwen LLM tests a saved model without switching the active provider", async () => {
+  const qwen = providers.find((p) => p.id === "qwen") as RegistryProvider;
+  mocks.config.llm = {
+    provider: "deepseek",
+    qwen: { api_key: "llm-key", models: [{ id: "qwen3.8-flash", name: "Flash" }] },
+  };
+  detail(qwen);
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "配置 Flash" }));
+  fireEvent.click(screen.getByRole("button", { name: "测试" }));
+  await waitFor(() =>
+    expect(mocks.testModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llm: expect.objectContaining({
+          provider: "deepseek",
+          qwen: expect.objectContaining({ api_key: "llm-key" }),
+        }),
+      }),
+      "qwen",
+      "qwen3.8-flash",
+      "llm",
+      expect.any(String),
+    ),
+  );
+  expect(mocks.save).not.toHaveBeenCalled();
 });

@@ -418,12 +418,9 @@ const ELEVENLABS_FIELDS: Record<string, Partial<FieldMeta>> = {
   },
 };
 
-const QWEN_FIELDS: Record<string, FieldMeta> = {
+const QWEN_FIELDS: Record<string, Partial<FieldMeta>> = {
   api_key: { label: "field.api_key", type: "password", group: "credentials" },
   url: {
-    label: "field.qwen_url",
-    type: "text",
-    group: "credentials",
     tooltip: "field.qwen_url.tooltip",
   },
   intermediate_result_enabled: {

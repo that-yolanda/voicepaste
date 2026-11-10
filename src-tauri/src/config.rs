@@ -354,6 +354,8 @@ pub struct LlmConfig {
     #[serde(default)]
     pub bytedance: Option<ProviderConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qwen: Option<ProviderConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_openai: Option<ProviderConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub openai_compatible: Option<ProviderConfig>,
@@ -1095,6 +1097,7 @@ impl Default for AppConfig {
                 siliconflow: None,
                 ollama: None,
                 bytedance: None,
+                qwen: None,
                 custom_openai: None,
                 openai_compatible: None,
                 url: None,
@@ -2257,6 +2260,38 @@ bytedance:
 mod qwen_tests {
     use super::*;
     use crate::asr::qwen::{QwenConfig, DEFAULT_URL, MESSAGE_ID, STREAMING_ID};
+
+    #[test]
+    fn qwen_llm_config_survives_restart_without_changing_asr_credentials() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let manager = ConfigManager::new(data.path(), resources.path());
+        let mut config = AppConfig::default();
+        config.audio.insert(
+            "credentials".into(),
+            serde_norway::from_str(
+                "qwen:\n  api_key: asr-key\n  url: wss://asr.example/inference\n",
+            )
+            .unwrap(),
+        );
+        let audio = config.audio.clone();
+        config.llm = serde_json::from_value(serde_json::json!({
+            "provider": "qwen", "default_model": "qwen3.8-flash",
+            "qwen": {"api_key": "llm-key", "url": "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+                "models": [{"id": "qwen3.8-flash", "name": "Flash", "params": {"temperature": 0.2, "max_tokens": 512}}]}
+        })).unwrap();
+        manager
+            .save_config(&serde_norway::to_value(&config).unwrap())
+            .unwrap();
+        let loaded = ConfigManager::new(data.path(), resources.path())
+            .load_config()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(loaded.llm).unwrap(),
+            serde_json::to_value(config.llm).unwrap()
+        );
+        assert_eq!(loaded.audio, audio);
+    }
 
     #[test]
     fn qwen_credentials_and_parameters_survive_restart_and_model_reset() {

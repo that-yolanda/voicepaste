@@ -328,6 +328,9 @@ export function ProviderDetailPage({
                 t,
               );
               if (field.type === "password") meta.type = "password";
+              if (scope === "llm" && provider.id === "qwen" && field.key === "url") {
+                meta.tooltip = t("field.qwen_llm_url.tooltip");
+              }
               meta.placeholder = meta.placeholder ?? placeholder;
               const control = renderControl(meta, raw, (value) => {
                 const next =

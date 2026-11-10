@@ -219,6 +219,7 @@ describe("Qwen model settings", () => {
       min: -1,
       max: 1,
     });
+    expect(getFieldMeta("url", "", model.id).label).toBe("field.url");
     expect(getFieldMeta("url", "", model.id).tooltip).toBe("field.qwen_url.tooltip");
   });
   it("preserves legacy smoothing values while sharing the existing field metadata", () => {

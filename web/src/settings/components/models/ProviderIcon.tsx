@@ -7,6 +7,7 @@ import gemini from "@/settings/assets/providers/gemini.svg";
 import ollama from "@/settings/assets/providers/ollama.svg";
 import openai from "@/settings/assets/providers/openai.svg";
 import openrouter from "@/settings/assets/providers/openrouter.svg";
+import qwen from "@/settings/assets/providers/qwen.svg";
 import siliconflow from "@/settings/assets/providers/siliconflow.svg";
 import type { RegistryProvider } from "@/settings/types/models";
 
@@ -19,6 +20,7 @@ const logos: Record<string, string> = {
   ollama,
   openrouter,
   openai,
+  qwen,
   siliconflow,
 };
 

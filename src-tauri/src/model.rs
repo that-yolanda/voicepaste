@@ -594,12 +594,12 @@ mod tests {
     }
 
     #[test]
-    fn embedded_registry_is_version_23() {
+    fn embedded_registry_is_version_24() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 23,
-            "EMBEDDED_REGISTRY version should be 23, got {}",
+            registry.version, 24,
+            "EMBEDDED_REGISTRY version should be 24, got {}",
             registry.version
         );
         assert!(
@@ -675,8 +675,8 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 23,
-            "bundled_registry should return version 23 from embedded, got {}",
+            registry.version, 24,
+            "bundled_registry should return version 24 from embedded, got {}",
             registry.version
         );
     }
@@ -713,6 +713,23 @@ mod tests {
     }
 
     #[test]
+    fn registry_upgrade_enables_qwen_llm_for_existing_asr_users() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let mut old: ModelRegistry = serde_json::from_str(EMBEDDED_REGISTRY).unwrap();
+        old.version = 23;
+        let qwen = old.providers.iter_mut().find(|p| p.id == "qwen").unwrap();
+        qwen.capabilities = vec![CapabilityKind::Asr];
+        qwen.credentials.as_mut().unwrap().remove("llm");
+        write_registry_file(&registry_path(data.path()), &old).unwrap();
+        let upgraded = load_registry(data.path(), resources.path());
+        let qwen = upgraded.providers.iter().find(|p| p.id == "qwen").unwrap();
+        assert!(qwen.capabilities.contains(&CapabilityKind::Llm));
+        assert!(qwen.credentials.as_ref().unwrap().contains_key("llm"));
+        assert!(qwen.credentials.as_ref().unwrap().contains_key("asr"));
+    }
+
+    #[test]
     fn registry_upgrade_adds_qwen_and_preserves_custom_models() {
         let bundled: ModelRegistry = serde_json::from_str(EMBEDDED_REGISTRY).unwrap();
         let mut current = bundled.clone();
@@ -723,7 +740,7 @@ mod tests {
         custom.id = "user-custom-model".into();
         current.models.push(custom);
         let merged = merge_registry(current, bundled);
-        assert_eq!(merged.version, 23);
+        assert_eq!(merged.version, 24);
         let message = merged
             .models
             .iter()

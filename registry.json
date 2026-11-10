@@ -1,5 +1,5 @@
 {
-  "version": 23,
+  "version": 24,
   "updated_at": "2026-11-10",
   "providers": [
     {
@@ -64,12 +64,24 @@
     },
     {
       "id": "qwen",
-      "name": "千问语音识别",
-      "name_en": "Qwen Speech Recognition",
+      "name": "千问",
+      "name_en": "Qwen",
       "kind": "online",
-      "capabilities": ["asr"],
-      "docs_url": "https://platform.qianwenai.com/docs/developer-guides/speech/asr-realtime",
+      "capabilities": ["asr", "llm"],
+      "default_llm_url": "https://maas.qianwenaiapi.com/compatible-mode/v1",
+      "docs_url": "https://platform.qianwenai.com/docs",
       "credentials": {
+        "llm": {
+          "fields": [
+            {
+              "key": "api_key",
+              "type": "password"
+            },
+            {
+              "key": "url"
+            }
+          ]
+        },
         "asr": {
           "fields": [
             {

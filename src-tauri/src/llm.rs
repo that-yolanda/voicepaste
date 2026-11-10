@@ -41,6 +41,9 @@ fn get_provider_defaults(provider: &str) -> ProviderDefaults {
         "bytedance" => ProviderDefaults {
             default_url: "https://ark.cn-beijing.volces.com/api/v3",
         },
+        "qwen" => ProviderDefaults {
+            default_url: "https://maas.qianwenaiapi.com/compatible-mode/v1",
+        },
         _ => ProviderDefaults { default_url: "" },
     }
 }
@@ -56,6 +59,7 @@ fn provider_config<'a>(config: &'a LlmConfig, provider: &str) -> Option<&'a Prov
         "siliconflow" => config.siliconflow.as_ref(),
         "ollama" => config.ollama.as_ref(),
         "bytedance" => config.bytedance.as_ref(),
+        "qwen" => config.qwen.as_ref(),
         _ => config
             .custom_openai
             .as_ref()
@@ -94,6 +98,16 @@ pub async fn list_provider_models(
         .send()
         .await
         .map_err(|e| AppError::new(classify_transport_error(&e)))?;
+    // Some Qwen gateways only expose the paginated DashScope catalog.
+    // Keep the configured host: keys must never be sent to another platform.
+    if provider == "qwen" && matches!(response.status().as_u16(), 404 | 405) {
+        if let Some(base) = url
+            .trim_end_matches('/')
+            .strip_suffix("/compatible-mode/v1")
+        {
+            return list_qwen_models(&format!("{base}/api/v1/models"), key).await;
+        }
+    }
     if !response.status().is_success() {
         return Err(test_failed_error(
             provider,
@@ -111,6 +125,68 @@ pub async fn list_provider_models(
         ));
     }
     Ok(result)
+}
+
+async fn list_qwen_models(url: &str, key: &str) -> Result<serde_json::Value, AppError> {
+    let mut models = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut page = 1_u64;
+    let mut received = 0_u64;
+    loop {
+        let response = http_client()
+            .get(url)
+            .bearer_auth(key)
+            .query(&[
+                ("capabilities", "TG"),
+                ("page_size", "100"),
+                ("page_no", &page.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| AppError::new(classify_transport_error(&e)))?;
+        if !response.status().is_success() {
+            return Err(test_failed_error(
+                "qwen",
+                format!("HTTP {}", response.status()),
+            ));
+        }
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|_| test_failed_error("qwen", "Invalid model list".into()))?;
+        let entries = result
+            .pointer("/output/models")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| test_failed_error("qwen", "Invalid model list".into()))?;
+        let total = result
+            .pointer("/output/total")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| test_failed_error("qwen", "Invalid model list".into()))?;
+        let previous = models.len();
+        received += entries.len() as u64;
+        for entry in entries {
+            if let Some(id) = entry
+                .get("model")
+                .and_then(|v| v.as_str())
+                .filter(|id| !id.is_empty())
+            {
+                if seen.insert(id.to_string()) {
+                    models.push(json!({"id": id, "name": entry.get("name").and_then(|v| v.as_str()).unwrap_or(id)}));
+                }
+            }
+        }
+        // Reject incomplete pages or a gateway that ignores page_no.
+        if models.len() == previous && (total > 0 || !entries.is_empty()) {
+            return Err(test_failed_error(
+                "qwen",
+                "Model pagination made no progress".into(),
+            ));
+        }
+        if received >= total {
+            return Ok(json!({"data": models}));
+        }
+        page += 1;
+    }
 }
 
 /// A model visible for a provider, with its resolved request string.
@@ -475,6 +551,9 @@ fn build_request_body(
             body.as_object_mut().unwrap().remove("temperature");
             body["thinking"] = json!({ "type": "disabled" });
         }
+        "qwen" if qwen_supports_no_thinking(model) => {
+            body["enable_thinking"] = json!(false);
+        }
         "siliconflow" if model.starts_with("Qwen/Qwen3.5-") => {
             body["enable_thinking"] = json!(false);
         }
@@ -539,6 +618,39 @@ fn build_request_body(
     }
 
     body
+}
+
+/// Only documented hybrid text models get the switch. Reasoning-only,
+/// older and third-party models must not receive an unsupported parameter.
+fn qwen_supports_no_thinking(model: &str) -> bool {
+    if model == "qwen3.7-max-2026-05-17" {
+        return false;
+    }
+    [
+        "qwen3.8-max",
+        "qwen3.8-flash",
+        "qwen3.8-27b",
+        "qwen3.7-max",
+        "qwen3.7-plus",
+        "qwen3.7-flash",
+        "qwen3.6-plus",
+        "qwen3.6-flash",
+        "qwen3.6-35b-a3b",
+        "qwen3.5-plus",
+        "qwen3.5-flash",
+        "qwen3.5-397b-a17b",
+        "qwen3.5-122b-a10b",
+        "qwen3.5-27b",
+        "qwen3.5-35b-a3b",
+    ]
+    .iter()
+    .any(|prefix| {
+        model == *prefix
+            || model
+                .strip_prefix(prefix)
+                .and_then(|suffix| suffix.strip_prefix('-'))
+                .is_some_and(|suffix| suffix.starts_with(|c: char| c.is_ascii_digit()))
+    })
 }
 
 /// Pull the provider's own explanation out of an error body. Providers return
@@ -858,6 +970,7 @@ mod tests {
             siliconflow: None,
             ollama: None,
             bytedance: None,
+            qwen: None,
             custom_openai: None,
             openai_compatible: None,
         }
@@ -884,6 +997,7 @@ mod tests {
             siliconflow: None,
             ollama: None,
             bytedance: None,
+            qwen: None,
             custom_openai: None,
             openai_compatible: None,
         }
@@ -910,6 +1024,7 @@ mod tests {
             siliconflow: None,
             ollama: None,
             bytedance: None,
+            qwen: None,
             custom_openai: None,
             openai_compatible: None,
         }
@@ -1430,6 +1545,245 @@ mod tests {
         });
         let result = list_provider_models(&config, "openai").await.unwrap();
         assert_eq!(result["data"][0]["id"], "model-a");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires QWEN_LLM_TEST_CONFIG and a paid API connection"]
+    async fn qwen_live_model_discovery_and_polishing() {
+        let path = std::env::var("QWEN_LLM_TEST_CONFIG").expect("set QWEN_LLM_TEST_CONFIG");
+        let app: AppConfig =
+            serde_norway::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let mut config = app.llm;
+        config.provider = "qwen".into();
+        let registry: ModelRegistry =
+            serde_json::from_str(include_str!("../../registry.json")).unwrap();
+        let resolved = resolve_endpoint(&config, &registry).unwrap();
+        let models = list_provider_models(&config, "qwen").await.unwrap();
+        let models = models["data"].as_array().unwrap();
+        assert!(!models.is_empty());
+        println!(
+            "Qwen catalog: {} models; selected model: {}",
+            models.len(),
+            resolved.model
+        );
+        let started = std::time::Instant::now();
+        let output = call_llm_once(
+            &config,
+            &registry,
+            "今天我们讨论了项目进度然后决定明天继续测试",
+            "整理输入文本，补充标点，保留原意，仅输出整理后的文本。",
+        )
+        .await
+        .unwrap();
+        assert!(!output.trim().is_empty());
+        println!(
+            "Qwen polishing: {} ms; output: {}",
+            started.elapsed().as_millis(),
+            output
+        );
+    }
+
+    #[test]
+    fn qwen_resolves_its_own_credentials_model_and_defaults() {
+        let registry = empty_registry();
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": "qwen", "default_model": "qwen3.8-flash",
+            "qwen": {"api_key": "qwen-key", "models": [{"id": "qwen3.8-flash", "params": {"temperature": 0.2}}]},
+            "custom_openai": {"api_key": "other-key", "url": "https://other.invalid/v1", "model": "other"}
+        })).unwrap();
+        let selected = select_test_model(&config, &registry, "qwen", "qwen3.8-flash").unwrap();
+        let resolved = resolve_endpoint(&selected, &registry).unwrap();
+        assert_eq!(
+            resolved.url,
+            "https://maas.qianwenaiapi.com/compatible-mode/v1/chat/completions"
+        );
+        assert_eq!(resolved.api_key, "qwen-key");
+        assert_eq!(resolved.model, "qwen3.8-flash");
+        assert_eq!(resolved.params.unwrap().temperature, Some(0.2));
+        assert!(validate_llm_config(&selected, &registry).is_ok());
+        for url in [
+            "https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1/",
+            "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/",
+        ] {
+            let mut config = config.clone();
+            config.qwen.as_mut().unwrap().url = format!(" {url} ");
+            assert_eq!(
+                resolve_endpoint(&config, &registry).unwrap().url,
+                format!("{}{}", url.trim_end_matches('/'), "/chat/completions")
+            );
+        }
+    }
+
+    #[test]
+    fn qwen_only_disables_thinking_for_supported_hybrid_models() {
+        for model in [
+            "qwen3.8-flash",
+            "qwen3.8-max-0902",
+            "qwen3.8-27b",
+            "qwen3.5-35b-a3b",
+            "qwen3.7-plus",
+            "qwen3.6-plus-2026-04-02",
+            "qwen3.5-flash",
+        ] {
+            assert_eq!(
+                build_request_body("qwen", model, "sys", "hi", None)["enable_thinking"],
+                false,
+                "{model}"
+            );
+        }
+        for model in [
+            "qwen-max",
+            "qwen-turbo",
+            "qwen-plus-2025-01-25",
+            "qwen3.7-max-preview",
+            "qwen3.7-max-2026-05-17",
+            "qwen3.8-2.4t-a95b",
+            "qwen3-235b-a22b-thinking-2507",
+            "deepseek-r1",
+            "unknown",
+        ] {
+            assert!(
+                build_request_body("qwen", model, "sys", "hi", None)
+                    .get("enable_thinking")
+                    .is_none(),
+                "{model}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn qwen_model_list_falls_back_to_native_catalog_and_paginates() {
+        use wiremock::{
+            matchers::{header, method, path, query_param},
+            Mock, MockServer, ResponseTemplate,
+        };
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/compatible-mode/v1/models"))
+            .and(header("authorization", "Bearer qwen-key"))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(1)
+            .mount(&server)
+            .await;
+        for (page, entries) in [
+            (
+                "1",
+                json!([{"model": "qwen3.8-flash", "name": "Flash"}, {"model": "qwen-plus"}]),
+            ),
+            (
+                "2",
+                json!([{"model": "qwen-plus"}, {"model": "qwen3.8-max", "name": "Max"}]),
+            ),
+        ] {
+            Mock::given(method("GET"))
+                .and(path("/api/v1/models"))
+                .and(header("authorization", "Bearer qwen-key"))
+                .and(query_param("capabilities", "TG"))
+                .and(query_param("page_size", "100"))
+                .and(query_param("page_no", page))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(json!({"output": {"total": 4, "models": entries}})),
+                )
+                .expect(1)
+                .mount(&server)
+                .await;
+        }
+        let config: LlmConfig = serde_json::from_value(json!({"qwen": {
+            "url": format!(" {}/compatible-mode/v1/ ", server.uri()), "api_key": "qwen-key"
+        }}))
+        .unwrap();
+        let result = list_provider_models(&config, "qwen").await.unwrap();
+        assert_eq!(
+            result,
+            json!({"data": [
+                {"id": "qwen3.8-flash", "name": "Flash"},
+                {"id": "qwen-plus", "name": "qwen-plus"},
+                {"id": "qwen3.8-max", "name": "Max"}
+            ]})
+        );
+    }
+
+    #[tokio::test]
+    async fn qwen_model_list_keeps_openai_compatible_results_and_auth_errors() {
+        use wiremock::{
+            matchers::{method, path},
+            Mock, MockServer, ResponseTemplate,
+        };
+        for status in [200, 401] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/compatible-mode/v1/models"))
+                .respond_with(
+                    ResponseTemplate::new(status)
+                        .set_body_json(json!({"data": [{"id": "qwen-plus"}]})),
+                )
+                .expect(1)
+                .mount(&server)
+                .await;
+            let config: LlmConfig = serde_json::from_value(json!({"qwen": {
+                "url": format!("{}/compatible-mode/v1", server.uri()), "api_key": "qwen-key"
+            }}))
+            .unwrap();
+            let result = list_provider_models(&config, "qwen").await;
+            if status == 200 {
+                assert_eq!(result.unwrap()["data"][0]["id"], "qwen-plus");
+            } else {
+                assert!(result.is_err());
+            }
+            assert_eq!(server.received_requests().await.unwrap().len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn qwen_native_catalog_rejects_invalid_or_stuck_pages() {
+        use wiremock::{
+            matchers::{method, path},
+            Mock, MockServer, ResponseTemplate,
+        };
+        for response in [
+            json!({"output": {"models": []}}),
+            json!({"output": {"total": 10, "models": []}}),
+            json!({"output": {"total": 2, "models": [{"model": "repeated"}]}}),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/api/v1/models"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(response))
+                .mount(&server)
+                .await;
+            assert!(
+                list_qwen_models(&format!("{}/api/v1/models", server.uri()), "key")
+                    .await
+                    .is_err()
+            );
+            assert!(server.received_requests().await.unwrap().len() <= 2);
+        }
+    }
+
+    #[tokio::test]
+    async fn qwen_chat_uses_selected_model_credentials_and_parameters() {
+        use wiremock::{
+            matchers::{body_partial_json, header, method, path},
+            Mock, MockServer, ResponseTemplate,
+        };
+        let server = MockServer::start().await;
+        Mock::given(method("POST")).and(path("/compatible-mode/v1/chat/completions"))
+            .and(header("authorization", "Bearer qwen-key"))
+            .and(body_partial_json(json!({"model": "qwen3.8-flash", "enable_thinking": false, "temperature": 0.2, "max_tokens": 512})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"choices": [{"message": {"content": "Hello"}, "finish_reason": "stop"}]})))
+            .expect(1).mount(&server).await;
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": "qwen", "default_model": "qwen3.8-flash",
+            "qwen": {"url": format!("{}/compatible-mode/v1", server.uri()), "api_key": "qwen-key",
+                "models": [{"id": "qwen3.8-flash", "params": {"temperature": 0.2, "max_tokens": 512}}]}
+        })).unwrap();
+        assert_eq!(
+            call_llm_once(&config, &empty_registry(), "hi", "polish")
+                .await
+                .unwrap(),
+            "Hello"
+        );
     }
 
     // ── validate_llm_config tests ──────────────────────────────────────────
