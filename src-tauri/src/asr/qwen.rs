@@ -84,9 +84,11 @@ impl QwenConfig {
     }
 
     pub fn validate(&self) -> Result<(), AppError> {
-        let invalid = || AppError::new(AppErrorCode::AsrConfigInvalid);
+        let invalid = |field: &str| {
+            AppError::new(AppErrorCode::AsrConfigFieldInvalid).with_param("field", field)
+        };
         let endpoint = self.endpoint();
-        let url = url::Url::parse(endpoint).map_err(|_| invalid())?;
+        let url = url::Url::parse(endpoint).map_err(|_| invalid("url"))?;
         if url.scheme() != "wss"
             || url.host_str().is_none()
             || !url.username().is_empty()
@@ -96,22 +98,30 @@ impl QwenConfig {
             || endpoint.to_ascii_lowercase().contains("%7b")
             || endpoint.to_ascii_lowercase().contains("%7d")
         {
-            return Err(invalid());
+            return Err(invalid("url"));
         }
         if !matches!(
             self.vad_model.as_str(),
             "near_meeting_16k" | "far_field_meeting_16k"
-        ) || !(200..=6000).contains(&self.max_sentence_silence)
-            || self
-                .speech_noise_threshold
-                .is_some_and(|v| !v.is_finite() || !(-1.0..=1.0).contains(&v))
-            || self.language_hints.len() > 4
+        ) {
+            return Err(invalid("vad_model"));
+        }
+        if !(200..=6000).contains(&self.max_sentence_silence) {
+            return Err(invalid("max_sentence_silence"));
+        }
+        if self
+            .speech_noise_threshold
+            .is_some_and(|v| !v.is_finite() || !(-1.0..=1.0).contains(&v))
+        {
+            return Err(invalid("speech_noise_threshold"));
+        }
+        if self.language_hints.len() > 4
             || self
                 .language_hints
                 .iter()
                 .any(|s| !LANGUAGES.contains(&s.as_str()))
         {
-            return Err(invalid());
+            return Err(invalid("language_hints"));
         }
         Ok(())
     }
@@ -206,7 +216,8 @@ impl Transcript {
             return if text.is_empty() {
                 Ok(())
             } else {
-                Err(AppError::new(AppErrorCode::AsrNoFinalResult))
+                Err(AppError::new(AppErrorCode::AsrProtocolError)
+                    .with_detail("Qwen result is missing a positive sentence_id"))
             };
         };
         let finalized = sentence["sentence_end"].as_bool() == Some(true);
@@ -755,6 +766,18 @@ mod tests {
                 return serde_json::from_str(&text).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn malformed_sentence_reports_protocol_error_without_discarding_previous_text() {
+        let mut transcript = Transcript::default();
+        transcript.update(&sentence(1, "Hello", true)).unwrap();
+        let error = transcript.update(&json!({"text":"world"})).unwrap_err();
+        assert_eq!(error.code, AppErrorCode::AsrProtocolError);
+        assert_eq!(transcript.finish().unwrap(), "Hello");
+        transcript
+            .update(&json!({"heartbeat":true,"sentence_id":0}))
+            .unwrap();
     }
 
     #[test]

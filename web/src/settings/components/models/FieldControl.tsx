@@ -5,17 +5,67 @@
  * the model config modal share one rendering path.
  */
 
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/settings/components/Input";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
 import { Select } from "@/settings/components/Select";
 import { Textarea } from "@/settings/components/Textarea";
 import { Toggle } from "@/settings/components/Toggle";
-import { type ControlType, type FieldMeta, parseLanguageList } from "@/settings/lib/model";
+import {
+  type ControlType,
+  type FieldMeta,
+  parseLanguageList,
+  validateLanguageList,
+} from "@/settings/lib/model";
 
 /** Trim f32→f64 round-trip artifacts (e.g. 0.20000000298023224) for display. */
 function formatNumber(value: number): string {
   return String(Number(value.toPrecision(6)));
+}
+
+function LanguageListControl({
+  meta,
+  value,
+  onChange,
+}: {
+  meta: FieldMeta;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
+  const { t } = useTranslation();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div>
+      <Input
+        aria-label={meta.label}
+        aria-invalid={!!error}
+        value={Array.isArray(value) ? value.join(", ") : ""}
+        placeholder={meta.placeholder}
+        onInput={(event) => {
+          const error = validateLanguageList(parseLanguageList(event.currentTarget.value));
+          event.currentTarget.setCustomValidity(error ? t(error) : "");
+          setError(error);
+        }}
+        onChange={(text) => {
+          const codes = parseLanguageList(text);
+          const error = validateLanguageList(codes);
+          setError(error);
+          if (!error) onChange(codes);
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.validity.valid) event.currentTarget.reportValidity();
+        }}
+        commitOnBlur
+        className="w-full"
+      />
+      {error && (
+        <p role="alert" className="mt-1 text-xs text-error">
+          {t(error)}
+        </p>
+      )}
+    </div>
+  );
 }
 
 /** Render the control matching a field's metadata. */
@@ -86,15 +136,7 @@ export function renderControl(
         />
       );
     case "list":
-      return (
-        <Input
-          value={Array.isArray(value) ? value.join(", ") : ""}
-          placeholder={meta.placeholder}
-          onChange={(v) => onChange(parseLanguageList(v))}
-          commitOnBlur
-          className="w-full"
-        />
-      );
+      return <LanguageListControl meta={meta} value={value} onChange={onChange} />;
     case "textarea":
       return (
         <Textarea

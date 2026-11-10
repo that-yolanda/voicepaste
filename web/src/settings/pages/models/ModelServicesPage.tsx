@@ -8,6 +8,7 @@
 import { ChevronRight, Cog, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { errText } from "@/i18n/errText";
 import {
   getAudioConfigDefaults,
   getDownloadedModels,
@@ -25,6 +26,7 @@ import {
 import { ProviderIcon } from "@/settings/components/models/ProviderIcon";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
 import { Select } from "@/settings/components/Select";
+import { Toast, useToast } from "@/settings/components/Toast";
 import { PageLayout, Section, SectionContent, SectionRows } from "@/settings/layout/PageLayout";
 import { clonePlain } from "@/settings/lib/clone";
 import { type AsrDefaults, localizedModelFields } from "@/settings/lib/model";
@@ -51,6 +53,7 @@ const ASR_DEFAULTS_ID = "asr_defaults";
 export function ModelServicesPage() {
   const { t, i18n } = useTranslation();
   const { settings, refresh } = useSettings();
+  const { toast, showToast } = useToast();
   const config = (settings?.parsedConfig || {}) as Config;
 
   const [providers, setProviders] = useState<RegistryProvider[]>([]);
@@ -118,10 +121,16 @@ export function ModelServicesPage() {
 
   const save = useCallback(
     async (next: Config) => {
-      await saveConfigObject(next as never);
-      await refresh();
+      try {
+        await saveConfigObject(next as never);
+        await refresh();
+        return true;
+      } catch (error) {
+        showToast(errText(error), "error");
+        return false;
+      }
     },
-    [refresh],
+    [refresh, showToast],
   );
 
   /* ---------- derived ---------- */
@@ -319,10 +328,13 @@ export function ModelServicesPage() {
         onClose={() => setAddProviderOpen(false)}
         catalog={catalog}
         onAdd={async (providerId) => {
-          await save(withAddedProvider(clonePlain(config), providerId, models));
+          if (!(await save(withAddedProvider(clonePlain(config), providerId, models))))
+            return false;
           setDetailProviderId(providerId);
+          return true;
         }}
       />
+      <Toast toast={toast} />
     </PageLayout>
   );
 }

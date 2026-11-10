@@ -86,6 +86,8 @@ app_error_codes! {
     // asr — speech recognition (engine-agnostic)
     AsrConfigMissing => "asr.config_missing",
     AsrConfigInvalid => "asr.config_invalid",
+    AsrConfigFieldInvalid => "asr.config_field_invalid",
+    AsrProtocolError => "asr.protocol_error",
     AsrTestFailed => "asr.test_failed",
     AsrAuthFailed => "asr.auth_failed",
     AsrNetwork => "asr.network",
@@ -243,6 +245,12 @@ impl AppErrorCode {
             // asr — engine-agnostic
             (ZhCn, Self::AsrConfigMissing) => "语音识别模型还未配置，缺少 {{field}}",
             (En, Self::AsrConfigMissing) => "Speech model is not configured: missing {{field}}",
+            (ZhCn, Self::AsrConfigFieldInvalid) => "语音识别配置无效：{{field}}",
+            (En, Self::AsrConfigFieldInvalid) => "Invalid speech recognition setting: {{field}}",
+            (ZhCn, Self::AsrProtocolError) => "语音识别服务返回了无效消息",
+            (En, Self::AsrProtocolError) => {
+                "The speech recognition service returned an invalid message"
+            }
             (ZhCn, Self::AsrConfigInvalid) => "语音识别参数或连接地址无效，请检查模型配置",
             (En, Self::AsrConfigInvalid) => {
                 "Invalid speech parameters or URL. Check the model configuration"

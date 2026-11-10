@@ -198,10 +198,16 @@ pub async fn test_model(
         biased;
         _ = rx => return Err(AppError::new(AppErrorCode::Cancelled)),
         result = tokio::time::timeout(TIMEOUT, work) => match result {
-            Ok(result) => result?,
-            Err(_) => return Err(AppError::new(if capability == "llm" { AppErrorCode::LlmTimeout } else { AppErrorCode::AsrTestFailed }).with_detail("Model test timed out")),
+            Ok(result) => result,
+            Err(_) => Err(AppError::new(if capability == "llm" { AppErrorCode::LlmTimeout } else { AppErrorCode::AsrTestFailed }).with_detail("Model test timed out")),
         },
-    };
+    }.map_err(|error| {
+        if error.code == AppErrorCode::AsrTestFailed {
+            error.with_param("provider", &provider_id)
+        } else {
+            error
+        }
+    })?;
     Ok(ModelTestResult {
         output,
         elapsed_ms: start.elapsed().as_millis().min(u64::MAX as u128) as u64,

@@ -335,7 +335,12 @@ export function ProviderDetailPage({
               const control = renderControl(meta, raw, (value) => {
                 const next =
                   scope === "shared"
-                    ? withSharedCredential(config, provider.id, "url", String(value))
+                    ? withSharedCredential(
+                        config,
+                        provider.id,
+                        field.key as "url" | "api_key",
+                        String(value),
+                      )
                     : scope === "llm"
                       ? withLlmCredential(config, provider.id, field.key as "url", String(value))
                       : isDoubaoUrl

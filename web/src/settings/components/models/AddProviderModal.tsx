@@ -8,7 +8,7 @@ interface AddProviderModalProps {
   open: boolean;
   onClose: () => void;
   catalog: RegistryProvider[];
-  onAdd: (providerId: string) => Promise<void>;
+  onAdd: (providerId: string) => Promise<boolean>;
 }
 
 /** Localized provider display fields (mirrors localizedModelFields). */
@@ -39,7 +39,9 @@ export function AddProviderModal({ open, onClose, catalog, onAdd }: AddProviderM
                 type="button"
                 className="flex min-h-16 items-center gap-2.5 rounded-lg border border-border-subtle bg-fill px-2.5 py-2.5 text-left transition-colors hover:bg-fill-hover"
                 onClick={() => {
-                  void onAdd(provider.id).then(onClose);
+                  void onAdd(provider.id).then((saved) => {
+                    if (saved) onClose();
+                  });
                 }}
               >
                 <ProviderIcon provider={provider} />

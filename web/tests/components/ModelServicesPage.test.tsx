@@ -97,3 +97,28 @@ test("uses the backend default provider when the saved provider is omitted", asy
     ),
   );
 });
+
+test("failed default save shows an error without reporting success", async () => {
+  mocks.save.mockRejectedValueOnce({
+    code: "asr.config_field_invalid",
+    params: { field: "audio.qwen-asr-streaming.language_hints" },
+  });
+  render(<ModelServicesPage />);
+  const asr = await screen.findByRole("combobox", { name: "语音识别" });
+  fireEvent.change(asr, { target: { value: "" } });
+  expect(await screen.findByText(/audio.qwen-asr-streaming.language_hints/)).toBeInTheDocument();
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+test("failed provider save keeps the catalog open and does not navigate", async () => {
+  mocks.config = { model_providers: { added: ["local_asr"] }, audio: { provider: localModel.id } };
+  mocks.save.mockRejectedValueOnce("Cannot save settings");
+  render(<ModelServicesPage />);
+  await screen.findByRole("combobox", { name: "语音识别" });
+  fireEvent.click(screen.getByRole("button", { name: "添加供应商" }));
+  const dialog = within(screen.getByRole("dialog"));
+  fireEvent.click(await dialog.findByRole("button", { name: /DeepSeek/ }));
+  expect(await screen.findByText("Cannot save settings")).toBeInTheDocument();
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(mocks.refresh).not.toHaveBeenCalled();
+});

@@ -488,6 +488,45 @@ const QWEN_FIELDS: Record<string, Partial<FieldMeta>> = {
   },
 };
 
+export const QWEN_LANGUAGE_CODES = new Set([
+  "zh",
+  "en",
+  "ja",
+  "ko",
+  "vi",
+  "th",
+  "id",
+  "ms",
+  "tl",
+  "hi",
+  "ar",
+  "fr",
+  "de",
+  "es",
+  "pt",
+  "ru",
+  "it",
+  "nl",
+  "sv",
+  "da",
+  "fi",
+  "no",
+  "el",
+  "pl",
+  "cs",
+  "hu",
+  "ro",
+  "bg",
+  "hr",
+  "sk",
+]);
+
+export function validateLanguageList(codes: string[]): string | null {
+  if (codes.length > 4) return "field.qwen_languages.too_many";
+  if (codes.some((code) => !QWEN_LANGUAGE_CODES.has(code))) return "field.qwen_languages.invalid";
+  return null;
+}
+
 export function parseLanguageList(value: string): string[] {
   return [
     ...new Set(

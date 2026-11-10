@@ -1367,7 +1367,27 @@ impl ConfigManager {
                 .validate()
                 .map_err(|e| AppError::new(AppErrorCode::AsrConfigInvalid).with_detail(e))?;
         }
+        let previous = self
+            .load_config()
+            .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
+        let qwen_credentials = |audio: &BTreeMap<String, serde_norway::Value>| {
+            audio
+                .get("credentials")
+                .and_then(|c| c.get("qwen"))
+                .cloned()
+        };
         for id in [crate::asr::qwen::MESSAGE_ID, crate::asr::qwen::STREAMING_ID] {
+            let selected = candidate.audio.get("provider").and_then(|v| v.as_str()) == Some(id);
+            let changed = candidate.audio.get(id) != previous.audio.get(id)
+                || qwen_credentials(&candidate.audio) != qwen_credentials(&previous.audio)
+                || (selected && candidate.audio.get("provider") != previous.audio.get("provider"));
+            if !changed || (!selected && !candidate.audio.contains_key(id)) {
+                continue;
+            }
+            let field_error = || {
+                AppError::new(AppErrorCode::AsrConfigFieldInvalid)
+                    .with_param("field", format!("audio.{id}"))
+            };
             let mut merged = serde_json::Map::new();
             for raw in [
                 candidate.audio.get(id),
@@ -1379,19 +1399,19 @@ impl ConfigManager {
             .into_iter()
             .flatten()
             {
-                let value = serde_json::to_value(raw)
-                    .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid))?;
-                let fields = value
-                    .as_object()
-                    .ok_or_else(|| AppError::new(AppErrorCode::AsrConfigInvalid))?;
+                let value = serde_json::to_value(raw).map_err(|_| field_error())?;
+                let fields = value.as_object().ok_or_else(field_error)?;
                 let mut fields = fields.clone();
                 crate::asr::qwen::normalize_settings(&mut fields);
                 merged.extend(fields);
             }
-            let merged = serde_json::Value::Object(merged);
-            let params: crate::asr::qwen::QwenConfig = serde_json::from_value(merged)
-                .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid))?;
-            params.validate()?;
+            let params: crate::asr::qwen::QwenConfig =
+                serde_json::from_value(serde_json::Value::Object(merged))
+                    .map_err(|_| field_error())?;
+            params.validate().map_err(|error| {
+                let field = error.params.get("field").cloned().unwrap_or_default();
+                error.with_param("field", format!("audio.{id}.{field}"))
+            })?;
         }
         let yaml = serde_norway::to_string(&config)
             .map_err(|e| AppError::new(AppErrorCode::ConfigIoWrite).with_detail(e.to_string()))?;
@@ -2378,6 +2398,44 @@ mod qwen_tests {
             assert!(manager.save_config(&invalid).is_err(), "{raw}");
             assert_eq!(fs::read(manager.config_path()).unwrap(), before);
         }
+    }
+
+    #[test]
+    fn unchanged_invalid_qwen_model_does_not_block_unrelated_saves() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let mut initial = serde_norway::to_value(AppConfig::default()).unwrap();
+        initial["audio"][crate::asr::qwen::STREAMING_ID] =
+            serde_norway::from_str("language_hints: [unknown]").unwrap();
+        fs::write(
+            data.path().join("config.yaml"),
+            serde_norway::to_string(&initial).unwrap(),
+        )
+        .unwrap();
+        let manager = ConfigManager::new(data.path(), resources.path());
+        let mut config = manager.get_editable_config().unwrap();
+        config["app"]["theme"] = serde_norway::Value::String("dark".into());
+        manager.save_config(&config).unwrap();
+        // Editing another Qwen model must not validate its unchanged sibling.
+        config["audio"][crate::asr::qwen::MESSAGE_ID] =
+            serde_norway::from_str("heartbeat: false").unwrap();
+        manager.save_config(&config).unwrap();
+        let before = fs::read(manager.config_path()).unwrap();
+        config["audio"]["provider"] =
+            serde_norway::Value::String(crate::asr::qwen::STREAMING_ID.into());
+        let error = manager.save_config(&config).unwrap_err();
+        assert_eq!(
+            error.code,
+            crate::errors::AppErrorCode::AsrConfigFieldInvalid
+        );
+        assert_eq!(
+            error.params.get("field").map(String::as_str),
+            Some("audio.qwen-asr-streaming.language_hints")
+        );
+        assert_eq!(fs::read(manager.config_path()).unwrap(), before);
+        config["audio"][crate::asr::qwen::STREAMING_ID]["language_hints"] =
+            serde_norway::from_str("[zh, en]").unwrap();
+        manager.save_config(&config).unwrap();
     }
 
     #[tokio::test]

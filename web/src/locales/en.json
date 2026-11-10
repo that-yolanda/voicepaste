@@ -90,6 +90,8 @@
       "reconnecting": "Reconnecting…",
       "reconnected": "Reconnected",
       "test_failed": "Connection test failed: {{provider}}",
+      "config_field_invalid": "Invalid speech recognition setting: {{field}}",
+      "protocol_error": "The speech recognition service returned an invalid message",
       "qwen_auth": "Invalid API key or endpoint/workspace mismatch",
       "qwen_quota": "Speech recognition quota exhausted. Check the account balance",
       "qwen_rate_limited": "Too many speech requests. Please retry later",
@@ -273,6 +275,8 @@
     "qwen_noise.tooltip": "Leave blank for the service default. Range: −1 to 1. Higher values may filter out speech; lower values may transcribe noise.",
     "qwen_languages": "Language hints",
     "qwen_languages.placeholder": "Auto; e.g. zh, en",
+    "qwen_languages.invalid": "Use supported language codes, e.g. zh, en, ja, pl.",
+    "qwen_languages.too_many": "Choose up to 4 languages.",
     "qwen_languages.tooltip": "Leave blank for automatic detection. Up to 4 comma-separated language codes, e.g. zh, en, ja, pl.",
     "qwen_multi_threshold": "Multi-threshold segmentation"
   },

@@ -90,6 +90,8 @@
       "reconnecting": "正在重连…",
       "reconnected": "已重连",
       "test_failed": "连接测试失败：{{provider}}",
+      "config_field_invalid": "语音识别配置无效：{{field}}",
+      "protocol_error": "语音识别服务返回了无效消息",
       "qwen_auth": "API Key 无效或与连接地址、业务空间不匹配",
       "qwen_quota": "语音识别额度不足，请检查账号余额",
       "qwen_rate_limited": "语音识别请求过于频繁，请稍后重试",
@@ -273,6 +275,8 @@
     "qwen_noise.tooltip": "留空使用服务端默认。范围 −1～1；越高越容易过滤语音，越低越容易将噪声识别为语音。",
     "qwen_languages": "识别语言提示",
     "qwen_languages.placeholder": "自动识别；例如 zh, en",
+    "qwen_languages.invalid": "请输入支持的语言码，例如 zh、en、ja、pl。",
+    "qwen_languages.too_many": "最多填写 4 种语言。",
     "qwen_languages.tooltip": "留空自动识别；最多 4 种语言代码，以逗号分隔，例如 zh, en, ja, pl。",
     "qwen_multi_threshold": "多阈值断句"
   },

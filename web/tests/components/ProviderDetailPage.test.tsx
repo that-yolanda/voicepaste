@@ -557,3 +557,18 @@ test("Qwen LLM tests a saved model without switching the active provider", async
   );
   expect(mocks.save).not.toHaveBeenCalled();
 });
+
+test("shared API keys are saved under api_key rather than url", async () => {
+  const provider: RegistryProvider = {
+    ...bytedance,
+    credentials: { shared: { fields: [{ key: "api_key", type: "password" }] } },
+  };
+  const view = detail(provider);
+  const input = view.container.querySelector('input[type="password"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "shared-test-key" } });
+  fireEvent.blur(input);
+  await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+  expect(mocks.save.mock.calls[0][0].model_providers.credentials.bytedance).toEqual({
+    api_key: "shared-test-key",
+  });
+});
