@@ -83,15 +83,10 @@ pub fn run() {
             log::set_boxed_logger(Box::new(voice_logger)).expect("Failed to set global logger");
             log::set_max_level(log_level);
 
+            // Convert persisted data before registry updates or runtime config loading.
+            // On failure, retain the original config and stop instead of using old semantics.
+            migration::run(&data_dir, &resource_dir).map_err(std::io::Error::other)?;
             model::ensure_registry(&data_dir, &resource_dir);
-
-            // One-time migration from 1.x (Electron). Must run before
-            // ConfigManager::new, which would otherwise overwrite the migrated
-            // config.yaml with the empty example template. Best-effort: a
-            // failure falls back to defaults and never blocks startup.
-            if let Err(e) = migration::run(&data_dir, &resource_dir) {
-                log_app!(warn, "config migration failed (app will use defaults): {e}");
-            }
 
             // Initialize services
             let config_manager = config::ConfigManager::new(&data_dir, &resource_dir);

@@ -19,6 +19,31 @@ Three-layer testing pyramid:
 | Before code review | All unit tests pass (`cargo test`, `npx vitest run`) |
 | Before release | All unit + integration tests pass (`pnpm test`, `pnpm test:asr`, `pnpm test:llm`) |
 
+## Configuration upgrades
+
+`migration::run` runs before registry refresh and config loading. The Electron
+import marker (`.migration_state`) is independent of `config_version` in
+`config.yaml`; an existing 2.x install still receives schema upgrades.
+
+Schema version 1 converts completion endpoints to API base URLs, moves legacy
+LLM credentials and single-model selections into provider sections/model lists,
+materializes historical defaults and cached registry request IDs, and renames
+legacy Qwen smoothing fields. Explicit empty model lists, custom model IDs,
+display names and inference parameters are preserved. Historical model mappings
+belong in migration code, not runtime fallback branches.
+
+Before replacement, the converted config is parsed and the original is saved as
+`config.before-v1.yaml` in the app data directory. Successful upgrades are skipped
+on later launches. A conversion/write failure stops startup and retains the
+original config. Completion URLs containing query parameters or fragments require
+manual conversion to a supported API base URL; the upgrade does not silently
+change their meaning. Backups contain the same credentials as the config and
+must stay out of commits and public diagnostics.
+
+Validate changes with `cargo test --manifest-path src-tauri/Cargo.toml migration::`.
+Tests use temporary data directories; do not run migrations against personal data
+as part of routine verification.
+
 ## Rust Test Conventions
 
 ### Unit Tests

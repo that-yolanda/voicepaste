@@ -95,6 +95,8 @@ impl ElevenLabsRealtimeConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    #[serde(default)]
+    pub config_version: u32,
     pub app: AppSettings,
     #[serde(default = "default_audio_settings")]
     pub audio: BTreeMap<String, serde_norway::Value>,
@@ -1070,6 +1072,7 @@ impl Default for DoubaoStreamingConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
+            config_version: crate::migration::CONFIG_VERSION,
             app: AppSettings {
                 onboarding_pending: false,
                 last_polish_prompt_id: None,

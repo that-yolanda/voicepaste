@@ -1,3 +1,5 @@
+config_version: 1
+
 # VoicePaste 配置文件
 #
 # 所有参数的默认值见 registry.json。
@@ -31,4 +33,4 @@ llm:
   provider: deepseek
   deepseek:
     api_key: ""
-    model: deepseek-flash
+    models: []

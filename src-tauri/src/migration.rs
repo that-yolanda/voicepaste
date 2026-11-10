@@ -1,4 +1,4 @@
-//! One-time migration from VoicePaste 1.x (Electron) to 2.x (Tauri).
+//! Persisted-data migrations: Electron import and versioned config upgrades.
 //!
 //! ## Background
 //! The app bundle changed from the Electron data dir name `voicepaste` to the
@@ -8,14 +8,11 @@
 //! prompt templates, hotwords and usage statistics.
 //!
 //! ## Design
-//! - Runs **once** on first launch, *before* `ConfigManager::new` (which would
-//!   otherwise copy the empty example template over the migrated file).
-//! - Idempotent via a `.migration_state` marker: once written, the probe never
-//!   runs again — zero per-launch overhead.
-//! - Self-contained: all migration logic lives here; `lib.rs` calls a single
-//!   `run()` entry point, so main business code stays clean.
-//! - Versioned marker (`from_version`/`to_version`) so future 2.x → 3.x
-//!   schema changes can add new steps under the same one-shot mechanism.
+//! - Runs before registry refresh and `ConfigManager::new`.
+//! - `.migration_state` guards only the one-time Electron import.
+//! - `config_version` guards independent, sequential config schema upgrades.
+//! - Conversion stays here; runtime services consume the converted format.
+//! - Config upgrades back up the original and replace it only after validation.
 
 use crate::config::DEFAULT_HOTKEY;
 use crate::hotword::HotwordManager;
@@ -40,16 +37,16 @@ struct MigrationState {
 // Public entry point
 // ---------------------------------------------------------------------------
 
-/// Run the 1.x → 2.x migration exactly once.
-///
-/// Must be called **before** `ConfigManager::new` so the migrated `config.yaml`
-/// is in place before the empty example would be copied.
-///
-/// Returns `Ok(true)` if a migration was performed, `Ok(false)` if skipped
-/// (already migrated, 2.x already configured, or no legacy install found).
-/// `Err` means migration failed; the caller should log and continue so the app
-/// still launches (falling back to the empty example).
+/// Import Electron data if needed, then upgrade the persisted config schema.
+/// Must run before registry refresh and `ConfigManager::new`.
+/// A failure must stop startup so old data is never read with new semantics.
 pub fn run(data_dir: &Path, resource_dir: &Path) -> Result<bool, String> {
+    let imported = run_legacy(data_dir, resource_dir)?;
+    let upgraded = upgrade_config(data_dir)?;
+    Ok(imported || upgraded)
+}
+
+fn run_legacy(data_dir: &Path, resource_dir: &Path) -> Result<bool, String> {
     let marker = data_dir.join(".migration_state");
 
     // Already handled on a previous launch — never probe again.
@@ -83,6 +80,284 @@ pub fn run(data_dir: &Path, resource_dir: &Path) -> Result<bool, String> {
             log_migration!(warn, "migration failed: {e}");
             Err(e)
         }
+    }
+}
+
+/// Independent of the app release version and the Electron import marker.
+pub const CONFIG_VERSION: u32 = 1;
+
+/// Upgrade persisted configuration before any runtime service reads it.
+fn upgrade_config(data_dir: &Path) -> Result<bool, String> {
+    let path = data_dir.join("config.yaml");
+    if !path.exists() {
+        return Ok(false);
+    }
+    let original = fs::read_to_string(&path).map_err(|e| format!("read config: {e}"))?;
+    let mut config: Value =
+        serde_norway::from_str(&original).map_err(|e| format!("parse config for upgrade: {e}"))?;
+    let version = config
+        .get("config_version")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    if version >= u64::from(CONFIG_VERSION) {
+        return Ok(false);
+    }
+    let registry_path = data_dir.join("registry.json");
+    let registry: serde_json::Value = if registry_path.exists() {
+        serde_json::from_str(
+            &fs::read_to_string(registry_path)
+                .map_err(|e| format!("read registry for upgrade: {e}"))?,
+        )
+        .map_err(|e| format!("parse registry for upgrade: {e}"))?
+    } else {
+        serde_json::json!({"models": []})
+    };
+    upgrade_model_config(&mut config, &registry)?;
+    config
+        .as_mapping_mut()
+        .ok_or("config must be a mapping")?
+        .insert(kv("config_version"), Value::from(CONFIG_VERSION));
+    // Validate the converted shape before touching the original file.
+    serde_norway::from_value::<crate::config::AppConfig>(config.clone())
+        .map_err(|e| format!("validate upgraded config: {e}"))?;
+    let yaml = serde_norway::to_string(&config).map_err(|e| format!("serialize upgrade: {e}"))?;
+    let backup = data_dir.join(format!("config.before-v{CONFIG_VERSION}.yaml"));
+    if !backup.exists() {
+        fs::write(&backup, original).map_err(|e| format!("back up config: {e}"))?;
+    }
+    let pending = data_dir.join("config.upgrade.yaml");
+    fs::write(&pending, yaml).map_err(|e| format!("write upgraded config: {e}"))?;
+    fs::rename(&pending, &path).map_err(|e| format!("replace upgraded config: {e}"))?;
+    log_migration!(info, "upgraded config schema to {CONFIG_VERSION}");
+    Ok(true)
+}
+
+// Historical defaults from v2.1.6, not defaults for new configurations.
+const LEGACY_DEFAULTS: &[(&str, &str)] = &[
+    ("deepseek", "deepseek-flash"),
+    ("openai", "gpt-6-luna"),
+    ("anthropic", "claude-haiku-5-5"),
+    ("gemini", "gemini-3.5-flash-lite"),
+    ("openrouter", "openai/gpt-6-luna"),
+    ("siliconflow", "Qwen/Qwen3.5-4B"),
+    ("ollama", "qwen3.5:4b"),
+];
+
+fn upgrade_model_config(config: &mut Value, registry: &serde_json::Value) -> Result<(), String> {
+    let root = config.as_mapping_mut().ok_or("config must be a mapping")?;
+    if let Some(llm) = root.get_mut(kv("llm")).and_then(Value::as_mapping_mut) {
+        let custom_authoritative = llm.get(kv("custom_openai")).is_some_and(Value::is_mapping);
+        if llm.get(kv("custom_openai")).is_some_and(Value::is_null) {
+            llm.remove(kv("custom_openai"));
+        }
+        if let Some(legacy) = llm.remove(kv("openai_compatible")) {
+            let current = llm.entry(kv("custom_openai")).or_insert(legacy.clone());
+            if let (Some(current), Some(legacy)) = (current.as_mapping_mut(), legacy.as_mapping()) {
+                for (key, value) in legacy {
+                    current.entry(key.clone()).or_insert(value.clone());
+                }
+            }
+        }
+        let active = llm
+            .get(kv("provider"))
+            .and_then(Value::as_str)
+            .unwrap_or("bytedance");
+        let active = if active == "openai_compatible" {
+            "custom_openai"
+        } else {
+            active
+        }
+        .to_string();
+        put_str(llm, "provider", &active);
+        // The old top-level fields only applied to the active provider.
+        for key in ["url", "api_key", "model"] {
+            if let Some(value) = llm.remove(kv(key)) {
+                if active == "custom_openai" && custom_authoritative {
+                    continue;
+                }
+                let section = ensure_child(llm, &active);
+                if section
+                    .get(kv(key))
+                    .and_then(Value::as_str)
+                    .is_none_or(|v| v.trim().is_empty())
+                {
+                    section.insert(kv(key), value);
+                }
+            }
+        }
+        llm.remove(kv("base_url")); // Never used by the old request resolver.
+        let cached = registry.get("models").and_then(serde_json::Value::as_array);
+        let mut providers: Vec<String> = LEGACY_DEFAULTS.iter().map(|(p, _)| (*p).into()).collect();
+        providers.extend(["bytedance".into(), "qwen".into(), "custom_openai".into()]);
+        for provider in providers {
+            let has_cached_models = cached.into_iter().flatten().any(|model| {
+                model["category"] == "llm" && model["provider"].as_str() == Some(&provider)
+            });
+            if !llm.get(kv(&provider)).is_some_and(Value::is_mapping)
+                && provider != active
+                && !has_cached_models
+            {
+                continue;
+            }
+            let default = llm
+                .get(kv("default_model"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let section = ensure_child(llm, &provider);
+            if let Some(url) = section
+                .get(kv("url"))
+                .and_then(Value::as_str)
+                .map(str::to_string)
+            {
+                let trimmed = url.trim().trim_end_matches('/');
+                if let Ok(mut parsed) = url::Url::parse(trimmed) {
+                    if parsed
+                        .path()
+                        .trim_end_matches('/')
+                        .ends_with("/chat/completions")
+                    {
+                        if parsed.query().is_some() || parsed.fragment().is_some() {
+                            return Err(format!("llm.{provider}.url contains a query or fragment; enter an API base URL before upgrading"));
+                        }
+                        let base = parsed
+                            .path()
+                            .trim_end_matches('/')
+                            .strip_suffix("/chat/completions")
+                            .unwrap()
+                            .to_string();
+                        parsed.set_path(&base);
+                        put_str(section, "url", parsed.as_str().trim_end_matches('/'));
+                    }
+                }
+            }
+            let legacy_model = section
+                .remove(kv("model"))
+                .and_then(|v| v.as_str().map(str::to_string))
+                .filter(|v| !v.trim().is_empty());
+            if !section.contains_key(kv("models")) {
+                let presets: Vec<Value> = cached.into_iter().flatten()
+                    .filter(|m| m["category"] == "llm" && m["provider"].as_str() == Some(&provider))
+                    .map(|m| serde_norway::to_value(serde_json::json!({
+                        "id": m["id"], "name": m["name"],
+                        "model_id": m["default_config"]["model_id"].as_str().or(m["id"].as_str()).unwrap_or("")
+                    })).unwrap()).collect();
+                section.insert(kv("models"), Value::Sequence(presets));
+                let selected = legacy_model.or_else(|| {
+                    if section["models"]
+                        .as_sequence()
+                        .is_some_and(|v| !v.is_empty())
+                    {
+                        return None;
+                    }
+                    LEGACY_DEFAULTS
+                        .iter()
+                        .find(|(p, _)| *p == provider)
+                        .map(|(_, m)| (*m).into())
+                });
+                if let Some(model) = selected {
+                    let entries = section
+                        .get_mut(kv("models"))
+                        .unwrap()
+                        .as_sequence_mut()
+                        .unwrap();
+                    if !entries.iter().any(|e| e["id"].as_str() == Some(&model)) {
+                        entries.push(
+                            serde_norway::to_value(serde_json::json!({"id": model})).unwrap(),
+                        );
+                    }
+                    if provider == active && default.is_none() {
+                        put_str(llm, "default_model", &model);
+                    }
+                }
+            }
+            let section = ensure_child(llm, &provider);
+            if let Some(entries) = section
+                .get_mut(kv("models"))
+                .and_then(Value::as_sequence_mut)
+            {
+                for entry in entries.iter_mut() {
+                    let Some(entry) = entry.as_mapping_mut() else {
+                        continue;
+                    };
+                    if entry.contains_key(kv("model_id")) {
+                        continue;
+                    }
+                    let id = entry.get(kv("id")).and_then(Value::as_str).unwrap_or("");
+                    // Resolve registry aliases once, preserving IDs, names and parameters.
+                    let request_id = cached
+                        .into_iter()
+                        .flatten()
+                        .find(|m| {
+                            m["category"] == "llm"
+                                && m["provider"].as_str() == Some(&provider)
+                                && m["id"].as_str() == Some(id)
+                        })
+                        .and_then(|m| m["default_config"]["model_id"].as_str())
+                        .or_else(|| legacy_request_id(&provider, id));
+                    if let Some(request_id) = request_id {
+                        put_str(entry, "model_id", request_id);
+                    }
+                }
+                if provider == active && default.is_none() {
+                    if let Some(id) = entries
+                        .first()
+                        .and_then(|e| e["id"].as_str())
+                        .map(str::to_string)
+                    {
+                        // An explicit legacy model already set the selection above.
+                        if !llm.contains_key(kv("default_model")) {
+                            put_str(llm, "default_model", &id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Some(providers) = root
+        .get_mut(kv("model_providers"))
+        .and_then(Value::as_mapping_mut)
+    {
+        if let Some(added) = providers
+            .get_mut(kv("added"))
+            .and_then(Value::as_sequence_mut)
+        {
+            for id in added {
+                if id.as_str() == Some("openai_compatible") {
+                    *id = kv("custom_openai");
+                }
+            }
+        }
+        if let Some(credentials) = providers
+            .get_mut(kv("credentials"))
+            .and_then(Value::as_mapping_mut)
+        {
+            if let Some(legacy) = credentials.remove(kv("openai_compatible")) {
+                credentials.entry(kv("custom_openai")).or_insert(legacy);
+            }
+        }
+    }
+    if let Some(audio) = root.get_mut(kv("audio")).and_then(Value::as_mapping_mut) {
+        for id in ["qwen-asr-message", "qwen-asr-streaming"] {
+            if let Some(section) = audio.get_mut(kv(id)).and_then(Value::as_mapping_mut) {
+                if let Some(old) = section.remove(kv("disfluency_removal_enabled")) {
+                    section.entry(kv("enable_ddc")).or_insert(old);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn legacy_request_id(provider: &str, id: &str) -> Option<&'static str> {
+    match (provider, id) {
+        ("bytedance", "doubao-seed-1-6") => Some("doubao-seed-1-6-250615"),
+        ("bytedance", "doubao-seed-1-6-flash") => Some("doubao-seed-1-6-flash-250715"),
+        ("bytedance", "doubao-1-5-pro-32k") => Some("doubao-1-5-pro-32k-250115"),
+        ("gemini", "gemini-3-5-flash-lite") => Some("gemini-3.5-flash-lite"),
+        ("openrouter", "openrouter-gpt-6-luna") => Some("openai/gpt-6-luna"),
+        ("siliconflow", "qwen3-5-4b") => Some("Qwen/Qwen3.5-4B"),
+        ("ollama", "ollama-qwen3-5-4b") => Some("qwen3.5:4b"),
+        _ => None,
     }
 }
 
@@ -170,6 +445,7 @@ fn migrate_config(src: &Path, dst: &Path, resource_dir: &Path) -> Result<(), Str
         }
     }
 
+    out.as_mapping_mut().unwrap().remove(kv("config_version"));
     let yaml = serde_norway::to_string(&out).map_err(|e| format!("serialize config: {e}"))?;
     fs::write(dst, yaml).map_err(|e| format!("write config: {e}"))?;
     log_migration!(info, "migrated config.yaml");
@@ -835,12 +1111,12 @@ llm:
     }
 
     #[test]
-    fn run_skips_when_target_config_exists() {
+    fn legacy_import_skips_when_target_config_exists() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("config.yaml"), "app: {}").unwrap();
         // Probe ordering: target-config check happens before legacy detection,
         // so the real home dir never matters here.
-        assert!(!run(tmp.path(), tmp.path()).unwrap());
+        assert!(!run_legacy(tmp.path(), tmp.path()).unwrap());
         assert!(tmp.path().join(".migration_state").exists());
     }
 
@@ -948,5 +1224,256 @@ llm:
         assert_eq!(hotkey, "Control+Space");
         assert!(creds_present);
         assert!(history_count > 0);
+    }
+}
+
+#[cfg(test)]
+mod config_upgrade_tests {
+    use super::*;
+
+    fn config_with_llm(llm: &str) -> Value {
+        let mut config = serde_norway::to_value(crate::config::AppConfig::default()).unwrap();
+        config
+            .as_mapping_mut()
+            .unwrap()
+            .remove(kv("config_version"));
+        config["llm"] = serde_norway::from_str(llm).unwrap();
+        config
+    }
+
+    #[test]
+    fn existing_electron_marker_does_not_skip_config_upgrade() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        fs::write(data.path().join(".migration_state"), "{}").unwrap();
+        let mut config = config_with_llm("provider: openai_compatible\nurl: https://gateway.example/v1/chat/completions/\napi_key: test-key\nmodel: private-model\n");
+        config["model_providers"] = serde_norway::from_str("added: [openai_compatible]\ncredentials:\n  openai_compatible: {api_key: shared-key}\n").unwrap();
+        let original = serde_norway::to_string(&config).unwrap();
+        fs::write(data.path().join("config.yaml"), &original).unwrap();
+        assert!(run(data.path(), resources.path()).unwrap());
+        let upgraded = fs::read_to_string(data.path().join("config.yaml")).unwrap();
+        let value: Value = serde_norway::from_str(&upgraded).unwrap();
+        assert_eq!(value["config_version"].as_u64(), Some(1));
+        assert_eq!(value["llm"]["provider"].as_str(), Some("custom_openai"));
+        assert_eq!(
+            value["llm"]["custom_openai"]["url"].as_str(),
+            Some("https://gateway.example/v1")
+        );
+        assert_eq!(
+            value["llm"]["custom_openai"]["api_key"].as_str(),
+            Some("test-key")
+        );
+        assert_eq!(
+            value["llm"]["custom_openai"]["models"][0]["id"].as_str(),
+            Some("private-model")
+        );
+        assert_eq!(
+            value["llm"]["default_model"].as_str(),
+            Some("private-model")
+        );
+        assert_eq!(
+            value["model_providers"]["added"][0].as_str(),
+            Some("custom_openai")
+        );
+        assert_eq!(
+            value["model_providers"]["credentials"]["custom_openai"]["api_key"].as_str(),
+            Some("shared-key")
+        );
+        assert!(value["llm"].get("model").is_none());
+        assert!(value["llm"].get("openai_compatible").is_none());
+        assert_eq!(
+            fs::read_to_string(data.path().join("config.before-v1.yaml")).unwrap(),
+            original
+        );
+        assert!(!run(data.path(), resources.path()).unwrap());
+        assert_eq!(
+            fs::read_to_string(data.path().join("config.yaml")).unwrap(),
+            upgraded
+        );
+        let runtime: crate::config::AppConfig = serde_norway::from_value(value).unwrap();
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        crate::llm::validate_llm_config(&runtime.llm, &registry).unwrap();
+    }
+
+    #[test]
+    fn null_custom_section_uses_legacy_but_explicit_custom_blanks_stay_blank() {
+        let mut config = config_with_llm("provider: openai_compatible\ncustom_openai: null\nopenai_compatible: {model: private-model, api_key: saved-key}\n");
+        upgrade_model_config(&mut config, &serde_json::json!({"models":[]})).unwrap();
+        assert_eq!(
+            config["llm"]["custom_openai"]["api_key"].as_str(),
+            Some("saved-key")
+        );
+        assert_eq!(
+            config["llm"]["custom_openai"]["models"][0]["id"].as_str(),
+            Some("private-model")
+        );
+        let mut config = config_with_llm("provider: custom_openai\napi_key: stale-key\nurl: https://stale.example/chat/completions\ncustom_openai: {api_key: '', url: '', models: []}\n");
+        upgrade_model_config(&mut config, &serde_json::json!({"models":[]})).unwrap();
+        assert_eq!(config["llm"]["custom_openai"]["api_key"].as_str(), Some(""));
+        assert_eq!(config["llm"]["custom_openai"]["url"].as_str(), Some(""));
+    }
+
+    #[test]
+    fn implicit_defaults_are_materialized_but_explicit_empty_lists_stay_empty() {
+        for (provider, model) in LEGACY_DEFAULTS {
+            let mut config = config_with_llm(&format!(
+                "provider: {provider}\n{provider}:\n  api_key: test-key\n"
+            ));
+            upgrade_model_config(&mut config, &serde_json::json!({"models":[]})).unwrap();
+            assert_eq!(
+                config["llm"][*provider]["models"][0]["id"].as_str(),
+                Some(*model)
+            );
+            assert_eq!(config["llm"]["default_model"].as_str(), Some(*model));
+        }
+        let mut config = config_with_llm("provider: deepseek\ndeepseek:\n  models: []\n");
+        upgrade_model_config(&mut config, &serde_json::json!({"models":[]})).unwrap();
+        assert!(config["llm"]["deepseek"]["models"]
+            .as_sequence()
+            .unwrap()
+            .is_empty());
+        assert!(config["llm"].get("default_model").is_none());
+    }
+
+    #[test]
+    fn model_aliases_names_parameters_and_custom_values_survive() {
+        let mut config = config_with_llm("provider: bytedance\ndefault_model: doubao-seed-1-6-flash\nbytedance:\n  url: https://custom.example/v3\n  models:\n    - id: doubao-seed-1-6-flash\n      name: My label\n      params: {temperature: 0.3}\n    - id: private-model\n      model_id: private-request-id\n");
+        upgrade_model_config(&mut config, &serde_json::json!({"models":[]})).unwrap();
+        let entries = &config["llm"]["bytedance"]["models"];
+        assert_eq!(
+            entries[0]["model_id"].as_str(),
+            Some("doubao-seed-1-6-flash-250715")
+        );
+        assert_eq!(entries[0]["name"].as_str(), Some("My label"));
+        assert_eq!(entries[0]["params"]["temperature"].as_f64(), Some(0.3));
+        assert_eq!(entries[1]["model_id"].as_str(), Some("private-request-id"));
+        assert_eq!(
+            config["llm"]["bytedance"]["url"].as_str(),
+            Some("https://custom.example/v3")
+        );
+    }
+
+    #[test]
+    fn cached_registry_aliases_are_materialized_before_registry_refresh() {
+        let mut config = config_with_llm("provider: bytedance\nbytedance: {api_key: test-key}\n");
+        let registry = serde_json::json!({"models":[
+            {"id":"custom-preset", "provider":"bytedance", "category":"llm", "name":"Saved model", "default_config":{"model_id":"vendor-model-v2"}},
+            {"id":"other-preset", "provider":"deepseek", "category":"llm", "name":"Other model", "default_config":{"model_id":"other-vendor-id"}}
+        ]});
+        upgrade_model_config(&mut config, &registry).unwrap();
+        assert_eq!(
+            config["llm"]["deepseek"]["models"][0]["model_id"].as_str(),
+            Some("other-vendor-id")
+        );
+        let entry = &config["llm"]["bytedance"]["models"][0];
+        assert_eq!(entry["id"].as_str(), Some("custom-preset"));
+        assert_eq!(entry["name"].as_str(), Some("Saved model"));
+        assert_eq!(entry["model_id"].as_str(), Some("vendor-model-v2"));
+        assert_eq!(
+            config["llm"]["default_model"].as_str(),
+            Some("custom-preset")
+        );
+    }
+
+    #[test]
+    fn fresh_template_does_not_receive_legacy_defaults() {
+        let data = tempfile::tempdir().unwrap();
+        let template = include_str!("../../config.yaml.example");
+        fs::write(data.path().join("config.yaml"), template).unwrap();
+        assert!(!upgrade_config(data.path()).unwrap());
+        assert_eq!(
+            fs::read_to_string(data.path().join("config.yaml")).unwrap(),
+            template
+        );
+        let config: crate::config::AppConfig = serde_norway::from_str(template).unwrap();
+        assert!(config.llm.deepseek.unwrap().models.unwrap().is_empty());
+        assert!(!data.path().join("config.before-v1.yaml").exists());
+    }
+
+    #[test]
+    fn failed_staged_write_preserves_original_and_backup() {
+        let data = tempfile::tempdir().unwrap();
+        let original = serde_norway::to_string(&config_with_llm(
+            "provider: deepseek\ndeepseek: {api_key: test-key}\n",
+        ))
+        .unwrap();
+        fs::write(data.path().join("config.yaml"), &original).unwrap();
+        fs::create_dir(data.path().join("config.upgrade.yaml")).unwrap();
+        assert!(upgrade_config(data.path()).is_err());
+        assert_eq!(
+            fs::read_to_string(data.path().join("config.yaml")).unwrap(),
+            original
+        );
+        assert_eq!(
+            fs::read_to_string(data.path().join("config.before-v1.yaml")).unwrap(),
+            original
+        );
+    }
+
+    #[test]
+    fn failed_upgrade_leaves_original_file_and_version_untouched() {
+        let data = tempfile::tempdir().unwrap();
+        let config = config_with_llm("provider: custom_openai\ncustom_openai:\n  url: https://gateway.example/chat/completions?token=test\n  model: custom\n");
+        let original = serde_norway::to_string(&config).unwrap();
+        fs::write(data.path().join("config.yaml"), &original).unwrap();
+        assert!(upgrade_config(data.path()).is_err());
+        assert_eq!(
+            fs::read_to_string(data.path().join("config.yaml")).unwrap(),
+            original
+        );
+        assert!(!data.path().join("config.upgrade.yaml").exists());
+    }
+
+    #[tokio::test]
+    async fn upgraded_config_sends_one_completion_path_and_the_saved_request_model() {
+        use wiremock::{
+            matchers::{body_partial_json, header, method, path},
+            Mock, MockServer, ResponseTemplate,
+        };
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .and(header("authorization", "Bearer test-key"))
+            .and(body_partial_json(serde_json::json!({"model":"doubao-seed-1-6-flash-250715"})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"choices":[{"message":{"content":"Hello"},"finish_reason":"stop"}]})))
+            .expect(1).mount(&server).await;
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let config = config_with_llm(&format!("provider: bytedance\nbytedance:\n  api_key: test-key\n  url: {}/v1/chat/completions\n  model: doubao-seed-1-6-flash\n", server.uri()));
+        fs::write(
+            data.path().join("config.yaml"),
+            serde_norway::to_string(&config).unwrap(),
+        )
+        .unwrap();
+        upgrade_config(data.path()).unwrap();
+        let config: crate::config::AppConfig =
+            serde_norway::from_str(&fs::read_to_string(data.path().join("config.yaml")).unwrap())
+                .unwrap();
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        let result = crate::llm::call_llm_once(&config.llm, &registry, "hi", "polish")
+            .await
+            .unwrap();
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn qwen_legacy_field_is_converted_without_overwriting_new_value() {
+        let mut config = config_with_llm("provider: qwen\nqwen: {models: []}\n");
+        config["audio"]["qwen-asr-message"] =
+            serde_norway::from_str("disfluency_removal_enabled: false").unwrap();
+        config["audio"]["qwen-asr-streaming"] =
+            serde_norway::from_str("disfluency_removal_enabled: false\nenable_ddc: true").unwrap();
+        upgrade_model_config(&mut config, &serde_json::json!({"models":[]})).unwrap();
+        assert_eq!(
+            config["audio"]["qwen-asr-message"]["enable_ddc"].as_bool(),
+            Some(false)
+        );
+        assert_eq!(
+            config["audio"]["qwen-asr-streaming"]["enable_ddc"].as_bool(),
+            Some(true)
+        );
+        assert!(config["audio"]["qwen-asr-message"]
+            .get("disfluency_removal_enabled")
+            .is_none());
     }
 }
