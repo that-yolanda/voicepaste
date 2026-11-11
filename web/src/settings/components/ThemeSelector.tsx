@@ -1,6 +1,7 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { SegmentedControl } from "@/settings/components/SegmentedControl";
 import { applyTheme, initialTheme, isThemePref, type ThemePref } from "@/settings/lib/theme";
 import { useSettings } from "@/settings/SettingsProvider";
 
@@ -20,26 +21,19 @@ export function ThemeSelector() {
   ];
 
   return (
-    <div className="flex gap-1">
-      {options.map((opt) => (
-        <button
-          key={opt.key}
-          type="button"
-          title={t(opt.label)}
-          aria-label={t(opt.label)}
-          aria-pressed={pref === opt.key}
-          onClick={() => {
-            setPref(opt.key);
-            applyTheme(opt.key);
-            scheduleSave({ app: { theme: opt.key } });
-          }}
-          className={`flex-1 flex items-center justify-center p-1.5 rounded-md text-text-muted hover:text-text transition-colors ${
-            pref === opt.key ? "bg-fill-interactive text-accent" : ""
-          }`}
-        >
-          <opt.icon size={16} />
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      value={pref}
+      options={options.map((opt) => ({
+        value: opt.key,
+        label: <opt.icon size={16} />,
+        ariaLabel: t(opt.label),
+      }))}
+      onChange={(value) => {
+        if (!isThemePref(value)) return;
+        setPref(value);
+        applyTheme(value);
+        scheduleSave({ app: { theme: value } });
+      }}
+    />
   );
 }

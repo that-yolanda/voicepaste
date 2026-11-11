@@ -1,25 +1,69 @@
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+
 interface SegmentedOption {
   value: string;
-  label: string;
+  label: ReactNode;
+  ariaLabel?: string;
 }
 
 interface SegmentedControlProps {
   options: SegmentedOption[];
   value: string;
   onChange: (value: string) => void;
+  label?: string;
+  role?: "tablist";
+  align?: "start" | "end";
+  className?: string;
 }
 
-export function SegmentedControl({ options, value, onChange }: SegmentedControlProps) {
+export function SegmentedControl({
+  options,
+  value,
+  onChange,
+  label,
+  role,
+  align = "end",
+  className = "",
+}: SegmentedControlProps) {
+  const list = useRef<HTMLDivElement>(null);
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const selected = list.current?.querySelector<HTMLElement>('[data-selected="true"]');
+      if (!selected) return;
+      const { offsetLeft: left, offsetWidth: width } = selected;
+      setIndicator((previous) =>
+        previous.left === left && previous.width === width ? previous : { left, width },
+      );
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
   return (
-    <div className="shrink-0 inline-flex border border-border rounded-lg overflow-hidden">
+    <div
+      ref={list}
+      {...(role === "tablist"
+        ? { role: "tablist", "aria-label": label }
+        : { role: "group", "aria-label": label })}
+      className={`relative inline-flex shrink-0 rounded-lg bg-fill-subtle p-0.5 ${align === "end" ? "ml-auto" : ""} ${className}`}
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0.5 left-0 top-0.5 rounded-md border border-border bg-surface-solid shadow-sm transition-[transform,width] duration-200 ease-out motion-reduce:transition-none"
+        style={{ width: indicator.width, transform: `translateX(${indicator.left}px)` }}
+      />
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
-          aria-pressed={value === opt.value}
-          className={`px-4 py-1.5 text-sm font-medium transition-colors ${
-            value === opt.value ? "bg-accent-soft text-accent" : "text-text-dim hover:bg-fill-hover"
-          }`}
+          aria-label={opt.ariaLabel}
+          title={opt.ariaLabel}
+          {...(role === "tablist"
+            ? { role: "tab", "aria-selected": value === opt.value }
+            : { "aria-pressed": value === opt.value })}
+          data-selected={value === opt.value}
+          className={`relative z-1 flex min-w-0 items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-accent ${value === opt.value ? "text-accent" : "text-text-dim hover:text-text"}`}
           onClick={() => onChange(opt.value)}
         >
           {opt.label}

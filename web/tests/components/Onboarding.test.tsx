@@ -84,7 +84,7 @@ function Harness() {
         <input aria-label="API Key" />
       </div>
       <div data-tour="llm-library">
-        <button type="button">模板库</button>
+        <button type="button">模板</button>
       </div>
       <div data-tour="llm-add-template" />
       <div data-tour="hotkey-main" />
@@ -260,16 +260,16 @@ describe("setup onboarding", () => {
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
     await screen.findByRole("heading", { name: "进入供应商配置" });
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-    await screen.findByRole("heading", { name: "从模板库添加" });
-    expect(screen.getByRole("button", { name: "模板库" })).toHaveFocus();
+    await screen.findByRole("heading", { name: "从模板添加" });
+    expect(screen.getByRole("button", { name: "模板" })).toHaveFocus();
     const dialog = document.createElement("div");
     dialog.setAttribute("data-settings-dialog", "");
     await act(async () => document.body.appendChild(dialog));
-    expect(screen.queryByRole("heading", { name: "从模板库添加" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "从模板添加" })).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
     await act(async () => dialog.remove());
-    await screen.findByRole("heading", { name: "从模板库添加" });
-    expect(screen.getByRole("button", { name: "模板库" })).toHaveFocus();
+    await screen.findByRole("heading", { name: "从模板添加" });
+    expect(screen.getByRole("button", { name: "模板" })).toHaveFocus();
     expect(lastDriver().drive).toHaveBeenCalledWith(2);
     expect(document.querySelectorAll(".driver-checklist-item-done")).toHaveLength(0);
   });

@@ -68,8 +68,8 @@ function SettingsShell() {
           onStartOnboarding={() => void onboarding.start()}
         />
         <div className="relative min-w-0 flex-1">
-          <main className="settings-page-scroll h-full relative rounded-tl-xl border-l border-border bg-surface-main ">
-            <div className="max-w-[640px] mx-auto py-7 px-9">
+          <main className="settings-page-scroll h-full relative rounded-tl-xl border-l border-border">
+            <div className="max-w-[640px] mx-auto py-5 px-6">
               {loading ? (
                 <HomeSkeleton />
               ) : error && !config ? (

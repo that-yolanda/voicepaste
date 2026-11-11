@@ -215,7 +215,7 @@ test("closing a model dialog cancels its pending test and ignores late results",
   fireEvent.click(screen.getByRole("button", { name: /配置 豆包/ }));
   const dialog = within(screen.getByRole("dialog"));
   expect(dialog.queryByRole("button", { name: "当前使用" })).not.toBeInTheDocument();
-  expect(dialog.getByText("当前使用")).toHaveClass("text-success");
+  expect(dialog.getByText("当前使用")).toHaveClass("text-accent");
   fireEvent.click(screen.getByRole("button", { name: "测试" }));
   expect(screen.getByRole("button", { name: "测试中…" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "保存" }));
@@ -382,8 +382,7 @@ test("Doubao resource ID remains editable in the model modelModal", () => {
 
 test("VAD reads shared values, writes there and resets without losing other defaults", async () => {
   detail(local);
-  const row = screen.getByText("Silero VAD").closest(".flex.min-h-14") as HTMLElement;
-  fireEvent.click(row);
+  fireEvent.click(screen.getByRole("button", { name: "配置 Silero VAD" }));
   const threshold = screen
     .getAllByRole("spinbutton")
     .find((input) => (input as HTMLInputElement).value === "0.7") as HTMLElement;
@@ -489,7 +488,7 @@ test("Qwen LLM credentials show endpoint help and save independently of ASR", as
   const audio = mocks.config.audio;
   mocks.config.llm = { provider: "deepseek", qwen: { api_key: "llm-key", models: [] } };
   detail(qwen);
-  expect(screen.getByRole("heading", { name: "千问" })).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "千问" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
   expect(screen.getByDisplayValue("llm-key")).toHaveAttribute("type", "password");
   const url = screen.getByDisplayValue("https://maas.qianwenaiapi.com/compatible-mode/v1");
@@ -571,4 +570,18 @@ test("shared API keys are saved under api_key rather than url", async () => {
   expect(mocks.save.mock.calls[0][0].model_providers.credentials.bytedance).toEqual({
     api_key: "shared-test-key",
   });
+});
+
+test("model information shows capabilities above languages without opening configuration", () => {
+  const qwen = providers.find((p) => p.id === "qwen") as RegistryProvider;
+  mocks.config.audio = { provider: "qwen-asr-message" };
+  detail(qwen);
+  fireEvent.focus(screen.getAllByRole("button", { name: "模型信息" })[0]);
+  const tooltip = screen.getByRole("tooltip");
+  expect(tooltip).toHaveTextContent("流式输出");
+  expect(tooltip).toHaveTextContent("支持语言");
+  expect(tooltip.textContent?.indexOf("流式输出")).toBeLessThan(
+    tooltip.textContent?.indexOf("支持语言") ?? 0,
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });

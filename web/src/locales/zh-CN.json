@@ -281,6 +281,11 @@
     "qwen_multi_threshold": "多阈值断句"
   },
   "ui": {
+    "library": {
+      "add": "添加",
+      "templates": "模板",
+      "remove": "移除"
+    },
     "hotkey": {
       "binding_main": "全局主键",
       "binding_voice": "语音输入",
@@ -311,11 +316,11 @@
       "help_error": "无法打开帮助文档，请稍后重试",
       "models": "模型",
       "usage": "使用",
-      "templates": "润色模板",
+      "templates": "文本润色",
       "support": "帮助与反馈",
       "navigation": "导航",
       "general": "通用设置",
-      "models_service": "模型配置"
+      "models_service": "模型服务"
     },
     "heatmap": {
       "title": "使用统计",
@@ -351,22 +356,24 @@
       "theme": "主题"
     },
     "hotwords": {
+      "default_list": "默认热词表",
       "title": "热词库",
-      "description": "热词库用于提高特定词汇的识别准确率。开启开关的表为默认热词表，识别时自动传入；若模型不支持热词可追加到 LLM 文本润色，配置前往 语音识别模型 > 自定义配置 > 识别强化。内置热词表可在「常用热词」中按需添加为自定义表。",
-      "add_group": "添加热词表",
-      "builtin": "常用热词",
-      "group_name": "热词组名称",
+      "description": "热词库用于提高特定词汇的识别准确率。开启开关的表为默认热词表，识别时自动传入；若模型不支持热词可追加到 LLM 文本润色，配置前往 语音识别模型 > 自定义配置 > 识别强化。内置热词表可在「模板」中按需添加为自定义表。",
+      "add_group": "添加",
+      "builtin": "模板",
+      "group_name": "热词表名称",
       "add_word": "添加热词",
       "add_word_placeholder": "逗号分隔批量添加，例如：Claude, Anthropic|8（默认权重 4）",
       "word_list": "热词列表",
       "remove_word": "点击移除",
       "new_group": "新热词表",
       "no_builtin": "暂无内置热词表。",
-      "add": "添加"
+      "add": "添加",
+      "word": "热词"
     },
     "llm": {
       "add_template": "添加",
-      "builtin_prompts": "模板库",
+      "builtin_prompts": "模板",
       "new_template": "新建润色模板",
       "template_name": "模板名称",
       "template_name_placeholder": "模板名称",
@@ -391,7 +398,7 @@
       "hotkeys_section": "快捷键",
       "hotkeys_subtitle": "点击输入框进入录制 → 按下快捷键",
       "voice_input": "语音输入",
-      "no_templates": "暂无润色模板，可前往「大语言模型」页面添加。"
+      "no_templates": "暂无润色模板，可前往「润色模板」页面添加。"
     },
     "home": {
       "greeting": {
@@ -644,8 +651,8 @@
           "description": "免提：按一下唤醒键开始录音，再按结束键停止。按住说话：按住快捷键录音，松开即结束。录音中按 Esc 可随时取消。"
         },
         "llmLibrary": {
-          "title": "从模板库添加",
-          "description": "打开「模板库」，选择现成模板并点击「添加」。添加后可修改内容；关闭模板库后继续。"
+          "title": "从模板添加",
+          "description": "打开「模板」，选择现成模板并点击「添加」。添加后可修改内容；关闭模板后继续。"
         },
         "llmTemplateCreate": {
           "title": "创建自己的模板",
@@ -677,7 +684,7 @@
         },
         "modelsProviders": {
           "title": "进入供应商配置",
-          "description": "点击供应商进入详情，填写接入凭证并管理它的模型列表。"
+          "description": "点击供应商展开配置，填写接入凭证并管理模型；在列表底部展开其余供应商以添加。"
         }
       }
     },
@@ -689,6 +696,10 @@
       "refresh_models": "刷新模型列表",
       "current_models": "当前使用",
       "provider_list": "供应商列表",
+      "show_remaining_providers": "显示其余 {{count}} 个",
+      "collapse_providers": "收起",
+      "model_info": "模型信息",
+      "supported_languages": "支持语言",
       "no_providers": "该筛选下没有供应商",
       "filter_all": "全部",
       "filter_online": "在线",

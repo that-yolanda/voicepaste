@@ -10,7 +10,7 @@ import {
   Settings2,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openHelpGuide } from "@/settings/bridge";
 import { Toast, useToast } from "@/settings/components/Toast";
@@ -45,6 +45,24 @@ export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps)
   const { settings } = useSettings();
   const version = settings?.runtime?.version as string | undefined;
   const { toast, showToast } = useToast();
+  const nav = useRef<HTMLElement>(null);
+  const [indicator, setIndicator] = useState({ top: 0, height: 0, visible: false });
+  useLayoutEffect(() => {
+    const element = nav.current;
+    if (!element) return;
+    const update = () => {
+      const selected = element.querySelector<HTMLElement>(`[data-nav-id="${active}"]`);
+      setIndicator(
+        selected
+          ? { top: selected.offsetTop, height: selected.offsetHeight, visible: true }
+          : { top: 0, height: 0, visible: false },
+      );
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [active]);
   const menu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const dismiss = (event: MouseEvent) => {
@@ -67,21 +85,22 @@ export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps)
     if (menu.current) menu.current.open = false;
   };
   const utilityClass =
-    "w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm text-text-dim hover:bg-fill-hover hover:text-text";
+    "w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm text-text-dim hover:text-text";
 
   const navBtn = (id: SectionId, Icon: typeof Home, label: string) => (
     <button
       key={id}
       type="button"
+      data-nav-id={id}
       aria-current={active === id ? "page" : undefined}
       onClick={() => {
         closeMenu();
         onNavigate(id);
       }}
-      className={`w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors ${
+      className={`relative w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors ${
         active === id
-          ? "bg-fill-hover text-text font-medium"
-          : "text-text-dim hover:bg-fill-hover hover:text-text"
+          ? `${id === "home" || id === "models" || id === "hotkey" || id === "hotwords" || id === "templates" ? "" : "settings-sidebar-selected"} text-text font-medium`
+          : "text-text-dim hover:text-text"
       }`}
     >
       <Icon size={18} />
@@ -91,7 +110,21 @@ export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps)
 
   return (
     <aside className="w-50 shrink-0 flex flex-col">
-      <nav aria-label={t("ui.nav.navigation")} className="flex-1 overflow-y-auto py-3 px-2">
+      <nav
+        ref={nav}
+        aria-label={t("ui.nav.navigation")}
+        className="relative flex-1 overflow-y-auto py-3 px-2"
+      >
+        <div
+          aria-hidden="true"
+          className="settings-sidebar-indicator"
+          style={{
+            top: 0,
+            transform: `translateY(${indicator.top}px)`,
+            height: indicator.height,
+            opacity: indicator.visible ? 1 : 0,
+          }}
+        />
         {navBtn("home", Home, "ui.nav.home")}
         {[
           { title: "ui.nav.models", items: MODEL_ITEMS },
@@ -106,7 +139,7 @@ export function Sidebar({ active, onNavigate, onStartOnboarding }: SidebarProps)
       <div className="p-2 border-t border-border-subtle space-y-1">
         <details ref={menu} className="relative">
           <summary
-            className={`${utilityClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
+            className={`${utilityClass} ${["app", "feedback", "about"].includes(active) ? "settings-sidebar-selected text-text" : ""} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
           >
             <Settings2 size={18} />
             {t("ui.nav.app")}

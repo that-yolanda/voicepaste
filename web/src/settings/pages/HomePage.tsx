@@ -343,7 +343,7 @@ export function HomePage({ onOpenSettings }: { onOpenSettings?: () => void }) {
                     return (
                       <div key={item.ts} className="text-sm">
                         {show && (
-                          <div className="flex items-center gap-2 p-2">
+                          <div className="flex items-center gap-2 px-3 py-3">
                             <div className="flex-1 h-px bg-border-subtle" />
                             <span className="text-text-muted">
                               {dateLabel(dk, tKey, yKey, t, locale)}

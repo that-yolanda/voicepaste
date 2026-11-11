@@ -281,6 +281,11 @@
     "qwen_multi_threshold": "Multi-threshold segmentation"
   },
   "ui": {
+    "library": {
+      "add": "Add",
+      "templates": "Templates",
+      "remove": "Remove"
+    },
     "hotkey": {
       "binding_main": "Recording hotkey",
       "binding_voice": "Voice input",
@@ -311,11 +316,11 @@
       "help_error": "Cannot open the help guide. Please retry later",
       "models": "Models",
       "usage": "Usage",
-      "templates": "Polishing templates",
+      "templates": "Text Polishing",
       "support": "Help & feedback",
       "navigation": "Navigation",
       "general": "General settings",
-      "models_service": "Model Configuration"
+      "models_service": "Model Provider"
     },
     "heatmap": {
       "title": "Usage",
@@ -351,10 +356,11 @@
       "theme": "Theme"
     },
     "hotwords": {
+      "default_list": "Default hotword list",
       "title": "Hotwords",
-      "description": "Hotwords help recognize specific terms. Enabled lists are included automatically. For models without native hotword support, use Speech models > Configuration > Recognition to add hotwords to text polishing. Add preset lists from Common hotwords.",
+      "description": "Hotwords help recognize specific terms. Enabled lists are included automatically. For models without native hotword support, use Speech models > Configuration > Recognition to add hotwords to text polishing. Add preset lists from Templates.",
       "add_group": "Add",
-      "builtin": "Common hotwords",
+      "builtin": "Templates",
       "group_name": "List name",
       "add_word": "Add hotwords",
       "add_word_placeholder": "Comma-separated, e.g. Claude, Anthropic|8 (default weight 4)",
@@ -362,11 +368,12 @@
       "remove_word": "Remove hotword",
       "new_group": "New list",
       "no_builtin": "No preset hotword lists.",
-      "add": "Add"
+      "add": "Add",
+      "word": "Hotwords"
     },
     "llm": {
       "add_template": "Add",
-      "builtin_prompts": "Template library",
+      "builtin_prompts": "Templates",
       "new_template": "New template",
       "template_name": "Template name",
       "template_name_placeholder": "Template name",
@@ -391,7 +398,7 @@
       "hotkeys_section": "Hotkeys",
       "hotkeys_subtitle": "Click a field, then press your shortcut",
       "voice_input": "Voice input",
-      "no_templates": "No polishing templates yet. Add one on the LLM page."
+      "no_templates": "No polishing templates yet. Add one on the Polishing templates page."
     },
     "home": {
       "greeting": {
@@ -645,7 +652,7 @@
         },
         "llmLibrary": {
           "title": "Browse templates",
-          "description": "Open Template library, choose a template, and click Add. You can edit it later. Close the library to continue."
+          "description": "Open Templates, choose a template, and click Add. You can edit it later. Close the library to continue."
         },
         "llmTemplateCreate": {
           "title": "Create a template",
@@ -677,7 +684,7 @@
         },
         "modelsProviders": {
           "title": "Open a provider",
-          "description": "Click a provider to fill in its credentials and manage its models."
+          "description": "Expand a provider to edit credentials and models. Expand the remaining providers at the bottom to add one."
         }
       }
     },
@@ -689,6 +696,10 @@
       "refresh_models": "Refresh models",
       "current_models": "Currently selected",
       "provider_list": "Providers",
+      "show_remaining_providers": "Show remaining {{count}}",
+      "collapse_providers": "Collapse",
+      "model_info": "Model information",
+      "supported_languages": "Supported languages",
       "no_providers": "No providers under this filter",
       "filter_all": "All",
       "filter_online": "Online",

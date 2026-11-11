@@ -17,9 +17,19 @@ vi.mock("@/settings/SettingsProvider", () => ({
 import { Sidebar } from "@/settings/layout/Sidebar";
 import { AboutPage } from "@/settings/pages/AboutPage";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it("keeps the current version visible through checking, downloading, installation and retry", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
   mocks.checkForUpdates.mockResolvedValue({ available: true, version: "2.1.6" });
   let finishDownload: () => void = () => {};
   mocks.downloadUpdate.mockImplementation(

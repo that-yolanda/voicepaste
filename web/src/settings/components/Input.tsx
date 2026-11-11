@@ -70,7 +70,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             onKeyDown?.(e);
             if (commitOnBlur && e.key === "Enter") commit();
           }}
-          className={`w-full h-8.5 px-3 rounded-lg bg-input-bg border border-border text-text text-sm placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-dim transition-colors ${isPassword ? "pr-10" : ""} ${inputClassName}`}
+          className={`w-full h-8 px-3 rounded-md bg-input-bg border border-border text-text text-sm placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-dim transition-colors ${isPassword ? "pr-10" : ""} ${inputClassName}`}
           {...props}
         />
         {isPassword && (

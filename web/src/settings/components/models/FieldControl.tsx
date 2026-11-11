@@ -86,7 +86,7 @@ export function renderControl(
           step={step}
           min={meta.min}
           max={meta.max}
-          className="w-36"
+          className="w-full"
           value={typeof value === "number" ? formatNumber(value) : ""}
           placeholder={meta.placeholder}
           onChange={(v) => {

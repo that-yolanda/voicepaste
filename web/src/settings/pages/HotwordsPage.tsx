@@ -1,19 +1,21 @@
-import { Library, Plus, Trash } from "lucide-react";
+import { Lightbulb, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { loadBuiltinHotwords, loadHotwords, saveHotwords } from "@/settings/bridge";
 import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
+import { CurrentUsageBadge } from "@/settings/components/DefaultAction";
 import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
-import { Toggle } from "@/settings/components/Toggle";
 import {
   PageLayout,
   Section,
+  SectionAccordionItem,
   SectionContent,
   SectionHeader,
   SectionItem,
   SectionItemList,
+  SectionRows,
 } from "@/settings/layout/PageLayout";
 import { cloneBuiltinGroup, mergeHotwords, parseHotwordInput } from "@/settings/lib/hotwords";
 import type { HotwordData, HotwordGroup } from "@/settings/types/hotwords";
@@ -25,6 +27,7 @@ export function HotwordsPage() {
     groups: [],
   });
   const [builtinOpen, setBuiltinOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -51,11 +54,6 @@ export function HotwordsPage() {
     });
   };
 
-  // active_group is single-select: the one group whose id matches is the default.
-  const setActiveGroup = (id: string) => {
-    persist({ ...data, active_group: id });
-  };
-
   const removeGroup = (id: string) => {
     const groups = data.groups.filter((g) => g.id !== id);
     const active_group = data.active_group === id ? (groups[0]?.id ?? "") : data.active_group;
@@ -64,6 +62,7 @@ export function HotwordsPage() {
 
   const addGroup = () => {
     const id = crypto.randomUUID();
+    setExpandedId(id);
     persist({
       ...data,
       groups: [...data.groups, { id, name: t("ui.hotwords.new_group"), words: [] }],
@@ -72,31 +71,46 @@ export function HotwordsPage() {
 
   // Clone a built-in table (fresh id) into the custom library.
   const addClonedGroup = (group: HotwordGroup) => {
+    setExpandedId(group.id);
     persist({ ...data, groups: [...data.groups, group] });
   };
 
   return (
     <PageLayout>
-      <div className="flex items-center justify-between">
-        <Button variant="accent" onClick={addGroup}>
+      {data.groups.length > 0 && (
+        <SectionRows>
+          {data.groups.map((group) => (
+            <SectionAccordionItem
+              key={group.id}
+              title={group.name}
+              status={data.active_group === group.id ? <CurrentUsageBadge size="xs" /> : undefined}
+              open={expandedId === group.id}
+              onToggle={() => {
+                setExpandedId(expandedId === group.id ? null : group.id);
+                if (data.active_group !== group.id) {
+                  persist({ ...data, active_group: group.id });
+                }
+              }}
+            >
+              <HotwordGroupItem
+                group={group}
+                onUpdate={(patch) => updateGroup(group.id, patch)}
+                onRemove={() => removeGroup(group.id)}
+              />
+            </SectionAccordionItem>
+          ))}
+        </SectionRows>
+      )}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" onClick={addGroup}>
           <Plus size={14} aria-hidden="true" />
-          {t("ui.hotwords.add_group")}
+          {t("ui.library.add")}
         </Button>
-        <Button variant="default" onClick={() => setBuiltinOpen(true)}>
-          <Library size={14} aria-hidden="true" />
-          {t("ui.hotwords.builtin")}
+        <Button variant="ghost" onClick={() => setBuiltinOpen(true)}>
+          <Lightbulb size={14} aria-hidden="true" />
+          {t("ui.library.templates")}
         </Button>
       </div>
-      {data.groups.map((group) => (
-        <HotwordGroupItem
-          key={group.id}
-          group={group}
-          isActive={data.active_group === group.id}
-          onUpdate={(patch) => updateGroup(group.id, patch)}
-          onRemove={() => removeGroup(group.id)}
-          onSetActive={() => setActiveGroup(group.id)}
-        />
-      ))}
       <BuiltinHotwordsModal
         open={builtinOpen}
         onClose={() => setBuiltinOpen(false)}
@@ -108,39 +122,24 @@ export function HotwordsPage() {
 
 function HotwordGroupItem({
   group,
-  isActive,
   onUpdate,
   onRemove,
-  onSetActive,
 }: {
   group: HotwordGroup;
-  isActive: boolean;
   onUpdate: (patch: Partial<HotwordGroup>) => void;
   onRemove: () => void;
-  onSetActive: () => void;
 }) {
   const { t } = useTranslation();
   const [wordDraft, setWordDraft] = useState("");
 
   return (
     <Section>
-      <SectionHeader
-        title={group.name}
-        action={
-          <div className="flex items-center gap-2">
-            <Button size="icon" onClick={onRemove}>
-              <Trash size={16} />
-            </Button>
-            <Toggle
-              checked={isActive}
-              onChange={(v) => {
-                if (v) onSetActive();
-              }}
-            />
-          </div>
-        }
-      />
-      <SectionContent>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="icon" title={t("ui.library.remove")} onClick={onRemove}>
+          <Trash2 size={14} />
+        </Button>
+      </div>
+      <SectionContent plain>
         <SectionItemList>
           <SectionItem
             title={t("ui.hotwords.group_name")}
@@ -154,7 +153,7 @@ function HotwordGroupItem({
             }
           />
 
-          <SectionItem title={t("ui.hotwords.add_word")}>
+          <SectionItem title={t("ui.hotwords.word")} last>
             <Input
               className="w-full"
               value={wordDraft}
@@ -170,10 +169,7 @@ function HotwordGroupItem({
                 }
               }}
             />
-          </SectionItem>
-
-          <SectionItem title={t("ui.hotwords.word_list")} last>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {group.words.map((word) => (
                 <Badge
                   key={word}
@@ -222,7 +218,7 @@ function BuiltinHotwordsModal({ open, onClose, onAdd }: BuiltinHotwordsModalProp
   }, [open]);
 
   return (
-    <Modal open={open} onClose={onClose} title={t("ui.hotwords.builtin")}>
+    <Modal open={open} onClose={onClose} title={t("ui.library.templates")}>
       <div className="space-y-3 overscroll-y-auto">
         {groups.length === 0 ? (
           <p className="text-text-muted">{t("ui.hotwords.no_builtin")}</p>
@@ -242,7 +238,7 @@ function BuiltinHotwordsModal({ open, onClose, onAdd }: BuiltinHotwordsModalProp
                         onClose();
                       }}
                     >
-                      {t("ui.hotwords.add")}
+                      {t("ui.library.add")}
                     </Button>
                   }
                 />

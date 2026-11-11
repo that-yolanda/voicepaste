@@ -74,7 +74,6 @@ export function AppSettingsPage() {
               action={
                 <Select
                   id="app-language"
-                  className="max-w-40"
                   value={(app.language as string) || "auto"}
                   onChange={(v) => {
                     void scheduleSave({ app: { language: v } }).then(() =>
@@ -94,7 +93,7 @@ export function AppSettingsPage() {
               last
               title={t("ui.app_settings.theme")}
               action={
-                <div className="w-48">
+                <div>
                   <ThemeSelector />
                 </div>
               }

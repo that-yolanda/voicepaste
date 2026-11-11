@@ -15,6 +15,14 @@ import type {
   RegistryProvider,
 } from "@/settings/types/models";
 
+/** Localized provider display fields (mirrors localizedModelFields). */
+export function localizedProviderFields(provider: RegistryProvider, locale: string) {
+  const en = locale.startsWith("en");
+  return {
+    name: (!en && provider.name) || provider.name_en || provider.name,
+  };
+}
+
 /** Default provider set for fresh installs (mirrors config.rs). */
 export const DEFAULT_ADDED_PROVIDERS = ["bytedance", "local_asr"] as const;
 

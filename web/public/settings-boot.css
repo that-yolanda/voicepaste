@@ -8,8 +8,8 @@ html[data-settings] {
   color-scheme: dark;
 }
 html[data-settings][data-theme="light"] {
-  --boot-ground: #faf9f5;
-  --boot-main: #f5f4ed;
+  --boot-ground: #fbfaf7;
+  --boot-main: #fbfaf7;
   --boot-card: #fff;
   --boot-fill: #e8e8e4;
   color-scheme: light;

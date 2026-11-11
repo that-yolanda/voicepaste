@@ -1,15 +1,13 @@
 /**
- * Provider detail page: back link, provider header (如何申请 / 移除),
- * capability tabs (语音识别 / 大语言), two-scope credential cards and the
- * provider's model list. Local providers render the same structure without
- * tabs or credentials (本地语音识别模型 + 基础组件).
+ * Inline provider editor: capability tabs, credentials and model management.
+ * Reuses the existing configuration, testing and download flows.
  */
 
 import {
-  ArrowLeft,
   ChevronRight,
   CloudDownload,
   ExternalLink,
+  Info,
   LoaderCircle,
   Plus,
   Trash2,
@@ -29,14 +27,14 @@ import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
 import { Modal } from "@/settings/components/Modal";
 import { AddModelModal } from "@/settings/components/models/AddModelModal";
-import { localizedProviderFields } from "@/settings/components/models/AddProviderModal";
 import { renderControl } from "@/settings/components/models/FieldControl";
 import {
   AsrModelConfigModal,
   LlmModelConfigModal,
 } from "@/settings/components/models/ModelConfigModal";
-import { ProviderIcon } from "@/settings/components/models/ProviderIcon";
+import { SegmentedControl } from "@/settings/components/SegmentedControl";
 import { Toast, useToast } from "@/settings/components/Toast";
+import { Tooltip } from "@/settings/components/Tooltip";
 import {
   Section,
   SectionContent,
@@ -62,6 +60,7 @@ import {
   asrCredentialDefault,
   asrCredentialValues,
   llmCredentialValues,
+  localizedProviderFields,
   resolveDefaultLlmModel,
   sharedCredentialValues,
   viewRequestId,
@@ -288,7 +287,6 @@ export function ProviderDetailPage({
 
     return (
       <Section aria-label={t("ui.models.credentials")}>
-        <SectionHeader title={t("ui.models.credentials")} />
         <SectionContent>
           <SectionItemList>
             {visibleFields.map((field, index) => {
@@ -366,19 +364,30 @@ export function ProviderDetailPage({
 
   /* ---------- model rows ---------- */
 
-  const renderModelMeta = (model: RegistryModel) => {
-    const parts: string[] = [];
-    if (model.file_size) parts.push(`${model.file_size} MB`);
-    if (model.languages?.length) {
-      parts.push(
-        model.languages
-          .slice(0, 3)
-          .map((code) => languageName(code, i18n.language))
-          .join(" · "),
-      );
-    }
-    if (model.capabilities?.streaming) parts.push(t("ui.model.capability.streaming"));
-    return parts.join(" · ");
+  const modelInfo = (model: RegistryModel) => {
+    const capabilities = ["streaming", "hotwords", "punctuation", "itn"] as const;
+    const labels = capabilities
+      .filter((key) => model.capabilities?.[key])
+      .map((key) => t(`ui.model.capability.${key}`));
+    const languages = model.languages?.map((code) => languageName(code, i18n.language));
+    if (!labels.length && !languages?.length) return null;
+    return (
+      <Tooltip
+        label={t("ui.models.model_info")}
+        content={
+          <div className="space-y-1">
+            {labels.length > 0 && <p>{labels.join(" · ")}</p>}
+            {!!languages?.length && (
+              <p>
+                {t("ui.models.supported_languages")}: {languages.join(" · ")}
+              </p>
+            )}
+          </div>
+        }
+      >
+        <Info size={14} aria-hidden="true" />
+      </Tooltip>
+    );
   };
 
   const renderAsrRow = (model: RegistryModel) => {
@@ -390,65 +399,64 @@ export function ProviderDetailPage({
         ? Math.max(0, Math.min(100, Math.round(progress.progress)))
         : 0;
     const canConfigure = model.type !== "offline" || downloadedNow;
-    const content = (
-      <>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-text">{name}</span>
-            {activeAsrId === model.id && (
-              <Badge variant="accent" size="xs">
-                {t("ui.models.current_badge")}
-              </Badge>
-            )}
+    return (
+      <div
+        key={model.id}
+        className="group relative flex min-h-11 items-center gap-2 border-b border-border-subtle px-3 py-2 last:border-b-0 hover:bg-fill-hover/40"
+      >
+        <button
+          type="button"
+          disabled={!canConfigure}
+          aria-label={t("ui.models.configure_model", { model: name })}
+          className="absolute inset-0 rounded-[inherit] focus-visible:ring-1 focus-visible:ring-accent-dim"
+          onClick={() => setModelModal({ kind: "asr", model })}
+        />
+        <span className="pointer-events-none relative min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1">
+            <span className="font-semibold break-words">{name}</span>
+            <span className="pointer-events-auto">{modelInfo(model)}</span>
           </span>
-          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-text-muted">
-            {model.type === "offline" && (
-              <Badge variant={downloadedNow ? "success" : "default"} size="xs">
-                {t(downloadedNow ? "ui.models.downloaded" : "ui.models.not_downloaded")}
-              </Badge>
-            )}
-            <span className="truncate">{renderModelMeta(model)}</span>
-          </span>
+          {model.type === "offline" && (
+            <span className="text-xs text-text-muted">
+              {t(downloadedNow ? "ui.models.downloaded" : "ui.models.not_downloaded")}
+              {model.file_size ? ` · ${model.file_size} MB` : ""}
+            </span>
+          )}
           {isDownloading(model.id) && (
-            <span className="mt-1 block h-1.5 w-40 overflow-hidden rounded-full bg-fill-track">
+            <span className="mt-1 block h-1 w-40 max-w-full overflow-hidden rounded-full bg-fill-track">
               <span
-                className="block h-full rounded-full bg-accent transition-[width]"
+                className="block h-full bg-accent transition-[width]"
                 style={{ width: `${percent}%` }}
               />
             </span>
           )}
         </span>
-      </>
-    );
-    return canConfigure ? (
-      <button
-        key={model.id}
-        type="button"
-        aria-label={t("ui.models.configure_model", { model: name })}
-        className="flex min-h-14 w-full items-center gap-3 border-b border-border-subtle px-4 py-2 text-left last:border-b-0 hover:bg-fill-hover/40"
-        onClick={() => setModelModal({ kind: "asr", model })}
-      >
-        {content}
-        <ChevronRight size={15} className="shrink-0 text-text-muted" />
-      </button>
-    ) : (
-      <div
-        key={model.id}
-        className="flex min-h-14 items-center gap-3 border-b border-border-subtle px-4 py-2 last:border-b-0"
-      >
-        {content}
-        <Button
-          variant="accent"
-          disabled={isDownloading(model.id)}
-          onClick={() => void downloadModel(model.id)}
-        >
-          {isDownloading(model.id) ? (
-            <LoaderCircle size={14} className="animate-spin" />
-          ) : (
-            <CloudDownload size={14} />
-          )}
-          {t("ui.models.download")}
-        </Button>
+        {activeAsrId === model.id && (
+          <Badge variant="accent" size="xs" className="pointer-events-none relative shrink-0">
+            {t("ui.models.current_badge")}
+          </Badge>
+        )}
+        {canConfigure ? (
+          <ChevronRight
+            size={15}
+            className="pointer-events-none relative shrink-0 text-text-muted"
+          />
+        ) : (
+          <span className="relative">
+            <Button
+              variant="accent"
+              disabled={isDownloading(model.id)}
+              onClick={() => void downloadModel(model.id)}
+            >
+              {isDownloading(model.id) ? (
+                <LoaderCircle size={14} className="animate-spin" />
+              ) : (
+                <CloudDownload size={14} />
+              )}
+              {t("ui.models.download")}
+            </Button>
+          </span>
+        )}
       </div>
     );
   };
@@ -470,22 +478,19 @@ export function ProviderDetailPage({
         key={view.id}
         type="button"
         aria-label={t("ui.models.configure_model", { model: displayName })}
-        className="flex min-h-14 w-full items-center gap-3 border-b border-border-subtle px-4 py-2 text-left last:border-b-0 hover:bg-fill-hover/40"
+        className="flex min-h-11 w-full items-center gap-3 border-b border-border-subtle px-3 py-2 text-left last:border-b-0 hover:bg-fill-hover/40"
         onClick={() => setModelModal({ kind: "llm", entryId: view.id })}
       >
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span className="text-sm font-semibold text-text">{displayName}</span>
-            {isCurrent && (
-              <Badge variant="accent" size="xs">
-                {t("ui.models.current_badge")}
-              </Badge>
-            )}
-          </span>
-          <span className="mt-0.5 block truncate text-xs text-text-muted">
-            {viewRequestId(view)}
           </span>
         </span>
+        {isCurrent && (
+          <Badge variant="accent" size="xs">
+            {t("ui.models.current_badge")}
+          </Badge>
+        )}
         <ChevronRight size={15} className="shrink-0 text-text-muted" />
       </button>
     );
@@ -495,12 +500,6 @@ export function ProviderDetailPage({
     if (cap === "asr") {
       return (
         <div className="space-y-2">
-          <div className="flex justify-end">
-            <Button variant="ghost" onClick={() => setAddModelOpen(true)}>
-              <Plus size={14} />
-              {t("ui.models.add_model")}
-            </Button>
-          </div>
           <Section aria-label={t("ui.models.asr_models")}>
             <SectionRows>
               {asrModels.map(renderAsrRow)}
@@ -511,12 +510,28 @@ export function ProviderDetailPage({
               )}
             </SectionRows>
           </Section>
+          <div className="flex justify-start">
+            <Button variant="ghost" onClick={() => setAddModelOpen(true)}>
+              <Plus size={14} />
+              {t("ui.models.add_model")}
+            </Button>
+          </div>
         </div>
       );
     }
     return (
       <div className="space-y-2">
-        <div className="flex justify-end">
+        <Section aria-label={t("ui.models.llm_models")}>
+          <SectionRows>
+            {llmModels.map(renderLlmRow)}
+            {llmModels.length === 0 && (
+              <p className="px-4 py-3 text-center text-sm text-text-muted">
+                {t("ui.models.no_models")}
+              </p>
+            )}
+          </SectionRows>
+        </Section>
+        <div className="flex justify-start">
           <Button
             variant="ghost"
             onClick={() => {
@@ -528,16 +543,6 @@ export function ProviderDetailPage({
             {t("ui.models.add_model")}
           </Button>
         </div>
-        <Section aria-label={t("ui.models.llm_models")}>
-          <SectionRows>
-            {llmModels.map(renderLlmRow)}
-            {llmModels.length === 0 && (
-              <p className="px-4 py-3 text-center text-sm text-text-muted">
-                {t("ui.models.no_models")}
-              </p>
-            )}
-          </SectionRows>
-        </Section>
       </div>
     );
   };
@@ -546,62 +551,45 @@ export function ProviderDetailPage({
   const activeCapFields = provider.credentials?.[tab]?.fields;
 
   return (
-    <div className="space-y-4">
-      <button
-        type="button"
-        className="inline-flex h-6 items-center gap-1.5 text-xs text-text-muted hover:text-text"
-        onClick={onBack}
-      >
-        <ArrowLeft size={13} />
-        {t("ui.models.back_to_services")}
-      </button>
+    <section aria-label={providerName} className="space-y-3">
+      <div className="flex items-center gap-2">
+        {showTabs && (
+          <SegmentedControl
+            role="tablist"
+            align="start"
+            label={t("ui.models.capabilities")}
+            value={tab}
+            options={provider.capabilities.map((cap) => ({
+              value: cap,
+              label: t(cap === "asr" ? "ui.models.tab_asr" : "ui.models.tab_llm"),
+            }))}
+            onChange={(value) => setTab(value as CapabilityKind)}
+          />
+        )}
 
-      <header className="flex items-center gap-3">
-        <ProviderIcon provider={provider} size="large" />
-        <h1 className="flex-1 text-xl font-semibold text-text">{providerName}</h1>
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
           {provider.docs_url && (
             <Button
               variant="ghost"
+              size="sm"
               onClick={() => void openExternalUrl(provider.docs_url as string)}
             >
-              <ExternalLink size={14} />
               {t("ui.models.how_to_apply")}
+              <ExternalLink size={13} />
             </Button>
           )}
-          <Button variant="ghost" onClick={() => setRemoveProviderOpen(true)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            title={t("ui.models.remove_provider")}
+            onClick={() => setRemoveProviderOpen(true)}
+          >
             <Trash2 size={14} />
-            {t("ui.models.remove_provider")}
+            <span className="sr-only">{t("ui.models.remove_provider")}</span>
           </Button>
         </div>
-      </header>
-
+      </div>
       {renderCredentialCard("shared", sharedFields)}
-
-      {showTabs && (
-        <div
-          role="tablist"
-          aria-label={t("ui.models.capabilities")}
-          className="flex gap-5 border-b border-border"
-        >
-          {provider.capabilities.map((cap) => (
-            <button
-              key={cap}
-              type="button"
-              role="tab"
-              aria-selected={tab === cap}
-              className={`relative h-9 text-sm ${
-                tab === cap
-                  ? "font-semibold text-text after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-accent"
-                  : "text-text-muted hover:text-text"
-              }`}
-              onClick={() => setTab(cap)}
-            >
-              {t(cap === "asr" ? "ui.models.tab_asr" : "ui.models.tab_llm")}
-            </button>
-          ))}
-        </div>
-      )}
 
       {!showTabs && activeCapFields && renderCredentialCard(tab, activeCapFields)}
       {showTabs && activeCapFields && renderCredentialCard(tab, activeCapFields)}
@@ -846,7 +834,7 @@ export function ProviderDetailPage({
       </Modal>
 
       <Toast toast={toast} />
-    </div>
+    </section>
   );
 }
 

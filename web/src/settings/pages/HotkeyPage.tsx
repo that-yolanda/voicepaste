@@ -184,16 +184,13 @@ export function HotkeyPage() {
 
       {/* Section 2 — per-feature hotkeys (voice input + each polish prompt) */}
       <Section data-tour="hotkey-voice">
-        <SectionHeader
-          title={t("ui.hotkey_page.hotkeys_section")}
-          subtitle={t("ui.hotkey_page.hotkeys_subtitle")}
-        />
+        <SectionHeader title={t("ui.hotkey_page.hotkeys_section")} />
         <SectionContent>
           <SectionItemList>
             <SectionItem
               title={t("ui.hotkey_page.voice_input")}
               action={
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   {hotkeyMode === "toggle" ? (
                     <>
                       {/* start = main key (locked); stop = independently configurable raw-input key */}
@@ -247,7 +244,9 @@ export function HotkeyPage() {
 
             <div data-tour="hotkey-templates" className="space-y-2">
               {prompts.length === 0 && (
-                <p className="text-sm text-text-muted">{t("ui.hotkey_page.no_templates")}</p>
+                <p className="text-center text-sm text-text-muted">
+                  {t("ui.hotkey_page.no_templates")}
+                </p>
               )}
               {prompts.map((item, idx) => {
                 const mode = item.hotkey_mode || "toggle";
@@ -257,7 +256,7 @@ export function HotkeyPage() {
                     title={item.title}
                     last={idx === prompts.length - 1}
                     action={
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         {mode === "toggle" ? (
                           <>
                             {/* start = main key (locked); stop = this prompt's polish key */}

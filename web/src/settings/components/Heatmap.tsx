@@ -2,7 +2,6 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Section, SectionContent, SectionHeader } from "@/settings/layout/PageLayout";
-import { formatCompact } from "@/settings/lib/format";
 
 /* ---------- constants ---------- */
 
@@ -45,8 +44,7 @@ interface HeatmapProps {
 export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language ?? "zh-CN";
-  const monthFormat = new Intl.DateTimeFormat(locale, { month: "short" });
-  const weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: "narrow" });
+  const monthFormat = new Intl.DateTimeFormat("en-US", { month: "short" });
   const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "long" });
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<{ text: string; rect: DOMRect } | null>(null);
@@ -80,8 +78,6 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
     .filter((c) => c > 0)
     .sort((a, b) => a - b);
 
-  let total = 0;
-
   const cells: { key: string; count: number; date: Date; future: boolean }[] = [];
   for (let w = 0; w < WEEKS; w++) {
     for (let d = 0; d < 7; d++) {
@@ -89,7 +85,6 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
       dt.setDate(dt.getDate() + w * 7 + d);
       const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
       const c = dailyCounts[key] || 0;
-      total += c;
       cells.push({ key, count: c, date: dt, future: dt > now });
     }
   }
@@ -124,7 +119,7 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
         <div className="w-full">
           {/* Month labels */}
           <div
-            className="grid gap-px ml-5.5 mb-1 h-3.5 text-[10px] text-text-muted"
+            className="grid gap-px ml-9 mb-1 h-3.5 text-[10px] text-text-muted"
             style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}
           >
             {monthSpans.map((m) => (
@@ -139,15 +134,15 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
           </div>
 
           {/* Grid + day labels */}
-          <div className="flex gap-2">
+          <div className="flex items-start gap-1.5">
             {/* Day-of-week labels */}
             <div
-              className="grid gap-px text-[10px] text-text-muted w-3.5 shrink-0"
+              className="grid gap-px text-[10px] text-text-muted w-3 shrink-0"
               style={{ gridTemplateRows: "repeat(7, 1fr)" }}
             >
               {DAY_KEYS.map((day, index) => (
                 <span key={day} className="flex items-center justify-end leading-none">
-                  {DAY_SHOWN[index] ? weekdayFormat.format(new Date(2024, 0, 1 + (index - 1))) : ""}
+                  {DAY_SHOWN[index] ? String(index) : ""}
                 </span>
               ))}
             </div>
@@ -186,12 +181,6 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
               })}
             </div>
           </div>
-        </div>
-
-        <div className="flex justify-end text-xs font-normal text-text-muted">
-          <span>
-            {loading ? t("ui.loading") : t("ui.heatmap.summary", { count: formatCompact(total) })}
-          </span>
         </div>
       </SectionContent>
       {hovered &&

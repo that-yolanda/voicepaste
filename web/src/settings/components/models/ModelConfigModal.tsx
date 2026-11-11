@@ -10,11 +10,12 @@
  * Header: remove and select; footer: test, reset and done.
  */
 
-import { Check, ChevronsUp, Info, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronsUp, Info, RotateCcw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
+import { Collapse } from "@/settings/components/Collapse";
+import { DefaultAction } from "@/settings/components/DefaultAction";
 import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
 import { renderControl } from "@/settings/components/models/FieldControl";
@@ -132,8 +133,14 @@ export function AsrModelConfigModal({
       <SectionItem
         key={field.key}
         title={meta.label}
-        description={meta.description}
-        tooltip={meta.tooltip}
+        tooltip={
+          [meta.description, meta.tooltip].filter(Boolean).length > 0 ? (
+            <div className="space-y-1">
+              {meta.description && <p>{meta.description}</p>}
+              {meta.tooltip && <p>{meta.tooltip}</p>}
+            </div>
+          ) : undefined
+        }
         action={fullWidth ? undefined : control}
       >
         {fullWidth ? control : undefined}
@@ -148,26 +155,22 @@ export function AsrModelConfigModal({
       title={t("ui.models.model_config")}
       headerAction={
         <div className="flex items-center gap-2">
-          <Button variant="ghost" disabled={test.testing} onClick={() => onRemove(model)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            title={removeLabel}
+            disabled={test.testing}
+            onClick={() => onRemove(model)}
+          >
             <Trash2 size={15} />
-            {removeLabel}
           </Button>
-          {onSetDefault &&
-            (isCurrent ? (
-              <Badge variant="success">
-                <Check size={14} />
-                {t("ui.models.current_badge")}
-              </Badge>
-            ) : (
-              <Button
-                variant="ghost"
-                disabled={defaultDisabled || test.testing}
-                onClick={onSetDefault}
-              >
-                <Check size={15} />
-                {t("ui.models.set_default")}
-              </Button>
-            ))}
+          {onSetDefault && (
+            <DefaultAction
+              current={isCurrent}
+              onSelect={onSetDefault}
+              disabled={defaultDisabled || test.testing}
+            />
+          )}
         </div>
       }
       footer={
@@ -190,8 +193,10 @@ export function AsrModelConfigModal({
         <p className="text-sm text-text-muted">{t("ui.models.no_config_fields")}</p>
       )}
       {!isVad && advanced.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {advancedExpanded && <SectionItemList>{advanced.map(renderField)}</SectionItemList>}
+        <div className="mt-2 space-y-2">
+          <Collapse open={advancedExpanded}>
+            <SectionItemList>{advanced.map(renderField)}</SectionItemList>
+          </Collapse>
           <Button variant="ghost" className="w-full" onClick={() => setAdvancedExpanded((v) => !v)}>
             <ChevronsUp
               size={15}
@@ -296,23 +301,23 @@ export function LlmModelConfigModal({
       headerAction={
         <div className="flex items-center gap-2">
           {onRemove && (
-            <Button variant="ghost" disabled={test.testing} onClick={onRemove}>
+            <Button
+              variant="ghost"
+              size="icon"
+              title={t("ui.models.remove_model")}
+              disabled={test.testing}
+              onClick={onRemove}
+            >
               <Trash2 size={15} />
-              {t("ui.models.remove_model")}
             </Button>
           )}
-          {onSetDefault &&
-            (isCurrent ? (
-              <Badge variant="success">
-                <Check size={14} />
-                {t("ui.models.current_badge")}
-              </Badge>
-            ) : (
-              <Button variant="ghost" disabled={saving || test.testing} onClick={onSetDefault}>
-                <Check size={15} />
-                {t("ui.models.set_default")}
-              </Button>
-            ))}
+          {onSetDefault && (
+            <DefaultAction
+              current={isCurrent}
+              onSelect={onSetDefault}
+              disabled={saving || test.testing}
+            />
+          )}
         </div>
       }
       footer={
@@ -395,7 +400,7 @@ export function LlmModelConfigModal({
               <Input
                 aria-label={t(field.label)}
                 type="number"
-                className="w-36"
+                className="w-full"
                 min={field.min}
                 max={field.max}
                 step={field.step}
