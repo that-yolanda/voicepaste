@@ -326,8 +326,7 @@
       "title": "Usage",
       "range": "Past 53 weeks",
       "total": "<count>{{count}}</count> characters entered",
-      "cell_title": "{{date}}\n{{count}} characters entered",
-      "summary": "Past 53 weeks · {{count}} characters entered"
+      "cell_title": "{{date}}\n{{count}} characters entered"
     },
     "app_settings": {
       "title": "Settings",
@@ -356,15 +355,11 @@
       "theme": "Theme"
     },
     "hotwords": {
-      "default_list": "Default hotword list",
       "title": "Hotwords",
       "description": "Hotwords help recognize specific terms. Enabled lists are included automatically. For models without native hotword support, use Speech models > Configuration > Recognition to add hotwords to text polishing. Add preset lists from Templates.",
-      "add_group": "Add",
-      "builtin": "Templates",
       "group_name": "List name",
       "add_word": "Add hotwords",
       "add_word_placeholder": "Comma-separated, e.g. Claude, Anthropic|8 (default weight 4)",
-      "word_list": "Hotwords",
       "remove_word": "Remove hotword",
       "new_group": "New list",
       "no_builtin": "No preset hotword lists.",
@@ -372,16 +367,13 @@
       "word": "Hotwords"
     },
     "llm": {
-      "add_template": "Add",
-      "builtin_prompts": "Templates",
       "new_template": "New template",
       "template_name": "Template name",
       "template_name_placeholder": "Template name",
       "system_prompt_placeholder": "Enter the system prompt…",
       "no_builtin": "No preset templates.",
       "empty_content": "(Empty)",
-      "untitled": "Untitled template",
-      "add": "Add"
+      "untitled": "Untitled template"
     },
     "hotkey_page": {
       "title": "Hotkeys",
@@ -396,7 +388,6 @@
       "main_subtitle": "Starts recording in Tap mode. Hold mode uses a separate shortcut. Begin with a modifier key (such as Ctrl or Shift), Tab, or a function key such as F1.",
       "wake": "Start recording",
       "hotkeys_section": "Hotkeys",
-      "hotkeys_subtitle": "Click a field, then press your shortcut",
       "voice_input": "Voice input",
       "no_templates": "No polishing templates yet. Add one on the Polishing templates page."
     },
@@ -688,7 +679,6 @@
         }
       }
     },
-    "loading": "Loading…",
     "load_failed": "Could not load. Please retry.",
     "retry": "Retry",
     "models": {
@@ -700,18 +690,12 @@
       "collapse_providers": "Collapse",
       "model_info": "Model information",
       "supported_languages": "Supported languages",
-      "no_providers": "No providers under this filter",
-      "filter_all": "All",
       "filter_online": "Online",
       "filter_local": "Local",
       "tag_asr": "Speech",
       "tag_llm": "Text",
-      "tag_local": "Local",
       "tab_asr": "Speech recognition",
       "tab_llm": "LLM",
-      "add_provider": "Add provider",
-      "add_provider_empty": "No providers available",
-      "back_to_services": "Model configuration",
       "capabilities": "Capability",
       "how_to_apply": "How to apply",
       "remove_provider": "Remove",

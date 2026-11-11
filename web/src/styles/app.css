@@ -10,7 +10,6 @@
   --color-text-on-accent: #fff;
 
   --color-surface: rgba(20, 20, 19, 0.7);
-  --color-surface-main: rgba(28, 28, 26, 0.82);
   --color-surface-expanded: #1b1b1a;
   --color-sidebar-selected: #292928;
   --color-sidebar-selected-border: #3b3b39;
@@ -90,7 +89,6 @@ body {
   --color-accent-glow: rgba(201, 100, 66, 0.3);
 
   --color-surface: rgba(250, 249, 246, 0.62);
-  --color-surface-main: rgb(251 250 247);
   --color-surface-expanded: #fbfaf7;
   --color-sidebar-selected: #fff;
   --color-sidebar-selected-border: #e4e4e8;

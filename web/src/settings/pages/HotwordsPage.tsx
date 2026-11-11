@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { loadBuiltinHotwords, loadHotwords, saveHotwords } from "@/settings/bridge";
 import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
-import { CurrentUsageBadge } from "@/settings/components/DefaultAction";
+import { CurrentUsageBadge, DefaultAction } from "@/settings/components/DefaultAction";
 import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
 import {
@@ -87,13 +87,12 @@ export function HotwordsPage() {
               open={expandedId === group.id}
               onToggle={() => {
                 setExpandedId(expandedId === group.id ? null : group.id);
-                if (data.active_group !== group.id) {
-                  persist({ ...data, active_group: group.id });
-                }
               }}
             >
               <HotwordGroupItem
                 group={group}
+                isActive={data.active_group === group.id}
+                onSetActive={() => persist({ ...data, active_group: group.id })}
                 onUpdate={(patch) => updateGroup(group.id, patch)}
                 onRemove={() => removeGroup(group.id)}
               />
@@ -122,10 +121,14 @@ export function HotwordsPage() {
 
 function HotwordGroupItem({
   group,
+  isActive,
+  onSetActive,
   onUpdate,
   onRemove,
 }: {
   group: HotwordGroup;
+  isActive: boolean;
+  onSetActive: () => void;
   onUpdate: (patch: Partial<HotwordGroup>) => void;
   onRemove: () => void;
 }) {
@@ -135,6 +138,7 @@ function HotwordGroupItem({
   return (
     <Section>
       <div className="flex items-center justify-end gap-2">
+        <DefaultAction current={isActive} onSelect={onSetActive} />
         <Button variant="ghost" size="icon" title={t("ui.library.remove")} onClick={onRemove}>
           <Trash2 size={14} />
         </Button>

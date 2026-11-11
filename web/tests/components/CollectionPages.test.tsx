@@ -81,12 +81,16 @@ test("adding and cloning templates opens the new editor with independent saved c
   );
 });
 
-test("expanded hotword lists keep single selection, word editing and deletion working", async () => {
+test("hotword expansion does not change the default, while explicit selection does", async () => {
   render(<HotwordsPage />);
   const first = await screen.findByRole("button", { name: /^First/ });
   expect(first).toHaveAttribute("aria-expanded", "false");
   fireEvent.click(screen.getByRole("button", { name: "Second" }));
   fireEvent.click(screen.getByRole("button", { name: /^Second/ }));
+  expect(mocks.saveHotwords).not.toHaveBeenCalled();
+  expect(first).toHaveTextContent("当前使用");
+  fireEvent.click(screen.getByRole("button", { name: "Second" }));
+  fireEvent.click(screen.getByRole("button", { name: "设为默认" }));
   expect(mocks.saveHotwords).toHaveBeenLastCalledWith(
     expect.objectContaining({ active_group: "b" }),
   );
@@ -107,4 +111,28 @@ test("expanded hotword lists keep single selection, word editing and deletion wo
     active_group: "a",
     groups: [{ id: "a", name: "First", words: ["Tauri"] }],
   });
+});
+
+test("adding and cloning hotword lists opens them without changing the default", async () => {
+  mocks.loadBuiltinHotwords.mockResolvedValue({
+    groups: [{ id: "builtin", name: "Preset", words: ["Rust"] }],
+  });
+  render(<HotwordsPage />);
+  await screen.findByRole("button", { name: /^First/ });
+  fireEvent.click(screen.getByRole("button", { name: "添加" }));
+  expect(screen.getByRole("button", { name: "新热词表" })).toHaveAttribute("aria-expanded", "true");
+  expect(mocks.saveHotwords).toHaveBeenLastCalledWith(
+    expect.objectContaining({ active_group: "a" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "模板" }));
+  fireEvent.click(await within(screen.getByRole("dialog")).findByRole("button", { name: "添加" }));
+  expect(screen.getByRole("button", { name: "Preset" })).toHaveAttribute("aria-expanded", "true");
+  expect(mocks.saveHotwords).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      active_group: "a",
+      groups: expect.arrayContaining([
+        expect.objectContaining({ name: "Preset", id: expect.not.stringMatching(/^builtin$/) }),
+      ]),
+    }),
+  );
 });

@@ -44,7 +44,8 @@ interface HeatmapProps {
 export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language ?? "zh-CN";
-  const monthFormat = new Intl.DateTimeFormat("en-US", { month: "short" });
+  const monthFormat = new Intl.DateTimeFormat(locale, { month: "short" });
+  const weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: "narrow" });
   const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "long" });
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<{ text: string; rect: DOMRect } | null>(null);
@@ -119,7 +120,7 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
         <div className="w-full">
           {/* Month labels */}
           <div
-            className="grid gap-px ml-9 mb-1 h-3.5 text-[10px] text-text-muted"
+            className="grid gap-px ml-4.5 mb-1 h-3.5 text-[10px] text-text-muted"
             style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}
           >
             {monthSpans.map((m) => (
@@ -142,7 +143,7 @@ export function Heatmap({ dailyCounts, loading = false }: HeatmapProps) {
             >
               {DAY_KEYS.map((day, index) => (
                 <span key={day} className="flex items-center justify-end leading-none">
-                  {DAY_SHOWN[index] ? String(index) : ""}
+                  {DAY_SHOWN[index] ? weekdayFormat.format(new Date(2024, 0, index)) : ""}
                 </span>
               ))}
             </div>

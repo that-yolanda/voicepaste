@@ -1,7 +1,7 @@
 /* Critical settings-only styles also cover the time before React and i18n load. */
 html[data-settings] {
   --boot-ground: #141413;
-  --boot-main: #1c1c1a;
+  --boot-main: #141413;
   --boot-card: #222220;
   --boot-fill: #30302e;
   background: var(--boot-ground);

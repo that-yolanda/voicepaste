@@ -1,4 +1,4 @@
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useLayoutEffect, useRef, useState } from "react";
 
 interface SegmentedOption {
   value: string;
@@ -27,19 +27,27 @@ export function SegmentedControl({
 }: SegmentedControlProps) {
   const list = useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+  const measure = useCallback(() => {
+    const selected = list.current?.querySelector<HTMLElement>('[data-selected="true"]');
+    if (!selected) return;
+    const { offsetLeft: left, offsetWidth: width } = selected;
+    setIndicator((previous) =>
+      previous.left === left && previous.width === width ? previous : { left, width },
+    );
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Selection and translated labels change the measured DOM.
   useLayoutEffect(() => {
-    const measure = () => {
-      const selected = list.current?.querySelector<HTMLElement>('[data-selected="true"]');
-      if (!selected) return;
-      const { offsetLeft: left, offsetWidth: width } = selected;
-      setIndicator((previous) =>
-        previous.left === left && previous.width === width ? previous : { left, width },
-      );
-    };
     measure();
+  }, [measure, options, value]);
+  useLayoutEffect(() => {
+    const observer = new ResizeObserver(measure);
+    if (list.current) observer.observe(list.current);
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [measure]);
   return (
     <div
       ref={list}
