@@ -1231,6 +1231,61 @@ llm:
 mod config_upgrade_tests {
     use super::*;
 
+    /// Opt-in smoke test for a private config; never modifies the source or logs secrets.
+    #[test]
+    #[ignore = "requires VOICEPASTE_UPGRADE_CONFIG pointing to a private config"]
+    fn private_config_upgrade_preserves_settings_and_restarts() {
+        let source = PathBuf::from(std::env::var_os("VOICEPASTE_UPGRADE_CONFIG").unwrap());
+        let original = fs::read_to_string(&source).unwrap();
+        let before: Value = serde_norway::from_str(&original).unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let resources = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        fs::write(data.path().join("config.yaml"), &original).unwrap();
+        fs::write(data.path().join(".migration_state"), "{}").unwrap();
+        let registry_path = source.parent().unwrap().join("registry.json");
+        if registry_path.exists() {
+            fs::copy(registry_path, data.path().join("registry.json")).unwrap();
+        }
+        let needs_upgrade =
+            before["config_version"].as_u64().unwrap_or(0) < u64::from(CONFIG_VERSION);
+        assert_eq!(run(data.path(), &resources).unwrap(), needs_upgrade);
+        let migrated = fs::read_to_string(data.path().join("config.yaml")).unwrap();
+        let after: Value = serde_norway::from_str(&migrated).unwrap();
+        assert!(before["app"] == after["app"], "app settings changed");
+        assert!(before["audio"] == after["audio"], "audio settings changed");
+        assert!(before["llm"]["provider"] == after["llm"]["provider"]);
+        assert!(before["llm"]["deepseek"]["api_key"] == after["llm"]["deepseek"]["api_key"]);
+        if needs_upgrade {
+            assert!(
+                fs::read_to_string(data.path().join("config.before-v1.yaml")).unwrap() == original
+            );
+            assert!(after["llm"]["deepseek"]["model"].is_null());
+            assert!(after["llm"]["deepseek"]["models"].is_sequence());
+        } else {
+            assert!(migrated == original, "current config was rewritten");
+            assert!(!data.path().join("config.before-v1.yaml").exists());
+        }
+        crate::model::ensure_registry(data.path(), &resources);
+        let registry = crate::model::load_registry(data.path(), &resources);
+        let before_typed: crate::config::AppConfig = serde_norway::from_value(before).unwrap();
+        let manager = crate::config::ConfigManager::new(data.path(), &resources);
+        let loaded = manager.load_config().unwrap();
+        let model_id = loaded.audio_provider();
+        assert!(
+            crate::config::AppConfig::resolve_model_config(
+                &registry,
+                model_id,
+                &before_typed.audio
+            ) == crate::config::AppConfig::resolve_model_config(&registry, model_id, &loaded.audio),
+            "effective ASR settings changed"
+        );
+        assert!(!run(data.path(), &resources).unwrap());
+        assert!(
+            fs::read_to_string(data.path().join("config.yaml")).unwrap() == migrated,
+            "restart rewrote config"
+        );
+    }
+
     fn config_with_llm(llm: &str) -> Value {
         let mut config = serde_norway::to_value(crate::config::AppConfig::default()).unwrap();
         config

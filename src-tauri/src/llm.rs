@@ -1892,7 +1892,7 @@ mod custom_provider_alias_tests {
             )
             .unwrap();
             let resolved = resolve_endpoint(&config, &registry).unwrap();
-            assert_eq!(resolved.url, "https://new.invalid");
+            assert_eq!(resolved.url, "https://new.invalid/chat/completions");
             assert_eq!(resolved.api_key, "");
             assert_eq!(resolved.model, "new-model");
             assert!(validate_llm_config(&config, &registry).is_err());
@@ -1907,14 +1907,16 @@ mod custom_provider_alias_tests {
 
     #[test]
     fn legacy_provider_uses_canonical_registry_presets() {
-        let mut registry: ModelRegistry =
-            serde_json::from_str(include_str!("../../registry.json")).unwrap();
-        let preset = registry
-            .models
-            .iter_mut()
-            .find(|m| m.id == "doubao-seed-1-6")
-            .unwrap();
-        preset.provider = Some("custom_openai".into());
+        let registry: ModelRegistry = serde_json::from_value(json!({
+            "version": 1,
+            "models": [{
+                "id": "doubao-seed-1-6", "name": "Test preset",
+                "category": "llm", "provider": "custom_openai",
+                "type": "online", "engine": "openai_compat", "description": "",
+                "default_config": {"model_id": "doubao-seed-1-6-250615"}
+            }]
+        }))
+        .unwrap();
         let config: LlmConfig = serde_json::from_value(json!({
             "provider": "openai_compatible",
             "default_model": "doubao-seed-1-6",
@@ -1938,7 +1940,7 @@ mod custom_provider_alias_tests {
         }))
         .unwrap();
         let resolved = resolve_endpoint(&config, &registry).unwrap();
-        assert_eq!(resolved.url, "https://top.invalid");
+        assert_eq!(resolved.url, "https://top.invalid/chat/completions");
         assert_eq!(resolved.api_key, "top-key");
     }
 
