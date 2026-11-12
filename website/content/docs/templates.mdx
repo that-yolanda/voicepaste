@@ -5,34 +5,34 @@ description: "Connect a language model to translate, organize, or polish dictate
 
 ## 1. Configure a language model
 
-Speech recognition turns audio into text. A language model translates, organizes, or polishes that text. It is optional for plain transcription.
+Speech recognition converts audio to text. A language model translates, organizes, or polishes it. This is optional for plain transcription.
 
-1. Open Settings → Language models and choose a provider.
-2. For an online service, enter your own API key. Find supported services and guides in the [compatibility list](/en/docs/compatibility), or see the [DeepSeek API guide](/en/docs/api/deepseek) as an example.
-3. Set the endpoint and model name as required by the provider. Start with app defaults for presets. Custom services need a compatible Chat Completions interface.
-4. Template requests use the single currently selected provider.
+1. Open **Model Services** and expand a provider, using **Show remaining** if needed. Select **LLM** when the provider supports multiple capabilities.
+2. Enter the API key and API base URL under **Credentials**. Omit `/chat/completions` and `/models`: VoicePaste appends the request path. Preset providers can usually keep their default address.
+3. Click **Add model** to load and select available models. If listing fails or a model is missing, choose **Add a custom model** and enter a display name and the provider's API Model ID. A chat website's mode name may not be a valid API identifier.
+4. Open the added model, adjust parameters if needed, and click **Test**. It uses built-in text without switching the current model. Online tests call the provider and may count toward usage.
+5. Click **Set as default**, or select it under **LLM** at the top. All text-polishing templates share the current model.
 
-For Ollama, install and run it locally and download a language model first. Then select Ollama in VoicePaste and enter the installed model's name. The service address must point to the running instance.
+Examples: [DeepSeek](/en/docs/api/deepseek), [Qwen](/en/docs/api/qwen), [Volcengine](/en/docs/api/volcengine#text-models). See the [compatibility list](/en/docs/compatibility) for other services.
 
 ## 2. Add a text template
 
-1. Open Settings → Polishing templates and add a template or choose one from the built-in prompts.
+1. Open **Text Polishing** in the sidebar. Click **Add** to create a template or **Templates** to browse the library.
 2. Give it a recognizable name, such as “Translate to English.”
 3. Write a specific instruction, for example:
 
 > Translate the input into natural English. Preserve its meaning and output only the translation.
 
-![Language model and template settings](/assets/templates.jpg)
+![Updated text-polishing template settings](/assets/docs/text-polishing-en.png)
 
 ## 3. Bind and use a shortcut
 
-1. Open Settings → Shortcuts and set the template's keys.
+1. Open Hotkeys and set the template's keys.
 2. Start recording in an input field and finish with that template's shortcut according to the current mode.
 3. Check that the result matches your instruction. See [Shortcuts and input](/en/docs/hotkeys).
 
 ## Common questions
 
-- [Plain transcription and polishing failures](/en/docs/faq#plain-transcription)
+- [Plain transcription](/en/docs/faq#plain-transcription)
 - [Use a template](/en/docs/faq#templates)
-- [Unexpected wording or extra explanations](/en/docs/faq#formatting)
 - [Keep processing local](/en/docs/faq#offline)

@@ -1,9 +1,11 @@
 {
-  "title": "Model API setup",
+  "title": "Model configuration",
   "pages": [
     "../compatibility",
+    "../local-models",
     "volcengine",
     "elevenlabs",
-    "deepseek"
+    "deepseek",
+    "qwen"
   ]
 }

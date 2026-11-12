@@ -1,28 +1,35 @@
 ---
 title: "Model compatibility"
 description: "Compare supported speech recognition models and polishing services: streaming, hotwords, languages, local runtimes, and feature support."
+full: true
 ---
 
-import { ModelTables } from "@/components/supported-models"
+import { RecognitionModelsTable, PolishingServicesTable } from "@/components/supported-models"
 
-## Recognition and polishing
+## Speech recognition
 
-These tables reflect the built-in configuration. Each recognition model has its own row. Polishing services and local runtimes are listed individually; choose a specific language model within your service. An integration listed here does not mean every account, model version and parameter combination has been tested live.
+<RecognitionModelsTable locale="en" detailed />
 
-<ModelTables locale="en" detailed />
+## Text polishing
+
+<PolishingServicesTable locale="en" detailed />
 
 ## Understanding recognition features
 
-- **Native streaming** means the current VoicePaste integration receives ongoing recognition results. Both Zipformer variants stream locally.
+- **Streaming output** reports native streaming support: the current VoicePaste integration receives ongoing recognition results. Both Zipformer variants stream locally.
 - **Segmented output** recognizes and displays SenseVoice, FunASR-Nano and Qwen3-ASR results in segments based on pauses. Enable Segmented output in Custom Configuration. This differs from native streaming.
+- **Speech cleanup** removes fillers, repetitions, or disfluencies during recognition. Enable the model’s relevant setting; this is separate from language-model polishing.
+- **Auto punctuation and number formatting** report the model’s own capabilities. Number formatting converts spoken numbers and dates into written forms. Results vary by language and settings. A separate local punctuation model can add punctuation without changing the recognizer’s own capability.
 - **Hotwords** require support from both the model and its configuration. Enable the relevant keyterm setting for ElevenLabs. VAD and punctuation models are supporting components, rather than separate transcription services.
 - **Doubao dialects** depend on the API mode and model version. The official documentation distinguishes bidirectional streaming from streaming input; capabilities vary between modes. Configure the service using its API documentation.
+
+Online Qwen Message and Streaming differ from local Qwen3-ASR; see the [Qwen guide](/en/docs/api/qwen). Doubao text models use [Ark credentials](/en/docs/api/volcengine#text-models), configured separately from speech recognition.
 
 ## Online and local
 
 Online recognition sends audio to your chosen service. Online polishing sends the text to be processed. To keep both on your device, use local recognition with local polishing, or turn polishing off.
 
-[Configure recognition](/en/docs/models) · [Configure polishing and templates](/en/docs/templates)
+[Configure recognition](/en/docs/models) · [Configure local recognition](/en/docs/local-models) · [Configure polishing and templates](/en/docs/templates)
 
 ## References
 

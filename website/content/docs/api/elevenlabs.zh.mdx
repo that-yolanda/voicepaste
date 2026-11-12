@@ -5,7 +5,9 @@ description: "接入 ElevenLabs Scribe v2 Realtime 语音识别：创建带语�
 
 VoicePaste 接入 ElevenLabs 的 Scribe v2 Realtime，用于实时语音转文字。
 
-## 1. 创建 API Key
+## 1. 语音识别
+
+### 申请 API Key
 
 1. 登录 [ElevenLabs API Keys 页面](https://elevenlabs.io/app/api/api-keys)。
 2. 创建一个密钥，使用容易辨认的名称，例如 `VoicePaste`。
@@ -14,20 +16,20 @@ VoicePaste 接入 ElevenLabs 的 Scribe v2 Realtime，用于实时语音转文�
    [![ElevenLabs 创建 API Key 时允许 Speech to Text 权限](/assets/docs/elevenlabs.png)](/assets/docs/elevenlabs.png)
 4. 保存生成的密钥，并检查账户是否有可用额度。
 
-## 2. 填入 VoicePaste
+### 配置 VoicePaste
 
-1. 打开「设置 → 语音识别模型 → 在线模型」。
-2. 找到「ElevenLabs — Scribe v2 Realtime」，在配置中填写 API Key 并保存。
-3. 启用该模型，先保留默认参数。
-4. 用快捷键完成一次语音输入，确认收到识别结果。
+1. 打开「模型服务」，展开 ElevenLabs；未显示时，点击列表底部「显示其余」。
+2. 在「接入凭证」填写 API Key，完成编辑后保存。
+3. 点击 Scribe v2 Realtime 模型行，先保留默认参数并点击「测试」。成功后「设为默认」。
+4. 到输入框用快捷键完成一次真实语音输入，确认录音与粘贴可用。
 
-## 3. 按需调整识别设置
+### 按需调整识别设置
 
 - 默认配置可先用于多语言识别，确认可用后再调整语言等选项。
 - 需要人名或术语提示时，配置 [热词库](/zh/docs/hotwords)，并确认模型的热词设置已启用。
 - 「文本确认方式」决定何时确认识别文本；不确定时保留默认值。
 
-## 常见问题
+## 2. 常见问题
 
 - [API 权限、账户额度与网络](/zh/docs/faq#online-recognition)
 - [启用热词](/zh/docs/faq#hotwords)

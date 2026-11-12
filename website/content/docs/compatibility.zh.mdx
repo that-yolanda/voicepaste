@@ -1,28 +1,35 @@
 ---
 title: "模型兼容清单"
 description: "对比各语音识别模型与润色服务的支持情况：流式识别、热词、语言、本地运行时与功能差异。"
+full: true
 ---
 
-import { ModelTables } from "@/components/supported-models"
+import { RecognitionModelsTable, PolishingServicesTable } from "@/components/supported-models"
 
-## 语音识别与文本润色
+## 语音识别
 
-下表对应当前内置配置：识别模型逐个列出；文本润色按服务或本地运行工具逐行列出，具体语言模型由你在该服务中选择。清单表示已有接入方式，不代表每个账户、模型版本与参数组合都经过在线实测。
+<RecognitionModelsTable locale="zh" detailed />
 
-<ModelTables locale="zh" detailed />
+## 文本润色
+
+<PolishingServicesTable locale="zh" detailed />
 
 ## 如何理解识别特性
 
-- **原生流式**：在 VoicePaste 当前接入方式下，模型能够持续返回识别结果。Zipformer 的两个版本均在本地原生流式运行。
+- **流式输出**：本表按模型的原生流式能力标记。在 VoicePaste 当前接入方式下，模型能够持续返回识别结果。Zipformer 的两个版本均在本地原生流式运行。
 - **分段输出**：SenseVoice、FunASR-Nano、Qwen3-ASR 可根据语音停顿分段识别并显示文字。需在「自定义配置」中启用「分段输出」；这不同于原生流式。
+- **语义顺滑**：识别时去除口头语、重复或不流畅表达；与额外调用大语言模型进行文本润色不同，需开启模型对应设置。
+- **自动标点与数字格式化**：按模型自身能力标记；数字格式化指把口语中的数字、日期等转换为书写形式。支持不代表所有语言和参数组合的效果相同。本地辅助标点模型可另行补充标点，不计入识别模型自身的能力。
 - **热词**：需要模型和当前配置共同支持；ElevenLabs 需要启用相应热词设置。额外的 VAD 与标点模型属于辅助组件，不是独立的转写服务。
 - **豆包方言**：能力随接口模式与模型版本而异。官方区分双向流式和流式输入，默认接口的能力不能直接套用于所有模式；请按服务端文档配置。
+
+在线千问 Message、Streaming 与本地 Qwen3-ASR 是不同模型，配置方式见[千问教程](/zh/docs/api/qwen)。豆包文本模型使用[火山方舟凭证](/zh/docs/api/volcengine#text-models)，与语音识别分开配置。
 
 ## 在线与本地
 
 在线识别会将音频发送给所选服务，在线润色会发送待处理文本。需要音频与文本均在本机处理时，请同时选择本地识别和本地润色，或关闭润色。
 
-[配置识别模型](/zh/docs/models) · [配置润色与模板](/zh/docs/templates)
+[配置语音识别](/zh/docs/models) · [配置本地语音识别](/zh/docs/local-models) · [配置润色与模板](/zh/docs/templates)
 
 ## 参考资料
 

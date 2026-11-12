@@ -1,11 +1,21 @@
 ---
-title: "Volcengine (Doubao speech)"
-description: "Activate Doubao Streaming Speech Recognition 2.0 on Volcengine, create an access token, and connect it to VoicePaste for online dictation."
+title: "Volcengine"
+description: "Set up Doubao speech recognition and Ark language models separately: obtain credentials, enable model access, and configure VoicePaste."
 ---
 
-This guide connects Doubao speech recognition to VoicePaste. It is not setup for the Doubao chat app or text-to-speech service.
+**Doubao speech recognition** and **Volcengine Ark language models** use separate service entry points. Obtain API credentials and enable model access for each service, then enter the two sets of credentials separately in VoicePaste.
 
-## 1. Activate speech recognition
+## 1. Speech recognition models
+
+### Get an API key
+
+1. Open [API Key management](https://console.volcengine.com/speech/new/setting/apikeys).
+2. Select the project where you will activate speech recognition, then create or retrieve a key.
+
+   [![Create or view a key in Doubao speech API Key management](/assets/docs/doubao-config-new-key.png)](/assets/docs/doubao-config-new-key.png)
+3. Store it for the next step. Keys and resources from different projects cannot be mixed.
+
+### Enable the recognition model
 
 1. Sign in to [service activation in the Doubao speech console](https://console.volcengine.com/speech/new/setting/activate).
 2. In the current project, find Streaming Speech Recognition 2.0 and follow the activation steps.
@@ -13,24 +23,15 @@ This guide connects Doubao speech recognition to VoicePaste. It is not setup for
    [![Activate Streaming Speech Recognition 2.0 in the Doubao speech console](/assets/docs/doubao-config-new-service.png)](/assets/docs/doubao-config-new-service.png)
 3. Check service status and available quota. The current console determines charges, trial allowance, and any required top-up.
 
-## 2. Create an API key
+### Configure VoicePaste
 
-1. Open [API Key management](https://console.volcengine.com/speech/new/setting/apikeys).
-2. Select the same project where you activated the service, then create or retrieve a key.
+1. Open Model Services → Volcengine → Speech recognition and find the Volcengine Doubao streaming recognizer.
+2. Enter the API key under Credentials. If legacy credentials already exist and the authentication selector is shown, choose the new mode.
+3. Open the model row, keep other defaults, click Test, then Set as default.
 
-   [![Create or view a key in Doubao speech API Key management](/assets/docs/doubao-config-new-key.png)](/assets/docs/doubao-config-new-key.png)
-3. Store it for the next step. Keys and resources from different projects cannot be mixed.
-
-## 3. Configure VoicePaste
-
-1. Open Settings → Speech models → Online Models and find the Volcengine Doubao streaming recognizer.
-2. Enter the API key in its parameter settings. If legacy credentials already exist and the authentication selector is shown, choose the new mode.
-3. Keep other defaults, save, and enable the model.
-
-   [![Doubao speech API key configuration in an earlier VoicePaste interface](/assets/docs/asr-doubao-new.png)](/assets/docs/asr-doubao-new.png)
 4. Record a sentence into an input field and check the output.
 
-## Existing legacy credentials
+### Use legacy App ID and Access Token credentials
 
 Existing accounts can use legacy `App ID` and `Access Token` credentials. New users should use the API key steps above; both credential sets are not required.
 
@@ -42,19 +43,46 @@ Existing accounts can use legacy `App ID` and `Access Token` credentials. New us
 
    [![View the selected app and authentication fields in the legacy Doubao console](/assets/docs/api-step2.png)](/assets/docs/api-step2.png)
 
-3. Choose legacy authentication in VoicePaste's model parameters, enter the corresponding credentials, and save.
+3. After upgrading with existing legacy credentials, select legacy authentication under Volcengine → Speech recognition → Credentials and check the App ID and Access Token. If a new installation only shows API key, use the newer setup above.
 
-   [![App ID and Access Token fields in VoicePaste legacy authentication settings](/assets/docs/asr-doubao-old.png)](/assets/docs/asr-doubao-old.png)
-
-## Hotwords and advanced parameters
+### Hotwords and advanced parameters
 
 - **Local hotwords**: Create and enable a group under [Hotwords](/en/docs/hotwords).
 - **Online hotword table**: Create one in [Hotword management](https://console.volcengine.com/speech/new/hot-word), then enter its ID in the model's hotword table field.
 - **Online replacement table**: Create one in [Replacement management](https://console.volcengine.com/speech/new/correct-word), then enter its ID in the replacement table field.
 - **Other parameters**: Adjust only after basic recognition works. Language and dialect support varies by API mode.
 
-## Common questions
+<span id="text-models" />
 
-- [Service activation, project matching, authentication, and quota](/en/docs/faq#online-recognition)
+## 2. Language models
 
-Official references: [Console guide](https://docs.volcengine.com/docs/DoubaoVoice/console-guidance?lang=zh) · [Speech recognition API](https://docs.volcengine.com/docs/DoubaoVoice/LargemodelstreamingautomaticspeechrecognitionAPI?lang=zh)
+### Get an Ark API key
+
+Open the [Ark console](https://console.volcengine.com/ark/region%3Acn-beijing/docs/api-key), select your project, and create an API key. Use an Ark key for text models rather than a Doubao speech key.
+
+### Enable a model and confirm its Model ID
+
+Follow the [official Ark quick start](https://docs.volcengine.com/docs/ark/quick-start?lang=zh) to enable a text model, check quota, and confirm its API identifier. Use an inference endpoint ID where the model requires one.
+
+### Configure VoicePaste
+
+1. Under **Model Services → Volcengine**, select **LLM** and enter the Ark API key.
+2. Keep the base URL `https://ark.cn-beijing.volces.com/api/v3`, without `/chat/completions`.
+3. Use **Add model** to select a model. If listing is unavailable, manually enter the Model ID from the console.
+4. Open the model, click **Test**, then **Set as default**. Continue with [Text Polishing](/en/docs/templates) and a template shortcut.
+
+## 3. Common questions
+
+### Why does recognition work while text polishing fails?
+
+Check credentials, model access, and quota separately for the two services. Enabling speech recognition does not enable an Ark model.
+
+### Why is legacy authentication missing?
+
+VoicePaste only shows this option when legacy credentials already exist. Use the speech console’s API key for new configurations. Preserve your existing configuration during an upgrade and check the migrated App ID and Access Token.
+
+### What if recognition still fails after entering a key?
+
+Check that the key and speech service belong to the same project, the model is enabled, authentication matches, and quota is available. See [online recognition questions](/en/docs/faq#online-recognition).
+
+Official references: [Speech console guide](https://docs.volcengine.com/docs/DoubaoVoice/console-guidance?lang=zh) · [Speech recognition API](https://docs.volcengine.com/docs/DoubaoVoice/LargemodelstreamingautomaticspeechrecognitionAPI?lang=zh) · [Ark quick start](https://docs.volcengine.com/docs/ark/quick-start?lang=zh)

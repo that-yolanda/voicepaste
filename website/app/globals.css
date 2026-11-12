@@ -260,6 +260,91 @@
   --color-fd-primary: var(--foreground);
 }
 
+.model-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.model-table-scroll:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.model-table-detailed {
+  min-width: 1080px;
+}
+
+.model-table-detailed th,
+.model-table-detailed td {
+  vertical-align: top;
+}
+
+.model-table-detailed thead th {
+  white-space: nowrap;
+}
+
+.model-table .model-features {
+  min-width: 15rem;
+  white-space: normal;
+}
+
+.model-table .model-features p {
+  margin: 0;
+}
+
+.model-table .model-capability {
+  text-align: center;
+}
+
+.provider-endpoints {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.provider-endpoints table {
+  width: 100%;
+  min-width: 68rem;
+  table-layout: fixed;
+}
+
+.provider-endpoints th,
+.provider-endpoints td {
+  vertical-align: top;
+}
+
+.provider-endpoints th,
+.provider-endpoints td:nth-child(2),
+.provider-endpoints td:nth-child(3),
+.provider-endpoints td:nth-child(4) {
+  white-space: nowrap;
+}
+
+.provider-endpoints th:first-child {
+  width: 18%;
+  white-space: normal;
+}
+
+.provider-endpoints th:nth-child(2) {
+  width: 8%;
+}
+
+.provider-endpoints th:nth-child(3) {
+  width: 12%;
+}
+
+.provider-endpoints th:nth-child(4) {
+  width: 14%;
+}
+
+.provider-endpoints th:nth-child(n + 5) {
+  width: 24%;
+}
+
+.provider-endpoints td code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 ::view-transition {
   pointer-events: none;
 }

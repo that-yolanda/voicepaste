@@ -1,33 +1,32 @@
 ---
-title: "Recognition models"
-description: "Choose an online or local speech recognition model for VoicePaste: provider API credentials, downloadable local models, and custom inference settings."
+title: "Speech recognition models"
+description: "Choose an online or local speech recognition model for VoicePaste: provider credentials, recognition settings, and the current model selection."
 ---
 
 ## Choose an online or local model
 
 - **Online models** require a network connection and your own API credentials. Audio is sent to the selected provider.
-- **Local models** require an initial download, then recognize audio on your device. No API key is needed, but they use local memory and processing resources.
+- **Local models** require an initial download, then recognize audio on your device. No API key is needed, but they use local memory and processing resources. See [Local speech recognition models](/en/docs/local-models) for downloads and inference settings.
 
 Compare languages, hotwords, and streaming in the [compatibility list](/en/docs/compatibility).
 
 ## Online models
 
-1. Open Settings → Speech models → Online Models and select a provider.
-2. Obtain credentials from your chosen provider. See the [compatibility list](/en/docs/compatibility) for supported services and setup guides.
-3. Enter them in the model card, save, and enable the model.
-4. Record a sentence with a shortcut and check the result.
+1. Open **Model Services** in the sidebar and expand a provider. Use **Show remaining** at the bottom if it is not listed.
+2. For a provider with multiple capabilities, select **Speech recognition**, then fill in **Credentials**. Guides: [Volcengine](/en/docs/api/volcengine), [ElevenLabs](/en/docs/api/elevenlabs), [Qwen](/en/docs/api/qwen).
+3. Click a model row to open **Model configuration**, keep the defaults, and click **Test**. Use **Add model** to restore a removed preset.
+4. After a successful test, click **Set as default**, or select the model under **Speech recognition** at the top of Model Services.
+5. Record a sentence in a text field with a shortcut to check actual recording and pasting.
 
-## Local models
+## Model tests
 
-1. Open Settings → Speech models → Local Models.
-2. Choose a model for your language and device resources, then download it. Required voice activity detection (VAD) and the punctuation model (Transformer) are prepared according to the model configuration.
-3. Wait for the download to finish, then enable the model.
+**Test** sends a built-in audio sample to the selected recognizer without switching the current model. Online tests send the sample to the provider and may count toward service usage; local tests run on your device.
 
-![Local recognition model settings](/assets/models.jpg)
+**Model request succeeded** confirms that sample request. It does not check microphone permissions, shortcuts, or auto-paste. Finish setup by trying real voice input in another app.
 
 ## Custom configuration
 
-Open Settings → Speech models → Custom Configuration for these advanced settings. The defaults are suitable for most users; effects depend on the model and inference backend. Individual online models can also have their own provider-specific parameters.
+Click the gear beside **Providers** in Model Services to open **Custom Configuration** for shared recognition settings. Keep defaults unless needed; effects depend on the model and inference backend. Click an individual model row for its own parameters.
 
 ### Audio sampling
 
@@ -36,23 +35,12 @@ Open Settings → Speech models → Custom Configuration for these advanced sett
 
 ### Recognition enhancement
 
-- **Segmented output:** recognizes and displays supported offline models' results in segments based on pauses. When disabled, recognition waits until recording ends.
 - **Hotword boost:** chooses whether to send hotwords to the polishing model: auto, off, or on. It applies when polishing is used; see [Hotwords](/en/docs/hotwords).
 - **Hotword replacement:** restores recognized hotwords to their saved spelling and format.
-
-### Offline model inference
-
-- **Threads:** the number of computing threads used for local inference. More threads may improve speed but also increase resource use.
-- **Inference backend:** selects how local computation runs. Availability depends on the system, device, and app build.
-- **Punctuation:** controls the separate punctuation model. Auto uses it when the recognition model lacks built-in punctuation; disabled skips it; force attempts to use it even when the recognition model has punctuation. The punctuation model must be downloaded.
-- **VAD threshold:** controls how voice activity detection (VAD) identifies speech. A lower value generally detects speech more readily but can also pick up noise.
-- **VAD min silence:** minimum silence before speech is considered interrupted, in seconds. A longer value can avoid splitting on short pauses but may delay segments.
-- **VAD min speech:** minimum speech duration, in seconds. Increasing it can filter brief noise but may miss short utterances.
-- **VAD max speech:** maximum duration of a speech segment, in seconds. Longer speech is split; changing it can affect segmentation and recognition.
 
 ## Common questions
 
 - [Choose online or local recognition](/en/docs/faq#choose-model)
-- [Local model download failures](/en/docs/faq#model-download)
+- [Local speech recognition models](/en/docs/local-models)
 - [Online recognition failures](/en/docs/faq#online-recognition)
 - [Differences in live output](/en/docs/faq#streaming)

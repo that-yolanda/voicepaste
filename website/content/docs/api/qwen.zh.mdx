@@ -1,0 +1,57 @@
+---
+title: "千问/百炼"
+description: "配置千问在线 Message、Streaming 语音识别和文本润色：选择平台与地域、填写对应凭证、添加并测试模型。"
+full: true
+---
+
+千问与阿里云百炼都可通过「模型服务 → 千问」接入：按所用平台修改 URL，并填写在该平台单独申请的 API Key。两边的凭证相互独立，不能直接混用。
+
+## 1. 准备凭证
+
+### 申请 API Key
+
+1. 在下表中找到使用的平台版本和地域，进入该行的「申请 API Key」创建密钥；操作步骤见同一行的「官方指南」。不同平台需分别申请凭证。
+2. 检查所选模型是否已开通、密钥是否有对应模型的调用权限，以及账户是否有可用额度。百炼还需确认地域和业务空间。
+3. 在 VoicePaste 的语音识别与大语言配置中分别填写 API Key。同一平台的密钥若有两种能力的权限，可以重复填写同一个密钥。
+
+### 平台入口与连接地址
+
+控制台、API Key 申请入口、官方指南和连接地址统一列在下表中。百炼中国站也支持新加坡地域，请按账户所属站点及实际地域选择，不要仅凭“新加坡”判断版本。使用百炼时，将 `{WorkspaceId}` 替换为实际业务空间 ID。
+
+<div className="provider-endpoints">
+
+| 平台版本与地域 | 控制台 | 申请 API Key | 官方指南 | 语音识别 WebSocket 地址 | 文本基础地址 |
+| --- | --- | --- | --- | --- | --- |
+| 千问AI平台（国内，应用默认） | [控制台](https://platform.qianwenai.com/home) | [申请 API Key](https://platform.qianwenai.com/home/api-keys) | [指南](https://platform.qianwenai.com/docs/api-reference/preparation/api-key) | `wss://maas.qianwenaiapi.com/api-ws/v1/inference` | `https://maas.qianwenaiapi.com/compatible-mode/v1` |
+| Qwen Cloud（国际，新加坡） | [控制台](https://home.qwencloud.com/) | [申请 API Key](https://home.qwencloud.com/api-keys) | [指南（英文）](https://docs.qwencloud.com/api-reference/preparation/api-key) | `wss://ap-southeast-1.maas.qwencloudapi.com/api-ws/v1/inference` | `https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1` |
+| 百炼（中国站，北京） | [控制台](https://bailian.console.aliyun.com/cn-beijing/model/market) | [申请 API Key](https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key) | [指南](https://help.aliyun.com/zh/model-studio/get-api-key) | `wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference` | `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+| 百炼（中国站，新加坡） | [控制台](https://bailian.console.aliyun.com/ap-southeast-1/model/market) | [申请 API Key](https://bailian.console.aliyun.com/ap-southeast-1/model/settings/api-key) | [指南](https://help.aliyun.com/zh/model-studio/get-api-key) | `wss://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference` | `https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` |
+| 百炼 Model Studio（国际站，新加坡） | [控制台](https://modelstudio.console.alibabacloud.com/ap-southeast-1) | [申请 API Key](https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key) | [指南（英文）](https://www.alibabacloud.com/help/en/model-studio/get-api-key) | `wss://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference` | `https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` |
+
+</div>
+
+从同一行申请凭证并复制对应连接地址；更换平台、站点或地域时，同时更新 API Key 与 URL。百炼的业务空间专属域名以控制台显示的 API Host 为准。
+
+## 2. 语音识别
+
+1. 打开「模型服务」，展开「千问」；未显示时，点击列表底部「显示其余」。
+2. 选择「语音识别」，在「接入凭证」中填写 API Key 和匹配的 WebSocket 地址。
+3. 选择内置模型：**Qwen ASR 3.1 Message** 面向语音输入，可按模型设置去除口头语和整理表达；**Qwen ASR 3.1 Streaming** 面向持续转写，提供语言提示等设置。见[官方模型说明](https://platform.qianwenai.com/docs/developer-guides/speech/speech-to-text-models)。
+4. 点击模型行，先保留默认参数并「测试」，成功后「设为默认」。
+5. 到其他应用的输入框完成一次真实录音，确认最终文字和粘贴可用。
+
+普通「语音输入」直接输出识别模型返回的文字；使用润色模板快捷键时，才继续交给当前大语言模型处理。Message 模型自身可能已经整理表达，不一定逐字保留口语。
+
+## 3. 大语言/文本润色
+
+1. 在同一供应商切到「大语言」，填写这一页的 API Key 与接口基础地址。
+2. 点击「添加模型」，从可用列表选择文本模型。列表不可用时，选择「添加自定义模型」，按平台提供的 API Model ID 手动添加。
+3. 点击模型行进行「测试」，成功后「设为默认」，再到[文本润色](/zh/docs/templates)添加模板并设置快捷键。
+
+文本地址只填写基础地址，不含 `/chat/completions` 或 `/models`。不要把语音的 `wss://` 地址填到文本配置中。
+
+## 4. 常见问题
+
+- **鉴权或服务不可用**：按表格核对平台版本、站点、地域与连接地址，再检查业务空间、模型权限和账户额度。
+- **模型列表加载失败**：检查文本基础地址；可以手动添加 API Model ID，再用「测试」确认实际请求。
+- **测试成功但无法输入**：测试使用内置样例，不检查麦克风或粘贴权限，继续检查[系统权限](/zh/docs/permissions)与[快捷键](/zh/docs/hotkeys)。

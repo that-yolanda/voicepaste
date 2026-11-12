@@ -1,0 +1,47 @@
+---
+title: "Local speech recognition models"
+description: "Download and configure local recognition models, segmented output, supporting models, inference backends, and voice detection settings."
+---
+
+Local speech models process audio on your device without an API key. Download the model files first; recognition can then run offline using your computer’s memory and processor. See [Model compatibility](/en/docs/compatibility) for models, languages, and capabilities.
+
+## Download and select a model
+
+1. Open **Model Services** and expand **Local ASR**.
+2. Download a model suitable for your language and device. Required voice activity detection (VAD) and punctuation models are prepared according to its configuration.
+3. Wait for the download, open the model row, click **Test**, then **Set as default**. Local models only appear in the top selector after downloading.
+
+![Updated Model Services and local model settings](/assets/docs/model-services-en.png)
+
+## Model tests
+
+After downloading, open the model row and click **Test**. Tests use built-in audio locally without switching the current model.
+
+## Supporting models
+
+Some models need voice activity detection (VAD) or an external punctuation model. Required files are prepared according to the recognition model’s configuration. Supporting models are not selected as the active recognizer.
+
+## Segmented output
+
+Non-native-streaming models such as SenseVoice, FunASR-Nano, and Qwen3-ASR can recognize segments based on pauses. Enable **Segmented output** through the gear in Model Services → Configuration if needed. When disabled, recognition waits until recording ends.
+
+## Advanced settings
+
+Use the gear beside **Providers** in Model Services for shared inference settings, or open an individual model row for its parameters. Keep defaults unless needed.
+
+## Inference and voice detection settings
+
+- **Threads:** the number of computing threads used for local inference. More threads may improve speed but also increase resource use.
+- **Inference backend:** selects how local computation runs. Availability depends on the system, device, and app build.
+- **Punctuation:** controls the separate punctuation model. Auto uses it when the recognition model lacks built-in punctuation; disabled skips it; force attempts to use it even when the recognition model has punctuation. The punctuation model must be downloaded.
+- **VAD threshold:** controls how voice activity detection (VAD) identifies speech. A lower value generally detects speech more readily but can also pick up noise.
+- **VAD min silence:** minimum silence before speech is considered interrupted, in seconds. A longer value can avoid splitting on short pauses but may delay segments.
+- **VAD min speech:** minimum speech duration, in seconds. Increasing it can filter brief noise but may miss short utterances.
+- **VAD max speech:** maximum duration of a speech segment, in seconds. Longer speech is split; changing it can affect segmentation and recognition.
+
+## Common questions
+
+- [Local model download failures](/en/docs/faq#model-download)
+- [Differences in live output](/en/docs/faq#streaming)
+- [Local model memory use](/en/docs/faq#memory)
+- [Local processing and privacy](/en/docs/privacy)

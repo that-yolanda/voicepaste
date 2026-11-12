@@ -9,25 +9,35 @@ description: "Improve recognition of names, products, and technical terms with h
 2. Add names, products, or technical terms, such as `VoicePaste`.
 3. Enable the group you want to use. You can save multiple groups, but only one is active at a time.
 
-## Bulk entry and weights
+## Bulk entry
 
-- Separate terms with English commas and press Enter, for example `VoicePaste, Anthropic, Claude`.
-- Use `term|weight` for an optional weight, such as `Anthropic|8`. The range is 1–10; the default is 4.
+Separate terms with English commas in the hotword input, then press Enter to add them together, for example `VoicePaste, Anthropic, Claude`.
 
-![Hotword settings](/assets/hotwords.jpg)
+## Weights
+
+Use `term|weight`, such as `Anthropic|8`. Weights range from 1–10 and default to 4 when omitted.
+
+Use this same format in the app, with or without a weight. VoicePaste adapts hotwords to the selected recognition model: integrations that support weights use them; others keep only the term text. You do not need to learn each provider’s parameter format.
+
+## Count and length limits
+
+Models also limit the number, length, and characters of hotwords. Integrations may filter entries, truncate the list, or report an error:
+
+- **Online Qwen recognition** deduplicates and filters invalid-length entries, submitting at most 2,000 valid terms. Extra entries are omitted.
+- **ElevenLabs**, with hotwords enabled, accepts at most 50 terms with no more than 20 characters each. Exceeding these limits reports an error; shorten the list and retry. It is not automatically truncated.
+
+Keep names, products, and technical terms relevant to the current input. Results depend on the selected model.
+
+![Hotword settings](/assets/docs/hotwords-en.png)
 
 ## Enhancement and replacement
 
-Configure these options in the current recognition model's parameters. Enhancement controls whether hotwords are added to polishing requests; it does not disable the recognizer's own hotword support:
+Use the gear in Model Services for shared recognition settings, or override them in an individual recognition model. Enhancement controls whether hotwords are added to polishing requests; it does not disable the recognizer's own hotword support:
 
 - **Enhancement · Auto**: Prefer the model's own hotword support. If unavailable and this input uses polishing, provide the terms to the language model.
 - **Enhancement · Off**: Do not add hotwords to the language model request.
 - **Enhancement · On**: Always add terms when this input uses a language model, even if the recognizer already supports hotwords.
 - **Replacement**: Restore matched terms to their saved form after recognition, including capitalization, punctuation, or special formatting.
-
-## Check the result
-
-Enable the group and test a sentence containing the term. See the [Volcengine guide](/en/docs/api/volcengine#hotwords-and-advanced-parameters) for online hotword tables.
 
 ## Common questions
 

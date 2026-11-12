@@ -1,0 +1,57 @@
+---
+title: "Qwen / Bailian"
+description: "Set up online Qwen Message and Streaming recognition and text polishing: match platform, region, credentials and endpoints, then add and test models."
+full: true
+---
+
+Qianwen AI and Alibaba Cloud Bailian both connect through **Model Services → Qwen**. Change the URL for your platform and use an API key obtained from that platform. Credentials are issued separately and are not interchangeable.
+
+## 1. Prepare credentials
+
+### Get an API key
+
+1. Find your platform edition and region in the table below, open **Get API key** in that row, and follow its **Official guide**. Obtain credentials separately for each platform.
+2. Check that the model is enabled, your key permits access, and quota is available. For Bailian, also confirm the region and workspace.
+3. Enter a key separately in VoicePaste’s speech and language-model settings. A key with access to both capabilities on one platform can be entered in both places.
+
+### Platform links and endpoints
+
+The table groups each console, API key page, official guide, and connection URL together. Bailian’s China site also supports Singapore: choose by account site and actual region, rather than treating Singapore as an international edition. Replace `{WorkspaceId}` with your actual workspace ID for Bailian.
+
+<div className="provider-endpoints">
+
+| Platform edition and region | Console | Get API key | Official guide | Speech WebSocket URL | Text base URL |
+| --- | --- | --- | --- | --- | --- |
+| Qianwen AI (China, app default) | [Console](https://platform.qianwenai.com/home) | [Get API key](https://platform.qianwenai.com/home/api-keys) | [Guide (Chinese)](https://platform.qianwenai.com/docs/api-reference/preparation/api-key) | `wss://maas.qianwenaiapi.com/api-ws/v1/inference` | `https://maas.qianwenaiapi.com/compatible-mode/v1` |
+| Qwen Cloud (international, Singapore) | [Console](https://home.qwencloud.com/) | [Get API key](https://home.qwencloud.com/api-keys) | [Guide](https://docs.qwencloud.com/api-reference/preparation/api-key) | `wss://ap-southeast-1.maas.qwencloudapi.com/api-ws/v1/inference` | `https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1` |
+| Bailian (China site, Beijing) | [Console](https://bailian.console.aliyun.com/cn-beijing/model/market) | [Get API key](https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key) | [Guide](https://help.aliyun.com/en/model-studio/get-api-key) | `wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference` | `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+| Bailian (China site, Singapore) | [Console](https://bailian.console.aliyun.com/ap-southeast-1/model/market) | [Get API key](https://bailian.console.aliyun.com/ap-southeast-1/model/settings/api-key) | [Guide](https://help.aliyun.com/en/model-studio/get-api-key) | `wss://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference` | `https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` |
+| Model Studio (international site, Singapore) | [Console](https://modelstudio.console.alibabacloud.com/ap-southeast-1) | [Get API key](https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key) | [Guide](https://www.alibabacloud.com/help/en/model-studio/get-api-key) | `wss://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference` | `https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` |
+
+</div>
+
+Obtain credentials and copy endpoints from the same row. When changing platform, account site, or region, update both the API key and URL. For Bailian workspace domains, use the API Host shown in the console.
+
+## 2. Speech recognition
+
+1. Open **Model Services** and expand Qwen. Use **Show remaining** if needed.
+2. Select **Speech recognition** and enter the API key and matching WebSocket URL under **Credentials**.
+3. Choose a built-in model: **Qwen ASR 3.1 Message** supports dictation with optional filler removal and expression cleanup; **Qwen ASR 3.1 Streaming** supports continuous transcription and language hints. See the [official model guide](https://platform.qianwenai.com/docs/developer-guides/speech/speech-to-text-models).
+4. Open the model row, keep default parameters, click **Test**, then **Set as default** after success.
+5. Try real recording in another app's text field to confirm final text and pasting.
+
+Plain **Voice input** inserts the recognizer's returned text directly. A template shortcut additionally processes it with the current language model. Message may already clean up the wording rather than preserving every spoken word.
+
+## 3. Language models / text polishing
+
+1. Select **LLM** within Qwen and enter that tab's API key and API base URL.
+2. Click **Add model** and select a text model. If listing is unavailable, choose **Add a custom model** and enter an API Model ID from your platform.
+3. Open the model row, click **Test**, then **Set as default**. Continue with [Text Polishing](/en/docs/templates) and a template shortcut.
+
+Text URLs are base URLs without `/chat/completions` or `/models`. Do not use the speech `wss://` URL in text settings.
+
+## 4. Common questions
+
+- **Authentication or service errors:** match the platform edition, account site, region, and URL against the table, then check workspace, model access, and quota.
+- **Model listing fails:** check the text base URL; manually add an API Model ID and test the actual request.
+- **Tests work but voice input does not:** built-in samples do not test your microphone or paste permissions. Check [permissions](/en/docs/permissions) and [hotkeys](/en/docs/hotkeys).

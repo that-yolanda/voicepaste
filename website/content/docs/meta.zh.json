@@ -5,9 +5,9 @@
     "hotkeys",
     "models",
     "templates",
-    "api",
     "hotwords",
     "sounds",
+    "api",
     "faq",
     "privacy"
   ],

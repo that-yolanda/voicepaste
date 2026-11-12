@@ -5,29 +5,31 @@ description: "Use your own DeepSeek API key for translation and polishing in Voi
 
 DeepSeek handles text translation and polishing in VoicePaste, not speech recognition. It is optional for plain transcription.
 
-## 1. Get an API key
+## 1. Language models / text polishing
+
+### Get an API key
 
 1. Sign in to the [DeepSeek platform](https://platform.deepseek.com/).
 2. Open [API keys](https://platform.deepseek.com/api_keys), create a key, and store it.
 3. Check the API account's balance and available services.
 
-## 2. Configure VoicePaste
+### Configure VoicePaste
 
-1. Open Settings → Language models and select DeepSeek.
-2. Enter the API key. You can use the app's preset endpoint, `https://api.deepseek.com/v1/chat/completions`.
-3. Use a model identifier currently supported by the API. Start with the app preset.
-4. Finish editing the fields, then configure a text template.
+1. Open **Model Services** and expand DeepSeek. Use **Show remaining** if needed.
+2. Enter the API key under **Credentials**. Keep the base URL `https://api.deepseek.com/v1`, without `/chat/completions`.
+3. Click **Add model** and choose an available model. If listing fails, manually add a supported API Model ID.
+4. Open the model row, click **Test**, then **Set as default** after success. All text-polishing templates share the current language model.
 
-This field expects the full Chat Completions endpoint, not the website homepage or console URL.
+VoicePaste appends `/chat/completions` or `/models` to the base URL. Do not enter a full request endpoint, website homepage, or console URL.
 
-## 3. Verify translation or polishing
+### Verify translation or polishing
 
-1. In Polishing templates, add a template, such as “Translate to English,” and write its instruction.
-2. Bind a shortcut to it in Settings → Shortcuts.
+1. In Text Polishing, add a template, such as “Translate to English,” and write its instruction.
+2. Bind a shortcut to it in Hotkeys.
 3. Say a sentence in an input field, finish with the template shortcut, and check the translation.
 
 See [Language models and templates](/en/docs/templates) for the full flow. Saving a key alone does not verify an API call.
 
-## Common questions
+## 2. Common questions
 
-- [Authentication, API model names, quota, and polishing failures](/en/docs/faq#plain-transcription)
+- [API credentials, URL, model access, and quota](/en/docs/faq#online-recognition)

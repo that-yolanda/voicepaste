@@ -23,13 +23,13 @@ VoicePaste provides macOS builds for Apple Silicon and Intel, and Windows x64 bu
 
 ### What do I need to configure before my first input?
 
-Follow the in-app setup guide to grant microphone access (and Accessibility permission on macOS), enable a recognition model, and check the shortcut. Then speak a sentence into a focused text field. A language model is optional for plain transcription. Seeing text pasted into the field verifies the full path; opening system settings alone does not grant permission. Follow the [Quick start](/en/docs).
+Follow the in-app setup guide. Windows requires microphone access; macOS also requires Accessibility permission. Configure a provider, choose a model, obtain the provider’s API key for online models, and select suitable hotkeys. See the [Quick start](/en/docs).
 
 <span id="offline" />
 
 ### Can I use VoicePaste completely offline?
 
-Yes. Download and enable a local recognition model, then use plain transcription or a language model running on your own computer, such as Ollama. Download and configure all required models first. Local recognition with online polishing still sends text to the polishing provider. See [Local processing and privacy](/en/docs/privacy).
+Yes. Download and configure the models, then select a [local speech recognition model](/en/docs/local-models) and a language model running on your computer. Recognition and text polishing can then run offline, with audio, text, and configuration stored locally. See [Local processing and privacy](/en/docs/privacy).
 
 ## Installation and permissions
 
@@ -77,6 +77,10 @@ For a firewall prompt, confirm it names VoicePaste and allow the app only if nee
 
 ## Models and recognition
 
+### What if model listing fails, or a test succeeds but voice input does not?
+
+Check the API key, base URL, and service permissions. Language-model base URLs omit `/chat/completions` and `/models`. If listing is unavailable, manually enter a Model ID in **Add model**. Model tests use built-in samples and only verify a model request, not the microphone, shortcuts, or auto-paste.
+
 <span id="choose-model" />
 
 ### Should I use an online or a local recognition model?
@@ -87,18 +91,13 @@ Online models send audio to the selected service and require network access, cre
 
 ### Why does recognition fail after I enter an API key?
 
-Confirm that the credentials were saved and that the intended model is enabled. Then check service activation, account quota, and connectivity to the provider.
-
-- **Doubao**: The key and activated speech service must belong to the same project. Match the authentication mode: API key for the new mode, or App ID and Access Token for legacy mode. See the [Doubao setup guide](/en/docs/api/volcengine).
-- **ElevenLabs**: The key must have **Speech to Text** access. Check account quota and any service terms shown in the provider console. See the [ElevenLabs guide](/en/docs/api/elevenlabs).
-
-Start with default parameters and record a short sentence. Saving credentials alone does not verify a successful API call.
+Check that the API key is valid, the URL is correct, the provider has enabled access to the selected model, and your account has enough balance or quota. See the [model configuration guides](/en/docs/compatibility).
 
 <span id="model-download" />
 
 ### What if a local model download fails?
 
-Check your connection and available disk space, then retry in Speech models → Local Models. Wait until the model and required supporting components finish downloading before enabling it. See [Recognition models](/en/docs/models). If it still fails, include the model name and error message in your feedback.
+Check your connection and available disk space, then retry in Model Services → Local ASR. Wait until the model and required supporting components finish downloading before enabling it. See [Local speech recognition models](/en/docs/local-models). If it still fails, include the model name and error message in your feedback.
 
 <span id="streaming" />
 
@@ -112,15 +111,7 @@ Native streaming models return recognition results as audio arrives. Supported l
 
 Create a hotword group, add the terms, and enable it; only one group is active at a time. Check the model's hotword support, and enable keyterms when using ElevenLabs. Hotword enhancement can also supply terms to polishing requests, and replacement restores their saved spelling or formatting.
 
-Hotwords are hints, not guarantees. Weights are model-dependent and do not behave identically across providers. Test a short sentence after changes; see [Hotwords](/en/docs/hotwords).
-
-<span id="formatting" />
-
-### Why do punctuation, numbers, or wording differ from what I expected?
-
-Punctuation and spoken-number formatting depend on the recognition model and its settings. Some local models use a separate punctuation model. Polishing templates can further rewrite wording, so compare plain transcription with template output to find which stage changes the text.
-
-Check Remove Trailing Period under [More settings](/en/docs/sounds), the model's parameters, and the [compatibility list](/en/docs/compatibility). For unwanted explanations in polished output, explicitly ask the template to return only the processed text.
+Hotwords are hints, not guarantees. VoicePaste adapts the input format; weight effects depend on the selected integration’s capabilities. Test a short sentence after changes; see [Hotwords](/en/docs/hotwords).
 
 ## Polishing and shortcuts
 
@@ -128,15 +119,13 @@ Check Remove Trailing Period under [More settings](/en/docs/sounds), the model's
 
 ### Can I use plain transcription without polishing?
 
-Yes. Use the plain voice-input shortcut; a language model is not required. In hands-free mode, start and finish with the global main key. In push-to-talk mode, use the plain voice-input shortcut rather than a template shortcut.
-
-If recognition works but polishing fails, check the language provider separately: API key, endpoint, model identifier, and quota. For DeepSeek, verify API billing and use an API model identifier rather than a web chat mode's display name. See [Language models and templates](/en/docs/templates) and the [DeepSeek guide](/en/docs/api/deepseek).
+Yes. Use the plain voice-input shortcut; a language model is not required.
 
 <span id="templates" />
 
 ### How do I use translation, email, and other templates?
 
-Configure a language model, add or choose a template, then bind its shortcut. In hands-free mode, start with the global main key and finish with the template's end key. In push-to-talk mode, hold the template's shortcut to record and release to process. Templates use the currently selected language provider. Follow [Language models and templates](/en/docs/templates).
+Configure a language model, add or choose a template, then bind its shortcut. In hands-free mode, start with the global main key and finish with the template's end key. In push-to-talk mode, hold the template's shortcut to record and release to process. Templates use the currently selected language model. Follow [Language models and templates](/en/docs/templates).
 
 <span id="recording-modes" />
 
@@ -148,7 +137,7 @@ Hands-free starts with one press and finishes with another, so you do not need t
 
 ### What if a shortcut does nothing or conflicts with another app?
 
-Check the current recording mode and saved binding. Press the complete combination without extra keys; in push-to-talk mode, hold it long enough to start. If a conflict is reported or another app intercepts it, choose another combination and test in an app’s input field. On macOS, also check the required permissions. See [Shortcuts and input](/en/docs/hotkeys).
+Check the current recording mode and saved binding. Press the complete combination without extra keys; in push-to-talk mode, hold it long enough to start. If a conflict is reported or another app intercepts it, choose another combination and test in an app’s input field. On macOS, also check Accessibility permission. See [Shortcuts and input](/en/docs/hotkeys).
 
 ## Privacy, resources, and feedback
 

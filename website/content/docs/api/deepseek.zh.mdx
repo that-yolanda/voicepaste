@@ -5,29 +5,31 @@ description: "使用自己的 DeepSeek API Key 为 VoicePaste 提供翻译与润
 
 DeepSeek 在 VoicePaste 中用于文本翻译与润色，不负责语音识别。只使用语音转文字时，无需配置。
 
-## 1. 申请 API Key
+## 1. 大语言/文本润色
+
+### 申请 API Key
 
 1. 登录 [DeepSeek 开放平台](https://platform.deepseek.com/)。
 2. 打开 [API keys](https://platform.deepseek.com/api_keys)，创建一个密钥并保存。
 3. 在平台检查 API 账户的余额和可用服务。
 
-## 2. 配置 VoicePaste
+### 配置 VoicePaste
 
-1. 打开「设置 → 大语言模型」，选择 DeepSeek。
-2. 填写 API Key。接口地址可使用应用预设的 `https://api.deepseek.com/v1/chat/completions`。
-3. 模型名称需使用当前 API 支持的标识，可以先使用应用预设。
-4. 完成字段编辑后继续配置文本模板。
+1. 打开「模型服务」，展开 DeepSeek；未显示时，点击列表底部「显示其余」。
+2. 在「接入凭证」填写 API Key。接口基础地址保留 `https://api.deepseek.com/v1`，不含 `/chat/completions`。
+3. 点击「添加模型」，从获取到的列表选择模型；无法获取列表时，手动添加供应商支持的 API Model ID。
+4. 点击模型行打开配置，点击「测试」，成功后「设为默认」。所有文本润色模板共用当前大语言模型。
 
-这里的接口地址是完整的 Chat Completions 请求地址；不要把官网首页或控制台地址填入该字段。
+应用会自动追加 `/chat/completions` 和 `/models` 请求路径。不要填写完整请求地址、官网首页或控制台地址。
 
-## 3. 验证翻译或润色
+### 验证翻译或润色
 
-1. 在「润色模板」添加模板，例如「翻译为英文」，并填写提示词。
-2. 到「设置 → 快捷键」为该模板绑定按键。
+1. 在「文本润色」添加模板，例如「翻译为英文」，并填写提示词。
+2. 到「快捷键」为该模板绑定按键。
 3. 在输入框中说一句话，使用模板快捷键完成，检查是否输出翻译结果。
 
 完整流程见 [大语言模型与润色模板](/zh/docs/templates)。仅保存密钥不能证明实际调用成功。
 
-## 常见问题
+## 2. 常见问题
 
-- [鉴权、API 模型名称、额度与润色失败](/zh/docs/faq#plain-transcription)
+- [API 凭证、地址、模型权限与额度](/zh/docs/faq#online-recognition)

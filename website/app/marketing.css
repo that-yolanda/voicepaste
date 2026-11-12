@@ -401,7 +401,7 @@
     line-height: 1.65;
     text-align: left;
   }
-  .marketing .model-table caption {
+  .marketing .model-table-title {
     margin-bottom: 20px;
     text-align: left;
     font-size: 22px;
@@ -427,15 +427,6 @@
   }
   .marketing .model-table tbody tr:nth-child(odd) {
     background: var(--card);
-  }
-  .marketing .model-tables-detailed {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .marketing
-    .model-tables-detailed
-    .model-table-scroll:first-child
-    .model-table {
-    min-width: 600px;
   }
   .marketing .cue-canvas,
   .marketing .choice-canvas {

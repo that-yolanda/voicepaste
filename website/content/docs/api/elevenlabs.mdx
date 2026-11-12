@@ -5,7 +5,9 @@ description: "Connect ElevenLabs Scribe v2 Realtime speech recognition to VoiceP
 
 VoicePaste uses ElevenLabs Scribe v2 Realtime for live speech recognition.
 
-## 1. Create an API key
+## 1. Speech recognition
+
+### Get an API key
 
 1. Sign in to the [ElevenLabs API Keys page](https://elevenlabs.io/app/api/api-keys).
 2. Create a key with a recognizable name, such as `VoicePaste`.
@@ -14,22 +16,22 @@ VoicePaste uses ElevenLabs Scribe v2 Realtime for live speech recognition.
    [![Allow Speech to Text access when creating an ElevenLabs API key](/assets/docs/elevenlabs.png)](/assets/docs/elevenlabs.png)
 4. Store the generated key and check that your account has available quota.
 
-## 2. Configure VoicePaste
+### Configure VoicePaste
 
-1. Open Settings → Speech models → Online Models.
-2. Find ElevenLabs — Scribe v2 Realtime, enter the API key, and save.
-3. Enable the model and keep its default parameters initially.
-4. Complete a voice input with a shortcut and check the recognized text.
+1. Open **Model Services** and expand ElevenLabs. Use **Show remaining** if needed.
+2. Enter the API key under **Credentials** and finish editing to save.
+3. Open the Scribe v2 Realtime model row, keep default parameters, and click **Test**. After success, click **Set as default**.
+4. Try actual voice input in a text field to confirm recording and pasting.
 
-## 3. Adjust recognition settings if needed
+### Adjust recognition settings if needed
 
 - Start with defaults for multilingual recognition, then adjust language options if needed.
 - For names and technical terms, configure [Hotwords](/en/docs/hotwords) and check that the model's hotword option is enabled.
 - The text confirmation setting controls when recognition text is committed. Keep the default if unsure.
 
-## Common questions
+## 2. Common questions
 
 - [API permissions, account quota, and connectivity](/en/docs/faq#online-recognition)
 - [Enable hotwords](/en/docs/faq#hotwords)
 
-Return to [Recognition models](/en/docs/models) · Official reference: [Scribe v2 Realtime](https://elevenlabs.io/blog/introducing-scribe-v2-realtime)
+Return to [Speech recognition models](/en/docs/models) · Official reference: [Scribe v2 Realtime](https://elevenlabs.io/blog/introducing-scribe-v2-realtime)

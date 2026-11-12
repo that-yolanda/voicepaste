@@ -1,9 +1,11 @@
 {
-  "title": "模型 API 申请",
+  "title": "模型配置",
   "pages": [
     "../compatibility",
+    "../local-models",
     "volcengine",
     "elevenlabs",
-    "deepseek"
+    "deepseek",
+    "qwen"
   ]
 }

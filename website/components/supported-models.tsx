@@ -1,96 +1,54 @@
 import Link from "next/link"
+import { Check } from "lucide-react"
 import type { Locale } from "@/lib/i18n"
+import asrModels from "@/lib/model-support.json"
 
-const asrModels = [
-  {
-    name: ["豆包流式识别 2.0", "Doubao Streaming ASR 2.0"],
-    guide: "api/volcengine",
-    online: true,
-    feature: [
-      "中英混说；方言支持随接口模式而异",
-      "Chinese–English speech; dialect support varies by API mode",
-    ],
-    streaming: true,
-    hotwords: true,
-  },
-  {
-    name: ["ElevenLabs Scribe v2 Realtime", "ElevenLabs Scribe v2 Realtime"],
-    guide: "api/elevenlabs",
-    online: true,
-    feature: [
-      "高精度多语言转写，自动识别语言",
-      "Accurate multilingual transcription with automatic language detection",
-    ],
-    streaming: true,
-    hotwords: true,
-  },
-  {
-    name: ["SenseVoice INT8", "SenseVoice INT8"],
-    guide: "models",
-    online: false,
-    feature: [
-      "轻量量化模型，支持中英日韩粤",
-      "Compact quantized model for Chinese, English, Japanese, Korean and Cantonese",
-    ],
-    streaming: false,
-    hotwords: false,
-  },
-  {
-    name: ["FunASR-Nano INT8", "FunASR-Nano INT8"],
-    guide: "models",
-    online: false,
-    feature: [
-      "中英日识别，支持中文方言与歌词",
-      "Chinese, English and Japanese; Chinese dialects and singing voice",
-    ],
-    streaming: false,
-    hotwords: true,
-  },
-  {
-    name: ["Zipformer 中英双语", "Zipformer Chinese–English"],
-    guide: "models",
-    online: false,
-    feature: [
-      "原生流式，中英混说，低延迟",
-      "Native streaming, mixed Chinese–English speech and low latency",
-    ],
-    streaming: true,
-    hotwords: true,
-  },
-  {
-    name: ["Zipformer 中文 INT8", "Zipformer Chinese INT8"],
-    guide: "models",
-    online: false,
-    feature: [
-      "原生流式，轻量中文量化模型",
-      "Native streaming with a compact, quantized Chinese model",
-    ],
-    streaming: true,
-    hotwords: true,
-  },
-  {
-    name: ["Qwen3-ASR 0.6B INT8", "Qwen3-ASR 0.6B INT8"],
-    guide: "models",
-    online: false,
-    feature: [
-      "多语言、中文方言，支持歌词识别",
-      "Multilingual speech, Chinese dialects and singing voice",
-    ],
-    streaming: false,
-    hotwords: true,
-  },
-] as const
 const llmServices = [
-  { name: "DeepSeek", online: true },
-  { name: "OpenAI", online: true },
-  { name: "Gemini", online: true },
-  { name: "Anthropic", online: true },
-  { name: "硅基流动 / SiliconFlow", online: true },
-  { name: "OpenRouter", online: true },
-  { name: "Ollama", online: false },
+  { name: ["千问/百炼", "Qwen / Bailian"], online: true, guide: "api/qwen" },
+  {
+    name: ["火山引擎", "Volcengine"],
+    online: true,
+    guide: "api/volcengine#text-models",
+  },
+  { name: ["DeepSeek", "DeepSeek"], online: true, guide: "api/deepseek" },
+  { name: ["OpenAI", "OpenAI"], online: true, guide: "templates" },
+  { name: ["Gemini", "Gemini"], online: true, guide: "templates" },
+  { name: ["Anthropic", "Anthropic"], online: true, guide: "templates" },
+  { name: ["硅基流动", "SiliconFlow"], online: true, guide: "templates" },
+  { name: ["OpenRouter", "OpenRouter"], online: true, guide: "templates" },
+  { name: ["Ollama", "Ollama"], online: false, guide: "templates" },
 ] as const
 
-export function ModelTables({
+const speechGuides: Record<string, string> = {
+  bytedance: "api/volcengine",
+  elevenlabs: "api/elevenlabs",
+  qwen: "api/qwen",
+  local_asr: "local-models",
+}
+
+const capabilityColumns = [
+  ["streaming", "流式输出", "Streaming output"],
+  ["hotwords", "热词", "Hotwords"],
+  ["smoothing", "语义顺滑", "Speech cleanup"],
+  ["punctuation", "自动标点", "Auto punctuation"],
+  ["itn", "数字格式化", "Number formatting"],
+] as const
+
+function ModelLanguages({
+  codes,
+  locale,
+}: {
+  codes: string[]
+  locale: Locale
+}) {
+  const en = locale === "en"
+  const names = new Intl.DisplayNames([locale], { type: "language" })
+  const languages = codes.map((code) => names.of(code) ?? code)
+  const separator = en ? ", " : "、"
+  return <p>{languages.join(separator)}</p>
+}
+
+export function RecognitionModelsTable({
   locale,
   detailed = false,
 }: {
@@ -99,127 +57,191 @@ export function ModelTables({
 }) {
   const en = locale === "en"
   const index = en ? 1 : 0
-  const mode = (online: boolean) =>
-    online ? (en ? "Online" : "在线") : en ? "Local" : "本地"
+  const title = en ? "Speech recognition" : "语音识别"
   return (
-    <div className={`model-tables ${detailed ? "model-tables-detailed" : ""}`}>
-      <div className="model-table-scroll">
-        <table className="model-table">
-          <caption>
-            {en ? "Speech recognition · ASR" : "语音识别 · ASR"}
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">{en ? "Model" : "模型"}</th>
-              <th scope="col">{en ? "Runs" : "运行"}</th>
-              <th scope="col">{en ? "Highlights" : "特点"}</th>
+    <div
+      className="model-table-scroll"
+      role="region"
+      aria-label={title}
+      tabIndex={0}
+    >
+      <table
+        className={`model-table ${detailed ? "model-table-detailed" : ""}`}
+      >
+        <caption className="sr-only">{title}</caption>
+        <thead>
+          <tr>
+            {detailed && <th scope="col">{en ? "Provider" : "供应商"}</th>}
+            <th scope="col">{en ? "Model" : "模型"}</th>
+            <th scope="col">{en ? "Runs" : "运行"}</th>
+            <th scope="col">{en ? "Languages" : "语言"}</th>
+            {detailed && (
+              <>
+                {capabilityColumns.map(([key, zh, english]) => (
+                  <th scope="col" key={key} className="model-capability">
+                    {en ? english : zh}
+                  </th>
+                ))}
+                <th scope="col">{en ? "Setup guide" : "配置指南"}</th>
+              </>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {asrModels.map((model, row) => (
+            <tr key={model.id}>
+              {detailed &&
+                (row === 0 ||
+                  asrModels[row - 1].providerId !== model.providerId) && (
+                  <th
+                    scope="rowgroup"
+                    rowSpan={
+                      asrModels.filter(
+                        (item) => item.providerId === model.providerId
+                      ).length
+                    }
+                  >
+                    {model.provider[index]}
+                  </th>
+                )}
+              <th scope="row">{model.name[index]}</th>
+              <td>
+                {model.online
+                  ? en
+                    ? "Online"
+                    : "在线"
+                  : en
+                    ? "Local"
+                    : "本地"}
+              </td>
+              <td className="model-features">
+                <ModelLanguages codes={model.languages} locale={locale} />
+              </td>
               {detailed && (
                 <>
-                  <th scope="col">{en ? "Native streaming" : "原生流式"}</th>
-                  <th scope="col">{en ? "Hotwords" : "热词"}</th>
-                  <th scope="col">{en ? "Setup guide" : "配置指南"}</th>
+                  {capabilityColumns.map(([key]) => (
+                    <td key={key} className="model-capability">
+                      <span className="sr-only">
+                        {model.capabilities[key]
+                          ? en
+                            ? "Yes"
+                            : "支持"
+                          : en
+                            ? "No"
+                            : "不支持"}
+                      </span>
+                      {model.capabilities[key] ? (
+                        <Check
+                          size={16}
+                          className="mx-auto"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <span aria-hidden="true">—</span>
+                      )}
+                    </td>
+                  ))}
+                  <td>
+                    <Link
+                      href={`/${locale}/docs/${speechGuides[model.providerId]}`}
+                    >
+                      {en ? "Configure" : "配置指南"}
+                    </Link>
+                  </td>
                 </>
               )}
             </tr>
-          </thead>
-          <tbody>
-            {asrModels.map((model) => (
-              <tr key={model.name[1]}>
-                <th scope="row">{model.name[index]}</th>
-                <td>{mode(model.online)}</td>
-                <td>{model.feature[index]}</td>
-                {detailed && (
-                  <>
-                    <td>
-                      {model.streaming
-                        ? en
-                          ? "Yes"
-                          : "支持"
-                        : en
-                          ? "No"
-                          : "不支持"}
-                    </td>
-                    <td>
-                      {model.hotwords
-                        ? en
-                          ? "Yes"
-                          : "支持"
-                        : en
-                          ? "No"
-                          : "不支持"}
-                    </td>
-                    <td>
-                      <Link href={`/${locale}/docs/${model.guide}`}>
-                        {model.online
-                          ? en
-                            ? "Get API key"
-                            : "申请 API Key"
-                          : en
-                            ? "Local setup"
-                            : "本地配置"}
-                      </Link>
-                    </td>
-                  </>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="model-table-scroll">
-        <table className="model-table">
-          <caption>{en ? "Text polishing · LLM" : "文本润色 · LLM"}</caption>
-          <thead>
-            <tr>
-              <th scope="col">
-                {en ? "Service / runtime" : "服务 / 运行工具"}
-              </th>
-              <th scope="col">{en ? "Runs" : "运行"}</th>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+export function PolishingServicesTable({
+  locale,
+  detailed = false,
+}: {
+  locale: Locale
+  detailed?: boolean
+}) {
+  const en = locale === "en"
+  const title = en ? "Text polishing" : "文本润色"
+  return (
+    <div
+      className="model-table-scroll"
+      role="region"
+      aria-label={title}
+      tabIndex={0}
+    >
+      <table className="model-table">
+        <caption className="sr-only">{title}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{en ? "Provider" : "供应商"}</th>
+            <th scope="col">{en ? "Runs" : "运行"}</th>
+            {detailed && <th scope="col">{en ? "Setup guide" : "配置指南"}</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {llmServices.map((service) => (
+            <tr key={service.name[1]}>
+              <th scope="row">{service.name[en ? 1 : 0]}</th>
+              <td>
+                {service.online
+                  ? en
+                    ? "Online"
+                    : "在线"
+                  : en
+                    ? "Local"
+                    : "本地"}
+              </td>
               {detailed && (
-                <th scope="col">{en ? "Setup guide" : "配置指南"}</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {llmServices.map((service) => (
-              <tr key={service.name}>
-                <th scope="row">{service.name}</th>
-                <td>{mode(service.online)}</td>
-                {detailed && (
-                  <td>
-                    <Link
-                      href={`/${locale}/docs/${service.name === "DeepSeek" ? "api/deepseek" : "templates"}`}
-                    >
-                      {service.name === "DeepSeek"
-                        ? en
-                          ? "Get API key"
-                          : "申请 API Key"
-                        : en
-                          ? "Configure service"
-                          : "配置服务"}
-                    </Link>
-                  </td>
-                )}
-              </tr>
-            ))}
-            {detailed && (
-              <tr>
-                <th scope="row">
-                  {en
-                    ? "Custom OpenAI-compatible service"
-                    : "自定义 OpenAI 兼容服务"}
-                </th>
-                <td>{en ? "Online / Local" : "在线 / 本地"}</td>
                 <td>
-                  <Link href={`/${locale}/docs/templates`}>
+                  <Link href={`/${locale}/docs/${service.guide}`}>
                     {en ? "Configure service" : "配置服务"}
                   </Link>
                 </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tr>
+          ))}
+          {detailed && (
+            <tr>
+              <th scope="row">
+                {en
+                  ? "Custom OpenAI-compatible service"
+                  : "自定义 OpenAI 兼容服务"}
+              </th>
+              <td>{en ? "Online / Local" : "在线 / 本地"}</td>
+              <td>
+                <Link href={`/${locale}/docs/templates`}>
+                  {en ? "Configure service" : "配置服务"}
+                </Link>
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+export function ModelTables({ locale }: { locale: Locale }) {
+  const en = locale === "en"
+  return (
+    <div className="model-tables">
+      <section>
+        <h3 className="model-table-title">
+          {en ? "Speech recognition" : "语音识别"}
+        </h3>
+        <RecognitionModelsTable locale={locale} />
+      </section>
+      <section>
+        <h3 className="model-table-title">
+          {en ? "Text polishing" : "文本润色"}
+        </h3>
+        <PolishingServicesTable locale={locale} />
+      </section>
     </div>
   )
 }

@@ -39,8 +39,8 @@
       "zh": "可以完全离线使用吗？"
     },
     "answer": {
-      "en": "Yes. Download and configure local recognition, then use plain transcription or a language model running on your computer. Online polishing still sends text to its provider.",
-      "zh": "可以。下载并配置本地识别模型，使用普通转写或本机运行的语言模型即可。搭配在线润色时，仍会向服务商发送文字。"
+      "zh": "可以。下载并配置本地语音识别模型与本地大语言模型，选择两者后即可离线识别和润色，音频、文字和配置均保存在本机。",
+      "en": "Yes. Download and configure local speech and language models, then select both for offline recognition and polishing. Audio, text, and configuration stay on your computer."
     },
     "link": {
       "path": "/docs/faq#offline",
