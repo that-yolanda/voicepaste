@@ -127,7 +127,7 @@ test("provider editing and the inline catalog are mutually exclusive", async () 
     audio: { provider: localModel.id },
   };
   render(<ModelServicesPage />);
-  const doubao = await screen.findByRole("button", { name: /^字节跳动/ });
+  const doubao = await screen.findByRole("button", { name: /^火山引擎/ });
   const local = screen.getByRole("button", { name: /本地语音识别模型/ });
   fireEvent.click(doubao);
   expect(doubao).toHaveAttribute("aria-expanded", "true");

@@ -29,7 +29,7 @@ const rec = (value: unknown): Record<string, Record<string, unknown>> =>
 const PROVIDERS: RegistryProvider[] = [
   {
     id: "bytedance",
-    name: "字节跳动",
+    name: "火山引擎",
     kind: "online",
     capabilities: ["asr", "llm"],
     credentials: {

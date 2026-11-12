@@ -1,11 +1,11 @@
 {
-  "version": 24,
-  "updated_at": "2026-11-10",
+  "version": 26,
+  "updated_at": "2026-11-12",
   "providers": [
     {
       "id": "bytedance",
-      "name": "字节跳动",
-      "name_en": "ByteDance",
+      "name": "火山引擎",
+      "name_en": "Volcengine",
       "kind": "online",
       "capabilities": ["asr", "llm"],
       "default_llm_url": "https://ark.cn-beijing.volces.com/api/v3",
@@ -69,7 +69,7 @@
       "kind": "online",
       "capabilities": ["asr", "llm"],
       "default_llm_url": "https://maas.qianwenaiapi.com/compatible-mode/v1",
-      "docs_url": "https://platform.qianwenai.com/docs",
+      "docs_url": "https://voicepaste.dev/docs/api/qwen",
       "credentials": {
         "llm": {
           "fields": [
@@ -108,7 +108,7 @@
       "kind": "online",
       "capabilities": ["llm"],
       "default_llm_url": "https://api.deepseek.com/v1",
-      "docs_url": "https://platform.deepseek.com/api_keys",
+      "docs_url": "https://voicepaste.dev/docs/api/deepseek",
       "credentials": {
         "llm": {
           "fields": [

@@ -682,6 +682,7 @@
       "add_provider": "添加供应商",
       "search_models": "搜索模型",
       "refresh_models": "刷新模型列表",
+      "provider_volcengine": "火山引擎",
       "current_models": "当前使用",
       "provider_list": "供应商列表",
       "show_remaining_providers": "显示其余 {{count}} 个",

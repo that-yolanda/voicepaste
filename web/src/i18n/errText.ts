@@ -19,8 +19,12 @@ export function errText(error: unknown): string {
     const { code, params, detail } = error as AppErrorShape;
     if (typeof code === "string") {
       const key = `errors.${code}`;
+      const values =
+        params?.provider === "bytedance"
+          ? { ...params, provider: i18next.t("ui.models.provider_volcengine") }
+          : params;
       // Missing locale entries degrade to the raw code, never the raw key.
-      const headline = i18next.exists(key) ? i18next.t(key, params ?? {}) : code;
+      const headline = i18next.exists(key) ? i18next.t(key, values ?? {}) : code;
       return detail ? i18next.t("errors.common.with_detail", { headline, detail }) : headline;
     }
   }

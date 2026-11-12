@@ -263,9 +263,9 @@ fn minimal_registry() -> ModelRegistry {
             category: ModelCategory::Asr,
             engine: "volcengine".to_string(),
             provider: Some("bytedance".to_string()),
-            name: "火山引擎 - 豆包流式输出大模型".to_string(),
+            name: "豆包流式语音识别模型2.0".to_string(),
             description: "基于豆包大模型的流式语音识别服务".to_string(),
-            name_en: None,
+            name_en: Some("Doubao streaming ASR 2.0".to_string()),
             description_en: None,
             capabilities: Capabilities {
                 streaming: true,
@@ -594,12 +594,12 @@ mod tests {
     }
 
     #[test]
-    fn embedded_registry_is_version_24() {
+    fn embedded_registry_is_version_26() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 24,
-            "EMBEDDED_REGISTRY version should be 24, got {}",
+            registry.version, 26,
+            "EMBEDDED_REGISTRY version should be 26, got {}",
             registry.version
         );
         assert!(
@@ -675,8 +675,8 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 24,
-            "bundled_registry should return version 24 from embedded, got {}",
+            registry.version, 26,
+            "bundled_registry should return version 26 from embedded, got {}",
             registry.version
         );
     }
@@ -740,7 +740,7 @@ mod tests {
         custom.id = "user-custom-model".into();
         current.models.push(custom);
         let merged = merge_registry(current, bundled);
-        assert_eq!(merged.version, 24);
+        assert_eq!(merged.version, 26);
         let message = merged
             .models
             .iter()

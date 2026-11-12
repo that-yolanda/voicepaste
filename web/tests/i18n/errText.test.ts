@@ -1,7 +1,21 @@
+import i18next from "i18next";
 import { describe, expect, test } from "vitest";
 import { errText } from "@/i18n/errText";
+import en from "@/locales/en.json";
 
 describe("errText", () => {
+  test.each(["zh-CN", "en"])("uses the Volcengine display name in %s errors", async (language) => {
+    const previous = i18next.language;
+    try {
+      i18next.addResourceBundle("en", "translation", en);
+      await i18next.changeLanguage(language);
+      const error = { code: "llm.test_failed", params: { provider: "bytedance" } };
+      expect(errText(error)).toContain(language === "en" ? "Volcengine" : "火山引擎");
+      expect(error.params.provider).toBe("bytedance");
+    } finally {
+      await i18next.changeLanguage(previous);
+    }
+  });
   test("passes plain strings through unchanged", () => {
     // Not-yet-migrated domains and legacy history entries stay verbatim.
     expect(errText("配置格式错误：xxx")).toBe("配置格式错误：xxx");

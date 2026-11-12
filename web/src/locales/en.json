@@ -682,6 +682,7 @@
       "add_provider": "Add Provider",
       "search_models": "Search models",
       "refresh_models": "Refresh models",
+      "provider_volcengine": "Volcengine",
       "current_models": "Currently selected",
       "provider_list": "Providers",
       "show_remaining_providers": "Show remaining {{count}}",
