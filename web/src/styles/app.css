@@ -262,8 +262,7 @@ main {
   }
 }
 
-.settings-sidebar-indicator,
-.settings-sidebar-selected {
+.settings-sidebar-indicator {
   background: var(--color-sidebar-selected);
   border: 1px solid var(--color-sidebar-selected-border);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
