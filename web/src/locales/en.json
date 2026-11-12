@@ -600,28 +600,23 @@
     "onboarding": {
       "title": "Setup guide",
       "welcomeTitle": "Set up VoicePaste",
-      "welcomeDescription": "Follow the guide to configure permissions, speech recognition, and shortcuts for voice input. A language model is optional.",
+      "welcomeDescription": "Set up permissions, models, and shortcuts, then try voice input in a text field. Speech models transcribe audio; language models are optional for translation or polishing.",
       "dismiss": "Don't show again",
       "start": "Start setup",
       "exit": "Exit",
       "finish": "Done",
       "collapse": "Collapse checklist",
-      "collapseGuide": "Collapse",
-      "expandGuide": "Expand",
       "backToChecklist": "Back to setup checklist",
       "next": "Next",
       "previous": "Previous",
-      "completeTask": "Done",
-      "skip": "Skip",
-      "skipped": "Skipped",
-      "reviewed": "Guide completed",
+      "completeTask": "Reviewed",
+      "reviewed": "Reviewed",
       "progress": "{{done}} / {{total}}",
       "saveError": "Could not save the guide preference. Please try again.",
       "targetError": "This setting is not available yet. Return to the checklist and try again.",
       "tasks": {
         "permissions": "System permissions",
-        "asr": "Speech recognition model",
-        "llm": "Language model (optional)",
+        "models": "Model setup",
         "hotkey": "Shortcuts"
       },
       "steps": {
@@ -640,14 +635,6 @@
         "hotkeyVoice": {
           "title": "Choose a voice input mode",
           "description": "Tap: press the recording hotkey to start, then the stop key to finish. Hold: hold the shortcut to record and release to finish. Press Esc anytime while recording to cancel."
-        },
-        "llmLibrary": {
-          "title": "Browse templates",
-          "description": "Open Templates, choose a template, and click Add. You can edit it later. Close the library to continue."
-        },
-        "llmTemplateCreate": {
-          "title": "Create a template",
-          "description": "Click Add to create a template. Give it a name and describe what it should do. For translation, name the target language. If a template already suits you, click Done."
         },
         "hotkeyWakeEdit": {
           "title": "Change the recording hotkey",
@@ -669,19 +656,30 @@
           "title": "Set template shortcuts",
           "description": "Each template has its own mode. Tap shares the recording hotkey and has an editable stop key that applies the template. Hold uses the template’s own shortcut."
         },
-        "modelsDefaults": {
-          "title": "Choose models",
-          "description": "Choose the speech and text-polish models to use at the top of Model Configuration."
+        "modelProviders": {
+          "title": "Choose model providers",
+          "description": "Choose providers for speech recognition and language models (optional, for text polishing)."
         },
-        "modelsProviders": {
-          "title": "Open a provider",
-          "description": "Expand a provider to edit credentials and models. Expand the remaining providers at the bottom to add one."
+        "modelSetup": {
+          "title": "Configure model services",
+          "description": "Add your providers, expand them, obtain an API key, and enter the credentials and API URL. Add the models you need, then click Next. Local models need no API key; download them before use."
+        },
+        "modelSelectAsr": {
+          "title": "Choose a speech recognition model",
+          "description": "Select the configured speech recognition model to transcribe recordings, then click Next."
+        },
+        "modelSelectLlm": {
+          "title": "Choose a language model (optional)",
+          "description": "Select a configured language model for polishing or translation. Skip if you only need transcription."
         }
-      }
+      },
+      "openDocs": "Help",
+      "skipText": "Skip"
     },
     "load_failed": "Could not load. Please retry.",
     "retry": "Retry",
     "models": {
+      "add_provider": "Add Provider",
       "search_models": "Search models",
       "refresh_models": "Refresh models",
       "current_models": "Currently selected",

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   config: { app: {} as { onboarding_pending?: boolean } },
   platform: "windows",
   save: vi.fn(),
+  openHelp: vi.fn().mockResolvedValue(undefined),
   drivers: [] as { config: Config; destroy: () => void; drive: ReturnType<typeof vi.fn> }[],
 }));
 vi.mock("@/settings/SettingsProvider", () => ({
@@ -18,6 +19,7 @@ vi.mock("@/settings/SettingsProvider", () => ({
     scheduleSave: mocks.save,
   }),
 }));
+vi.mock("@/settings/bridge", () => ({ openHelpGuide: mocks.openHelp }));
 vi.mock("driver.js", () => ({
   driver: (config: Config) => {
     const instance = {
@@ -28,7 +30,11 @@ vi.mock("driver.js", () => ({
         popover.className = "mock-popover";
         const title = document.createElement("h2");
         title.textContent = step?.popover?.title ?? "";
+        const description = document.createElement("p");
+        description.textContent = step?.popover?.description ?? "";
+        const footer = document.createElement("div");
         const footerButtons = document.createElement("div");
+        footer.append(footerButtons);
         const previousButton = document.createElement("button");
         previousButton.textContent = config.prevBtnText ?? "";
         previousButton.onclick = () => config.onPrevClick?.(undefined, {} as never, {} as never);
@@ -38,14 +44,23 @@ vi.mock("driver.js", () => ({
             index === (config.steps?.length ?? 0) - 1 ? config.onDoneClick : config.onNextClick;
           callback?.(undefined, {} as never, {} as never);
         };
+        previousButton.hidden = !config.showButtons?.includes("previous");
+        nextButton.hidden = !config.showButtons?.includes("next");
         footerButtons.append(previousButton, nextButton);
         const closeButton = document.createElement("button");
         closeButton.textContent = config.closeBtnLabel ?? "";
         closeButton.onclick = () => instance.destroy();
-        popover.append(closeButton, title, footerButtons);
+        popover.append(closeButton, title, description, footer);
         document.body.append(popover);
         config.onPopoverRender?.(
-          { title, footerButtons, previousButton, nextButton } as never,
+          {
+            title,
+            wrapper: popover,
+            footer,
+            footerButtons,
+            previousButton,
+            nextButton,
+          } as never,
           {} as never,
         );
         closeButton.focus();
@@ -69,6 +84,8 @@ import { useOnboarding } from "@/settings/onboarding/useOnboarding";
 
 function Harness() {
   const [voiceMode, setVoiceMode] = useState("toggle");
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [section, navigate] = useState<SectionId>("home");
   const onboarding = useOnboarding(navigate);
   return (
@@ -79,14 +96,43 @@ function Harness() {
       <span>{section}</span>
       <div data-tour="microphone" />
       <div data-tour="accessibility" />
-      <div data-tour="models-defaults" />
+      <div data-tour="models-defaults">
+        <div data-tour="models-default-asr">
+          <select aria-label="语音识别" defaultValue="">
+            <option value="">—</option>
+            <option value="speech">Speech</option>
+          </select>
+        </div>
+        <div data-tour="models-default-llm">
+          <select aria-label="大语言" defaultValue="">
+            <option value="">—</option>
+            <option value="text">Text</option>
+          </select>
+        </div>
+      </div>
+      <div data-tour="models-add-provider">
+        <button
+          type="button"
+          aria-expanded={catalogOpen}
+          onClick={() => setCatalogOpen((open) => !open)}
+        >
+          添加供应商
+        </button>
+      </div>
       <div data-tour="models-providers">
+        {catalogOpen && <button type="button">添加 DeepSeek</button>}
         <input aria-label="API Key" />
+        <button type="button" onClick={() => setDialogOpen(true)}>
+          打开模型
+        </button>
+        {dialogOpen && (
+          <div data-settings-dialog role="dialog">
+            <button type="button" onClick={() => setDialogOpen(false)}>
+              关闭模型
+            </button>
+          </div>
+        )}
       </div>
-      <div data-tour="llm-library">
-        <button type="button">模板</button>
-      </div>
-      <div data-tour="llm-add-template" />
       <div data-tour="hotkey-main" />
       <div data-tour="hotkey-wake-edit">
         <button type="button">唤醒键</button>
@@ -122,6 +168,7 @@ beforeEach(() => {
   mocks.platform = "windows";
   mocks.save.mockReset().mockResolvedValue(undefined);
   mocks.drivers.length = 0;
+  mocks.openHelp.mockClear();
 });
 afterEach(cleanup);
 const begin = async () => {
@@ -129,6 +176,11 @@ const begin = async () => {
   await screen.findByRole("button", { name: "退出" });
 };
 const lastDriver = () => mocks.drivers[mocks.drivers.length - 1];
+
+const next = async (title: string) => {
+  fireEvent.click(await screen.findByRole("button", { name: "下一步" }));
+  await screen.findByRole("heading", { name: title });
+};
 
 describe("setup onboarding", () => {
   it.each([undefined, false])("does not invite legacy/dismissed users (%s)", (pending) => {
@@ -179,56 +231,103 @@ describe("setup onboarding", () => {
     expect(document.querySelectorAll(".driver-checklist-item-done")).toHaveLength(1);
   });
 
-  it.each([0, 1, 2, 3])("lets users skip the optional LLM at step %s", async (index) => {
+  it("uses four simple model steps and advances after clicking Add Provider", async () => {
     render(<Harness />);
     await begin();
-    fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择使用的模型" });
-    const targets = ["models-defaults", "models-providers", "llm-library", "llm-add-template"];
-    for (let step = 0; step < index; step++) {
-      fireEvent.click(await screen.findByRole("button", { name: "下一步" }));
-      await waitFor(() => expect(lastDriver().drive).toHaveBeenCalledWith(step + 1));
-    }
-    expect(
-      screen.getByText(index >= 2 ? "templates" : "models", { exact: true }),
-    ).toBeInTheDocument();
-    expect(lastDriver().config.steps?.[index].element).toBe(
-      document.querySelector(`[data-tour="${targets[index]}"]`),
+    fireEvent.click(screen.getByRole("button", { name: "模型配置" }));
+    await screen.findByRole("heading", { name: "选择需要的模型供应商" });
+    expect(getSteps("models", false, i18next.t)).toHaveLength(4);
+    expect(lastDriver().config.steps?.[0].element).toBe(
+      document.querySelector('[data-tour="models-add-provider"]'),
     );
-    expect(document.body).toHaveClass("voicepaste-tour-interactive");
-    expect(lastDriver().config.allowKeyboardControl).toBe(false);
-    fireEvent.click(await screen.findByRole("button", { name: "跳过此项" }));
+    expect(lastDriver().config.steps?.[0].popover?.side).toBe("bottom");
+    expect(
+      screen.getByText("选择需要的语音识别模型和大语言模型（可选，用于文本润色）。"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "添加供应商" }));
+    await screen.findByRole("heading", { name: "配置模型服务" });
+    expect(document.querySelector(".mock-popover")).toBeNull();
     expect(document.body).not.toHaveClass("voicepaste-tour-interactive");
-    expect(screen.getByRole("button", { name: "大语言模型（可选） (已跳过)" })).toBeInTheDocument();
+    expect(document.querySelector(".onboarding-model-guide")).toHaveClass("top-4", "right-4");
+    fireEvent.click(screen.getByRole("button", { name: "帮助" }));
+    expect(mocks.openHelp).toHaveBeenCalledWith("compatibility");
+    fireEvent.change(screen.getByRole("textbox", { name: "API Key" }), {
+      target: { value: "test-key" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "添加 DeepSeek" }));
+    expect(screen.getByRole("heading", { name: "配置模型服务" })).toBeInTheDocument();
+    await next("选择语音识别模型");
+    expect(lastDriver().config.steps?.[2].element).toBe(
+      document.querySelector('[data-tour="models-default-asr"]'),
+    );
+    expect(screen.getByRole("combobox", { name: "语音识别" })).toHaveFocus();
+    fireEvent.change(screen.getByRole("combobox", { name: "语音识别" }), {
+      target: { value: "speech" },
+    });
+    await next("选择大语言模型（可选）");
+    expect(lastDriver().config.steps?.[3].element).toBe(
+      document.querySelector('[data-tour="models-default-llm"]'),
+    );
+    expect(screen.getByRole("combobox", { name: "大语言" })).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "帮助" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "完成" }));
     expect(document.querySelectorAll(".driver-checklist-item-done")).toHaveLength(1);
   });
 
-  it("keeps the active task and progress when the language changes", async () => {
+  it("allows skipping the optional language model without requiring configured models", async () => {
+    render(<Harness />);
+    await begin();
+    fireEvent.click(screen.getByRole("button", { name: "模型配置" }));
+    await screen.findByRole("heading", { name: "选择需要的模型供应商" });
+    fireEvent.click(screen.getByRole("button", { name: "添加供应商" }));
+    await screen.findByRole("heading", { name: "配置模型服务" });
+    await next("选择语音识别模型");
+    await next("选择大语言模型（可选）");
+    fireEvent.click(screen.getByRole("button", { name: "跳过" }));
+    expect(document.querySelectorAll(".driver-checklist-item-done")).toHaveLength(1);
+  });
+
+  it("keeps the active model step and checklist progress when the language changes", async () => {
     i18next.addResourceBundle("en", "translation", en);
     render(<Harness />);
     await begin();
     fireEvent.click(screen.getByRole("button", { name: "系统权限" }));
-    await waitFor(() => expect(mocks.drivers).toHaveLength(1));
-    act(() => lastDriver().config.onDoneClick?.(undefined, {} as never, {} as never));
-    fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择使用的模型" });
+    fireEvent.click(await screen.findByRole("button", { name: "完成" }));
+    fireEvent.click(screen.getByRole("button", { name: "模型配置" }));
+    await screen.findByRole("heading", { name: "选择需要的模型供应商" });
+    fireEvent.click(screen.getByRole("button", { name: "添加供应商" }));
+    await screen.findByRole("heading", { name: "配置模型服务" });
     try {
       await act(async () => {
         await i18next.changeLanguage("en");
       });
-      await screen.findByRole("heading", { name: "Choose models" });
-      for (let index = 0; index < 3; index++) {
-        fireEvent.click(await screen.findByRole("button", { name: "Next" }));
-      }
-      fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+      await screen.findByRole("heading", { name: "Configure model services" });
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      await screen.findByRole("heading", { name: "Choose a speech recognition model" });
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      await screen.findByRole("heading", { name: "Choose a language model (optional)" });
+      fireEvent.click(screen.getByRole("button", { name: "Skip" }));
       expect(
-        screen.getByRole("button", { name: /System permissions\s*\(Guide completed\)/ }),
+        screen.getByRole("button", { name: /System permissions\s*\(Reviewed\)/ }),
       ).toBeInTheDocument();
     } finally {
       await act(async () => {
         await i18next.changeLanguage("zh-CN");
       });
     }
+  });
+
+  it("uses Help throughout the guide and Done on the final permission step", async () => {
+    mocks.platform = "macos";
+    render(<Harness />);
+    await begin();
+    fireEvent.click(screen.getByRole("button", { name: "系统权限" }));
+    await screen.findByRole("heading", { name: "允许使用麦克风" });
+    fireEvent.click(screen.getByRole("button", { name: "帮助" }));
+    expect(mocks.openHelp).toHaveBeenCalledWith("permissions");
+    await next("开启辅助功能权限");
+    expect(screen.getByRole("button", { name: "完成" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "已浏览此项" })).toBeNull();
   });
 
   it("Escape returns from shortcuts without interfering with shortcut recording", async () => {
@@ -252,25 +351,18 @@ describe("setup onboarding", () => {
     expect(getSteps("permissions", true, i18next.t)).toHaveLength(2);
   });
 
-  it("pauses for an existing settings dialog and resumes the same task", async () => {
+  it("pauses the model instructions for dialogs and resumes the same step", async () => {
     render(<Harness />);
     await begin();
-    fireEvent.click(screen.getByRole("button", { name: "大语言模型（可选）" }));
-    await screen.findByRole("heading", { name: "选择使用的模型" });
-    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-    await screen.findByRole("heading", { name: "进入供应商配置" });
-    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-    await screen.findByRole("heading", { name: "从模板添加" });
-    expect(screen.getByRole("button", { name: "模板" })).toHaveFocus();
-    const dialog = document.createElement("div");
-    dialog.setAttribute("data-settings-dialog", "");
-    await act(async () => document.body.appendChild(dialog));
-    expect(screen.queryByRole("heading", { name: "从模板添加" })).not.toBeInTheDocument();
-    fireEvent.keyDown(window, { key: "Escape" });
-    await act(async () => dialog.remove());
-    await screen.findByRole("heading", { name: "从模板添加" });
-    expect(screen.getByRole("button", { name: "模板" })).toHaveFocus();
-    expect(lastDriver().drive).toHaveBeenCalledWith(2);
+    fireEvent.click(screen.getByRole("button", { name: "模型配置" }));
+    await screen.findByRole("heading", { name: "选择需要的模型供应商" });
+    fireEvent.click(screen.getByRole("button", { name: "添加供应商" }));
+    await screen.findByRole("heading", { name: "配置模型服务" });
+    fireEvent.click(screen.getByRole("button", { name: "打开模型" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "配置模型服务" })).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "关闭模型" }));
+    await screen.findByRole("heading", { name: "配置模型服务" });
+    expect(document.querySelector(".mock-popover")).toBeNull();
     expect(document.querySelectorAll(".driver-checklist-item-done")).toHaveLength(0);
   });
 
@@ -303,7 +395,7 @@ describe("setup onboarding", () => {
       name: mode === "toggle" ? "免提：结束录音" : "设置按住说话的快捷键",
     });
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-    fireEvent.click(await screen.findByRole("button", { name: "完成此项" }));
+    fireEvent.click(await screen.findByRole("button", { name: "已浏览此项" }));
     expect(document.querySelectorAll(".driver-checklist-item-done")).toHaveLength(1);
   });
 
@@ -325,9 +417,16 @@ describe("setup onboarding", () => {
   it("keeps the checklist title and removes its description when all tasks finish", async () => {
     render(<Harness />);
     await begin();
-    for (const task of ["系统权限", "语音识别模型", "大语言模型（可选）", "快捷键"]) {
+    for (const task of ["系统权限", "模型配置", "快捷键"]) {
       fireEvent.click(screen.getByRole("button", { name: task }));
       await waitFor(() => expect(screen.queryByRole("button", { name: "退出" })).toBeNull());
+      if (task === "模型配置") {
+        await screen.findByRole("heading", { name: "选择需要的模型供应商" });
+        fireEvent.click(screen.getByRole("button", { name: "添加供应商" }));
+        await screen.findByRole("heading", { name: "配置模型服务" });
+        await next("选择语音识别模型");
+        await next("选择大语言模型（可选）");
+      }
       await waitFor(() => expect(document.querySelector(".mock-popover")).not.toBeNull());
       act(() => lastDriver().config.onDoneClick?.(undefined, {} as never, {} as never));
     }
@@ -337,39 +436,27 @@ describe("setup onboarding", () => {
     await waitFor(() => expect(document.querySelector(".voicepaste-checklist")).toBeNull());
   });
 
-  it("keeps ASR guidance interactive while the provider list stays on screen", async () => {
+  it("returns from model selection to the floating configuration instructions", async () => {
     render(<Harness />);
     await begin();
-    fireEvent.click(screen.getByRole("button", { name: "语音识别模型" }));
-    await waitFor(() => expect(mocks.drivers).toHaveLength(1));
-    act(() => lastDriver().config.onNextClick?.(undefined, {} as never, {} as never));
-    await screen.findByRole("heading", { name: "进入供应商配置" });
-    expect(mocks.drivers).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "收起说明" }));
-    expect(screen.queryByRole("button", { name: "完成此项" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "展开说明" }));
-    expect(screen.getByRole("button", { name: "完成此项" })).toBeVisible();
-    const input = screen.getByRole("textbox", { name: "API Key" });
-    fireEvent.change(input, { target: { value: "test-key" } });
-    fireEvent.keyUp(input, { key: "ArrowRight" });
-    expect(input).toHaveValue("test-key");
-    expect(screen.getByRole("heading", { name: "进入供应商配置" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "模型配置" }));
+    await screen.findByRole("heading", { name: "选择需要的模型供应商" });
+    fireEvent.click(screen.getByRole("button", { name: "添加供应商" }));
+    await screen.findByRole("heading", { name: "配置模型服务" });
+    await next("选择语音识别模型");
     fireEvent.click(screen.getByRole("button", { name: "上一步" }));
-    await waitFor(() => expect(mocks.drivers).toHaveLength(2));
-    expect(screen.queryByRole("heading", { name: "进入供应商配置" })).not.toBeInTheDocument();
-    act(() => lastDriver().config.onNextClick?.(undefined, {} as never, {} as never));
-    fireEvent.click(await screen.findByRole("button", { name: "完成此项" }));
-    expect(document.querySelectorAll(".driver-checklist-item-done")).toHaveLength(1);
+    await screen.findByRole("heading", { name: "配置模型服务" });
+    expect(document.querySelector(".mock-popover")).toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
   });
 
   it("returns from floating ASR guidance without completing the task", async () => {
     render(<Harness />);
     await begin();
     const openConfig = async () => {
-      fireEvent.click(screen.getByRole("button", { name: "语音识别模型" }));
-      await screen.findByRole("heading", { name: "选择使用的模型" });
-      fireEvent.click(screen.getByRole("button", { name: "下一步" }));
-      await screen.findByRole("heading", { name: "进入供应商配置" });
+      fireEvent.click(screen.getByRole("button", { name: "模型配置" }));
+      await screen.findByRole("heading", { name: "选择需要的模型供应商" });
     };
     await openConfig();
     fireEvent.click(screen.getByRole("button", { name: "返回配置清单" }));
@@ -377,13 +464,21 @@ describe("setup onboarding", () => {
     expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
     await openConfig();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("heading", { name: "进入供应商配置" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "选择需要的模型供应商" })).not.toBeInTheDocument();
+  });
+
+  it("opens the current task's documentation from a tour popover", async () => {
+    render(<Harness />);
+    await begin();
+    fireEvent.click(screen.getByRole("button", { name: "快捷键" }));
+    fireEvent.click(await screen.findByRole("button", { name: "帮助" }));
+    expect(mocks.openHelp).toHaveBeenCalledWith("hotkeys");
   });
 
   it("unmount cancels an outstanding target wait and removes the checklist", async () => {
     const view = render(<Harness />);
     await begin();
-    fireEvent.click(screen.getByRole("button", { name: "语音识别模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "模型配置" }));
     view.unmount();
     await act(async () => {});
     expect(document.querySelector(".voicepaste-checklist")).toBeNull();

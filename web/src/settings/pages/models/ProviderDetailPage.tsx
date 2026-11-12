@@ -590,9 +590,7 @@ export function ProviderDetailPage({
         </div>
       </div>
       {renderCredentialCard("shared", sharedFields)}
-
-      {!showTabs && activeCapFields && renderCredentialCard(tab, activeCapFields)}
-      {showTabs && activeCapFields && renderCredentialCard(tab, activeCapFields)}
+      {activeCapFields && renderCredentialCard(tab, activeCapFields)}
 
       {hasAsr && (tab === "asr" || !showTabs) && renderModelSection("asr")}
       {baseModels.length > 0 && (tab === "asr" || !showTabs) && (
@@ -780,7 +778,10 @@ export function ProviderDetailPage({
             setSavingModel(true);
             void changeLlmModels([...llmModels.map(toEntry), { ...newModel, id, name }])
               .then((success) => {
-                if (success) setNewModel(null);
+                if (success) {
+                  setNewModel(null);
+                  setModelModal({ kind: "llm", entryId: id });
+                }
               })
               .finally(() => setSavingModel(false));
           }}
@@ -799,7 +800,12 @@ export function ProviderDetailPage({
         onCreateCustom={() => setNewModel({ id: "", name: "" })}
         onRestorePreset={(modelId) => {
           if (tab === "asr") {
-            void save(withAsrModelVisible(config, modelId, true, models, isModelDownloaded));
+            void save(withAsrModelVisible(config, modelId, true, models, isModelDownloaded)).then(
+              (success) => {
+                const model = models.find((entry) => entry.id === modelId);
+                if (success && model) setModelModal({ kind: "asr", model });
+              },
+            );
           } else {
             const entries: LlmModelEntry[] = llmModels.map((v) => ({
               id: v.id,
@@ -807,12 +813,16 @@ export function ProviderDetailPage({
               model_id: v.modelIdOverride,
               params: v.params,
             }));
-            void changeLlmModels([...entries, { id: modelId }]);
+            void changeLlmModels([...entries, { id: modelId }]).then((success) => {
+              if (success) setModelModal({ kind: "llm", entryId: modelId });
+            });
           }
         }}
         onAddCustom={(id, name) => {
           if (llmModels.some((model) => viewRequestId(model) === id)) return;
-          void changeLlmModels([...llmModels.map(toEntry), { id, name }]);
+          void changeLlmModels([...llmModels.map(toEntry), { id, name }]).then((success) => {
+            if (success) setModelModal({ kind: "llm", entryId: id });
+          });
         }}
       />
 

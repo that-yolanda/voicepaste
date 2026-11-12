@@ -2,12 +2,16 @@ import type { DriveStep } from "driver.js";
 import type { TFunction } from "i18next";
 import type { SectionId } from "@/settings/layout/Sidebar";
 
-export const TASKS = ["permissions", "asr", "llm", "hotkey"] as const;
+export const TASKS = ["permissions", "models", "hotkey"] as const;
 export type TaskId = (typeof TASKS)[number];
+export const TASK_DOC: Record<TaskId, string> = {
+  permissions: "permissions",
+  models: "compatibility",
+  hotkey: "hotkeys",
+};
 export const TASK_SECTION: Record<TaskId, SectionId> = {
   permissions: "app",
-  asr: "models",
-  llm: "models",
+  models: "models",
   hotkey: "hotkey",
 };
 
@@ -32,17 +36,12 @@ export function getSteps(
         step("microphone", "microphone"),
         ...(isMac ? [step("accessibility", "accessibility")] : []),
       ];
-    case "asr":
+    case "models":
       return [
-        step("models-defaults", "modelsDefaults"),
-        step("models-providers", "modelsProviders"),
-      ];
-    case "llm":
-      return [
-        step("models-defaults", "modelsDefaults"),
-        step("models-providers", "modelsProviders"),
-        step("llm-library", "llmLibrary"),
-        step("llm-add-template", "llmTemplateCreate"),
+        step("models-add-provider", "modelProviders"),
+        step("models-providers", "modelSetup"),
+        step("models-default-asr", "modelSelectAsr"),
+        step("models-default-llm", "modelSelectLlm"),
       ];
     case "hotkey":
       return [
@@ -61,13 +60,7 @@ export function getSteps(
 /** Wait for React navigation / async model loading without advancing past a missing target. */
 export function waitForTarget(selector: string, signal: AbortSignal): Promise<Element> {
   return new Promise((resolve, reject) => {
-    const find = () => {
-      const target = document.querySelector(selector);
-      // A provider list that is still loading renders no children.
-      return target?.getAttribute("data-tour") === "models-providers" && !target.children.length
-        ? null
-        : target;
-    };
+    const find = () => document.querySelector(selector);
     const found = find();
     if (signal.aborted) return reject(new Error("cancelled"));
     if (found) return resolve(found);

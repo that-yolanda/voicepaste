@@ -16,6 +16,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import i18next from "i18next";
+import en from "@/locales/en.json";
 import {
   checkForUpdates,
   deleteHistory,
@@ -36,6 +38,8 @@ import {
   onEvent,
   onModelDownloadProgress,
   onUpdateProgress,
+  openExternalUrl,
+  openHelpGuide,
   recordHotkey,
   reinitHotkey,
   requestMicrophoneAccess,
@@ -258,5 +262,33 @@ describe("settings bridge — recordHotkey", () => {
 
     expect(result.keys).toEqual([]);
     expect(result.displayString).toBe("");
+  });
+});
+
+describe("localized help links", () => {
+  it.each([
+    "zh-CN",
+    "en",
+  ])("uses the app language (%s) for documentation and preserves anchors", async (language) => {
+    const previous = i18next.language;
+    try {
+      i18next.addResourceBundle("en", "translation", en);
+      await i18next.changeLanguage(language);
+      const locale = language === "zh-CN" ? "zh" : "en";
+      await openHelpGuide();
+      expect(invoke).toHaveBeenLastCalledWith("plugin:shell|open", {
+        path: `https://voicepaste.dev/${locale}/docs`,
+      });
+      await openExternalUrl("https://voicepaste.dev/docs/api/volcengine#text-models");
+      expect(invoke).toHaveBeenLastCalledWith("plugin:shell|open", {
+        path: `https://voicepaste.dev/${locale}/docs/api/volcengine#text-models`,
+      });
+      await openExternalUrl("https://platform.openai.com/api-keys");
+      expect(invoke).toHaveBeenLastCalledWith("plugin:shell|open", {
+        path: "https://platform.openai.com/api-keys",
+      });
+    } finally {
+      await i18next.changeLanguage(previous);
+    }
   });
 });

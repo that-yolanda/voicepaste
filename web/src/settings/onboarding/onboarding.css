@@ -91,6 +91,11 @@ div.voicepaste-tour {
   line-height: 1.6;
 }
 
+.voicepaste-tour .driver-popover-navigation-btns {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .voicepaste-tour .driver-popover-footer button,
 .voicepaste-checklist .onboarding-exit {
   font-family: inherit;
@@ -101,6 +106,10 @@ div.voicepaste-tour {
   background: var(--color-fill-subtle);
   color: var(--color-text);
   cursor: pointer;
+}
+
+.voicepaste-tour .driver-popover-navigation-btns button + button {
+  margin-left: 0;
 }
 
 .voicepaste-tour .driver-popover-footer button:hover,
@@ -165,4 +174,20 @@ div.voicepaste-tour {
 .driver-active.voicepaste-tour-interactive .driver-overlay * {
   /* biome-ignore lint/complexity/noImportantStyles: Driver.js sets pointer-events inline on the SVG mask path. */
   pointer-events: none !important;
+}
+
+.voicepaste-tour .driver-popover-footer button,
+.onboarding-model-guide button:not([aria-label]) {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  line-height: 30px;
+}
+
+.voicepaste-tour .driver-popover-footer button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }

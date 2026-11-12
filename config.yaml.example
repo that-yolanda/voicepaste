@@ -23,14 +23,13 @@ app:
     end_sound: ""
   beta_updates: false
 
+# New installs start without providers or models. Existing configs are not changed.
+model_providers:
+  added: []
+
 audio:
-  provider: doubao-streaming      # 默认 ASR 引擎，切换模型后自动更新
-  # 如需使用豆包流式 ASR，在设置 UI 中填写凭据。
-  # 如需使用本地 sherpa-onnx 模型，在设置 UI 中切换并下载模型。
-  # 修改任何参数后，对应模型配置段会自动追加到此文件。
+  provider: ""
+  models: []
 
 llm:
-  provider: deepseek
-  deepseek:
-    api_key: ""
-    models: []
+  provider: ""

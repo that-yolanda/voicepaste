@@ -11,6 +11,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import i18next from "i18next";
 import type { FeedbackEnvironment, FeedbackPayload } from "@/settings/lib/feedback";
 import type { HotwordData } from "@/settings/types/hotwords";
 import type { PromptItem } from "@/settings/types/prompts";
@@ -100,13 +101,16 @@ export interface ModelDownloadProgress {
 
 // ---- Data methods ----
 
-export async function openHelpGuide(): Promise<void> {
-  return invoke("plugin:shell|open", {
-    path: "https://voicepaste.dev/docs",
-  });
+export async function openHelpGuide(page = ""): Promise<void> {
+  return openExternalUrl(`https://voicepaste.dev/docs${page ? `/${page}` : ""}`);
 }
 
 export async function openExternalUrl(path: string): Promise<void> {
+  const locale = (i18next.resolvedLanguage ?? i18next.language)?.startsWith("zh") ? "zh" : "en";
+  path = path.replace(
+    /^https:\/\/voicepaste\.dev\/(?:en\/|zh\/)?docs(?=\/|#|$)/,
+    `https://voicepaste.dev/${locale}/docs`,
+  );
   return invoke("plugin:shell|open", { path });
 }
 

@@ -35,8 +35,8 @@ const defaults = {
   ...registry.defaults.asr,
   vad: { ...registry.defaults.vad, threshold: 0.7 },
 } as AsrDefaults;
-function detail(provider: RegistryProvider) {
-  return render(
+function detailNode(provider: RegistryProvider) {
+  return (
     <ProviderDetailPage
       provider={provider}
       providers={providers}
@@ -46,11 +46,16 @@ function detail(provider: RegistryProvider) {
       downloadProgress={{}}
       onDownloadedChange={vi.fn()}
       onBack={vi.fn()}
-    />,
+    />
   );
+}
+function detail(provider: RegistryProvider) {
+  return render(detailNode(provider));
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.save.mockReset().mockResolvedValue(undefined);
+  mocks.refresh.mockReset().mockResolvedValue(undefined);
   mocks.config = {
     audio: {
       provider: "",
@@ -584,4 +589,56 @@ test("model information shows capabilities above languages without opening confi
     tooltip.textContent?.indexOf("支持语言") ?? 0,
   );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+test.each([
+  "speech",
+  "language",
+  "custom",
+])("adding a %s model opens its saved configuration for testing", async (kind) => {
+  mocks.config.llm = { provider: "deepseek", bytedance: { models: [] } };
+  const view = detail(bytedance);
+  mocks.save.mockImplementation(async (next) => {
+    mocks.config = next;
+  });
+  mocks.refresh.mockImplementation(async () => {
+    view.rerender(detailNode(bytedance));
+  });
+  if (kind !== "speech") fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
+  const speechModel = models.find(
+    (model) => model.provider === "bytedance" && model.category === "asr",
+  ) as RegistryModel;
+  const expectedId =
+    kind === "speech" ? speechModel.id : kind === "language" ? "model-a" : "my-model";
+  if (kind === "speech") {
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(speechModel.name) }));
+  } else if (kind === "language") {
+    fireEvent.click(await screen.findByRole("button", { name: "model-a" }));
+  } else {
+    fireEvent.click(screen.getByRole("button", { name: "添加自定义模型" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "显示名称" }), {
+      target: { value: "My model" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Model ID" }), {
+      target: { value: expectedId },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  }
+  await waitFor(() => expect(screen.getByRole("button", { name: "测试" })).toBeInTheDocument());
+  expect(screen.getByRole("heading", { name: "模型配置" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "测试" }));
+  await waitFor(() =>
+    expect(mocks.testModel).toHaveBeenCalledWith(
+      expect.anything(),
+      "bytedance",
+      expectedId,
+      kind === "speech" ? "asr" : "llm",
+      expect.any(String),
+    ),
+  );
+  const select = screen.getByRole("button", { name: "设为默认" });
+  fireEvent.click(select);
+  await waitFor(() => expect(screen.queryByRole("button", { name: "设为默认" })).toBeNull());
+  expect(within(screen.getByRole("dialog")).getByText("当前使用")).toBeInTheDocument();
 });

@@ -205,6 +205,7 @@ export function ModelServicesPage() {
         <SectionContent>
           <SectionItemList>
             <DefaultsRow
+              tourTarget="models-default-asr"
               label={t("ui.models.tab_asr")}
               value={activeAsrId}
               options={asrCandidates.map(({ provider, model }) => ({
@@ -217,6 +218,7 @@ export function ModelServicesPage() {
             />
             <DefaultsRow
               last
+              tourTarget="models-default-llm"
               label={t("ui.models.tab_llm")}
               value={defaultLlm ? `${defaultLlm.provider.id}::${defaultLlm.model.id}` : ""}
               options={llmCandidates.map(({ provider, model }) => ({
@@ -343,27 +345,31 @@ export function ModelServicesPage() {
                   ))}
                 </div>
               </Collapse>
-              <button
-                type="button"
-                aria-expanded={catalogOpen}
-                aria-controls="provider-catalog"
-                className="flex min-h-9 w-full items-center justify-center gap-1 border-t border-border-subtle text-xs text-text-muted hover:bg-fill-hover"
-                onClick={() => {
-                  setCatalogOpen(!catalogOpen);
-                  setDetailProviderId(null);
-                }}
-              >
-                {t(
-                  catalogOpen
-                    ? "ui.models.collapse_providers"
-                    : "ui.models.show_remaining_providers",
-                  { count: catalog.length },
-                )}
-                <ChevronDown
-                  size={13}
-                  className={`transition-transform motion-reduce:transition-none ${catalogOpen ? "rotate-180" : ""}`}
-                />
-              </button>
+              <div data-tour="models-add-provider">
+                <button
+                  type="button"
+                  aria-expanded={catalogOpen}
+                  aria-controls="provider-catalog"
+                  className="flex min-h-9 w-full items-center justify-center gap-1 border-t border-border-subtle text-xs text-text-muted hover:bg-fill-hover"
+                  onClick={() => {
+                    setCatalogOpen(!catalogOpen);
+                    setDetailProviderId(null);
+                  }}
+                >
+                  {t(
+                    catalogOpen
+                      ? "ui.models.collapse_providers"
+                      : visible.length === 0
+                        ? "ui.models.add_provider"
+                        : "ui.models.show_remaining_providers",
+                    { count: catalog.length },
+                  )}
+                  <ChevronDown
+                    size={13}
+                    className={`transition-transform motion-reduce:transition-none ${catalogOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+              </div>
             </>
           )}
         </SectionRows>
@@ -384,12 +390,14 @@ export function ModelServicesPage() {
 
 function DefaultsRow({
   label,
+  tourTarget,
   value,
   options,
   onChange,
   last = false,
 }: {
   label: string;
+  tourTarget: string;
   last?: boolean;
   value: string;
   options: { value: string; label: string }[];
@@ -400,16 +408,18 @@ function DefaultsRow({
       title={label}
       last={last}
       action={
-        <Select
-          aria-label={label}
-          value={options.some((o) => o.value === value) ? value : ""}
-          options={
-            options.some((o) => o.value === value)
-              ? options
-              : [{ value: "", label: "—" }, ...options]
-          }
-          onChange={onChange}
-        />
+        <div data-tour={tourTarget} className="w-full">
+          <Select
+            aria-label={label}
+            value={options.some((o) => o.value === value) ? value : ""}
+            options={
+              options.some((o) => o.value === value)
+                ? options
+                : [{ value: "", label: "—" }, ...options]
+            }
+            onChange={onChange}
+          />
+        </div>
       }
     />
   );

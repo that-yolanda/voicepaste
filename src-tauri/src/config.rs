@@ -1795,6 +1795,19 @@ min_silence_duration: 0.3
         let manager = ConfigManager::new(data.path(), resources.path());
         let config = manager.load_config().unwrap();
         assert!(config.app.onboarding_pending);
+        assert_eq!(config.model_providers.added, Some(vec![]));
+        assert_eq!(config.audio_provider(), "");
+        assert_eq!(
+            config
+                .audio
+                .get("models")
+                .unwrap()
+                .as_sequence()
+                .unwrap()
+                .len(),
+            0
+        );
+        assert_eq!(config.llm.provider, "");
         assert_eq!(config.app.hotkey.as_str(), Some(DEFAULT_HOTKEY));
         assert_eq!(config.app.voice_hotkey.as_deref(), Some(DEFAULT_HOTKEY));
         let prompts = manager.load_prompts();

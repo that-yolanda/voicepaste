@@ -165,3 +165,43 @@ test("adding an inline provider saves it, closes the catalog and opens its edito
   expect(await screen.findByRole("region", { name: "DeepSeek" })).toBeInTheDocument();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
+
+test("fresh installs show only Add Provider and adding one does not seed models", async () => {
+  mocks.config = {
+    model_providers: { added: [] },
+    audio: { provider: "", models: [] },
+    llm: { provider: "" },
+  };
+  const providerName = registry.providers.find((provider) => provider.id === "bytedance")?.name;
+  expect(providerName).toBeTruthy();
+  const view = render(<ModelServicesPage />);
+  mocks.save.mockImplementationOnce(async (config) => {
+    mocks.config = config;
+  });
+  mocks.refresh.mockImplementationOnce(async () => {
+    view.rerender(<ModelServicesPage />);
+  });
+  const add = await screen.findByRole("button", { name: "添加供应商" });
+  expect(add.closest('[data-tour="models-add-provider"]')).toContainElement(add);
+  expect(add).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByRole("button", { name: new RegExp(`^${providerName}`) })).toBeNull();
+  expect(screen.getByRole("combobox", { name: "语音识别" })).toHaveValue("");
+  expect(document.querySelector('[data-tour="models-default-asr"]')).toContainElement(
+    screen.getByRole("combobox", { name: "语音识别" }),
+  );
+  expect(document.querySelector('[data-tour="models-default-llm"]')).toContainElement(
+    screen.getByRole("combobox", { name: "大语言" }),
+  );
+  expect(screen.getByRole("combobox", { name: "大语言" })).toHaveValue("");
+  fireEvent.click(add);
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(`^${providerName}`) }));
+  await screen.findByRole("tab", { name: "语音识别" });
+  expect(mocks.save.mock.calls.at(-1)?.[0]).toMatchObject({
+    model_providers: { added: ["bytedance"] },
+    audio: { models: [] },
+    llm: { bytedance: { models: [] } },
+  });
+  expect(screen.queryByRole("button", { name: /^配置 / })).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  expect(screen.getByText("暂无模型，点击「添加模型」加入")).toBeInTheDocument();
+});
