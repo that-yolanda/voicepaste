@@ -258,8 +258,8 @@
     "doubao.end_window.tooltip": "Ends a sentence after this much continuous silence. Range: 300–5000 ms; recommended: 800–1000 ms. Overrides the semantic segmentation silence threshold.",
     "doubao.force_speech.tooltip": "Treats the start of the audio as speech even during silence, preventing premature segmentation. Recommended: 1000 ms.",
     "doubao.accelerate.tooltip": "Displays the first character sooner, but may reduce its accuracy.",
-    "qwen_llm_url.tooltip": "Default Qwen endpoint:\nhttps://maas.qianwenaiapi.com/compatible-mode/v1\n\nQwen Cloud international (Singapore):\nhttps://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1\n\nAlibaba Cloud Model Studio, Beijing:\nhttps://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1\n\nAlibaba Cloud Model Studio, Singapore:\nhttps://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1\n\nReplace {WorkspaceId} with your workspace ID. Use an API key matching the platform, region and workspace. Enter the Base URL without /chat/completions. Leave blank to restore the default URL.",
-    "qwen_url.tooltip": "Default Qwen endpoint:\nwss://maas.qianwenaiapi.com/api-ws/v1/inference\n\nQwen Cloud international (Singapore):\nwss://ap-southeast-1.maas.qwencloudapi.com/api-ws/v1/inference\n\nAlibaba Cloud Model Studio, Beijing:\nwss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference\n\nAlibaba Cloud Model Studio, Singapore:\nwss://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference\n\nReplace {WorkspaceId} with your workspace ID. Use an API key matching the endpoint, region and workspace. Leave blank to restore the default URL.",
+    "qwen_llm_url.tooltip": "Use the API base URL matching your key’s platform, region, and workspace, without /chat/completions. Leave blank for the Qianwen AI default. See Setup guide for other platforms.",
+    "qwen_url.tooltip": "Use the WebSocket URL (wss://) matching your key’s platform, region, and workspace. Leave blank for the Qianwen AI default. See Setup guide for other platforms.",
     "qwen_intermediate": "Intermediate results",
     "qwen_intermediate.tooltip": "Recommended on to show text as you speak. When off, shows recording status and confirmed sentences. The service default is off.",
     "qwen_dialect": "Preserve dialect",
@@ -278,7 +278,8 @@
     "qwen_languages.invalid": "Use supported language codes, e.g. zh, en, ja, pl.",
     "qwen_languages.too_many": "Choose up to 4 languages.",
     "qwen_languages.tooltip": "Leave blank for automatic detection. Up to 4 comma-separated language codes, e.g. zh, en, ja, pl.",
-    "qwen_multi_threshold": "Multi-threshold segmentation"
+    "qwen_multi_threshold": "Multi-threshold segmentation",
+    "llm_url.tooltip": "Enter the API base URL, such as https://api.example.com/v1, without /chat/completions or /models. Do not use a website or console URL."
   },
   "ui": {
     "library": {
@@ -320,7 +321,7 @@
       "support": "Help & feedback",
       "navigation": "Navigation",
       "general": "General settings",
-      "models_service": "Model Provider"
+      "models_service": "Model Services"
     },
     "heatmap": {
       "title": "Usage",
@@ -389,7 +390,7 @@
       "wake": "Start recording",
       "hotkeys_section": "Hotkeys",
       "voice_input": "Voice input",
-      "no_templates": "No polishing templates yet. Add one on the Polishing templates page."
+      "no_templates": "No polishing templates yet. Add one on the Text Polishing page."
     },
     "home": {
       "greeting": {
@@ -696,7 +697,6 @@
       "tab_asr": "Speech recognition",
       "tab_llm": "LLM",
       "capabilities": "Capability",
-      "how_to_apply": "How to apply",
       "remove_provider": "Remove",
       "remove_provider_confirm": "This removes {{provider}} and all of its configuration (including API keys). Downloaded local model files are kept. Remove it?",
       "credentials": "Credentials",
@@ -713,7 +713,7 @@
       "custom_model_hint": "Custom models must match the provider's OpenAI-compatible API; use the model id your service expects.",
       "model_id": "Model ID",
       "model_id_placeholder": "e.g. qwen3.5:8b",
-      "model_id_description": "The model string actually sent; leave empty to use the preset value.",
+      "model_id_description": "The model identifier sent to the service. Leave blank to use the ID chosen when adding the model or the preset value.",
       "model_name": "Display name",
       "model_name_placeholder": "Shown name for this model",
       "save": "Save",
@@ -738,7 +738,10 @@
       "param_max_tokens": "Max tokens",
       "param_max_tokens.tooltip": "Maximum tokens per response.",
       "param_top_p": "Top P",
-      "param_top_p.tooltip": "Nucleus sampling range, 0–1."
+      "param_top_p.tooltip": "Nucleus sampling range, 0–1.",
+      "setup_guide": "Setup guide",
+      "get_api_key": "Get API key",
+      "test_description": "Tests this model with a built-in sample without switching the current model. Does not check the microphone or auto-paste. Online tests call the provider’s service."
     }
   }
 }

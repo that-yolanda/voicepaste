@@ -14,12 +14,14 @@ const mocks = vi.hoisted(() => ({
   listModels: vi.fn(),
   testModel: vi.fn(),
   cancelTest: vi.fn(),
+  openExternal: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/settings/SettingsProvider", () => ({
   useSettings: () => ({ settings: { parsedConfig: mocks.config }, refresh: mocks.refresh }),
 }));
 vi.mock("@/settings/bridge", () => ({
   saveConfigObject: mocks.save,
+  openExternalUrl: mocks.openExternal,
   deleteModel: vi.fn(),
   downloadModel: vi.fn(),
   listLlmModels: mocks.listModels,
@@ -100,7 +102,7 @@ test("model ID help opens a toast and redundant model hints are absent", () => {
   detail(bytedance);
   fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
   fireEvent.click(screen.getByRole("button", { name: "配置 chosen" }));
-  const description = "实际请求的模型标识；留空使用预置值。";
+  const description = "实际请求使用的模型标识。留空使用添加时的 Model ID 或预置值。";
   expect(screen.queryByText(description)).not.toBeInTheDocument();
   expect(screen.queryByText("推理参数")).not.toBeInTheDocument();
   expect(screen.queryByText(/仅显式设置的参数/)).not.toBeInTheDocument();
@@ -258,7 +260,7 @@ test("ASR usage badge follows the selected model and provider tests are absent",
   expect(screen.queryByText("当前使用")).not.toBeInTheDocument();
 });
 
-test("ByteDance exposes distinct ASR and LLM addresses with their defaults", () => {
+test("Volcengine exposes distinct ASR and LLM addresses with their defaults", () => {
   detail(bytedance);
   const url = screen.getByRole("textbox");
   expect(url).toHaveValue("wss://openspeech.bytedance.com/api/v3/sauc");
@@ -419,12 +421,8 @@ test("Qwen credentials expose only Key and URL with a default and endpoint help"
   const url = screen.getByDisplayValue(endpoint);
   expect(screen.queryByText("接入平台")).not.toBeInTheDocument();
   fireEvent.focus(screen.getByRole("button", { name: "URL说明" }));
-  expect(screen.getByRole("tooltip")).toHaveTextContent(
-    "{WorkspaceId}.cn-beijing.maas.aliyuncs.com",
-  );
-  expect(screen.getByRole("tooltip")).toHaveTextContent(
-    "{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com",
-  );
+  expect(screen.getByRole("tooltip")).toHaveTextContent("平台、地域和业务空间");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("配置教程");
   fireEvent.change(url, { target: { value: "wss://custom.example/asr" } });
   fireEvent.blur(url);
   await waitFor(() => expect(mocks.save).toHaveBeenCalled());
@@ -498,10 +496,8 @@ test("Qwen LLM credentials show endpoint help and save independently of ASR", as
   expect(screen.getByDisplayValue("llm-key")).toHaveAttribute("type", "password");
   const url = screen.getByDisplayValue("https://maas.qianwenaiapi.com/compatible-mode/v1");
   fireEvent.focus(screen.getByRole("button", { name: "URL说明" }));
-  expect(screen.getByRole("tooltip")).toHaveTextContent("ap-southeast-1.maas.qwencloudapi.com");
-  expect(screen.getByRole("tooltip")).toHaveTextContent(
-    "{WorkspaceId}.cn-beijing.maas.aliyuncs.com",
-  );
+  expect(screen.getByRole("tooltip")).toHaveTextContent("配置教程");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("平台、地域和业务空间");
   expect(screen.queryByText("接入平台")).not.toBeInTheDocument();
   fireEvent.change(url, {
     target: { value: "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1" },
@@ -589,6 +585,17 @@ test("model information shows capabilities above languages without opening confi
     tooltip.textContent?.indexOf("支持语言") ?? 0,
   );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+test("provider help follows the selected capability", () => {
+  detail(bytedance);
+  fireEvent.click(screen.getByRole("button", { name: "配置教程" }));
+  expect(mocks.openExternal).toHaveBeenLastCalledWith("https://voicepaste.dev/docs/api/volcengine");
+  fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
+  fireEvent.click(screen.getByRole("button", { name: "配置教程" }));
+  expect(mocks.openExternal).toHaveBeenLastCalledWith(
+    "https://voicepaste.dev/docs/api/volcengine#text-models",
+  );
 });
 
 test.each([

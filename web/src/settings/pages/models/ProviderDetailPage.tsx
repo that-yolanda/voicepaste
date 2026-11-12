@@ -328,6 +328,10 @@ export function ProviderDetailPage({
               if (field.type === "password") meta.type = "password";
               if (scope === "llm" && provider.id === "qwen" && field.key === "url") {
                 meta.tooltip = t("field.qwen_llm_url.tooltip");
+                meta.placeholder = provider.default_llm_url;
+              } else if (scope === "llm" && field.key === "url") {
+                meta.tooltip = t("field.llm_url.tooltip");
+                meta.placeholder = provider.default_llm_url || "https://api.example.com/v1";
               }
               meta.placeholder = meta.placeholder ?? placeholder;
               const control = renderControl(meta, raw, (value) => {
@@ -572,9 +576,16 @@ export function ProviderDetailPage({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void openExternalUrl(provider.docs_url as string)}
+              onClick={() => {
+                const url = `${provider.docs_url}${provider.id === "bytedance" && tab === "llm" ? "#text-models" : ""}`;
+                void openExternalUrl(url).catch(() => showToast(t("ui.nav.help_error"), "error"));
+              }}
             >
-              {t("ui.models.how_to_apply")}
+              {t(
+                provider.docs_url.startsWith("https://voicepaste.dev/")
+                  ? "ui.models.setup_guide"
+                  : "ui.models.get_api_key",
+              )}
               <ExternalLink size={13} />
             </Button>
           )}

@@ -69,7 +69,12 @@ export function useModelTest(target: ModelTestTarget | undefined) {
   return {
     testing,
     button: target ? (
-      <Button variant="ghost" disabled={target.disabled || testing} onClick={() => void run()}>
+      <Button
+        variant="ghost"
+        title={t("ui.models.test_description")}
+        disabled={target.disabled || testing}
+        onClick={() => void run()}
+      >
         {testing ? <LoaderCircle size={15} className="animate-spin" /> : <Play size={15} />}
         {t(testing ? "ui.models.testing" : "ui.models.test")}
       </Button>
