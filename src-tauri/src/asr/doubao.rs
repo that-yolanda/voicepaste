@@ -376,7 +376,7 @@ pub(crate) fn build_api_request_body(
     }
     let mut context_hotwords: Vec<Value> = hotwords
         .iter()
-        .map(|word| word.trim())
+        .map(|word| crate::hotword::strip_weight(word))
         .filter(|word| !word.is_empty())
         .map(|word| json!({ "word": word }))
         .collect();
@@ -1155,6 +1155,28 @@ impl AsrSession for DoubaoSession {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn hotword_weights_are_removed_from_context() {
+        let audio: AudioConfig = serde_json::from_value(json!({})).unwrap();
+        let request: RequestConfig = serde_json::from_value(json!({})).unwrap();
+        let body = build_api_request_body(
+            &audio,
+            &request,
+            &[
+                "VoicePaste|8".into(),
+                "VoicePaste".into(),
+                "中文|3".into(),
+                "|4".into(),
+            ],
+        );
+        let context: Value =
+            serde_json::from_str(body["request"]["corpus"]["context"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            context["hotwords"],
+            json!([{"word":"VoicePaste"},{"word":"中文"}])
+        );
+    }
 
     #[tokio::test]
     async fn modes_and_auth_finish_on_final_packet_without_waiting_for_server_close() {

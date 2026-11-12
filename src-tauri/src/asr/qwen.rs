@@ -145,7 +145,7 @@ impl QwenConfig {
         let mut vocabulary = Map::new();
         let mut skipped = 0;
         for word in words {
-            let word = word.trim();
+            let word = crate::hotword::strip_weight(word);
             if !seen.insert(word) {
                 continue;
             }
@@ -883,7 +883,7 @@ mod tests {
     #[test]
     fn hotwords_are_deduplicated_validated_and_capped_stably() {
         let mut words = vec![
-            "VoicePaste".into(),
+            "VoicePaste|8".into(),
             " VoicePaste ".into(),
             "".into(),
             "中".repeat(16),
@@ -894,6 +894,7 @@ mod tests {
         let vocabulary = params["vocabulary"].as_object().unwrap();
         assert_eq!(vocabulary.len(), 2000);
         assert_eq!(vocabulary["VoicePaste"], 4);
+        assert!(!vocabulary.contains_key("VoicePaste|8"));
         assert!(vocabulary.contains_key("term1998"));
         assert!(!vocabulary.contains_key("term1999"));
         assert_eq!(skipped, 4);

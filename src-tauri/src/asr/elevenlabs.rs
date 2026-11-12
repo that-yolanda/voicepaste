@@ -110,7 +110,7 @@ fn request(
         if config.enable_keyterms {
             let words: BTreeSet<_> = hotwords
                 .iter()
-                .map(|v| v.trim())
+                .map(|v| crate::hotword::strip_weight(v))
                 .filter(|v| !v.is_empty())
                 .collect();
             if words.len() > 50 {
@@ -840,9 +840,12 @@ mod tests {
                 .code,
             AppErrorCode::AsrHotwordTooLong
         );
-        let pairs = params(&config, &[" A&B ".into(), "A&B".into(), "中文".into()]);
+        let pairs = params(&config, &[" A&B|8 ".into(), "A&B".into(), "中文|3".into()]);
         assert_eq!(pairs.iter().filter(|(k, _)| k == "keyterms").count(), 2);
         assert!(pairs.contains(&("keyterms".into(), "A&B".into())));
+        assert!(pairs.contains(&("keyterms".into(), "中文".into())));
+        let weighted = format!("{}|10", "x".repeat(20));
+        assert!(request(&config, &[weighted], ENDPOINT).is_ok());
         config.commit_strategy = "manual".into();
         assert!(!params(&config, &[])
             .iter()
