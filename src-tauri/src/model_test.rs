@@ -102,15 +102,17 @@ async fn run_asr_session(
     speech: &[u8],
 ) -> Result<String, AppError> {
     let session = SessionGuard(session);
-    if speech.is_empty() || speech.len() % 2 != 0 {
+    if speech.is_empty() || !speech.len().is_multiple_of(2) {
         return Err(AppError::new(AppErrorCode::AsrTestFailed).with_detail("Invalid test audio"));
     }
     let committing = std::sync::atomic::AtomicBool::new(false);
     let audio = async {
         for chunk in speech.chunks(3200) {
             let samples: Vec<f32> = chunk
-                .chunks_exact(2)
-                .map(|bytes| i16::from_le_bytes([bytes[0], bytes[1]]) as f32 / 32768.0)
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|bytes| i16::from_le_bytes(*bytes) as f32 / 32768.0)
                 .collect();
             session.0.append_audio(&samples);
             tokio::time::sleep(Duration::from_secs_f64(samples.len() as f64 / 16000.0)).await;

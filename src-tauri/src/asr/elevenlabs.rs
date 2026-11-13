@@ -1558,8 +1558,10 @@ mod tests {
             offset += 8 + size + (size % 2);
         };
         let samples: Vec<f32> = pcm
-            .chunks_exact(2)
-            .map(|v| i16::from_le_bytes([v[0], v[1]]) as f32 / 32768.0)
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|v| i16::from_le_bytes(*v) as f32 / 32768.0)
             .collect();
         for silence_ms in [0_u64, 2500] {
             let (socket, _) = connect_async(request(&config, &[], ENDPOINT).unwrap())
@@ -1635,8 +1637,10 @@ mod tests {
             offset += 8 + size + (size % 2);
         };
         let samples: Vec<f32> = pcm
-            .chunks_exact(2)
-            .map(|v| i16::from_le_bytes([v[0], v[1]]) as f32 / 32768.0)
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|v| i16::from_le_bytes(*v) as f32 / 32768.0)
             .collect();
         let mut cases = vec![(0_u64, false), (2500, false)];
         if std::env::var("ELEVENLABS_TEST_EDITING").as_deref() == Ok("1") {

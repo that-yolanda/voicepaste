@@ -1178,6 +1178,10 @@ mod tests {
         );
     }
 
+    // The tokio-tungstenite handshake callback must return
+    // Result<Response, ErrorResponse>; the Err type's size is fixed by the
+    // crate and cannot be reduced here.
+    #[allow(clippy::result_large_err)]
     #[tokio::test]
     async fn modes_and_auth_finish_on_final_packet_without_waiting_for_server_close() {
         for (mode, path, empty_final) in [

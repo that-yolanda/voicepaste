@@ -810,8 +810,10 @@ mod tests {
 
     #[test]
     fn endpoints_and_parameters_are_validated_without_domain_routing() {
-        let mut config = QwenConfig::default();
-        config.url = "  ".into();
+        let mut config = QwenConfig {
+            url: "  ".into(),
+            ..Default::default()
+        };
         assert_eq!(config.endpoint(), DEFAULT_URL);
         for url in [
             "wss://gateway.example/asr",
@@ -1221,7 +1223,11 @@ mod tests {
             panic!("expected audio");
         };
         assert_eq!(first.len(), 16000);
-        assert!(first.chunks_exact(2).all(|v| v == 8192_i16.to_le_bytes()));
+        assert!(first
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .all(|v| *v == 8192_i16.to_le_bytes()));
         let Some(Ok(Message::Binary(tail))) = server.next().await else {
             panic!("expected tail");
         };
@@ -1362,8 +1368,10 @@ mod tests {
         let fixture = include_bytes!("test-speech.pcm").repeat(repeats);
         for chunk in fixture.chunks(3200) {
             let samples: Vec<f32> = chunk
-                .chunks_exact(2)
-                .map(|v| i16::from_le_bytes([v[0], v[1]]) as f32 / 32768.0)
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|v| i16::from_le_bytes(*v) as f32 / 32768.0)
                 .collect();
             session.append_audio(&samples);
             tokio::time::sleep(Duration::from_secs_f64(samples.len() as f64 / 16000.0)).await;
@@ -1436,8 +1444,10 @@ mod tests {
             offset += 8 + size + (size % 2);
         };
         let samples: Vec<f32> = pcm
-            .chunks_exact(2)
-            .map(|v| i16::from_le_bytes([v[0], v[1]]) as f32 / 32768.0)
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|v| i16::from_le_bytes(*v) as f32 / 32768.0)
             .collect();
         eprintln!("QWEN_LATENCY_CONFIG near_field={} silence_ms={} intermediate={} heartbeat={} words={} audio_ms={}",
             base.vad_model == "near_meeting_16k", base.max_sentence_silence, base.intermediate_result_enabled, base.heartbeat, words.len(),samples.len()*1000/16000);

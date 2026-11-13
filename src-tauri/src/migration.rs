@@ -1441,7 +1441,8 @@ mod config_upgrade_tests {
             template
         );
         let config: crate::config::AppConfig = serde_norway::from_str(template).unwrap();
-        assert!(config.llm.deepseek.unwrap().models.unwrap().is_empty());
+        assert_eq!(config.llm.provider, "");
+        assert!(config.llm.deepseek.is_none());
         assert!(!data.path().join("config.before-v1.yaml").exists());
     }
 
