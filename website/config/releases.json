@@ -1,7 +1,42 @@
 {
-  "latest": "v2.1.6",
+  "latest": "v2.1.7",
   "githubReleases": "https://github.com/that-yolanda/voicepaste/releases",
   "releases": [
+    {
+      "version": "v2.1.7",
+      "date": "2026-11-13",
+      "releaseUrl": "https://github.com/that-yolanda/voicepaste/releases/tag/v2.1.7",
+      "files": [
+        {
+          "platform": "macos-arm64",
+          "filename": "VoicePaste_2.1.7_aarch64.dmg",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.7/VoicePaste_2.1.7_aarch64.dmg",
+          "size": 16527591
+        },
+        {
+          "platform": "macos-x64",
+          "filename": "VoicePaste_2.1.7_x64.dmg",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.7/VoicePaste_2.1.7_x64.dmg",
+          "size": 18627696
+        },
+        {
+          "platform": "windows-x64",
+          "filename": "VoicePaste_2.1.7_x64-setup.exe",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.7/VoicePaste_2.1.7_x64-setup.exe",
+          "size": 10645749
+        },
+        {
+          "platform": "windows-msi",
+          "filename": "VoicePaste_2.1.7_x64_en-US.msi",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.7/VoicePaste_2.1.7_x64_en-US.msi",
+          "size": 15343616
+        }
+      ],
+      "notes": {
+        "en": "This update adds Qwen online speech recognition and Qwen LLM support, rebuilds model management as a provider-centric services page, and safely migrates existing model settings during upgrade.\n\n### Added\n- **Qwen Speech Recognition** — Dictate with Qwen ASR 3.1 (Message and Streaming) across 30 languages through configurable endpoints, with hotwords, language hints, and built-in filler removal and sentence cleanup on the Message model.\n- **Qwen and Volcengine LLMs** — Qwen (including Model Studio) and Volcengine Ark can now polish text alongside the existing providers, with model discovery from the service and custom model entries.\n- **Connection and Model Testing** — Verify provider credentials and test individual models from settings without starting a recording.\n- **Model Discovery** — Fetch available LLM models from each provider and pick or add the ones you use.\n\n### Changed\n- **Provider-Centric Model Services Page** — The ASR and LLM tabs are merged into one Model Services page organized by provider, with per-model config drawers, two-scope credentials, and a compact unified layout.\n- **Simpler First-Run Setup** — New installs start without preselected providers or models; the onboarding guide walks provider setup before choosing speech and language models.\n- **ByteDance is now Volcengine** — The provider uses the vendor's current public name across the app and error messages.\n- **Clearer Setup Links and Help** — Provider links are labeled by whether they open a setup guide or an API key page; URL fields and model tests are explained in place.\n\n### Fixed\n- **Model Settings Survive Upgrades** — Existing LLM endpoints and model selections are migrated on upgrade; a failed migration backs up the config and stops startup instead of losing settings.\n- **No More Blocked Saves** — Unchanged Qwen settings no longer block unrelated saves; invalid configuration fields are identified explicitly.\n- **Hotword Defaults** — Browsing hotword lists no longer changes the active hotword list without an explicit selection.\n- **Weighted Hotwords** — Hotword weights are stripped before requests to online providers that don't support them; local models keep native weight support.\n- **ElevenLabs Finalization** — Final transcripts complete without repeated commit requests.",
+        "zh": "本次更新新增千问（Qwen）在线语音识别与千问大模型润色支持，模型管理重构为以服务商为中心的「模型服务」页，并确保升级时已有模型配置安全迁移。\n\n### 新增\n- **千问语音识别** — 通过可配置端点使用千问 Qwen ASR 3.1（Message 与 Streaming 两种模式）进行 30 种语言的听写，支持热词与语言提示；Message 模式内置口头语去除与句子整理。\n- **千问与火山引擎大模型** — 千问（含 Model Studio）与火山方舟现在可与既有服务商一样用于文本润色，支持从服务发现模型并添加自定义模型。\n- **连接与模型测试** — 在设置中即可验证服务商凭证、测试单个模型，无需开始录音。\n- **模型发现** — 自动获取各服务商可用的大模型列表，直接选用或添加你在用的模型。\n\n### 改进\n- **以服务商为中心的模型服务页** — 原识别模型与大模型两个标签合并为一个「模型服务」页，按服务商组织，支持逐模型配置抽屉、双层级凭证与紧凑统一的布局。\n- **更简单的新手引导** — 新安装不再预选服务商与模型；引导先带你完成服务商配置，再选择识别与大语言模型。\n- **ByteDance 更名为火山引擎** — 应用内与错误提示统一使用该厂商现行的公开名称。\n- **更清晰的配置链接与帮助** — 服务商链接标明打开的是配置教程还是 API Key 页面；URL 字段与模型测试在原位给出说明。\n\n### 修复\n- **升级保留模型配置** — 升级时自动迁移已有的大模型端点与模型选择；迁移失败会备份配置并阻止启动，而不是丢失设置。\n- **保存不再被阻塞** — 未改动的千问设置不再阻塞无关的保存操作；无效配置字段会被明确指出。\n- **热词默认值** — 浏览热词列表不再在未明确选择时更改生效中的热词表。\n- **带权重的热词** — 在不支持权重的在线识别服务请求前自动剥离热词权重；本地模型保留原生权重支持。\n- **ElevenLabs 结束识别** — 最终转写完成时不再重复发送 commit 请求。"
+      }
+    },
     {
       "version": "v2.1.6",
       "date": "2026-10-29",
