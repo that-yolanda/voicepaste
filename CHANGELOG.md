@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.1.7 (2026-11-13)
+This update adds Qwen online speech recognition and Qwen LLM support, rebuilds model management as a provider-centric services page, and safely migrates existing model settings during upgrade.
+
+### Added
+- **Qwen Speech Recognition** — Dictate with Qwen ASR 3.1 (Message and Streaming) across 30 languages through configurable endpoints, with hotwords, language hints, and built-in filler removal and sentence cleanup on the Message model.
+- **Qwen and Volcengine LLMs** — Qwen (including Model Studio) and Volcengine Ark can now polish text alongside the existing providers, with model discovery from the service and custom model entries.
+- **Connection and Model Testing** — Verify provider credentials and test individual models from settings without starting a recording.
+- **Model Discovery** — Fetch available LLM models from each provider and pick or add the ones you use.
+
+### Changed
+- **Provider-Centric Model Services Page** — The ASR and LLM tabs are merged into one Model Services page organized by provider, with per-model config drawers, two-scope credentials, and a compact unified layout.
+- **Simpler First-Run Setup** — New installs start without preselected providers or models; the onboarding guide walks provider setup before choosing speech and language models.
+- **ByteDance is now Volcengine** — The provider uses the vendor's current public name across the app and error messages.
+- **Clearer Setup Links and Help** — Provider links are labeled by whether they open a setup guide or an API key page; URL fields and model tests are explained in place.
+
+### Fixed
+- **Model Settings Survive Upgrades** — Existing LLM endpoints and model selections are migrated on upgrade; a failed migration backs up the config and stops startup instead of losing settings.
+- **No More Blocked Saves** — Unchanged Qwen settings no longer block unrelated saves; invalid configuration fields are identified explicitly.
+- **Hotword Defaults** — Browsing hotword lists no longer changes the active hotword list without an explicit selection.
+- **Weighted Hotwords** — Hotword weights are stripped before requests to online providers that don't support them; local models keep native weight support.
+- **ElevenLabs Finalization** — Final transcripts complete without repeated commit requests.
+
 ## v2.1.6 (2026-10-29)
 This update ships a full English interface with in-app language switching, adds a first-run setup guide, in-app feedback, and pending-update release notes in About, and consolidates the settings pages.
 

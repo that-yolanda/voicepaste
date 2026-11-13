@@ -25,7 +25,7 @@ VoicePaste is a free, open-source, lightweight voice typing app for macOS and Wi
 
 - **Free and open source**: MIT-licensed. Use your own API keys for online services and pay providers directly, so you can check their pricing and your usage.
 - **Lightweight**: The installer is about 20 MB, with around 120 MB of idle memory use on macOS. Recognition models load on demand; memory use varies by model and backend.
-- **Online and local recognition**: Use an online service such as Doubao or ElevenLabs, or download a local model to transcribe offline without an API key. Local recognition keeps your audio on your device.
+- **Online and local recognition**: Use an online service such as Doubao, Qwen, or ElevenLabs, or download a local model to transcribe offline without an API key. Local recognition keeps your audio on your device.
 - **Flexible shortcuts and templates**: Set your preferred shortcuts. In toggle mode, speak first, then choose a template shortcut to turn your words into an email, translate them, or polish them for another task. Use a built-in template or write your own prompt.
 - **Hotwords**: Add names, product names, and technical terms. Organize them into groups and restore saved capitalization and formatting after recognition.
 - **Audio cues**: Hear when VoicePaste is ready for you to speak and when recording has finished. You can turn the cues off or choose your own sounds.
@@ -54,6 +54,7 @@ For permissions, model setup, and your first input, follow the [quick start guid
 | Model and setup guide | Languages | Streaming | Hotwords |
 | --- | --- | --- | --- |
 | [Doubao Streaming ASR 2.0](https://voicepaste.dev/docs/api/volcengine) | Chinese–English speech; dialect support varies by API mode | Native | Supported |
+| [Qwen — ASR 3.1 (Message / Streaming)](https://voicepaste.dev/docs/api/qwen) | Multilingual, 30 languages | Native | Supported |
 | [ElevenLabs — Scribe v2 Realtime](https://voicepaste.dev/docs/api/elevenlabs) | Multilingual; automatic language detection | Native | Enable keyterms in model settings |
 
 Online recognition needs an internet connection and your own API credentials. Check your provider for pricing and available quota.
@@ -77,7 +78,7 @@ See the [model compatibility list](https://voicepaste.dev/docs/compatibility) fo
 
 ### Language models
 
-DeepSeek · OpenAI · Anthropic · Gemini · OpenRouter · SiliconFlow · Ollama · OpenAI-compatible services
+Qwen · Volcengine (Ark) · DeepSeek · OpenAI · Anthropic · Gemini · OpenRouter · SiliconFlow · Ollama · OpenAI-compatible services
 
 Language models are optional and used for polishing and translation.
 

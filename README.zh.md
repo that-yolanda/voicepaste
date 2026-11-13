@@ -25,7 +25,7 @@ VoicePaste 是一款免费、开源、轻量的语音输入法，支持 macOS �
 
 - **免费开源**：采用 MIT 协议。在线服务使用你自己的 API Key，费用直接支付给服务商，价格和用量清晰可查。
 - **轻量运行**：安装包约 20 MB，macOS 空闲时内存占用约 120 MB。识别模型按需加载，使用时的内存占用因模型和运行方式而异。
-- **在线与本地识别**：支持豆包、ElevenLabs 等在线服务，也可以下载本地模型离线识别，无需申请 API Key，音频留在本机。
+- **在线与本地识别**：支持豆包、千问、ElevenLabs 等在线服务，也可以下载本地模型离线识别，无需申请 API Key，音频留在本机。
 - **灵活的快捷键与模板**：自定义习惯的快捷键。在免提模式下，可以先说出内容，再用模板快捷键选择如何处理：整理成邮件、翻译，或用于其他场景。支持内置模板和自定义提示词。
 - **热词库**：添加人名、产品名和专业术语，按场景分组管理，并在识别后还原大小写和特殊格式。
 - **录音提示音**：准备就绪和录音结束时都有提示音，让你知道什么时候可以开始说话、什么时候已经结束。提示音可以关闭或自定义。
@@ -54,6 +54,7 @@ macOS 安装包经过 Apple 签名与公证；Windows 安装包暂未签名，�
 | 模型与配置教程 | 支持语言 | 流式输出 | 热词 |
 | --- | --- | --- | --- |
 | [豆包流式语音识别 2.0](https://voicepaste.dev/docs/api/volcengine) | 中英混说；方言支持随接口模式而异 | 原生支持 | 支持 |
+| [千问 — Qwen ASR 3.1（Message / Streaming）](https://voicepaste.dev/docs/api/qwen) | 多语言，30 种 | 原生支持 | 支持 |
 | [ElevenLabs — Scribe v2 Realtime](https://voicepaste.dev/docs/api/elevenlabs) | 多语言，自动识别语言 | 原生支持 | 需在模型设置中开启热词功能 |
 
 在线识别需要联网，并填写自己申请的 API 凭证。费用与可用额度以服务商为准。
@@ -77,7 +78,7 @@ macOS 安装包经过 Apple 签名与公证；Windows 安装包暂未签名，�
 
 ### 大语言模型
 
-DeepSeek · OpenAI · Anthropic · Gemini · OpenRouter · SiliconFlow · Ollama · OpenAI 兼容服务
+千问 · 火山方舟 · DeepSeek · OpenAI · Anthropic · Gemini · OpenRouter · SiliconFlow · Ollama · OpenAI 兼容服务
 
 大语言模型用于润色和翻译，普通语音输入无需配置。
 
