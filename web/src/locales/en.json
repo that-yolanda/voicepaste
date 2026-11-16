@@ -219,6 +219,7 @@
     "enable_ddc.tooltip": "Removes filler words, repeated starts, and disfluencies; does not affect the real-time transcript",
     "enable_keyterms.tooltip": "Uses the enabled hotwords; up to 50 entries, 20 chars each",
     "enable_keyterms.description": "Enabling raises the base transcription cost by 20%",
+    "openrouter_model.tooltip": "OpenRouter model slug (e.g. qwen/qwen3-asr-1.7b); fetch the live catalog via Add model",
     "commit_strategy.tooltip": "Controls when each transcript segment is confirmed without affecting the live display. Manual: commit the current segment when recording ends; VAD: the server confirms segments on pauses. Both wait for the final result after recording ends.",
     "filter_background_audio.tooltip": "Reduce false recognition from nearby speech and ambient noise",
     "vad_silence_threshold_secs.tooltip": "How long a pause confirms the current segment; 0.3–3 s",

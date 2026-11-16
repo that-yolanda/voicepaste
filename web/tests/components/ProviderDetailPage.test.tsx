@@ -85,6 +85,16 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+test("openrouter add-model auto-fetches the online ASR catalog", async () => {
+  mocks.listAsrModels.mockResolvedValue({
+    data: [{ id: "qwen/qwen3-asr-1.7b", name: "Qwen3 ASR 1.7B · $0.00045/min" }],
+  });
+  const openrouter = providers.find((p) => p.id === "openrouter") as RegistryProvider;
+  detail(openrouter);
+  fireEvent.click(screen.getByRole("button", { name: "添加模型" }));
+  await waitFor(() => expect(mocks.listAsrModels).toHaveBeenCalledWith("openrouter"));
+});
+
 test("model header sets both LLM provider and model without a close icon", () => {
   mocks.config.llm = { provider: "deepseek", bytedance: { models: [{ id: "chosen" }] } };
   detail(bytedance);

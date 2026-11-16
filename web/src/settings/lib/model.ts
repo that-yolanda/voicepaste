@@ -272,6 +272,14 @@ export const FIELD_META: Record<string, FieldMeta> = {
   modeling_unit: { label: "field.modeling_unit", type: "text", group: "basic" },
   max_total_len: { label: "field.max_total_len", type: "number", group: "basic" },
   enable_endpoint: { label: "field.enable_endpoint", type: "toggle", group: "basic" },
+  /* Upstream model selector (OpenRouter catalog models). Reuses the LLM
+   * tab's "Model ID" wording so the same concept reads the same everywhere. */
+  model: {
+    label: "ui.models.model_id",
+    type: "text",
+    group: "basic",
+    tooltip: "field.openrouter_model.tooltip",
+  },
   rule1_min_trailing_silence: {
     label: "field.rule1_min_trailing_silence",
     type: "number",

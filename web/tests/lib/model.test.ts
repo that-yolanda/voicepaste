@@ -59,6 +59,13 @@ describe("getFieldMeta", () => {
     const meta = getFieldMeta("some_unknown_key", 1);
     expect(meta.label).toBe("some unknown key");
   });
+
+  it("reuses the LLM Model ID wording for the upstream model selector", () => {
+    const meta = getFieldMeta("model", "qwen/qwen3-asr-1.7b");
+    expect(meta.label).toBe("ui.models.model_id");
+    expect(meta.type).toBe("text");
+    expect(meta.group).toBe("basic");
+  });
 });
 
 describe("inferControlType", () => {

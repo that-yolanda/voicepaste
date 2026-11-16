@@ -563,7 +563,15 @@ export function ProviderDetailPage({
             </SectionRows>
           </Section>
           <div className="flex justify-start">
-            <Button variant="ghost" onClick={() => setAddModelOpen(true)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setAddModelOpen(true);
+                // Catalog providers fetch the online list on open, matching
+                // the LLM tab's add-model behavior.
+                if (hasAsrCatalog) void fetchModels("asr");
+              }}
+            >
               <Plus size={14} />
               {t("ui.models.add_model")}
             </Button>
