@@ -195,11 +195,40 @@ pub fn ensure_registry(data_dir: &Path, resource_dir: &Path) {
     let bundled = bundled_registry(resource_dir);
 
     if let Some(current) = read_registry_file(&data_path) {
+        let mut current = current;
+        let mut corrected = false;
+        // Update existing OpenRouter entries to the current settings and description.
+        for entry in &mut current.models {
+            if entry.engine != "openrouter" {
+                continue;
+            }
+            corrected |= entry.capabilities.hotwords;
+            entry.capabilities.hotwords = false;
+            if let Some(defaults) = entry
+                .default_config
+                .as_mut()
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                corrected |= defaults.remove("enable_keyterms").is_some();
+            }
+            if entry.description == "一次性整段转写，按秒计费" {
+                entry.description = "一次性整段转写".into();
+                corrected = true;
+            }
+            if entry.description_en.as_deref()
+                == Some("One-shot whole-clip transcription billed per second")
+            {
+                entry.description_en = Some("One-shot whole-clip transcription".into());
+                corrected = true;
+            }
+        }
         let needs_upgrade = bundled.version > current.version
             || (current.defaults.is_none() && bundled.defaults.is_some());
         if needs_upgrade {
             let merged = merge_registry(current, bundled);
             let _ = write_registry_file(&data_path, &merged);
+        } else if corrected {
+            let _ = write_registry_file(&data_path, &current);
         }
         return;
     }
@@ -846,6 +875,37 @@ mod tests {
         bundled_clone.custom = true;
         let error = add_custom_model(data.path(), resources.path(), &bundled_clone).unwrap_err();
         assert_eq!(error.code, AppErrorCode::ModelDuplicateId);
+    }
+
+    #[test]
+    fn ensure_registry_updates_existing_openrouter_entries() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let mut registry: ModelRegistry = serde_json::from_str(EMBEDDED_REGISTRY).unwrap();
+        let mut entry = crate::asr::openrouter::custom_entry("test/model", "My model");
+        entry.capabilities.hotwords = true;
+        entry.default_config.as_mut().unwrap()["enable_keyterms"] = serde_json::json!(true);
+        entry.description = "一次性整段转写，按秒计费".into();
+        entry.description_en = Some("One-shot whole-clip transcription billed per second".into());
+        registry.models.push(entry.clone());
+        write_registry_file(&registry_path(data.path()), &registry).unwrap();
+
+        ensure_registry(data.path(), resources.path());
+        let registry = read_registry_file(&registry_path(data.path())).unwrap();
+        let corrected = registry.models.iter().find(|m| m.id == entry.id).unwrap();
+        assert_eq!(corrected.name, "My model");
+        assert!(!corrected.capabilities.hotwords);
+        assert!(corrected
+            .default_config
+            .as_ref()
+            .unwrap()
+            .get("enable_keyterms")
+            .is_none());
+        assert_eq!(corrected.description, "一次性整段转写");
+        assert_eq!(
+            corrected.description_en.as_deref(),
+            Some("One-shot whole-clip transcription")
+        );
     }
 
     #[test]

@@ -561,6 +561,7 @@ export function isModelFieldVisible(
   key: string,
   config: Record<string, unknown>,
 ): boolean {
+  if (modelId.startsWith("openrouter-") && key === "enable_keyterms") return false;
   if (isQwenModel(modelId)) {
     if (!(key in QWEN_FIELDS)) return false;
     if (["intermediate_result_enabled", "enable_ddc"].includes(key))

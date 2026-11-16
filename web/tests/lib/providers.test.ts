@@ -489,6 +489,25 @@ describe("config patches", () => {
     expect(rec(next.audio).provider).toBe("");
   });
 
+  test("removing a custom default selects another model or clears the default", () => {
+    const customModels: RegistryModel[] = ["first", "second"].map((id) => ({
+      id: `openrouter-${id}`,
+      provider: "openrouter",
+      type: "online",
+      category: "asr",
+      name: id,
+      custom: true,
+    }));
+    const config = {
+      model_providers: { added: ["openrouter"] },
+      audio: { provider: customModels[0].id, models: [] },
+    };
+    const next = withAsrModelVisible(config, customModels[0].id, false, customModels);
+    expect(asRecord(next.audio).provider).toBe(customModels[1].id);
+    const last = withAsrModelVisible(config, customModels[0].id, false, [customModels[0]]);
+    expect(asRecord(last.audio).provider).toBe("");
+  });
+
   test("withAsrCredential writes canonical and strips the legacy copy", () => {
     const config = {
       audio: { "doubao-streaming": { api_key: "legacy", language: "ja" } },

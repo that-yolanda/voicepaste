@@ -525,6 +525,7 @@ export function withAsrModelVisible(
         m.category === "asr" &&
         // Custom entries are always visible candidates; presets must be
         // whitelisted.
+        m.id !== modelId &&
         (m.custom === true || current.has(m.id)) &&
         !!m.provider &&
         added.has(m.provider) &&

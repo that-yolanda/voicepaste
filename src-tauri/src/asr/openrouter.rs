@@ -12,7 +12,6 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -31,10 +30,6 @@ const TIMEOUT_PER_AUDIO_SEC: f32 = 3.0;
 const TIMEOUT_CAP_SECS: f32 = 300.0;
 /// Refuse recordings beyond 10 minutes (~19 MB PCM / ~26 MB base64 JSON).
 const MAX_AUDIO_SECS: f32 = 600.0;
-/// Protocol caps for `keyterms` (see the STT request schema).
-const MAX_KEYTERMS: usize = 1000;
-const MAX_KEYTERM_CHARS: usize = 100;
-
 /// Registry model ids served by this engine all start with this prefix.
 pub fn is_openrouter_model(id: &str) -> bool {
     id.starts_with("openrouter-")
@@ -51,8 +46,6 @@ pub struct OpenRouterAsrConfig {
     pub model: String,
     /// ISO-639-1 code (exactly two letters); empty = provider auto-detect.
     pub language: String,
-    /// Forward hotwords as `keyterms` (only some models support them).
-    pub enable_keyterms: bool,
     /// Sampling temperature, clamped to the 0..=1 protocol range.
     pub temperature: f64,
 }
@@ -64,7 +57,6 @@ impl Default for OpenRouterAsrConfig {
             api_key: String::new(),
             model: "openai/whisper-large-v3".to_string(),
             language: String::new(),
-            enable_keyterms: false,
             temperature: 0.0,
         }
     }
@@ -127,31 +119,6 @@ fn normalized_language(raw: &str) -> Option<String> {
     (trimmed.len() == 2 && trimmed.chars().all(|c| c.is_ascii_alphabetic())).then_some(trimmed)
 }
 
-/// Strip hotword `|weight` suffixes, drop empties, dedupe (order-preserving),
-/// clamp each term to the protocol's 100-char cap and the list to 1000 terms.
-fn prepare_keyterms(hotwords: &[String]) -> Vec<String> {
-    let mut seen = BTreeSet::new();
-    let mut terms = Vec::new();
-    for entry in hotwords {
-        let word = crate::hotword::strip_weight(entry);
-        if word.is_empty() {
-            continue;
-        }
-        let word: String = if word.chars().count() > MAX_KEYTERM_CHARS {
-            word.chars().take(MAX_KEYTERM_CHARS).collect()
-        } else {
-            word.to_string()
-        };
-        if seen.insert(word.clone()) {
-            terms.push(word);
-        }
-        if terms.len() == MAX_KEYTERMS {
-            break;
-        }
-    }
-    terms
-}
-
 /// Per-request deadline: floor 30 s plus 3 s per audio second, capped at
 /// 300 s — a 2-minute recording gets a ~5-minute budget.
 fn request_timeout(audio_secs: f32) -> Duration {
@@ -174,7 +141,7 @@ fn audio_seconds(samples: &[f32]) -> Result<f32, AppError> {
     Ok(secs)
 }
 
-fn build_request_body(audio_b64: &str, config: &OpenRouterAsrConfig, keyterms: &[String]) -> Value {
+fn build_request_body(audio_b64: &str, config: &OpenRouterAsrConfig) -> Value {
     // "wav" wraps the capture pipeline's s16le/16 kHz/mono stream in a
     // RIFF header — the one `input_audio.format` every OpenRouter STT
     // provider accepts (raw "pcm" is provider-dependent).
@@ -185,9 +152,6 @@ fn build_request_body(audio_b64: &str, config: &OpenRouterAsrConfig, keyterms: &
     });
     if let Some(language) = normalized_language(&config.language) {
         body["language"] = json!(language);
-    }
-    if config.enable_keyterms && !keyterms.is_empty() {
-        body["keyterms"] = json!(keyterms);
     }
     body
 }
@@ -305,10 +269,8 @@ pub async fn list_stt_models(url: &str, api_key: &str) -> Result<Value, AppError
     Ok(catalog)
 }
 
-/// Normalize the raw provider catalog into `{data: [{id, name}]}` entries for
-/// the settings UI: entries without a usable id are skipped and the per-minute
-/// audio price is appended to the display name when the provider reports one.
-/// Callers that persist the name strip the ` · $…/min` suffix first.
+/// Normalize the raw provider catalog into `{data: [{id, name}]}` entries.
+/// Pricing units differ across models, so do not infer a per-minute price.
 pub fn catalog_entries(catalog: &Value) -> Value {
     let empty = Vec::new();
     let entries = catalog
@@ -325,33 +287,13 @@ pub fn catalog_entries(catalog: &Value) -> Value {
             continue;
         };
         let name = entry.get("name").and_then(Value::as_str).unwrap_or(id);
-        let label = match entry
-            .pointer("/pricing/prompt")
-            .and_then(Value::as_str)
-            .and_then(|price| price.parse::<f64>().ok())
-        {
-            Some(per_second) => format!("{name} · ${}/min", format_price(per_second * 60.0)),
-            None => name.trim().to_string(),
-        };
-        out.push(json!({ "id": id, "name": label }));
+        out.push(json!({ "id": id, "name": name.trim() }));
     }
     Value::Object(
         [("data".to_string(), Value::Array(out))]
             .into_iter()
             .collect(),
     )
-}
-
-/// Format a USD price with up to 5 decimals and trailing zeros trimmed
-/// ("0.00045", "0.0037", "0.02").
-fn format_price(value: f64) -> String {
-    let text = format!("{value:.5}");
-    let trimmed = text.trim_end_matches('0').trim_end_matches('.');
-    if trimmed.is_empty() {
-        "0".to_string()
-    } else {
-        trimmed.to_string()
-    }
 }
 
 /// Derive a registry model id from an OpenRouter slug:
@@ -388,11 +330,11 @@ pub fn custom_entry(slug: &str, display_name: &str) -> crate::model::ModelEntry 
         provider: Some("openrouter".to_string()),
         name: display_name.to_string(),
         name_en: Some(display_name.to_string()),
-        description: "一次性整段转写，按秒计费".to_string(),
-        description_en: Some("One-shot whole-clip transcription billed per second".to_string()),
+        description: "一次性整段转写".to_string(),
+        description_en: Some("One-shot whole-clip transcription".to_string()),
         capabilities: Capabilities {
             streaming: false,
-            hotwords: true,
+            hotwords: false,
             punctuation: true,
             itn: true,
         },
@@ -414,7 +356,6 @@ pub fn custom_entry(slug: &str, display_name: &str) -> crate::model::ModelEntry 
             "api_key": "",
             "model": slug,
             "language": "",
-            "enable_keyterms": false,
             "temperature": 0,
         })),
         custom: true,
@@ -447,7 +388,7 @@ fn config_invalid(field: &str) -> AppError {
 impl AsrEngine for OpenRouterEngine {
     async fn create_session(
         &self,
-        hotwords: &[String],
+        _hotwords: &[String],
     ) -> Result<(Box<dyn AsrSession>, mpsc::UnboundedReceiver<AsrEvent>), AppError> {
         // HTTP has no connection handshake, so all checks are local and fail
         // fast here rather than after the user has spoken.
@@ -470,20 +411,12 @@ impl AsrEngine for OpenRouterEngine {
             return Err(config_invalid("temperature"));
         }
 
-        // Pre-process hotwords once; they are only sent when the toggle is on.
-        let keyterms = if self.config.enable_keyterms {
-            prepare_keyterms(hotwords)
-        } else {
-            Vec::new()
-        };
-
         let (event_tx, event_rx) = mpsc::unbounded_channel::<AsrEvent>();
         let session = OpenRouterSession {
             is_ready: Arc::new(AtomicBool::new(true)),
             is_committed: Arc::new(AtomicBool::new(false)),
             audio_buffer: Arc::new(Mutex::new(Vec::<f32>::new())),
             config: Arc::new(self.config.clone()),
-            keyterms,
         };
         // HTTP is stateless: the session is ready immediately. No events are
         // produced during recording (one-shot, not streaming).
@@ -501,15 +434,10 @@ struct OpenRouterSession {
     is_committed: Arc<AtomicBool>,
     audio_buffer: Arc<Mutex<Vec<f32>>>,
     config: Arc<OpenRouterAsrConfig>,
-    keyterms: Vec<String>,
 }
 
 /// Submit the whole recording in one request and return the final transcript.
-async fn submit(
-    samples: &[f32],
-    config: &OpenRouterAsrConfig,
-    keyterms: &[String],
-) -> Result<String, AppError> {
+async fn submit(samples: &[f32], config: &OpenRouterAsrConfig) -> Result<String, AppError> {
     // A stop before any audio chunk arrived must not cost a network round
     // trip; surface it as an empty transcript through the existing path.
     if samples.is_empty() {
@@ -522,7 +450,7 @@ async fn submit(
     let audio_secs = audio_seconds(samples)?;
     let wav = wav_s16le_bytes(samples);
     let audio_b64 = STANDARD.encode(&wav);
-    let body = build_request_body(&audio_b64, config, keyterms);
+    let body = build_request_body(&audio_b64, config);
     log_asr!(
         info,
         "OpenRouter ASR submit: model={}, {:.1}s audio, {} bytes WAV",
@@ -610,7 +538,7 @@ impl AsrSession for OpenRouterSession {
                 .map_err(|_| AppError::new(AppErrorCode::AsrWorkerAborted))?,
         );
         self.is_ready.store(false, Ordering::SeqCst);
-        submit(&samples, &self.config, &self.keyterms).await
+        submit(&samples, &self.config).await
     }
 
     fn close(&self) {
@@ -634,7 +562,6 @@ mod tests {
             api_key: "test-key".to_string(),
             model: "openai/whisper-large-v3".to_string(),
             language: String::new(),
-            enable_keyterms: false,
             temperature: 0.0,
         }
     }
@@ -680,49 +607,26 @@ mod tests {
     #[test]
     fn request_body_omits_optional_fields() {
         let config = test_config("https://example.com");
-        let body = build_request_body("QWxwaGE=", &config, &["热词".to_string()]);
+        let body = build_request_body("QWxwaGE=", &config);
         assert_eq!(body["model"], "openai/whisper-large-v3");
         assert_eq!(body["input_audio"]["data"], "QWxwaGE=");
         assert_eq!(body["input_audio"]["format"], "wav");
         assert_eq!(body["temperature"], 0.0);
-        // Empty language = auto-detect; keyterms stay off regardless of the
-        // prepared list while the toggle is disabled.
+        // Empty language = auto-detect; hotwords are not exposed for this engine.
         assert!(body.get("language").is_none());
         assert!(body.get("keyterms").is_none());
     }
 
     #[test]
-    fn request_body_includes_language_and_keyterms() {
-        let mut config = test_config("https://example.com");
-        config.language = "ZH".to_string();
-        config.enable_keyterms = true;
-        let body = build_request_body("AA==", &config, &["Claude Code".to_string()]);
+    fn legacy_keyterms_setting_does_not_send_hotwords() {
+        let config: OpenRouterAsrConfig = serde_json::from_value(json!({
+            "language": "ZH",
+            "enable_keyterms": true,
+        }))
+        .unwrap();
+        let body = build_request_body("AA==", &config);
         assert_eq!(body["language"], "zh");
-        assert_eq!(body["keyterms"][0], "Claude Code");
-    }
-
-    #[test]
-    fn prepare_keyterms_strips_dedupes_and_clamps() {
-        let long: String = "词".repeat(120);
-        let terms = prepare_keyterms(&[
-            "Claude Code|10".to_string(),
-            "流式".to_string(),
-            "Claude Code".to_string(),
-            String::new(),
-            long.clone(),
-        ]);
-        let expected = vec![
-            "Claude Code".to_string(),
-            "流式".to_string(),
-            long.chars().take(100).collect::<String>(),
-        ];
-        assert_eq!(terms, expected);
-    }
-
-    #[test]
-    fn prepare_keyterms_caps_list_length() {
-        let hotwords: Vec<String> = (0..1200).map(|i| format!("词{i}")).collect();
-        assert_eq!(prepare_keyterms(&hotwords).len(), MAX_KEYTERMS);
+        assert!(body.get("keyterms").is_none());
     }
 
     #[test]
@@ -821,13 +725,13 @@ mod tests {
     }
 
     #[test]
-    fn catalog_entries_appends_price_and_skips_bad_rows() {
+    fn catalog_entries_preserves_names_without_inferring_price_units() {
         let catalog = json!({
             "data": [
                 { "id": "openai/whisper-large-v3", "name": "OpenAI: Whisper Large V3",
                   "pricing": { "prompt": "0.0000075" } },
-                { "id": "elevenlabs/scribe-v2", "name": "ElevenLabs: Scribe v2",
-                  "pricing": { "prompt": "0.0000611111" } },
+                { "id": "openai/gpt-4o-transcribe", "name": "GPT-4o Transcribe",
+                  "pricing": { "prompt": "0.0000025", "completion": "0.00001" } },
                 { "id": "", "name": "broken" },
                 { "name": "missing id" },
                 { "id": "no-pricing/model", "name": "No Pricing" }
@@ -839,20 +743,9 @@ mod tests {
             .clone();
         assert_eq!(entries.len(), 3);
         assert_eq!(entries[0]["id"], "openai/whisper-large-v3");
-        assert_eq!(
-            entries[0]["name"],
-            "OpenAI: Whisper Large V3 · $0.00045/min"
-        );
-        assert_eq!(entries[1]["name"], "ElevenLabs: Scribe v2 · $0.00367/min");
+        assert_eq!(entries[0]["name"], "OpenAI: Whisper Large V3");
+        assert_eq!(entries[1]["name"], "GPT-4o Transcribe");
         assert_eq!(entries[2]["name"], "No Pricing");
-    }
-
-    #[test]
-    fn format_price_trims_zeros() {
-        assert_eq!(format_price(0.00045), "0.00045");
-        assert_eq!(format_price(0.0037), "0.0037");
-        assert_eq!(format_price(0.02), "0.02");
-        assert_eq!(format_price(0.0), "0");
     }
 
     #[test]
@@ -878,6 +771,8 @@ mod tests {
         assert_eq!(defaults["model"], "qwen/qwen3-asr-1.7b");
         assert_eq!(defaults["url"], DEFAULT_URL);
         assert!(!entry.capabilities.streaming);
+        assert!(!entry.capabilities.hotwords);
+        assert!(defaults.get("enable_keyterms").is_none());
         assert_eq!(entry.requires_config, Some(vec!["api_key".to_string()]));
     }
 

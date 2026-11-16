@@ -249,3 +249,12 @@ describe("Qwen model settings", () => {
     expect(getFieldMeta("enable_ddc", true, model.id).tooltip).toBe("field.enable_ddc.tooltip");
   });
 });
+
+test("OpenRouter hides the removed hotword setting from saved configs", () => {
+  expect(
+    isModelFieldVisible("openrouter-elevenlabs-scribe-v2", "enable_keyterms", {
+      enable_keyterms: true,
+    }),
+  ).toBe(false);
+  expect(isModelFieldVisible("elevenlabs-realtime", "enable_keyterms", {})).toBe(true);
+});

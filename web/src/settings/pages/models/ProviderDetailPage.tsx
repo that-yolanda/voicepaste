@@ -281,8 +281,7 @@ export function ProviderDetailPage({
   /** Add an online-catalog ASR model (slug from the catalog or manual input),
    * then reopen the config modal for the fresh registry entry. */
   const addAsrModelFlow = async (slug: string, displayName?: string) => {
-    // Catalog rows append " · $x.xx/min" for display; never persist the price.
-    const cleanName = displayName?.split(" · $")[0].trim() || slug;
+    const cleanName = displayName?.trim() || slug;
     try {
       const result = await addAsrModel(provider.id, slug, cleanName);
       const updated = await onRegistryChange();
