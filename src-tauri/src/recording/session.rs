@@ -86,7 +86,7 @@ pub(super) async fn connect_and_attach(
                 AppErrorCode::AsrNetwork | AppErrorCode::AsrTimeout | AppErrorCode::AsrServerError
             )
         } else {
-            config.audio_provider() != crate::config::ELEVENLABS_REALTIME_ID
+            !crate::asr::elevenlabs::is_elevenlabs_model(config.audio_provider())
                 || crate::asr::elevenlabs::retryable_start_error(error.code)
         }
     }) && is_current_epoch(&app_inner, my_epoch)
@@ -207,7 +207,7 @@ pub(super) async fn manage_asr_session(
     // Reconnecting these engines would discard unconfirmed audio/edit state. Fail
     // visibly and retain the full WAV for retry rather than paste a partial prefix.
     let can_reconnect = app_inner.config_manager.load_config().is_ok_and(|config| {
-        config.audio_provider() != crate::config::ELEVENLABS_REALTIME_ID
+        !crate::asr::elevenlabs::is_elevenlabs_model(config.audio_provider())
             && !crate::asr::qwen::is_qwen_model(config.audio_provider())
     });
 

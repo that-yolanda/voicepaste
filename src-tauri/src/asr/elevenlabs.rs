@@ -18,7 +18,9 @@ use tokio_tungstenite::{
 };
 
 use super::{AsrEngine, AsrEvent, AsrSession};
-use crate::config::ElevenLabsRealtimeConfig;
+use crate::config::{
+    ElevenLabsRealtimeConfig, ELEVENLABS_REALTIME_ID, ELEVENLABS_SCRIBE_V3_LIVE_ID,
+};
 use crate::errors::{AppError, AppErrorCode};
 
 const ENDPOINT: &str = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
@@ -30,6 +32,10 @@ const MIN_COMMIT_SAMPLES: usize = 4800;
 // Best-effort window for automatic VAD results racing the final explicit commit.
 // The API does not attach the triggering request ID to committed transcripts.
 const VAD_FINAL_SETTLE: Duration = Duration::from_millis(200);
+
+pub fn is_elevenlabs_model(id: &str) -> bool {
+    matches!(id, ELEVENLABS_REALTIME_ID | ELEVENLABS_SCRIBE_V3_LIVE_ID)
+}
 
 pub struct ElevenLabsEngine {
     config: ElevenLabsRealtimeConfig,
@@ -58,7 +64,7 @@ fn request(
     {
         let mut query = url.query_pairs_mut();
         query
-            .append_pair("model_id", "scribe_v2_realtime")
+            .append_pair("model_id", &config.model)
             .append_pair("audio_format", "pcm_16000")
             .append_pair("commit_strategy", &config.commit_strategy)
             .append_pair(
@@ -88,7 +94,8 @@ fn request(
         {
             query.append_pair("secondary_languages", &code);
         }
-        if config.commit_strategy != "manual" {
+        // Turn prediction also uses VAD as a silence-based fallback.
+        if matches!(config.commit_strategy.as_str(), "vad" | "turn_prediction") {
             for (key, value) in [
                 (
                     "vad_silence_threshold_secs",
@@ -418,9 +425,12 @@ async fn connect_session(
     let editing = url
         .query_pairs()
         .any(|(key, value)| key == "transcript_edit" && !value.is_empty());
-    let manual = !url
+    // Only the manual strategy defers segment commits to the client; vad and
+    // turn_prediction both commit automatically and take the same tail-commit
+    // path when recording stops.
+    let manual = url
         .query_pairs()
-        .any(|(key, value)| key == "commit_strategy" && value == "vad");
+        .any(|(key, value)| key == "commit_strategy" && value == "manual");
     let (mut socket, _) = timeout(CONNECT_TIMEOUT, connect_async(req))
         .await
         .map_err(|_| AppError::new(AppErrorCode::AsrElConnectTimeout))?
@@ -743,6 +753,13 @@ mod tests {
     use tokio::net::{TcpListener, TcpStream};
     use tokio_tungstenite::accept_async;
 
+    #[test]
+    fn recording_policy_recognizes_both_elevenlabs_entries() {
+        assert!(is_elevenlabs_model("elevenlabs-realtime"));
+        assert!(is_elevenlabs_model("elevenlabs-scribe-v3-live"));
+        assert!(!is_elevenlabs_model("doubao-streaming"));
+    }
+
     fn config() -> ElevenLabsRealtimeConfig {
         ElevenLabsRealtimeConfig {
             api_key: "test-secret".into(),
@@ -771,6 +788,7 @@ mod tests {
         assert!(!req.uri().to_string().contains("test-secret"));
         let pairs = params(&config, &[]);
         assert!(pairs.contains(&("language_code".into(), "zh".into())));
+        assert!(pairs.contains(&("model_id".into(), "scribe_v2_realtime".into())));
         assert!(pairs.contains(&("no_verbatim".into(), "true".into())));
         assert_eq!(
             pairs
@@ -787,6 +805,7 @@ mod tests {
     #[test]
     fn defaults_and_validation_do_not_silently_fall_back() {
         let config: ElevenLabsRealtimeConfig = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(config.model, "scribe_v2_realtime");
         assert_eq!(config.commit_strategy, "vad");
         assert_eq!(config.vad_threshold, 0.4);
         assert!(!config.enable_keyterms);
@@ -804,12 +823,16 @@ mod tests {
         )
         .contains(&("no_verbatim".into(), "false".into())));
         for patch in [
+            json!({"model":"scribe_v1"}),
+            json!({"model":""}),
             json!({"vad_threshold":0.0}),
             json!({"vad_silence_threshold_secs":3.1}),
             json!({"min_speech_duration_ms":49}),
             json!({"min_silence_duration_ms":2001}),
             json!({"language":"zh-CN"}),
             json!({"commit_strategy":"auto"}),
+            // turn_prediction requires scribe_v3_live.
+            json!({"commit_strategy":"turn_prediction"}),
         ] {
             let bad: ElevenLabsRealtimeConfig = serde_json::from_value(patch).unwrap();
             assert!(bad.validate().is_err());
@@ -920,8 +943,27 @@ mod tests {
         config.transcript_edit = "x".repeat(2001);
         assert!(config.validate().is_err());
         config.transcript_edit.clear();
+        // turn_prediction is scribe_v3_live only; v2 rejects the combination.
         config.commit_strategy = "turn_prediction".into();
         assert!(config.validate().is_err());
+        config.model = "scribe_v3_live".into();
+        assert!(config.validate().is_ok());
+        // Turn prediction retains all configured VAD fallback parameters.
+        config.vad_silence_threshold_secs = 2.5;
+        config.vad_threshold = 0.6;
+        config.min_speech_duration_ms = 200;
+        config.min_silence_duration_ms = 300;
+        let pairs = params(&config, &[]);
+        for (key, value) in [
+            ("vad_silence_threshold_secs", "2.5"),
+            ("vad_threshold", "0.6"),
+            ("min_speech_duration_ms", "200"),
+            ("min_silence_duration_ms", "300"),
+        ] {
+            assert!(pairs.contains(&(key.into(), value.into())));
+        }
+        assert!(params(&config, &[]).contains(&("model_id".into(), "scribe_v3_live".into())));
+        config.model = "scribe_v2_realtime".into();
         config.commit_strategy = "vad".into();
         assert!(config.validate().is_ok());
         assert!(params(&config, &[])
@@ -963,6 +1005,9 @@ mod tests {
         let (endpoint, server) = mock().await;
         let mut config = config();
         config.commit_strategy = strategy.into();
+        if strategy == "turn_prediction" {
+            config.model = "scribe_v3_live".into();
+        }
         config.vad_silence_threshold_secs = 0.3;
         if editing {
             config.transcript_edit = "Use digits".into();
@@ -1110,6 +1155,32 @@ mod tests {
         assert!(timeout(Duration::from_millis(100), server.next())
             .await
             .is_err());
+        session.close();
+    }
+
+    #[tokio::test]
+    async fn turn_prediction_stop_takes_the_automatic_tail_commit_path() {
+        let (session, _events, mut server) = session_with_options("turn_prediction", false).await;
+        session.append_audio(&[0.1; 1600]);
+        let copy = Arc::clone(&session);
+        let result = tokio::spawn(async move { copy.commit_and_await_final().await });
+        assert_eq!(next_audio(&mut server).await["commit"], false);
+        let commit = next_audio(&mut server).await;
+        assert_eq!(commit["commit"], true);
+        // Silence padding is bundled with the single tail commit, as with vad.
+        let bytes = STANDARD
+            .decode(commit["audio_base_64"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(bytes.len(), 2 * MIN_COMMIT_SAMPLES);
+        send(&mut server, "committed_transcript", "尾句。").await;
+        assert_eq!(
+            timeout(Duration::from_millis(600), result)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+            "尾句。"
+        );
         session.close();
     }
 

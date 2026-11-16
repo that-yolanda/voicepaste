@@ -145,7 +145,7 @@ pub(super) async fn stop_recording(app_handle: AppHandle) {
         .session_epoch
         .load(std::sync::atomic::Ordering::SeqCst);
     let server_final_only = app_inner.config_manager.load_config().is_ok_and(|config| {
-        config.audio_provider() == crate::config::ELEVENLABS_REALTIME_ID
+        crate::asr::elevenlabs::is_elevenlabs_model(config.audio_provider())
             || crate::asr::qwen::is_qwen_model(config.audio_provider())
             || crate::asr::openrouter::is_openrouter_model(config.audio_provider())
     });

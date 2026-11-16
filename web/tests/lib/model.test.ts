@@ -258,3 +258,34 @@ test("OpenRouter hides the removed hotword setting from saved configs", () => {
   ).toBe(false);
   expect(isModelFieldVisible("elevenlabs-realtime", "enable_keyterms", {})).toBe(true);
 });
+
+test("ElevenLabs v3 Live shares the v2 field set, hides the model id and gates VAD tuning", () => {
+  const V2 = "elevenlabs-realtime";
+  const V3 = "elevenlabs-scribe-v3-live";
+  // The registry entry fixes the endpoint model id — never user-editable.
+  expect(isModelFieldVisible(V2, "model", {})).toBe(false);
+  expect(isModelFieldVisible(V3, "model", {})).toBe(false);
+  // Manual commits hide VAD tuning on both models.
+  for (const id of [V2, V3]) {
+    expect(isModelFieldVisible(id, "vad_threshold", { commit_strategy: "vad" })).toBe(true);
+    expect(isModelFieldVisible(id, "vad_threshold", { commit_strategy: "manual" })).toBe(false);
+    expect(isModelFieldVisible(id, "min_silence_duration_ms", { commit_strategy: "manual" })).toBe(
+      false,
+    );
+  }
+  // Context-aware segmentation retains all VAD fallback controls.
+  for (const key of [
+    "vad_silence_threshold_secs",
+    "vad_threshold",
+    "min_speech_duration_ms",
+    "min_silence_duration_ms",
+  ]) {
+    expect(isModelFieldVisible(V3, key, { commit_strategy: "turn_prediction" })).toBe(true);
+  }
+  // The turn_prediction option exists only on Scribe v3 Live.
+  expect(getFieldMeta("commit_strategy", "vad", V2).options).toHaveLength(2);
+  expect(getFieldMeta("commit_strategy", "vad", V3).options).toHaveLength(3);
+  expect(getFieldMeta("commit_strategy", "vad", V3).options?.map((o) => o.value)).toContain(
+    "turn_prediction",
+  );
+});

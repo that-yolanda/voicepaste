@@ -88,12 +88,12 @@ flowchart TD
 
 ## ElevenLabs WebSocket ASR
 
-`elevenlabs.rs` implements ElevenLabs — Scribe v2 Realtime behind the shared `AsrEngine` / `AsrSession` traits. The registry ID is `elevenlabs-realtime`, with `engine: "elevenlabs"`.
+`elevenlabs.rs` implements ElevenLabs realtime STT (Scribe v2 Realtime and Scribe v3 Live) behind the shared `AsrEngine` / `AsrSession` traits. Both registry IDs (`elevenlabs-realtime`, `elevenlabs-scribe-v3-live`) use `engine: "elevenlabs"` and share one implementation; the per-model `model` config field selects the endpoint model id.
 
-- Connects to the realtime WebSocket API with `model_id=scribe_v2_realtime` and the user's `xi-api-key` header.
+- Connects to the realtime WebSocket API with `model_id` from the model config (`scribe_v2_realtime` / `scribe_v3_live`) and the user's `xi-api-key` header.
 - Sends 16 kHz mono PCM as base64 in JSON `input_audio_chunk` messages.
 - Combines `partial_transcript` previews with confirmed `committed_transcript` segments. Optional transcript edits are matched to their original confirmed segments.
-- Supports VAD or manual commit strategies; finalization waits for confirmed text before completing the session.
+- Supports `manual`, `vad`, and `turn_prediction` (Scribe v3 Live only) commit strategies; the v3 entry defaults to `turn_prediction` while v2 defaults to `vad`. `vad` and `turn_prediction` both take the automatic tail-commit path on stop and receive VAD tuning params, since turn prediction retains VAD as a silence-based fallback. Finalization waits for confirmed text before completing the session.
 - Passes enabled hotwords as keyterms only when `enable_keyterms` is on. Language, background-audio filtering, disfluency cleanup, and transcript editing are configured per model.
 
 See the [setup guide](https://voicepaste.dev/en/docs/api/elevenlabs) and [official realtime API reference](https://elevenlabs.io/docs/api-reference/speech-to-text/v-1-speech-to-text-realtime).

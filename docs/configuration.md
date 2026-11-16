@@ -140,6 +140,7 @@ Platform-specific hotkey defaults are resolved by the backend rather than set in
 | `asr_defaults` | object | `registry.json → defaults.asr` | User overrides for shared defaults (rate, channel, num_threads, vad, provider, etc.) |
 | `doubao-streaming` | object | `registry.json → doubao-streaming.default_config` | Doubao credentials + parameter overrides (url, app_id, show_utterances, etc.) |
 | `elevenlabs-realtime` | object | `registry.json → elevenlabs-realtime.default_config` | ElevenLabs — Scribe v2 Realtime credentials and overrides (api_key, language, commit_strategy, enable_keyterms, etc.) |
+| `elevenlabs-scribe-v3-live` | object | `registry.json → elevenlabs-scribe-v3-live.default_config` | ElevenLabs — Scribe v3 Live overrides; shares the provider-level `api_key` with the v2 entry |
 | `<model-id>` | object | `registry.json → <model>.default_config` | Per-model overrides for any registered model |
 
 Per-model configs are keyed by model ID (matching `registry.json`). Each model can override any field from its `default_config`.

@@ -15,11 +15,14 @@ import type { RegistryModel } from "@/settings/types/models";
 
 export const DOUBAO_MODEL_ID = "doubao-streaming";
 export const ELEVENLABS_MODEL_ID = "elevenlabs-realtime";
+export const ELEVENLABS_V3_MODEL_ID = "elevenlabs-scribe-v3-live";
 export const QWEN_MESSAGE_ID = "qwen-asr-message";
 export const QWEN_STREAMING_ID = "qwen-asr-streaming";
 export const QWEN_DEFAULT_URL = "wss://maas.qianwenaiapi.com/api-ws/v1/inference";
 export const isQwenModel = (id: string | undefined): boolean =>
   id === QWEN_MESSAGE_ID || id === QWEN_STREAMING_ID;
+export const isElevenLabsModel = (id: string | undefined): boolean =>
+  id === ELEVENLABS_MODEL_ID || id === ELEVENLABS_V3_MODEL_ID;
 
 /**
  * Localized display fields for a registry model: the optional `*_en` values
@@ -587,16 +590,22 @@ export function isModelFieldVisible(
     if (key === "accelerate_score") return !sentence && config.enable_accelerate_text === true;
     if (key === "vad_segment_duration") return config.end_window_size == null;
   }
-  return (
-    modelId !== ELEVENLABS_MODEL_ID ||
-    config.commit_strategy !== "manual" ||
-    ![
-      "vad_silence_threshold_secs",
-      "vad_threshold",
-      "min_speech_duration_ms",
-      "min_silence_duration_ms",
-    ].includes(key)
-  );
+  if (isElevenLabsModel(modelId)) {
+    // The registry entry itself fixes the endpoint model id.
+    if (key === "model") return false;
+    // Both automatic strategies use VAD; manual commits do not.
+    if (
+      [
+        "vad_silence_threshold_secs",
+        "vad_threshold",
+        "min_speech_duration_ms",
+        "min_silence_duration_ms",
+      ].includes(key)
+    ) {
+      return config.commit_strategy === "vad" || config.commit_strategy === "turn_prediction";
+    }
+  }
+  return true;
 }
 
 /** Infer a control type from the value when FIELD_META omits `type`. */
@@ -617,10 +626,23 @@ export function getFieldMeta(key: string, value: unknown, modelId?: string): Fie
     ? QWEN_FIELDS[key]
     : modelId === DOUBAO_MODEL_ID
       ? DOUBAO_FIELDS[key]
-      : modelId === ELEVENLABS_MODEL_ID
+      : isElevenLabsModel(modelId)
         ? ELEVENLABS_FIELDS[key]
         : undefined;
-  if (meta || override) return { ...(meta ?? { label: key }), ...override };
+  if (meta || override) {
+    const merged = { ...(meta ?? { label: key }), ...override };
+    // turn_prediction (context-aware segmentation) is scribe_v3_live only.
+    if (key === "commit_strategy" && modelId === ELEVENLABS_V3_MODEL_ID) {
+      return {
+        ...merged,
+        options: [
+          ...(merged.options ?? []),
+          { value: "turn_prediction", label: "field.commit_strategy.options.turn_prediction" },
+        ],
+      };
+    }
+    return merged;
+  }
   return {
     label: key.replace(/_/g, " "),
     type: inferControlType(key, value),
@@ -761,7 +783,7 @@ export function getMergedAsrConfig(
   const fieldOrder = Object.keys(
     isQwenModel(model.id)
       ? QWEN_FIELDS
-      : model.id === ELEVENLABS_MODEL_ID
+      : isElevenLabsModel(model.id)
         ? ELEVENLABS_FIELDS
         : FIELD_META,
   );

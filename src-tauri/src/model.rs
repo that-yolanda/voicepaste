@@ -676,12 +676,12 @@ mod tests {
     }
 
     #[test]
-    fn embedded_registry_is_version_27() {
+    fn embedded_registry_is_version_28() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 27,
-            "EMBEDDED_REGISTRY version should be 27, got {}",
+            registry.version, 28,
+            "EMBEDDED_REGISTRY version should be 28, got {}",
             registry.version
         );
         assert!(
@@ -757,8 +757,8 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 27,
-            "bundled_registry should return version 27 from embedded, got {}",
+            registry.version, 28,
+            "bundled_registry should return version 28 from embedded, got {}",
             registry.version
         );
     }
@@ -822,7 +822,7 @@ mod tests {
         custom.id = "user-custom-model".into();
         current.models.push(custom);
         let merged = merge_registry(current, bundled);
-        assert_eq!(merged.version, 27);
+        assert_eq!(merged.version, 28);
         let message = merged
             .models
             .iter()

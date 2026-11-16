@@ -8,12 +8,18 @@ use crate::model::ModelRegistry;
 
 pub const DOUBAO_STREAMING_ID: &str = "doubao-streaming";
 pub const ELEVENLABS_REALTIME_ID: &str = "elevenlabs-realtime";
+pub const ELEVENLABS_SCRIBE_V3_LIVE_ID: &str = "elevenlabs-scribe-v3-live";
 pub const SILERO_VAD_ID: &str = "silero-vad";
 pub const ASR_DEFAULTS_ID: &str = "asr_defaults";
+
+/// ElevenLabs model ids accepted by the realtime endpoint.
+pub const ELEVENLABS_MODEL_V2: &str = "scribe_v2_realtime";
+pub const ELEVENLABS_MODEL_V3_LIVE: &str = "scribe_v3_live";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ElevenLabsRealtimeConfig {
+    pub model: String,
     pub api_key: String,
     pub language: String,
     pub filter_background_audio: bool,
@@ -31,6 +37,7 @@ pub struct ElevenLabsRealtimeConfig {
 impl Default for ElevenLabsRealtimeConfig {
     fn default() -> Self {
         Self {
+            model: ELEVENLABS_MODEL_V2.into(),
             api_key: String::new(),
             language: String::new(),
             filter_background_audio: false,
@@ -49,8 +56,22 @@ impl Default for ElevenLabsRealtimeConfig {
 
 impl ElevenLabsRealtimeConfig {
     pub fn validate(&self) -> Result<(), String> {
-        if !matches!(self.commit_strategy.as_str(), "manual" | "vad") {
-            return Err("ElevenLabs 文本确认方式必须为 manual 或 vad".into());
+        if !matches!(
+            self.model.as_str(),
+            ELEVENLABS_MODEL_V2 | ELEVENLABS_MODEL_V3_LIVE
+        ) {
+            return Err(format!(
+                "ElevenLabs 模型必须为 {ELEVENLABS_MODEL_V2} 或 {ELEVENLABS_MODEL_V3_LIVE}"
+            ));
+        }
+        if !matches!(
+            self.commit_strategy.as_str(),
+            "manual" | "vad" | "turn_prediction"
+        ) {
+            return Err("ElevenLabs 文本确认方式必须为 manual、vad 或 turn_prediction".into());
+        }
+        if self.commit_strategy == "turn_prediction" && self.model != ELEVENLABS_MODEL_V3_LIVE {
+            return Err("ElevenLabs turn_prediction 仅 scribe_v3_live 支持".into());
         }
         if self.transcript_edit.chars().count() > 2000 {
             return Err("ElevenLabs 转写编辑指令最多 2000 个字符".into());
@@ -1357,12 +1378,22 @@ impl ConfigManager {
                 .app,
             &prompts,
         )?;
-        if let Some(raw) = config
-            .get("audio")
-            .and_then(|a| a.get(ELEVENLABS_REALTIME_ID))
-        {
-            let params: ElevenLabsRealtimeConfig = serde_norway::from_value(raw.clone())
+        for (id, registry_model) in [
+            (ELEVENLABS_REALTIME_ID, ELEVENLABS_MODEL_V2),
+            (ELEVENLABS_SCRIBE_V3_LIVE_ID, ELEVENLABS_MODEL_V3_LIVE),
+        ] {
+            let Some(raw) = config.get("audio").and_then(|a| a.get(id)) else {
+                continue;
+            };
+            let mut params: ElevenLabsRealtimeConfig = serde_norway::from_value(raw.clone())
                 .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid))?;
+            // config.yaml stores user overrides only; the registry entry
+            // supplies the model id at resolve time. A missing `model` must
+            // not fall back to the struct default (always v2) — otherwise
+            // saving turn_prediction on the v3 entry would be rejected.
+            if raw.get("model").is_none() {
+                params.model = registry_model.into();
+            }
             params
                 .validate()
                 .map_err(|e| AppError::new(AppErrorCode::AsrConfigInvalid).with_detail(e))?;
@@ -2011,6 +2042,72 @@ mod elevenlabs_tests {
             serde_norway::from_str("vad_threshold: 2.0").unwrap();
         assert!(manager.save_config(&config).is_err());
         assert_eq!(fs::read(manager.config_path()).unwrap(), before);
+    }
+
+    #[test]
+    fn v3_turn_prediction_save_resolves_model_from_registry_entry() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let manager = ConfigManager::new(data.path(), resources.path());
+        manager
+            .save_config(&serde_norway::to_value(manager.load_config().unwrap()).unwrap())
+            .unwrap();
+        let mut config = manager.get_editable_config().unwrap();
+        // The UI patches one field at a time and never writes `model`; the
+        // registry entry must supply it (scribe_v3_live) at validation time —
+        // the struct default (v2) would reject the save.
+        config["audio"][ELEVENLABS_SCRIBE_V3_LIVE_ID] =
+            serde_norway::from_str("commit_strategy: turn_prediction").unwrap();
+        manager.save_config(&config).unwrap();
+        // The resolve path agrees: turn_prediction is valid on the v3 entry.
+        let loaded = manager.load_config().unwrap();
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        let resolved =
+            AppConfig::resolve_model_config(&registry, ELEVENLABS_SCRIBE_V3_LIVE_ID, &loaded.audio);
+        let params: ElevenLabsRealtimeConfig = serde_json::from_value(resolved).unwrap();
+        assert_eq!(params.model, "scribe_v3_live");
+        assert_eq!(params.commit_strategy, "turn_prediction");
+        assert!(params.validate().is_ok());
+        // An explicit v2 model on the v3 entry is still rejected.
+        let mut config = manager.get_editable_config().unwrap();
+        config["audio"][ELEVENLABS_SCRIBE_V3_LIVE_ID] =
+            serde_norway::from_str("commit_strategy: turn_prediction\nmodel: scribe_v2_realtime")
+                .unwrap();
+        assert!(manager.save_config(&config).is_err());
+        // turn_prediction on the v2 entry (no model override) stays invalid.
+        config["audio"][ELEVENLABS_SCRIBE_V3_LIVE_ID] =
+            serde_norway::from_str("commit_strategy: vad").unwrap();
+        config["audio"][ELEVENLABS_REALTIME_ID] =
+            serde_norway::from_str("commit_strategy: turn_prediction").unwrap();
+        assert!(manager.save_config(&config).is_err());
+    }
+
+    #[test]
+    fn v3_entry_defaults_to_turn_prediction_without_user_overrides() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let manager = ConfigManager::new(data.path(), resources.path());
+        manager
+            .save_config(&serde_norway::to_value(manager.load_config().unwrap()).unwrap())
+            .unwrap();
+        let loaded = manager.load_config().unwrap();
+        let registry = crate::model::load_registry(data.path(), resources.path());
+        // No user overrides: the v3 entry resolves to turn_prediction, the v2
+        // entry keeps its vad default.
+        for (id, strategy, model) in [
+            (
+                ELEVENLABS_SCRIBE_V3_LIVE_ID,
+                "turn_prediction",
+                "scribe_v3_live",
+            ),
+            (ELEVENLABS_REALTIME_ID, "vad", "scribe_v2_realtime"),
+        ] {
+            let resolved = AppConfig::resolve_model_config(&registry, id, &loaded.audio);
+            let params: ElevenLabsRealtimeConfig = serde_json::from_value(resolved).unwrap();
+            assert_eq!(params.commit_strategy, strategy);
+            assert_eq!(params.model, model);
+            assert!(params.validate().is_ok());
+        }
     }
 
     #[tokio::test]
