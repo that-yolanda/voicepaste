@@ -819,11 +819,11 @@ pub async fn list_llm_models(
 }
 
 /// List a provider's online ASR model catalog (v1: OpenRouter STT models).
-/// The URL and optional API key come from the merged model config, so a key
-/// saved in the credential card is picked up automatically.
+/// The URL and optional API key come from the provider credential card
+/// (`audio.credentials.openrouter`); the catalog endpoint itself is public,
+/// so a missing key still works.
 #[tauri::command]
 pub async fn list_asr_models(
-    app: AppHandle,
     state: State<'_, AppState>,
     provider_id: String,
 ) -> Result<serde_json::Value, AppError> {
@@ -835,34 +835,29 @@ pub async fn list_asr_models(
         .config_manager
         .load_config()
         .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
-    let dirs = model_dirs(&app)?;
-    let registry = model::load_registry(&dirs.0, &dirs.1);
-    let entry = registry
-        .models
-        .iter()
-        .find(|m| m.engine == "openrouter")
-        .ok_or_else(|| {
-            AppError::new(AppErrorCode::ModelNotInRegistry).with_param("model", "openrouter")
-        })?;
-    let merged =
-        crate::config::AppConfig::resolve_model_config(&registry, &entry.id, &config.audio);
-    let url = merged
-        .get("url")
-        .and_then(serde_json::Value::as_str)
-        .filter(|s| !s.trim().is_empty())
+    let credentials = config
+        .audio
+        .get("credentials")
+        .and_then(|block| block.get("openrouter"));
+    let url = credentials
+        .and_then(|block| block.get("url"))
+        .and_then(serde_norway::Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
         .unwrap_or(crate::asr::openrouter::DEFAULT_URL);
-    let api_key = merged
-        .get("api_key")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("");
-    let catalog = crate::asr::openrouter::list_stt_models(url, api_key).await?;
+    let api_key = credentials
+        .and_then(|block| block.get("api_key"))
+        .and_then(serde_norway::Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let catalog = crate::asr::openrouter::list_stt_models(url, &api_key).await?;
     Ok(crate::asr::openrouter::catalog_entries(&catalog))
 }
 
 /// Add an OpenRouter STT model from the online catalog (or a manual slug) to
-/// the user registry as a custom entry. The entry mirrors the bundled seed
-/// entry with `model` set to the slug, so engine dispatch and the settings
-/// UI work without further wiring.
+/// the user registry as a custom entry. Custom entries are always visible in
+/// the settings UI, so this single write completes the add flow.
 #[tauri::command]
 pub async fn add_asr_model(
     app: AppHandle,
@@ -879,31 +874,14 @@ pub async fn add_asr_model(
         return Err(AppError::new(AppErrorCode::AsrRequestInvalid)
             .with_detail("model slug must be 1-200 characters"));
     }
-    let dirs = model_dirs(&app)?;
-    let registry = model::load_registry(&dirs.0, &dirs.1);
-    let seed = registry
-        .models
-        .iter()
-        .find(|m| m.engine == "openrouter")
-        .ok_or_else(|| {
-            AppError::new(AppErrorCode::ModelNotInRegistry).with_param("model", "openrouter")
-        })?
-        .clone();
-
     let display_name = name
         .as_deref()
         .map(str::trim)
         .filter(|n| !n.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| slug.to_string());
-    let mut entry = seed;
-    entry.id = crate::asr::openrouter::custom_model_id(slug);
-    entry.custom = true;
-    entry.name = display_name.clone();
-    entry.name_en = Some(display_name);
-    if let Some(defaults) = entry.default_config.as_mut() {
-        defaults["model"] = serde_json::json!(slug);
-    }
+    let entry = crate::asr::openrouter::custom_entry(slug, &display_name);
+    let dirs = model_dirs(&app)?;
     model::add_custom_model(&dirs.0, &dirs.1, &entry)?;
     Ok(serde_json::json!({ "ok": true, "id": entry.id }))
 }

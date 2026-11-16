@@ -173,13 +173,10 @@ export function ProviderDetailPage({
   );
   const hiddenAsrPresets = useMemo(() => {
     const all = models.filter((m) => m.provider === provider.id && m.category === "asr");
-    return all.filter((m) => !asrModels.some((v) => v.id === m.id));
+    return all.filter((m) => m.custom !== true && !asrModels.some((v) => v.id === m.id));
   }, [models, provider.id, asrModels]);
   /** The provider exposes an online ASR catalog (fetchable model list). */
-  const hasAsrCatalog = useMemo(
-    () => models.some((m) => m.provider === provider.id && m.engine === "openrouter"),
-    [models, provider.id],
-  );
+  const hasAsrCatalog = provider.id === "openrouter";
   const baseModels = useMemo(
     () =>
       provider.id === "local_asr"

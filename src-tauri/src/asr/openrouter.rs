@@ -3,7 +3,7 @@
 //! Unlike the streaming WebSocket engines, this backend buffers the whole
 //! recording and submits it in a single HTTP request once the user stops.
 //! Audio chunks arriving via `append_audio` are held until
-//! `commit_and_await_final` flushes them as base64 PCM inside a JSON body.
+//! `commit_and_await_final` flushes them as base64 WAV inside a JSON body.
 //! No partial results are produced during recording — the caller shows the
 //! static recording hint (`show_recording_hint = true`) and the mic-driven
 //! waveform instead.
@@ -88,6 +88,33 @@ fn pcm_s16le_bytes(samples: &[f32]) -> Vec<u8> {
         .collect()
 }
 
+/// Wrap s16le samples in a canonical 44-byte WAV (RIFF) header.
+///
+/// Providers behind OpenRouter vary in accepted `input_audio.format`: raw
+/// headerless "pcm" is only honored by some (ElevenLabs Scribe), while every
+/// provider tested (Qwen3-ASR, Whisper, Nova-3, GPT-Transcribe) decodes
+/// "wav" — the 44-byte overhead is negligible, so WAV is the safe default.
+fn wav_s16le_bytes(samples: &[f32]) -> Vec<u8> {
+    let data = pcm_s16le_bytes(samples);
+    let data_len = data.len() as u32;
+    let mut wav = Vec::with_capacity(44 + data.len());
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&36u32.wrapping_add(data_len).to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes()); // fmt chunk size
+    wav.extend_from_slice(&1u16.to_le_bytes()); // PCM format tag
+    wav.extend_from_slice(&1u16.to_le_bytes()); // mono
+    wav.extend_from_slice(&(SAMPLE_RATE as u32).to_le_bytes());
+    wav.extend_from_slice(&((SAMPLE_RATE as u32) * 2).to_le_bytes()); // byte rate
+    wav.extend_from_slice(&2u16.to_le_bytes()); // block align
+    wav.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_len.to_le_bytes());
+    wav.extend_from_slice(&data);
+    wav
+}
+
 /// Gate the `language` setting to the ISO-639-1 subset the protocol accepts:
 /// empty → `None` (omit the field, provider auto-detects); exactly two ASCII
 /// letters → normalized lowercase; anything else was rejected at session
@@ -148,11 +175,12 @@ fn audio_seconds(samples: &[f32]) -> Result<f32, AppError> {
 }
 
 fn build_request_body(audio_b64: &str, config: &OpenRouterAsrConfig, keyterms: &[String]) -> Value {
-    // "pcm" = headerless signed 16-bit little-endian mono audio at 16 kHz,
-    // which is exactly what the capture pipeline produces.
+    // "wav" wraps the capture pipeline's s16le/16 kHz/mono stream in a
+    // RIFF header — the one `input_audio.format` every OpenRouter STT
+    // provider accepts (raw "pcm" is provider-dependent).
     let mut body = json!({
         "model": config.model.trim(),
-        "input_audio": { "data": audio_b64, "format": "pcm" },
+        "input_audio": { "data": audio_b64, "format": "wav" },
         "temperature": config.temperature,
     });
     if let Some(language) = normalized_language(&config.language) {
@@ -183,6 +211,22 @@ fn classify_http_error(status: u16) -> AppErrorCode {
         500..=599 => AppErrorCode::AsrServerError,
         _ => AppErrorCode::AsrRequestInvalid,
     }
+}
+
+/// Opaque provider-side failures forwarded by OpenRouter as HTTP 400. They
+/// are not caused by our request shape (a genuine parameter problem gets an
+/// actionable message such as "does not support keyterms"), so surface them
+/// as server errors instead of the misleading "invalid request".
+fn is_provider_side_rejection(message: &str) -> bool {
+    message.starts_with("Provider returned") || message.starts_with("Provider could not process")
+}
+
+/// Status plus provider message → user-facing code.
+fn classify_rejection(status: u16, message: &str) -> AppErrorCode {
+    if status == 400 && is_provider_side_rejection(message) {
+        return AppErrorCode::AsrServerError;
+    }
+    classify_http_error(status)
 }
 
 /// Extract `error.message` from an OpenRouter error body; fall back to the
@@ -330,6 +374,53 @@ pub fn custom_model_id(slug: &str) -> String {
     format!("openrouter-{trimmed}")
 }
 
+/// Build the registry entry for a user-added catalog model. The template
+/// lives in code (not in the bundled registry) so no OpenRouter model ships
+/// built-in — users start from an empty list and add what they want from
+/// the online catalog.
+pub fn custom_entry(slug: &str, display_name: &str) -> crate::model::ModelEntry {
+    use crate::model::{Capabilities, ModelCategory, ModelEntry};
+    ModelEntry {
+        id: custom_model_id(slug),
+        model_type: "online".to_string(),
+        category: ModelCategory::Asr,
+        engine: "openrouter".to_string(),
+        provider: Some("openrouter".to_string()),
+        name: display_name.to_string(),
+        name_en: Some(display_name.to_string()),
+        description: "一次性整段转写，按秒计费".to_string(),
+        description_en: Some("One-shot whole-clip transcription billed per second".to_string()),
+        capabilities: Capabilities {
+            streaming: false,
+            hotwords: true,
+            punctuation: true,
+            itn: true,
+        },
+        languages: [
+            "zh", "yue", "en", "ja", "ko", "de", "es", "fr", "pt", "ru", "ar", "it", "nl", "pl",
+            "tr", "vi", "th", "id", "hi",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect(),
+        requires_config: Some(vec!["api_key".to_string()]),
+        architecture: None,
+        download_url: None,
+        file_size: None,
+        mem_size: None,
+        model_files: std::collections::HashMap::new(),
+        default_config: Some(json!({
+            "url": DEFAULT_URL,
+            "api_key": "",
+            "model": slug,
+            "language": "",
+            "enable_keyterms": false,
+            "temperature": 0,
+        })),
+        custom: true,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // OpenRouterEngine — AsrEngine implementation
 // ---------------------------------------------------------------------------
@@ -429,15 +520,15 @@ async fn submit(
         return Ok(String::new());
     }
     let audio_secs = audio_seconds(samples)?;
-    let pcm = pcm_s16le_bytes(samples);
-    let audio_b64 = STANDARD.encode(&pcm);
+    let wav = wav_s16le_bytes(samples);
+    let audio_b64 = STANDARD.encode(&wav);
     let body = build_request_body(&audio_b64, config, keyterms);
     log_asr!(
         info,
-        "OpenRouter ASR submit: model={}, {:.1}s audio, {} bytes PCM",
+        "OpenRouter ASR submit: model={}, {:.1}s audio, {} bytes WAV",
         config.model.trim(),
         audio_secs,
-        pcm.len()
+        wav.len()
     );
 
     let url = format!(
@@ -466,11 +557,12 @@ async fn submit(
         ))
     })?;
     if !status.is_success() {
-        let code = classify_http_error(status.as_u16());
+        let message = error_message(&text);
+        let code = classify_rejection(status.as_u16(), &message);
         return Err(AppError::new(code).with_detail(format!(
             "HTTP {}: {}",
             status.as_u16(),
-            error_message(&text)
+            message
         )));
     }
     let transcript = parse_response(&text)?;
@@ -560,12 +652,38 @@ mod tests {
     }
 
     #[test]
+    fn wav_wraps_canonical_44_byte_header() {
+        let wav = wav_s16le_bytes(&[0.0; 16000]); // 1 s
+        assert_eq!(wav.len(), 44 + 32000);
+        assert_eq!(&wav[0..4], b"RIFF");
+        assert_eq!(&wav[8..12], b"WAVE");
+        assert_eq!(&wav[12..16], b"fmt ");
+        assert_eq!(&wav[36..40], b"data");
+        // RIFF size + 8 == file length; data size == payload length.
+        assert_eq!(
+            u32::from_le_bytes(wav[4..8].try_into().unwrap()) as usize + 8,
+            wav.len()
+        );
+        assert_eq!(
+            u32::from_le_bytes(wav[40..44].try_into().unwrap()) as usize,
+            32000
+        );
+        // fmt payload: PCM tag, mono, 16 kHz, 32 kB/s, 2-byte align, 16-bit.
+        assert_eq!(u16::from_le_bytes(wav[20..22].try_into().unwrap()), 1);
+        assert_eq!(u16::from_le_bytes(wav[22..24].try_into().unwrap()), 1);
+        assert_eq!(u32::from_le_bytes(wav[24..28].try_into().unwrap()), 16000);
+        assert_eq!(u32::from_le_bytes(wav[28..32].try_into().unwrap()), 32000);
+        assert_eq!(u16::from_le_bytes(wav[32..34].try_into().unwrap()), 2);
+        assert_eq!(u16::from_le_bytes(wav[34..36].try_into().unwrap()), 16);
+    }
+
+    #[test]
     fn request_body_omits_optional_fields() {
         let config = test_config("https://example.com");
         let body = build_request_body("QWxwaGE=", &config, &["热词".to_string()]);
         assert_eq!(body["model"], "openai/whisper-large-v3");
         assert_eq!(body["input_audio"]["data"], "QWxwaGE=");
-        assert_eq!(body["input_audio"]["format"], "pcm");
+        assert_eq!(body["input_audio"]["format"], "wav");
         assert_eq!(body["temperature"], 0.0);
         // Empty language = auto-detect; keyterms stay off regardless of the
         // prepared list while the toggle is disabled.
@@ -657,6 +775,35 @@ mod tests {
     }
 
     #[test]
+    fn classify_rejection_separates_provider_faults_from_bad_params() {
+        // Opaque provider-side 400s are server errors, not our fault.
+        assert_eq!(
+            classify_rejection(400, "Provider returned 400"),
+            AppErrorCode::AsrServerError
+        );
+        assert_eq!(
+            classify_rejection(
+                400,
+                "Provider could not process the audio input (unsupported or malformed audio)"
+            ),
+            AppErrorCode::AsrServerError
+        );
+        // Actionable parameter problems stay request-invalid…
+        assert_eq!(
+            classify_rejection(
+                400,
+                "The selected model does not support keyterms. Remove the field"
+            ),
+            AppErrorCode::AsrRequestInvalid
+        );
+        // …and so do provider-side messages on non-400 statuses.
+        assert_eq!(
+            classify_rejection(422, "Provider returned 400"),
+            AppErrorCode::AsrRequestInvalid
+        );
+    }
+
+    #[test]
     fn error_message_extracts_provider_detail() {
         let body = r#"{"error":{"code":402,"message":"Insufficient credits"}}"#;
         assert_eq!(error_message(body), "Insufficient credits");
@@ -718,6 +865,20 @@ mod tests {
             custom_model_id(" Qwen/Qwen3-ASR:free "),
             "openrouter-qwen-qwen3-asr-free"
         );
+    }
+
+    #[test]
+    fn custom_entry_builds_registry_template() {
+        let entry = custom_entry("qwen/qwen3-asr-1.7b", "Qwen3 ASR 1.7B");
+        assert_eq!(entry.id, "openrouter-qwen-qwen3-asr-1.7b");
+        assert_eq!(entry.engine, "openrouter");
+        assert_eq!(entry.provider.as_deref(), Some("openrouter"));
+        assert!(entry.custom);
+        let defaults = entry.default_config.as_ref().expect("template defaults");
+        assert_eq!(defaults["model"], "qwen/qwen3-asr-1.7b");
+        assert_eq!(defaults["url"], DEFAULT_URL);
+        assert!(!entry.capabilities.streaming);
+        assert_eq!(entry.requires_config, Some(vec!["api_key".to_string()]));
     }
 
     #[tokio::test]
@@ -786,7 +947,7 @@ mod tests {
     fn transcription_mock(status: u16, body: String) -> Mock {
         Mock::given(method("POST"))
             .and(path("/audio/transcriptions"))
-            .and(body_partial_json(json!({"input_audio": {"format": "pcm"}})))
+            .and(body_partial_json(json!({"input_audio": {"format": "wav"}})))
             .respond_with(ResponseTemplate::new(status).set_body_string(body))
     }
 
@@ -811,17 +972,23 @@ mod tests {
     #[tokio::test]
     async fn commit_maps_http_errors_to_codes() {
         let cases = [
-            (401u16, AppErrorCode::AsrAuthFailed),
-            (402, AppErrorCode::AsrQuotaExhausted),
-            (429, AppErrorCode::AsrRateLimited),
-            (504, AppErrorCode::AsrTimeout),
-            (529, AppErrorCode::AsrServerError),
+            (401u16, "boom", AppErrorCode::AsrAuthFailed),
+            (
+                400,
+                "The selected model does not support keyterms",
+                AppErrorCode::AsrRequestInvalid,
+            ),
+            (400, "Provider returned 400", AppErrorCode::AsrServerError),
+            (402, "Insufficient credits", AppErrorCode::AsrQuotaExhausted),
+            (429, "Rate limited", AppErrorCode::AsrRateLimited),
+            (504, "Gateway timeout", AppErrorCode::AsrTimeout),
+            (529, "Overloaded", AppErrorCode::AsrServerError),
         ];
-        for (status, code) in cases {
+        for (status, message, code) in cases {
             let server = MockServer::start().await;
             transcription_mock(
                 status,
-                r#"{"error":{"code":500,"message":"boom"}}"#.to_string(),
+                format!(r#"{{"error":{{"code":{status},"message":"{message}"}}}}"#),
             )
             .mount(&server)
             .await;
@@ -831,7 +998,7 @@ mod tests {
             let error = session.commit_and_await_final().await.unwrap_err();
             assert_eq!(error.code, code, "status {status}");
             assert!(
-                error.detail.as_deref().is_some_and(|d| d.contains("boom")),
+                error.detail.as_deref().is_some_and(|d| d.contains(message)),
                 "status {status}"
             );
         }

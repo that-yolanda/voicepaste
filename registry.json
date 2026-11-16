@@ -633,53 +633,6 @@
       ]
     },
     {
-      "id": "openrouter-transcribe",
-      "provider": "openrouter",
-      "type": "online",
-      "category": "asr",
-      "engine": "openrouter",
-      "name": "OpenRouter 语音转写",
-      "name_en": "OpenRouter Transcribe",
-      "description": "一次性整段转写，按秒计费；更多模型可在模型设置中在线获取",
-      "description_en": "One-shot whole-clip transcription billed per second; more models via the in-app catalog",
-      "capabilities": {
-        "streaming": false,
-        "hotwords": true,
-        "punctuation": true,
-        "itn": true
-      },
-      "requires_config": ["api_key"],
-      "default_config": {
-        "url": "https://openrouter.ai/api/v1",
-        "api_key": "",
-        "model": "openai/whisper-large-v3",
-        "language": "",
-        "enable_keyterms": false,
-        "temperature": 0
-      },
-      "languages": [
-        "zh",
-        "yue",
-        "en",
-        "ja",
-        "ko",
-        "de",
-        "es",
-        "fr",
-        "pt",
-        "ru",
-        "ar",
-        "it",
-        "nl",
-        "pl",
-        "tr",
-        "vi",
-        "th",
-        "id",
-        "hi"
-      ]
-    },
-    {
       "id": "silero-vad",
       "provider": "local_asr",
       "type": "offline",

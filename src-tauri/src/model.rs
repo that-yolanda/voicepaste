@@ -826,21 +826,15 @@ mod tests {
         let data = tempfile::tempdir().unwrap();
         let resources = tempfile::tempdir().unwrap();
         let bundled: ModelRegistry = serde_json::from_str(EMBEDDED_REGISTRY).unwrap();
-        let mut entry = bundled
-            .models
-            .iter()
-            .find(|m| m.id == "openrouter-transcribe")
-            .expect("openrouter seed entry")
-            .clone();
-        entry.id = "openrouter-scribe-v2".into();
-        entry.custom = true;
+        let entry =
+            crate::asr::openrouter::custom_entry("elevenlabs/scribe-v2", "ElevenLabs Scribe v2");
 
         add_custom_model(data.path(), resources.path(), &entry).unwrap();
         let written = read_registry_file(&registry_path(data.path())).expect("registry written");
         let added = written
             .models
             .iter()
-            .find(|m| m.id == "openrouter-scribe-v2")
+            .find(|m| m.id == entry.id)
             .expect("custom entry persisted");
         assert!(added.custom);
 
@@ -869,22 +863,11 @@ mod tests {
         assert_eq!(error.code, AppErrorCode::ModelNotInRegistry);
 
         // A custom entry round-trips through add → remove.
-        let bundled: ModelRegistry = serde_json::from_str(EMBEDDED_REGISTRY).unwrap();
-        let mut entry = bundled
-            .models
-            .iter()
-            .find(|m| m.id == "openrouter-transcribe")
-            .unwrap()
-            .clone();
-        entry.id = "openrouter-qwen3-asr".into();
-        entry.custom = true;
+        let entry = crate::asr::openrouter::custom_entry("qwen/qwen3-asr-1.7b", "Qwen3 ASR 1.7B");
         add_custom_model(data.path(), resources.path(), &entry).unwrap();
-        remove_custom_model(data.path(), resources.path(), "openrouter-qwen3-asr").unwrap();
+        remove_custom_model(data.path(), resources.path(), &entry.id).unwrap();
         let written = read_registry_file(&registry_path(data.path())).expect("registry written");
-        assert!(!written
-            .models
-            .iter()
-            .any(|m| m.id == "openrouter-qwen3-asr"));
+        assert!(!written.models.iter().any(|m| m.id == entry.id));
     }
 
     #[test]

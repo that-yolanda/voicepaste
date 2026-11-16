@@ -132,9 +132,11 @@ export function catalogProviders(
    ====================================================================== */
 
 /**
- * ASR models shown for a provider. `audio.models` is the truth when present;
- * otherwise all preset ASR models of the provider are visible. Base models
- * (vad / punctuation) are always visible — their state is download-based.
+ * ASR models shown for a provider. User-created entries (`custom: true`)
+ * are always visible — they exist only because the user added them. For
+ * bundled presets, `audio.models` is the truth when present; otherwise all
+ * preset ASR models of the provider are visible. Base models (vad /
+ * punctuation) are always visible — their state is download-based.
  */
 export function visibleAsrModels(
   audio: Rec,
@@ -145,7 +147,7 @@ export function visibleAsrModels(
   const preset = models.filter((m) => m.provider === providerId && m.category === "asr");
   if (!list) return preset;
   const visible = new Set(list);
-  return preset.filter((m) => visible.has(m.id));
+  return preset.filter((m) => m.custom === true || visible.has(m.id));
 }
 
 /** All ASR models across visible providers (for the default-model picker). */
@@ -521,7 +523,9 @@ export function withAsrModelVisible(
     const candidates = models.filter(
       (m) =>
         m.category === "asr" &&
-        current.has(m.id) &&
+        // Custom entries are always visible candidates; presets must be
+        // whitelisted.
+        (m.custom === true || current.has(m.id)) &&
         !!m.provider &&
         added.has(m.provider) &&
         (m.type === "online" || isAsrModelSelectable(m)),

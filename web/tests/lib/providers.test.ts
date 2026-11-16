@@ -214,6 +214,18 @@ describe("asr model visibility", () => {
       "elevenlabs-realtime",
     ]);
   });
+
+  test("custom entries stay visible even when the whitelist excludes them", () => {
+    // A user-added catalog model must appear right after `add_asr_model`,
+    // without a second click through the whitelist restore path.
+    const audio = { models: ["elevenlabs-realtime"] };
+    const custom: RegistryModel = {
+      ...MODELS.find((m) => m.provider === "bytedance"),
+      custom: true,
+    } as RegistryModel;
+    const all = [...MODELS, custom];
+    expect(visibleAsrModels(audio, "bytedance", all).map((m) => m.id)).toEqual([custom.id]);
+  });
 });
 
 describe("credentials", () => {
