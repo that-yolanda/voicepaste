@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/settings/components/Button";
 import { HomeSkeleton } from "@/settings/components/Skeleton";
@@ -40,8 +40,15 @@ function SettingsShell() {
     return () => mq.removeEventListener("change", update);
   }, [theme]);
   const [section, setSection] = useState<SectionId>("home");
+  const [visited, setVisited] = useState<SectionId[]>([]);
+  const navigate = useCallback((next: SectionId) => {
+    setSection(next);
+    if (next === "templates" || next === "hotwords") {
+      setVisited((previous) => (previous.includes(next) ? previous : [...previous, next]));
+    }
+  }, []);
   const feedback = useFeedback(section === "feedback");
-  const onboarding = useOnboarding(setSection);
+  const onboarding = useOnboarding(navigate);
 
   // Prevent Alt and F10 from activating the WebView2 menu bar, which
   // would pause JavaScript execution and block IPC promise resolution
@@ -63,7 +70,7 @@ function SettingsShell() {
           active={section}
           onNavigate={(next) => {
             onboarding.cancelTour();
-            setSection(next);
+            navigate(next);
           }}
           onStartOnboarding={() => void onboarding.start()}
         />
@@ -81,10 +88,18 @@ function SettingsShell() {
                 <>
                   {section === "home" && <HomePage onOpenSettings={() => setSection("app")} />}
                   {section === "app" && <AppSettingsPage />}
-                  {section === "templates" && <TemplatesPage />}
+                  {visited.includes("templates") && (
+                    <div hidden={section !== "templates"}>
+                      <TemplatesPage />
+                    </div>
+                  )}
                   {section === "hotkey" && <HotkeyPage />}
                   {section === "models" && <ModelServicesPage />}
-                  {section === "hotwords" && <HotwordsPage />}
+                  {visited.includes("hotwords") && (
+                    <div hidden={section !== "hotwords"}>
+                      <HotwordsPage />
+                    </div>
+                  )}
                   {section === "about" && <AboutPage />}
                   {section === "feedback" && <FeedbackPage feedback={feedback} />}
                 </>

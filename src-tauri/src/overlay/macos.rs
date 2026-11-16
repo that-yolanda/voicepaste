@@ -69,7 +69,7 @@ struct Views {
     label: Retained<NSTextField>,
     /// Keyboard hints above the glass, without increasing the pill height.
     shortcuts_root: Retained<NSView>,
-    shortcuts_background: Option<Retained<NSVisualEffectView>>,
+    shortcuts_glass: GlassKind,
     shortcuts_width: Retained<NSLayoutConstraint>,
     shortcuts_height: Retained<NSLayoutConstraint>,
     shortcut_items: Vec<ShortcutViews>,
@@ -160,10 +160,7 @@ fn uses_glass(style: &str) -> bool {
     matches!(style, "liquid" | "liquid-standard")
 }
 
-/// Map the configured style to a Liquid Glass style, chosen to match the on-screen
-/// look (which is the inverse of the API names here): the default `liquid` (通透,
-/// "transparent") renders most see-through with `Regular`, while `liquid-standard`
-/// (标准, "frosted") reads heavier with `Clear`.
+/// Regular (标准) is the default; Clear (通透) retains its existing config value.
 fn glass_style(style: &str) -> NSGlassEffectViewStyle {
     if style == "liquid-standard" {
         NSGlassEffectViewStyle::Clear
@@ -189,7 +186,7 @@ pub(super) fn animate_visibility(app: &AppHandle, visible: bool) {
             return;
         };
         fade_shortcuts(
-            &views.shortcuts_root,
+            views.shortcuts_glass.view(),
             visible && !views.shortcut_content.is_empty(),
         );
         unsafe {
@@ -440,8 +437,8 @@ fn ensure_loaded(app: &AppHandle, model: &mut Model) {
 
 /// Resolve the effective appearance variant pinned on the window.
 ///
-/// Liquid Glass (Clear/Regular) self-adapts to the backdrop and follows the system
-/// light/dark on its own, so it is ALWAYS "" (auto — never pin an appearance).
+/// Liquid Glass inherits the application appearance without a window override.
+/// Regular additionally adapts to the backdrop; Clear does not share that behavior.
 /// The vibrancy (`NSVisualEffectView`) material responds to `NSAppearance`, so for
 /// that style we follow the global `app.theme`: system → "" (follow system),
 /// light → "light", dark → "dark".
@@ -488,14 +485,14 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
         let mut slot = v.borrow_mut();
         let recreate = slot
             .as_ref()
-            .map(|x| x.glass.kind() != want || x.shortcuts_background.is_some() != (model.style == "vibrancy"))
+            .map(|x| x.glass.kind() != want)
             .unwrap_or(true);
         if !recreate {
             return;
         }
         if let Some(old) = slot.take() {
             old.host.removeFromSuperview();
-            old.shortcuts_root.removeFromSuperview();
+            old.shortcuts_glass.view().removeFromSuperview();
         }
 
         let label = NSTextField::labelWithString(&NSString::from_str(""), mtm);
@@ -503,26 +500,35 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
         // Layer-backed so the hint-text pulse (a layer.opacity animation) works.
         label.setWantsLayer(true);
 
-        // A separate root stays anchored to the window, outside width animations.
-        let shortcuts_root = NSView::new(mtm);
-        shortcuts_root.setTranslatesAutoresizingMaskIntoConstraints(false);
-        shortcuts_root.setWantsLayer(true);
-        shortcuts_root.setAlphaValue(0.0);
-        content.addSubview(&shortcuts_root);
-        let shortcuts_background = if model.style == "vibrancy" {
-            let background = NSVisualEffectView::new(mtm);
-            background.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-            background.setState(NSVisualEffectState::Active);
-            background.setMaterial(NSVisualEffectMaterial::HUDWindow);
-            background.setWantsLayer(true);
-            set_corner(&background, 12.0);
-            shortcuts_root.addSubview(&background);
-            Some(background)
-        } else {
-            None
+        // Hints have their own matching material and adapt to their own backdrop.
+        let shortcuts_root = unsafe {
+            let raw: *mut NSView = msg_send![overlay_content_class(), new];
+            Retained::from_raw(raw).expect("shortcut content view")
         };
-        let shortcuts_width = shortcuts_root.widthAnchor().constraintEqualToConstant(0.0);
-        let shortcuts_height = shortcuts_root.heightAnchor().constraintEqualToConstant(18.0);
+        shortcuts_root.setWantsLayer(true);
+        let shortcuts_glass = if want == "liquid" {
+            let g = NSGlassEffectView::new(mtm);
+            g.setStyle(glass_style(&model.style));
+            g.setCornerRadius(12.0);
+            g.setContentView(Some(&shortcuts_root));
+            GlassKind::Liquid(g)
+        } else {
+            let g = NSVisualEffectView::new(mtm);
+            g.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+            g.setState(NSVisualEffectState::Active);
+            g.setMaterial(NSVisualEffectMaterial::HUDWindow);
+            g.setWantsLayer(true);
+            set_corner(&g, 12.0);
+            g.addSubview(&shortcuts_root);
+            GlassKind::Vibrancy(g)
+        };
+        let shortcut_view = shortcuts_glass.view();
+        shortcut_view.setTranslatesAutoresizingMaskIntoConstraints(false);
+        shortcut_view.setWantsLayer(true);
+        shortcut_view.setAlphaValue(0.0);
+        content.addSubview(shortcut_view);
+        let shortcuts_width = shortcut_view.widthAnchor().constraintEqualToConstant(0.0);
+        let shortcuts_height = shortcut_view.heightAnchor().constraintEqualToConstant(30.0);
 
         let indicator = NSView::new(mtm);
         indicator.setWantsLayer(true);
@@ -613,10 +619,10 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
             host.bottomAnchor().constraintEqualToAnchor_constant(&content.bottomAnchor(), -BOTTOM_OFFSET),
             width_constraint.clone(),
             height_constraint.clone(),
-            shortcuts_root.centerXAnchor().constraintEqualToAnchor(&content.centerXAnchor()),
+            shortcut_view.centerXAnchor().constraintEqualToAnchor(&content.centerXAnchor()),
             shortcuts_width.clone(),
             shortcuts_height.clone(),
-            shortcuts_root.bottomAnchor().constraintEqualToAnchor_constant(&host.topAnchor(), -16.0),
+            shortcut_view.bottomAnchor().constraintEqualToAnchor_constant(&host.topAnchor(), -16.0),
             pivot.centerXAnchor().constraintEqualToAnchor(&host.centerXAnchor()),
             pivot.bottomAnchor().constraintEqualToAnchor(&host.bottomAnchor()),
             pivot.widthAnchor().constraintEqualToConstant(0.0),
@@ -644,7 +650,7 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
             indicator,
             label,
             shortcuts_root,
-            shortcuts_background,
+            shortcuts_glass,
             shortcuts_width,
             shortcuts_height,
             shortcut_items: Vec::new(),
@@ -662,16 +668,12 @@ fn ensure_views(content: &NSView, model: &Model, mtm: MainThreadMarker) {
 
 /// Set the overlay's appearance *environment baseline*.
 ///
-/// Liquid Glass adapts its material to the backdrop on its own and, at brightness
-/// extremes, switches its content's light/dark appearance via the NSAppearance
-/// system — so for "auto" we must NOT pin any appearance (let the glass drive it).
-/// For an explicit "light"/"dark" override we set the appearance on the *window*
-/// (the environment baseline: semantic colors, vibrancy, highlights), within which
-/// the glass still recalculates itself — rather than pinning the glass view, which
-/// would fight its built-in adaptation.
+/// Clearing the window override inherits the application appearance (which may
+/// itself be forced by app.theme). The traditional material explicitly follows
+/// app.theme at the window level.
 fn apply_variant(window: &AnyObject, variant: &str) {
     if variant.is_empty() {
-        // auto: follow the system; clear any forced appearance.
+        // Inherit the application appearance; clear the window override.
         unsafe {
             let _: () = msg_send![window, setAppearance: std::ptr::null::<AnyObject>()];
         }
@@ -713,11 +715,14 @@ fn sync_foreground(views: &Views) {
         // Use the glass content's appearance, which can differ from the window
         // when Liquid Glass adapts to the backdrop.
         let appearance: Retained<NSAppearance> = msg_send![&*views.container, effectiveAppearance];
-        let _: () = msg_send![&*views.shortcuts_root, setAppearance: &*appearance];
+        appearance.performAsCurrentDrawingAppearance(&RcBlock::new(|| {
+            let cg: *mut AnyObject = msg_send![&*NSColor::labelColor(), CGColor];
+            let _: () = msg_send![&*views.icon_layer, setStrokeColor: cg];
+        }));
+        let shortcut_appearance: Retained<NSAppearance> =
+            msg_send![&*views.shortcuts_root, effectiveAppearance];
         let update = RcBlock::new(|| {
             let color = NSColor::labelColor();
-            let cg: *mut AnyObject = msg_send![&*color, CGColor];
-            let _: () = msg_send![&*views.icon_layer, setStrokeColor: cg];
             let background = color.colorWithAlphaComponent(0.12);
             let background_cg: *mut AnyObject = msg_send![&*background, CGColor];
             for item in &views.shortcut_items {
@@ -727,7 +732,7 @@ fn sync_foreground(views: &Views) {
                 let _: () = msg_send![layer, setBackgroundColor: background_cg];
             }
         });
-        appearance.performAsCurrentDrawingAppearance(&update);
+        shortcut_appearance.performAsCurrentDrawingAppearance(&update);
     }
 }
 
@@ -836,6 +841,13 @@ fn apply_top_fade(container: &NSView, mask: &AnyObject, faded: bool, bounds: NSR
             return;
         }
         if faded {
+            // Keep the fade at the clipping edge, not across the first visible line.
+            let locations = NSArray::from_retained_slice(&[
+                NSNumber::numberWithDouble(0.0),
+                NSNumber::numberWithDouble((8.0 / bounds.size.height.max(1.0)).min(1.0)),
+                NSNumber::numberWithDouble(1.0),
+            ]);
+            let _: () = msg_send![mask, setLocations: &*locations];
             let _: () = msg_send![mask, setFrame: bounds];
             let _: () = msg_send![layer, setMask: mask];
         } else {
@@ -967,32 +979,20 @@ fn set_wave_activity(app: &AppHandle, active: bool) {
     });
 }
 
-/// Build the transcript attributed string: final (labelColor) + partial (secondary).
+/// Display one text level for the entire utterance, independent of ASR segments.
 fn transcript_attr(model: &Model) -> Retained<NSAttributedString> {
-    let final_s = &model.final_text;
-    let partial_s = &model.partial_text;
-    let combined = format!("{final_s}{partial_s}");
+    let combined = format!("{}{}", model.final_text, model.partial_text);
     let attr = NSMutableAttributedString::from_nsstring(&NSString::from_str(&combined));
     let font = NSFont::systemFontOfSize(FONT_SIZE);
     let full = NSRange::new(0, combined.encode_utf16().count());
+    let color = if matches!(model.app_state.as_str(), "recording" | "finishing") {
+        NSColor::secondaryLabelColor()
+    } else {
+        NSColor::labelColor()
+    };
     unsafe {
         attr.addAttribute_value_range(objc2_app_kit::NSFontAttributeName, &font, full);
-        let final_len = final_s.encode_utf16().count();
-        if final_len > 0 {
-            attr.addAttribute_value_range(
-                objc2_app_kit::NSForegroundColorAttributeName,
-                &NSColor::labelColor(),
-                NSRange::new(0, final_len),
-            );
-        }
-        let partial_len = partial_s.encode_utf16().count();
-        if partial_len > 0 {
-            attr.addAttribute_value_range(
-                objc2_app_kit::NSForegroundColorAttributeName,
-                &NSColor::secondaryLabelColor(),
-                NSRange::new(final_len, partial_len),
-            );
-        }
+        attr.addAttribute_value_range(objc2_app_kit::NSForegroundColorAttributeName, &color, full);
     }
     Retained::into_super(attr)
 }
@@ -1089,7 +1089,7 @@ fn update_shortcuts(
     views.shortcut_content = shortcuts.to_vec();
     views.shortcut_language = language;
     if shortcuts.is_empty() {
-        fade_shortcuts(&views.shortcuts_root, false);
+        fade_shortcuts(views.shortcuts_glass.view(), false);
         return; // Keep the rendered items alive until their fade finishes.
     }
     for item in views.shortcut_items.drain(..) {
@@ -1137,22 +1137,19 @@ fn update_shortcuts(
     }
     let total: f64 = widths.iter().map(|w| w.0 + 4.0 + w.1).sum::<f64>()
         + 14.0 * widths.len().saturating_sub(1) as f64;
-    let padded = views.shortcuts_background.is_some();
-    let padding_x = if padded { 12.0 } else { 0.0 };
-    let padding_y = if padded { 6.0 } else { 0.0 };
-    let max_width = unsafe { views.shortcuts_root.superview() }
+    let padding_x = 12.0;
+    let padding_y = 6.0;
+    let max_width = unsafe { views.shortcuts_glass.view().superview() }
         .map(|parent| (parent.bounds().size.width - 64.0).max(0.0))
         .unwrap_or(656.0);
     let width = (total + padding_x * 2.0).min(max_width);
     let height = 18.0 + padding_y * 2.0;
     views.shortcuts_width.setConstant(width);
     views.shortcuts_height.setConstant(height);
-    if let Some(background) = &views.shortcuts_background {
-        background.setFrame(NSRect {
-            origin: NSPoint { x: 0.0, y: 0.0 },
-            size: NSSize { width, height },
-        });
-    }
+    views.shortcuts_root.setFrame(NSRect {
+        origin: NSPoint { x: 0.0, y: 0.0 },
+        size: NSSize { width, height },
+    });
     // The template is the last action; shorten it without hiding cancel/complete.
     let overflow = (total + padding_x * 2.0 - width).max(0.0);
     let mut x = padding_x;
@@ -1194,7 +1191,7 @@ fn update_shortcuts(
         });
         x += key_w + 4.0 + label_w + 14.0;
     }
-    fade_shortcuts(&views.shortcuts_root, true);
+    fade_shortcuts(views.shortcuts_glass.view(), true);
 }
 
 fn hint_color(level: &str) -> Retained<NSColor> {
@@ -1494,6 +1491,9 @@ fn render(app: &AppHandle, model: &mut Model) {
             GlassKind::Liquid(g) => {
                 // Style may change live between Clear and Regular without recreating.
                 g.setStyle(glass_style(&model.style));
+                if let GlassKind::Liquid(shortcuts) = &views.shortcuts_glass {
+                    shortcuts.setStyle(glass_style(&model.style));
+                }
                 g.setCornerRadius(radius);
             }
             GlassKind::Vibrancy(g) => set_corner(g, radius),
@@ -1594,5 +1594,52 @@ fn render(app: &AppHandle, model: &mut Model) {
             .is_some_and(|views| views.resize.is_some())
     }) {
         schedule_resize_tick(app);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transcript_level_depends_on_session_state_not_asr_segments() {
+        let mut model = Model {
+            final_text: "已确认👋".into(),
+            partial_text: "仍在识别".into(),
+            ..Model::default()
+        };
+        for state in ["recording", "finishing", "idle"] {
+            model.app_state = state.into();
+            let text = transcript_attr(&model);
+            let expected = if state == "idle" {
+                NSColor::labelColor()
+            } else {
+                NSColor::secondaryLabelColor()
+            };
+            let mut range = NSRange::new(0, 0);
+            unsafe {
+                let color = text
+                    .attribute_atIndex_effectiveRange(
+                        objc2_app_kit::NSForegroundColorAttributeName,
+                        0,
+                        &mut range,
+                    )
+                    .unwrap();
+                let equal: bool = msg_send![&*color, isEqual: &*expected];
+                assert!(equal, "unexpected text level for {state}");
+                assert_eq!(range, NSRange::new(0, text.length()));
+                let font = text
+                    .attribute_atIndex_effectiveRange(
+                        objc2_app_kit::NSFontAttributeName,
+                        0,
+                        &mut range,
+                    )
+                    .unwrap();
+                let regular: bool =
+                    msg_send![&*font, isEqual: &*NSFont::systemFontOfSize(FONT_SIZE)];
+                assert!(regular);
+                assert_eq!(range, NSRange::new(0, text.length()));
+            }
+        }
     }
 }

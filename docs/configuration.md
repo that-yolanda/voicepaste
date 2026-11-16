@@ -124,11 +124,15 @@ Platform-specific hotkey defaults are resolved by the backend rather than set in
 | `remove_trailing_period` | bool | `true` | Strip trailing period from ASR output |
 | `keep_clipboard` | bool | `true` | Keep text in clipboard after paste |
 | `theme` | string | `"system"` | `"dark"` / `"light"` / `"system"` |
-| `overlay_style` | string | `"liquid"` | macOS overlay appearance (3 variants) |
+| `overlay_style` | string | `"liquid"` | macOS: `liquid` = Regular (标准), `liquid-standard` = Clear (通透), `vibrancy` = Classic (经典) |
 | `sound.enabled` | bool | `true` | Enable start/end sounds |
 | `sound.start_sound` | string | `""` | Path to custom start sound |
 | `sound.end_sound` | string | `""` | Path to custom end sound |
 | `beta_updates` | bool | `false` | Enable beta update channel |
+
+On macOS, Regular is the default adaptive Liquid Glass style; Clear preserves more of the background, while Classic uses the traditional HUD frosted material. Unsupported macOS versions fall back to the traditional material. Existing configuration values are unchanged. The app appearance theme provides the base light/dark environment; Regular also adapts to the backdrop. Clear does not provide the same adaptive contrast protection.
+
+Shortcut hints use their own background with the same material and Liquid Glass variant as the transcript pill. During recording and processing, the transcript uses one secondary text level regardless of which segments the recognizer has confirmed; completed text uses the primary level. Text uses the regular system font. Overflow fades only near the top edge.
 
 ### audio — ASR Configuration
 

@@ -16,7 +16,7 @@ app:
   keep_recordings: false          # 是否保留成功录音；关闭时仅保留失败录音用于重试
   language: auto                 # 界面语言：auto（跟随系统）/ zh-CN / en
   theme: system                   # dark / light / system
-  overlay_style: liquid           # macOS 悬浮窗外观（仅 macOS 生效）
+  overlay_style: liquid           # macOS: liquid=标准/Regular（默认）, liquid-standard=通透/Clear, vibrancy=经典/Classic
   sound:
     enabled: true
     start_sound: ""

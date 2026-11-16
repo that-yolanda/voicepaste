@@ -7,6 +7,7 @@ import { Button } from "@/settings/components/Button";
 import { CurrentUsageBadge, DefaultAction } from "@/settings/components/DefaultAction";
 import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
+import { LibrarySkeleton } from "@/settings/components/Skeleton";
 import {
   PageLayout,
   Section,
@@ -26,15 +27,21 @@ export function HotwordsPage() {
     active_group: "",
     groups: [],
   });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [builtinOpen, setBuiltinOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const hw = await loadHotwords();
       if (hw) setData(hw);
     } catch {
-      /* ignore */
+      setLoadError(true);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -74,6 +81,16 @@ export function HotwordsPage() {
     setExpandedId(group.id);
     persist({ ...data, groups: [...data.groups, group] });
   };
+
+  if (loading) return <LibrarySkeleton />;
+  if (loadError) {
+    return (
+      <div role="alert" className="space-y-4">
+        <p>{t("ui.load_failed")}</p>
+        <Button onClick={() => void load()}>{t("ui.retry")}</Button>
+      </div>
+    );
+  }
 
   return (
     <PageLayout>

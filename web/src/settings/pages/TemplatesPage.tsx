@@ -5,6 +5,7 @@ import { loadBuiltinPrompts, loadPrompts, savePrompts } from "@/settings/bridge"
 import { Button } from "@/settings/components/Button";
 import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
+import { LibrarySkeleton } from "@/settings/components/Skeleton";
 import { Textarea } from "@/settings/components/Textarea";
 import {
   PageLayout,
@@ -16,6 +17,7 @@ import {
   SectionRows,
 } from "@/settings/layout/PageLayout";
 import { cloneBuiltinPrompt } from "@/settings/lib/prompts";
+import { useSettings } from "@/settings/SettingsProvider";
 import type { PromptItem } from "@/settings/types/prompts";
 
 let promptIdCounter = 1;
@@ -25,24 +27,32 @@ function createPromptId(): string {
 
 export function TemplatesPage() {
   const { t } = useTranslation();
+  const { config } = useSettings();
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [builtinOpen, setBuiltinOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const promptsSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
-  // Load prompts
+  // Refresh cached templates after settings changes (including template hotkeys).
   const loadP = useCallback(async () => {
+    setLoadError(false);
     try {
+      await promptsSaveChainRef.current;
       const data = (await loadPrompts()) as unknown as PromptItem[];
       if (Array.isArray(data)) setPrompts(data);
     } catch {
-      /* ignore */
+      setLoadError(true);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Other settings pages refresh config after editing template hotkeys.
   useEffect(() => {
-    loadP();
-  }, [loadP]);
+    void loadP();
+  }, [loadP, config]);
 
   // Serialize prompt saves: each commit (blur/Enter) fires immediately, but
   // later writes must never overtake earlier ones and clobber newer content.
@@ -72,6 +82,23 @@ export function TemplatesPage() {
     },
     [prompts, scheduleSavePrompts],
   );
+
+  if (loading) return <LibrarySkeleton />;
+  if (loadError) {
+    return (
+      <div role="alert" className="space-y-4">
+        <p>{t("ui.load_failed")}</p>
+        <Button
+          onClick={() => {
+            setLoading(true);
+            void loadP();
+          }}
+        >
+          {t("ui.retry")}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <PageLayout>

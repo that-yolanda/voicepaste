@@ -22,3 +22,27 @@ export function HomeSkeleton() {
     </div>
   );
 }
+
+export function LibrarySkeleton() {
+  return (
+    <div aria-busy="true" className="space-y-4">
+      <div
+        aria-hidden="true"
+        className="overflow-hidden rounded-lg border border-border bg-surface-card"
+      >
+        {[0, 1, 2].map((key) => (
+          <div
+            key={key}
+            className="flex h-12 items-center px-3 border-b border-border-subtle last:border-b-0"
+          >
+            <Skeleton className="h-4 w-36" />
+          </div>
+        ))}
+      </div>
+      <div aria-hidden="true" className="flex h-8 items-center gap-3">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-24" />
+      </div>
+    </div>
+  );
+}

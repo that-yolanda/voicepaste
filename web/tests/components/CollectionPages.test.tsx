@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   loadBuiltinHotwords: vi.fn(),
 }));
 vi.mock("@/settings/bridge", () => mocks);
+vi.mock("@/settings/SettingsProvider", () => ({
+  useSettings: () => ({ config: null }),
+}));
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.loadPrompts.mockResolvedValue([

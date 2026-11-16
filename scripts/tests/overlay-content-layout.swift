@@ -1,4 +1,4 @@
-// Native regression check for fixed shortcut positioning and glass foreground inheritance.
+// Native regression check for fixed shortcut positioning and matching shortcut materials and independent foregrounds.
 // Run: swift scripts/tests/overlay-content-layout.swift
 import AppKit
 import QuartzCore
@@ -33,24 +33,31 @@ func checkContent(_ glass: NSView, name: String) {
     defer { window.orderOut(nil); backdrop.orderOut(nil); window.close(); backdrop.close() }
     let root = window.contentView!
     let host = NSView()
-    let shortcuts = NSView()
-    let padded = glass is NSVisualEffectView
-    let shortcutsBackground: NSVisualEffectView? = padded ? NSVisualEffectView() : nil
-    if let background = shortcutsBackground {
+    let shortcuts = AdaptiveContent()
+    let shortcutsBackground: NSView
+    if #available(macOS 26, *), let liquid = glass as? NSGlassEffectView {
+        let background = NSGlassEffectView()
+        background.style = liquid.style
+        background.cornerRadius = 12
+        background.contentView = shortcuts
+        shortcutsBackground = background
+    } else {
+        let background = NSVisualEffectView()
         background.state = .active
         background.material = .hudWindow
         background.blendingMode = .behindWindow
         background.wantsLayer = true
         background.layer!.cornerRadius = 12
         background.layer!.masksToBounds = true
-        shortcuts.addSubview(background)
+        background.addSubview(shortcuts)
+        shortcutsBackground = background
     }
-    for view in [host, shortcuts, glass] {
+    for view in [host, shortcutsBackground, glass] {
         view.translatesAutoresizingMaskIntoConstraints = false
         view.wantsLayer = true
     }
     root.addSubview(host)
-    root.addSubview(shortcuts)
+    root.addSubview(shortcutsBackground)
     host.addSubview(glass)
     let width = host.widthAnchor.constraint(equalToConstant: 160)
     NSLayoutConstraint.activate([
@@ -61,14 +68,13 @@ func checkContent(_ glass: NSView, name: String) {
         glass.trailingAnchor.constraint(equalTo: host.trailingAnchor),
         glass.topAnchor.constraint(equalTo: host.topAnchor),
         glass.bottomAnchor.constraint(equalTo: host.bottomAnchor),
-        shortcuts.centerXAnchor.constraint(equalTo: root.centerXAnchor),
-        shortcuts.widthAnchor.constraint(equalToConstant: padded ? 98 : 74),
-        shortcuts.heightAnchor.constraint(equalToConstant: padded ? 30 : 18),
-        shortcuts.bottomAnchor.constraint(equalTo: host.topAnchor, constant: -16),
+        shortcutsBackground.centerXAnchor.constraint(equalTo: root.centerXAnchor),
+        shortcutsBackground.widthAnchor.constraint(equalToConstant: 98),
+        shortcutsBackground.heightAnchor.constraint(equalToConstant: 30),
+        shortcutsBackground.bottomAnchor.constraint(equalTo: host.topAnchor, constant: -16),
     ])
     let content = AdaptiveContent()
     if #available(macOS 26, *), let liquid = glass as? NSGlassEffectView {
-        liquid.style = .regular
         liquid.cornerRadius = 20
         liquid.contentView = content
     } else if let vibrancy = glass as? NSVisualEffectView {
@@ -80,7 +86,7 @@ func checkContent(_ glass: NSView, name: String) {
     let label = NSTextField(labelWithString: "准备中")
     label.alignment = .center
     content.addSubview(label)
-    let keycap = NSView(frame: NSRect(x: padded ? 12 : 0, y: padded ? 6 : 0, width: 30, height: 18))
+    let keycap = NSView(frame: NSRect(x: 12, y: 6, width: 30, height: 18))
     keycap.wantsLayer = true
     keycap.layer!.cornerRadius = 4
     let key = NSTextField(labelWithString: "Fn")
@@ -95,23 +101,27 @@ func checkContent(_ glass: NSView, name: String) {
     content.wantsLayer = true
     content.layer!.addSublayer(icon)
     func syncForeground() {
-        shortcuts.appearance = content.effectiveAppearance
         content.effectiveAppearance.performAsCurrentDrawingAppearance {
+            icon.strokeColor = NSColor.labelColor.cgColor
+        }
+        shortcuts.effectiveAppearance.performAsCurrentDrawingAppearance {
             key.textColor = .labelColor
             action.textColor = .labelColor
             keycap.layer!.backgroundColor = NSColor.labelColor.withAlphaComponent(0.12).cgColor
-            icon.strokeColor = NSColor.labelColor.cgColor
         }
     }
     content.appearanceChanged = syncForeground
+    shortcuts.appearanceChanged = syncForeground
     backdrop.orderFrontRegardless()
     window.orderFrontRegardless()
     root.layoutSubtreeIfNeeded()
-    shortcutsBackground?.frame = shortcuts.bounds
-    if let background = shortcutsBackground {
-        precondition(background.frame == shortcuts.bounds)
-        precondition(keycap.frame.minX == 12 && keycap.frame.minY == 6)
-        precondition(abs(shortcuts.bounds.maxX - action.frame.maxX - 12) < 0.1)
+    shortcuts.frame = shortcutsBackground.bounds
+    precondition(keycap.frame.minX == 12 && keycap.frame.minY == 6)
+    precondition(abs(shortcuts.bounds.maxX - action.frame.maxX - 12) < 0.1)
+    if #available(macOS 26, *), let liquid = glass as? NSGlassEffectView {
+        precondition((shortcutsBackground as! NSGlassEffectView).style == liquid.style)
+    } else {
+        let background = shortcutsBackground as! NSVisualEffectView
         precondition(background.material == .hudWindow && background.blendingMode == .behindWindow)
     }
     syncForeground()
@@ -124,13 +134,14 @@ func checkContent(_ glass: NSView, name: String) {
         advance(0.35)
         syncForeground()
         let source = content.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])!
-        precondition(shortcuts.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == source)
         var expected: CGColor!
         content.effectiveAppearance.performAsCurrentDrawingAppearance { expected = NSColor.labelColor.cgColor }
         precondition(icon.strokeColor == expected, "icon did not follow the transcript foreground")
         var shortcutColor: CGColor!
         shortcuts.effectiveAppearance.performAsCurrentDrawingAppearance { shortcutColor = key.textColor!.cgColor }
-        precondition(shortcutColor == expected, "shortcut did not follow the transcript foreground")
+        var expectedShortcut: CGColor!
+        shortcuts.effectiveAppearance.performAsCurrentDrawingAppearance { expectedShortcut = NSColor.labelColor.cgColor }
+        precondition(shortcutColor == expectedShortcut, "shortcut must follow its own material")
         for next in [240.0, 400.0, 570.0] {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0
@@ -141,7 +152,7 @@ func checkContent(_ glass: NSView, name: String) {
             for duration in [0.01, 0.03, 0.08] {
                 advance(duration)
                 precondition(abs(host.layer!.presentation()!.bounds.width - next) < 0.5, "pill width must update without animation")
-                let presented = shortcuts.layer!.presentation()!
+                let presented = shortcutsBackground.layer!.presentation()!
                 let center = presented.convert(CGPoint(x: presented.bounds.midX, y: presented.bounds.midY), to: root.layer!.presentation()!)
                 precondition(abs(center.x - root.bounds.midX) < 0.5, "shortcut drifted during width changes")
             }
@@ -151,16 +162,23 @@ func checkContent(_ glass: NSView, name: String) {
         }
         print("\(name): backdrop \(color == .black ? "black" : "white"), content appearance \(source.rawValue), fixed center and matching foreground passed")
     }
-    // Changes while no transcript arrives must still update the outside hints.
+    // The two materials may resolve different appearances over different backdrops.
     content.appearance = NSAppearance(named: .darkAqua)
-    precondition(shortcuts.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
-    content.appearance = NSAppearance(named: .aqua)
+    shortcuts.appearance = NSAppearance(named: .aqua)
+    syncForeground()
+    precondition(content.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
     precondition(shortcuts.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua)
     precondition(keycap.layer!.cornerRadius == 4)
 }
 
 checkContent(NSVisualEffectView(), name: "Vibrancy")
-if #available(macOS 26, *) { checkContent(NSGlassEffectView(), name: "Liquid Glass") }
+if #available(macOS 26, *) {
+    for style in [NSGlassEffectView.Style.regular, .clear] {
+        let glass = NSGlassEffectView()
+        glass.style = style
+        checkContent(glass, name: "Liquid Glass \(style.rawValue)")
+    }
+}
 
 // State labels must fit on their first centered frame after a narrow, left-aligned waveform.
 let status = NSTextField(labelWithString: "")
