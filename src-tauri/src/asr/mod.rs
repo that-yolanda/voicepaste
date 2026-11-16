@@ -1,5 +1,6 @@
 pub mod doubao;
 pub mod elevenlabs;
+pub mod openrouter;
 pub mod qwen;
 pub mod sherpa_onnx;
 
@@ -106,6 +107,18 @@ pub async fn create_engine_session(
             })?;
             let engine = elevenlabs::ElevenLabsEngine::new(config);
             (engine.create_session(hotwords).await, false)
+        }
+        Some(entry) if entry.engine == "openrouter" => {
+            let merged = crate::config::AppConfig::resolve_model_config(
+                registry,
+                engine_model_id,
+                &config.audio,
+            );
+            let params: openrouter::OpenRouterAsrConfig = serde_json::from_value(merged)
+                .map_err(|_| AppError::new(AppErrorCode::AsrConfigInvalid))?;
+            let engine = openrouter::OpenRouterEngine::new(params);
+            // One-shot engine: no partials ever, always show the static hint.
+            (engine.create_session(hotwords).await, true)
         }
         Some(entry) if entry.engine == "sherpa-onnx" => {
             let punctuation_config = registry

@@ -203,6 +203,9 @@ pub fn run() {
             model_test::test_model,
             model_test::cancel_model_test,
             commands::list_llm_models,
+            commands::list_asr_models,
+            commands::add_asr_model,
+            commands::remove_asr_model,
             #[cfg(desktop)]
             updater::check_for_update,
             #[cfg(desktop)]

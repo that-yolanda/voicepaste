@@ -95,7 +95,9 @@
       "qwen_auth": "API Key 无效或与连接地址、业务空间不匹配",
       "qwen_quota": "语音识别额度不足，请检查账号余额",
       "qwen_rate_limited": "语音识别请求过于频繁，请稍后重试",
-      "qwen_hotwords_skipped": "已跳过 {{count}} 个格式不符或超出数量限制的热词"
+      "qwen_hotwords_skipped": "已跳过 {{count}} 个格式不符或超出数量限制的热词",
+      "quota_exhausted": "语音识别额度不足，请到服务商控制台充值",
+      "rate_limited": "语音识别请求过于频繁，请稍后重试"
     },
     "config": {
       "invalid": "配置格式错误",
@@ -124,6 +126,8 @@
     },
     "model": {
       "not_in_registry": "模型 {{model}} 未在注册表中找到",
+      "duplicate_id": "模型 {{model}} 已存在",
+      "not_custom": "内置模型不支持删除",
       "no_download_url": "模型 {{model}} 没有下载地址（在线模型无需下载）",
       "mkdir_failed": "创建模型目录失败",
       "download_failed": "下载失败",

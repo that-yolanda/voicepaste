@@ -818,6 +818,121 @@ pub async fn list_llm_models(
     crate::llm::list_provider_models(&config.llm, &provider_id).await
 }
 
+/// List a provider's online ASR model catalog (v1: OpenRouter STT models).
+/// The URL and optional API key come from the merged model config, so a key
+/// saved in the credential card is picked up automatically.
+#[tauri::command]
+pub async fn list_asr_models(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    provider_id: String,
+) -> Result<serde_json::Value, AppError> {
+    if provider_id != "openrouter" {
+        return Err(AppError::new(AppErrorCode::AsrRequestInvalid)
+            .with_detail(format!("provider {provider_id} has no online ASR catalog")));
+    }
+    let config = state
+        .config_manager
+        .load_config()
+        .map_err(|_| AppError::new(AppErrorCode::ConfigInvalid))?;
+    let dirs = model_dirs(&app)?;
+    let registry = model::load_registry(&dirs.0, &dirs.1);
+    let entry = registry
+        .models
+        .iter()
+        .find(|m| m.engine == "openrouter")
+        .ok_or_else(|| {
+            AppError::new(AppErrorCode::ModelNotInRegistry).with_param("model", "openrouter")
+        })?;
+    let merged =
+        crate::config::AppConfig::resolve_model_config(&registry, &entry.id, &config.audio);
+    let url = merged
+        .get("url")
+        .and_then(serde_json::Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(crate::asr::openrouter::DEFAULT_URL);
+    let api_key = merged
+        .get("api_key")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let catalog = crate::asr::openrouter::list_stt_models(url, api_key).await?;
+    Ok(crate::asr::openrouter::catalog_entries(&catalog))
+}
+
+/// Add an OpenRouter STT model from the online catalog (or a manual slug) to
+/// the user registry as a custom entry. The entry mirrors the bundled seed
+/// entry with `model` set to the slug, so engine dispatch and the settings
+/// UI work without further wiring.
+#[tauri::command]
+pub async fn add_asr_model(
+    app: AppHandle,
+    provider_id: String,
+    slug: String,
+    name: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    if provider_id != "openrouter" {
+        return Err(AppError::new(AppErrorCode::AsrRequestInvalid)
+            .with_detail(format!("provider {provider_id} has no online ASR catalog")));
+    }
+    let slug = slug.trim();
+    if slug.is_empty() || slug.len() > 200 {
+        return Err(AppError::new(AppErrorCode::AsrRequestInvalid)
+            .with_detail("model slug must be 1-200 characters"));
+    }
+    let dirs = model_dirs(&app)?;
+    let registry = model::load_registry(&dirs.0, &dirs.1);
+    let seed = registry
+        .models
+        .iter()
+        .find(|m| m.engine == "openrouter")
+        .ok_or_else(|| {
+            AppError::new(AppErrorCode::ModelNotInRegistry).with_param("model", "openrouter")
+        })?
+        .clone();
+
+    let display_name = name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| slug.to_string());
+    let mut entry = seed;
+    entry.id = crate::asr::openrouter::custom_model_id(slug);
+    entry.custom = true;
+    entry.name = display_name.clone();
+    entry.name_en = Some(display_name);
+    if let Some(defaults) = entry.default_config.as_mut() {
+        defaults["model"] = serde_json::json!(slug);
+    }
+    model::add_custom_model(&dirs.0, &dirs.1, &entry)?;
+    Ok(serde_json::json!({ "ok": true, "id": entry.id }))
+}
+
+/// Remove a user-added ASR model entry from the user registry. Bundled
+/// entries are rejected (they are hidden via config visibility instead).
+#[tauri::command]
+pub async fn remove_asr_model(
+    app: AppHandle,
+    model_id: String,
+) -> Result<serde_json::Value, AppError> {
+    let dirs = model_dirs(&app)?;
+    model::remove_custom_model(&dirs.0, &dirs.1, &model_id)?;
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+/// Resolve (data_dir, resource_dir) for registry access.
+fn model_dirs(app: &AppHandle) -> Result<(std::path::PathBuf, std::path::PathBuf), AppError> {
+    let data_dir = app.path().app_data_dir().map_err(|e| {
+        AppError::new(AppErrorCode::ModelSaveFailed)
+            .with_detail(format!("Failed to resolve data dir: {}", e))
+    })?;
+    let resource_dir = app.path().resource_dir().map_err(|e| {
+        AppError::new(AppErrorCode::ModelSaveFailed)
+            .with_detail(format!("Failed to resolve resource dir: {}", e))
+    })?;
+    Ok((data_dir, resource_dir))
+}
+
 /// Called after the WebView's exit animation; stale completions cannot hide a new session.
 #[tauri::command]
 pub fn complete_overlay_hide(app: AppHandle, generation: u64) {

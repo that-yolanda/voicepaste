@@ -16,15 +16,19 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { errText } from "@/i18n/errText";
 import {
+  addAsrModel,
   deleteModel,
   downloadModel,
+  listAsrModels,
   listLlmModels,
   type ModelDownloadProgress,
   openExternalUrl,
+  removeAsrModel as removeAsrModelEntry,
   saveConfigObject,
 } from "@/settings/bridge";
 import { Badge } from "@/settings/components/Badge";
 import { Button } from "@/settings/components/Button";
+import { Input } from "@/settings/components/Input";
 import { Modal } from "@/settings/components/Modal";
 import { AddModelModal } from "@/settings/components/models/AddModelModal";
 import { renderControl } from "@/settings/components/models/FieldControl";
@@ -98,6 +102,8 @@ interface ProviderDetailPageProps {
   downloaded: string[];
   downloadProgress: Record<string, ModelDownloadProgress>;
   onDownloadedChange: () => Promise<void>;
+  /** Re-fetch the registry after add/remove of user-created model entries. */
+  onRegistryChange: () => Promise<RegistryModel[]>;
   onBack: () => void;
 }
 
@@ -109,6 +115,7 @@ export function ProviderDetailPage({
   downloaded,
   downloadProgress,
   onDownloadedChange,
+  onRegistryChange,
   onBack,
 }: ProviderDetailPageProps) {
   const { t, i18n } = useTranslation();
@@ -123,9 +130,16 @@ export function ProviderDetailPage({
     testConfig.current = config;
   }
   const [tab, setTab] = useState<CapabilityKind>(provider.capabilities[0] ?? "asr");
+  /** Switch capability tab; a catalog fetched for one tab must not leak into
+   * the other tab's picker, so drop it on switch. */
+  const switchTab = (next: CapabilityKind) => {
+    setTab(next);
+    setRemoteModels([]);
+  };
   const [modelModal, setModelModal] = useState<ModelModalState>(null);
   const [addModelOpen, setAddModelOpen] = useState(false);
   const [newModel, setNewModel] = useState<LlmModelEntry | null>(null);
+  const [newAsrModel, setNewAsrModel] = useState<{ slug: string; name: string } | null>(null);
   const [savingModel, setSavingModel] = useState(false);
   const [removeProviderOpen, setRemoveProviderOpen] = useState(false);
   const [remoteModels, setRemoteModels] = useState<Array<{ id: string; name?: string }>>([]);
@@ -161,6 +175,11 @@ export function ProviderDetailPage({
     const all = models.filter((m) => m.provider === provider.id && m.category === "asr");
     return all.filter((m) => !asrModels.some((v) => v.id === m.id));
   }, [models, provider.id, asrModels]);
+  /** The provider exposes an online ASR catalog (fetchable model list). */
+  const hasAsrCatalog = useMemo(
+    () => models.some((m) => m.provider === provider.id && m.engine === "openrouter"),
+    [models, provider.id],
+  );
   const baseModels = useMemo(
     () =>
       provider.id === "local_asr"
@@ -194,11 +213,12 @@ export function ProviderDetailPage({
 
   /* ---------- actions ---------- */
 
-  const fetchModels = async () => {
+  const fetchModels = async (capability: CapabilityKind) => {
     const sequence = ++modelFetchSequence.current;
     setFetchingModels(true);
     try {
-      const result = await listLlmModels(provider.id);
+      const result =
+        capability === "llm" ? await listLlmModels(provider.id) : await listAsrModels(provider.id);
       if (sequence !== modelFetchSequence.current) return;
       setRemoteModels(
         Array.isArray(result.data) ? result.data.filter((m) => typeof m.id === "string") : [],
@@ -226,6 +246,22 @@ export function ProviderDetailPage({
 
   const removeAsrModel = async (model: RegistryModel) => {
     setModelModal(null);
+    if (model.custom) {
+      // User-added entries are really deleted: keep config consistent first
+      // (the active default reselects a visible model), then drop the entry.
+      const saved = await save(
+        withAsrModelVisible(config, model.id, false, models, isModelDownloaded),
+      );
+      if (!saved) return;
+      try {
+        await removeAsrModelEntry(model.id);
+      } catch (error) {
+        showToast(errText(error), "error");
+        return;
+      }
+      await onRegistryChange();
+      return;
+    }
     if (model.type === "offline") {
       // Local model removal deletes the downloaded files; the row stays.
       try {
@@ -243,6 +279,21 @@ export function ProviderDetailPage({
 
   const changeLlmModels = async (entries: LlmModelEntry[]) => {
     return save(withLlmModels(config, provider.id, entries, models));
+  };
+
+  /** Add an online-catalog ASR model (slug from the catalog or manual input),
+   * then reopen the config modal for the fresh registry entry. */
+  const addAsrModelFlow = async (slug: string, displayName?: string) => {
+    // Catalog rows append " · $x.xx/min" for display; never persist the price.
+    const cleanName = displayName?.split(" · $")[0].trim() || slug;
+    try {
+      const result = await addAsrModel(provider.id, slug, cleanName);
+      const updated = await onRegistryChange();
+      const added = updated.find((m) => m.id === result.id);
+      if (added) setModelModal({ kind: "asr", model: added });
+    } catch (error) {
+      showToast(errText(error), "error");
+    }
   };
 
   const modelEntry =
@@ -540,7 +591,7 @@ export function ProviderDetailPage({
             variant="ghost"
             onClick={() => {
               setAddModelOpen(true);
-              void fetchModels();
+              void fetchModels(tab);
             }}
           >
             <Plus size={14} />
@@ -567,7 +618,7 @@ export function ProviderDetailPage({
               value: cap,
               label: t(cap === "asr" ? "ui.models.tab_asr" : "ui.models.tab_llm"),
             }))}
-            onChange={(value) => setTab(value as CapabilityKind)}
+            onChange={(value) => switchTab(value as CapabilityKind)}
           />
         )}
 
@@ -799,16 +850,78 @@ export function ProviderDetailPage({
         />
       )}
 
+      {/* New custom ASR model (online catalog provider): slug + name */}
+      {newAsrModel && (
+        <Modal open onClose={() => setNewAsrModel(null)} title={t("ui.models.add_model_custom")}>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-text-muted" htmlFor="new-asr-slug">
+                {t("ui.models.model_id")}
+              </label>
+              <Input
+                id="new-asr-slug"
+                className="mt-1 w-full"
+                placeholder="openai/whisper-large-v3"
+                value={newAsrModel.slug}
+                onChange={(v) => setNewAsrModel({ ...newAsrModel, slug: v })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-muted" htmlFor="new-asr-name">
+                {t("ui.models.model_name")}
+              </label>
+              <Input
+                id="new-asr-name"
+                className="mt-1 w-full"
+                value={newAsrModel.name}
+                onChange={(v) => setNewAsrModel({ ...newAsrModel, name: v })}
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button
+                variant="accent"
+                disabled={savingModel || !newAsrModel.slug.trim()}
+                onClick={() => {
+                  const slug = newAsrModel.slug.trim();
+                  const name = newAsrModel.name.trim() || slug;
+                  if (asrModels.some((v) => asrModelSlug(v) === slug)) {
+                    showToast(t("ui.models.duplicate_model"), "error");
+                    return;
+                  }
+                  setSavingModel(true);
+                  void addAsrModelFlow(slug, name)
+                    .then(() => setNewAsrModel(null))
+                    .finally(() => setSavingModel(false));
+                }}
+              >
+                {t("ui.models.save")}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Add model */}
       <AddModelModal
         open={addModelOpen}
         onClose={() => setAddModelOpen(false)}
         hiddenPresets={tab === "asr" ? hiddenAsrPresets : hiddenLlmPresets}
-        allowCustom={tab === "llm"}
-        remoteModels={remoteModels.filter((m) => !llmModels.some((v) => viewRequestId(v) === m.id))}
+        allowCustom={tab === "llm" || (tab === "asr" && hasAsrCatalog)}
+        remoteModels={
+          tab === "llm"
+            ? remoteModels.filter((m) => !llmModels.some((v) => viewRequestId(v) === m.id))
+            : remoteModels.filter((m) => !asrModels.some((v) => asrModelSlug(v) === m.id))
+        }
         fetching={fetchingModels}
-        onFetch={tab === "llm" ? () => void fetchModels() : undefined}
-        onCreateCustom={() => setNewModel({ id: "", name: "" })}
+        onFetch={
+          tab === "llm" || (tab === "asr" && hasAsrCatalog)
+            ? () => void fetchModels(tab)
+            : undefined
+        }
+        onCreateCustom={() => {
+          if (tab === "asr") setNewAsrModel({ slug: "", name: "" });
+          else setNewModel({ id: "", name: "" });
+        }}
         onRestorePreset={(modelId) => {
           if (tab === "asr") {
             void save(withAsrModelVisible(config, modelId, true, models, isModelDownloaded)).then(
@@ -830,6 +943,10 @@ export function ProviderDetailPage({
           }
         }}
         onAddCustom={(id, name) => {
+          if (tab === "asr") {
+            void addAsrModelFlow(id, name);
+            return;
+          }
           if (llmModels.some((model) => viewRequestId(model) === id)) return;
           void changeLlmModels([...llmModels.map(toEntry), { id, name }]).then((success) => {
             if (success) setModelModal({ kind: "llm", entryId: id });
@@ -866,6 +983,12 @@ function toEntry(v: {
   params?: LlmModelEntry["params"];
 }): LlmModelEntry {
   return { id: v.id, name: v.name, model_id: v.modelIdOverride, params: v.params };
+}
+
+/** Upstream model slug of an ASR registry entry (`default_config.model`). */
+function asrModelSlug(model: RegistryModel): string {
+  const slug = model.default_config?.model;
+  return typeof slug === "string" ? slug : "";
 }
 
 function isNested(value: unknown): boolean {

@@ -95,7 +95,9 @@
       "qwen_auth": "Invalid API key or endpoint/workspace mismatch",
       "qwen_quota": "Speech recognition quota exhausted. Check the account balance",
       "qwen_rate_limited": "Too many speech requests. Please retry later",
-      "qwen_hotwords_skipped": "Skipped {{count}} invalid or excess hotwords"
+      "qwen_hotwords_skipped": "Skipped {{count}} invalid or excess hotwords",
+      "quota_exhausted": "Speech recognition quota exhausted. Top up the provider balance",
+      "rate_limited": "Too many speech requests. Please retry later"
     },
     "config": {
       "invalid": "Invalid configuration",
@@ -124,6 +126,8 @@
     },
     "model": {
       "not_in_registry": "Model {{model}} was not found in the registry",
+      "duplicate_id": "Model {{model}} already exists",
+      "not_custom": "Bundled models cannot be deleted",
       "no_download_url": "Model {{model}} has no download URL (online models do not download)",
       "mkdir_failed": "Failed to create the model directory",
       "download_failed": "Download failed",

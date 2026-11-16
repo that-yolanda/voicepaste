@@ -396,6 +396,27 @@ export async function listLlmModels(
   return invoke("list_llm_models", { providerId });
 }
 
+/** Online ASR model catalog (v1: OpenRouter STT models). */
+export async function listAsrModels(
+  providerId: string,
+): Promise<{ data: Array<{ id: string; name?: string }> }> {
+  return invoke("list_asr_models", { providerId });
+}
+
+/** Add an online-catalog ASR model as a custom registry entry. */
+export async function addAsrModel(
+  providerId: string,
+  slug: string,
+  name?: string,
+): Promise<{ ok: boolean; id: string }> {
+  return invoke("add_asr_model", { providerId, slug, name });
+}
+
+/** Remove a user-added ASR model entry from the registry. */
+export async function removeAsrModel(modelId: string): Promise<{ ok: boolean }> {
+  return invoke("remove_asr_model", { modelId });
+}
+
 export function onModelDownloadProgress(listener: (p: ModelDownloadProgress) => void): () => void {
   let active = true;
   const unlisten = listen<ModelDownloadProgress>("model:download:progress", (event) => {

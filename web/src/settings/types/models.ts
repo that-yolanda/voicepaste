@@ -21,6 +21,8 @@ export interface RegistryModel {
   default_config?: Record<string, unknown>;
   architecture?: string;
   streaming?: boolean;
+  /** True for user-added entries (online catalog); only those can be deleted. */
+  custom?: boolean;
 }
 
 /** Capability a provider offers. */

@@ -94,6 +94,8 @@ app_error_codes! {
     AsrTimeout => "asr.timeout",
     AsrRequestInvalid => "asr.request_invalid",
     AsrServerError => "asr.server_error",
+    AsrQuotaExhausted => "asr.quota_exhausted",
+    AsrRateLimited => "asr.rate_limited",
     AsrConnectClosed => "asr.connect_closed",
     AsrFinalTimeout => "asr.final_timeout",
     AsrSessionClosed => "asr.session_closed",
@@ -161,6 +163,8 @@ app_error_codes! {
     PasteClipboardWriteFailed => "paste.clipboard_write_failed",
     // model — download / delete
     ModelNotInRegistry => "model.not_in_registry",
+    ModelDuplicateId => "model.duplicate_id",
+    ModelNotCustom => "model.not_custom",
     ModelNoDownloadUrl => "model.no_download_url",
     ModelMkdirFailed => "model.mkdir_failed",
     ModelDownloadFailed => "model.download_failed",
@@ -269,6 +273,12 @@ impl AppErrorCode {
             (En, Self::AsrRequestInvalid) => "Invalid ASR request parameters",
             (ZhCn, Self::AsrServerError) => "ASR 服务异常",
             (En, Self::AsrServerError) => "ASR service error",
+            (ZhCn, Self::AsrQuotaExhausted) => "语音识别额度不足，请到服务商控制台充值",
+            (En, Self::AsrQuotaExhausted) => {
+                "Speech recognition quota exhausted. Top up the provider balance"
+            }
+            (ZhCn, Self::AsrRateLimited) => "语音识别请求过于频繁，请稍后重试",
+            (En, Self::AsrRateLimited) => "Too many speech requests. Please retry later",
             (ZhCn, Self::AsrConnectClosed) => "ASR 连接已断开，请重新开始",
             (En, Self::AsrConnectClosed) => "ASR connection closed. Please start again",
             (ZhCn, Self::AsrFinalTimeout) => "ASR 最终结果超时，请检查网络连接",

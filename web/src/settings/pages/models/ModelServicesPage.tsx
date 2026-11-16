@@ -93,16 +93,25 @@ export function ModelServicesPage() {
     }
   }, []);
 
-  useEffect(() => {
-    getModelRegistry()
-      .then(({ providers: p, models: m }) => {
-        if (!mounted.current) return;
+  /** Re-fetch the model registry; returns the fresh model list so callers can
+   * act on entries they just added or removed. */
+  const refreshRegistry = useCallback(async (): Promise<RegistryModel[]> => {
+    try {
+      const { providers: p, models: m } = await getModelRegistry();
+      if (mounted.current) {
         setProviders(p as RegistryProvider[]);
         setModels(m as RegistryModel[]);
-      })
-      .catch(() => {});
+      }
+      return m as RegistryModel[];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshRegistry();
     void refreshDownloaded();
-  }, [refreshDownloaded]);
+  }, [refreshRegistry, refreshDownloaded]);
 
   useEffect(
     () =>
@@ -297,6 +306,7 @@ export function ModelServicesPage() {
                       downloaded={downloaded}
                       downloadProgress={downloadProgress}
                       onDownloadedChange={refreshDownloaded}
+                      onRegistryChange={refreshRegistry}
                       onBack={() => setDetailProviderId(null)}
                     />
                   </div>

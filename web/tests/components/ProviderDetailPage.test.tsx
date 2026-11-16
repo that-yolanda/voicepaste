@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   refresh: vi.fn(),
   listModels: vi.fn(),
+  listAsrModels: vi.fn(),
+  addAsrModel: vi.fn(),
+  removeAsrModel: vi.fn(),
+  registryChange: vi.fn(),
   testModel: vi.fn(),
   cancelTest: vi.fn(),
   openExternal: vi.fn().mockResolvedValue(undefined),
@@ -25,6 +29,9 @@ vi.mock("@/settings/bridge", () => ({
   deleteModel: vi.fn(),
   downloadModel: vi.fn(),
   listLlmModels: mocks.listModels,
+  listAsrModels: mocks.listAsrModels,
+  addAsrModel: mocks.addAsrModel,
+  removeAsrModel: mocks.removeAsrModel,
   testModel: mocks.testModel,
   cancelModelTest: mocks.cancelTest,
 }));
@@ -47,6 +54,7 @@ function detailNode(provider: RegistryProvider) {
       downloaded={[vad.id]}
       downloadProgress={{}}
       onDownloadedChange={vi.fn()}
+      onRegistryChange={mocks.registryChange}
       onBack={vi.fn()}
     />
   );

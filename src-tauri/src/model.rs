@@ -144,6 +144,11 @@ pub struct ModelEntry {
     /// Default model parameters (sherpa-onnx config overrides).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_config: Option<serde_json::Value>,
+    /// True for user-created entries (added from the online catalog). Custom
+    /// entries survive registry upgrades and are removable in the settings
+    /// UI; bundled entries are not.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub custom: bool,
 }
 
 /// Shared defaults that apply across all models.
@@ -287,6 +292,7 @@ fn minimal_registry() -> ModelRegistry {
             mem_size: None,
             model_files: std::collections::HashMap::new(),
             default_config: None,
+            custom: false,
         }],
     }
 }
@@ -525,6 +531,51 @@ pub fn model_path(data_dir: &Path, model_id: &str) -> PathBuf {
     models_dir(data_dir).join(model_id)
 }
 
+/// Append a user-created model entry to the editable app-data registry.
+/// Ids colliding with any existing entry (bundled or custom) are rejected so
+/// registry upgrades stay authoritative for bundled definitions.
+pub fn add_custom_model(
+    data_dir: &Path,
+    resource_dir: &Path,
+    entry: &ModelEntry,
+) -> Result<(), AppError> {
+    ensure_registry(data_dir, resource_dir);
+    let mut registry = read_registry_file(&registry_path(data_dir))
+        .unwrap_or_else(|| bundled_registry(resource_dir));
+    if registry.models.iter().any(|m| m.id == entry.id) {
+        return Err(AppError::new(AppErrorCode::ModelDuplicateId).with_param("model", &entry.id));
+    }
+    registry.models.push(entry.clone());
+    write_registry_file(&registry_path(data_dir), &registry)
+        .map_err(|e| AppError::new(AppErrorCode::ModelSaveFailed).with_detail(e))
+}
+
+/// Remove a user-created model entry from the editable app-data registry.
+/// Bundled entries cannot be removed (only hidden via config visibility).
+pub fn remove_custom_model(
+    data_dir: &Path,
+    resource_dir: &Path,
+    model_id: &str,
+) -> Result<(), AppError> {
+    ensure_registry(data_dir, resource_dir);
+    let mut registry = read_registry_file(&registry_path(data_dir))
+        .unwrap_or_else(|| bundled_registry(resource_dir));
+    let is_custom = registry
+        .models
+        .iter()
+        .find(|m| m.id == model_id)
+        .map(|m| m.custom)
+        .ok_or_else(|| {
+            AppError::new(AppErrorCode::ModelNotInRegistry).with_param("model", model_id)
+        })?;
+    if !is_custom {
+        return Err(AppError::new(AppErrorCode::ModelNotCustom).with_param("model", model_id));
+    }
+    registry.models.retain(|m| m.id != model_id);
+    write_registry_file(&registry_path(data_dir), &registry)
+        .map_err(|e| AppError::new(AppErrorCode::ModelSaveFailed).with_detail(e))
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -559,6 +610,7 @@ mod tests {
             mem_size: None,
             model_files: std::collections::HashMap::new(),
             default_config: None,
+            custom: false,
         };
         assert!(entry.is_downloadable());
     }
@@ -589,17 +641,18 @@ mod tests {
             mem_size: None,
             model_files: std::collections::HashMap::new(),
             default_config: None,
+            custom: false,
         };
         assert!(!entry.is_downloadable());
     }
 
     #[test]
-    fn embedded_registry_is_version_26() {
+    fn embedded_registry_is_version_27() {
         let registry: ModelRegistry =
             serde_json::from_str(EMBEDDED_REGISTRY).expect("EMBEDDED_REGISTRY should parse");
         assert_eq!(
-            registry.version, 26,
-            "EMBEDDED_REGISTRY version should be 26, got {}",
+            registry.version, 27,
+            "EMBEDDED_REGISTRY version should be 27, got {}",
             registry.version
         );
         assert!(
@@ -675,8 +728,8 @@ mod tests {
         let fake_dir = std::path::Path::new("/nonexistent");
         let registry = bundled_registry(fake_dir);
         assert_eq!(
-            registry.version, 26,
-            "bundled_registry should return version 26 from embedded, got {}",
+            registry.version, 27,
+            "bundled_registry should return version 27 from embedded, got {}",
             registry.version
         );
     }
@@ -740,7 +793,7 @@ mod tests {
         custom.id = "user-custom-model".into();
         current.models.push(custom);
         let merged = merge_registry(current, bundled);
-        assert_eq!(merged.version, 26);
+        assert_eq!(merged.version, 27);
         let message = merged
             .models
             .iter()
@@ -766,6 +819,72 @@ mod tests {
         );
         assert!(merged.models.iter().any(|m| m.id == "user-custom-model"));
         assert!(merged.models.iter().any(|m| m.id == "doubao-streaming"));
+    }
+
+    #[test]
+    fn add_custom_model_appends_and_rejects_duplicates() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+        let bundled: ModelRegistry = serde_json::from_str(EMBEDDED_REGISTRY).unwrap();
+        let mut entry = bundled
+            .models
+            .iter()
+            .find(|m| m.id == "openrouter-transcribe")
+            .expect("openrouter seed entry")
+            .clone();
+        entry.id = "openrouter-scribe-v2".into();
+        entry.custom = true;
+
+        add_custom_model(data.path(), resources.path(), &entry).unwrap();
+        let written = read_registry_file(&registry_path(data.path())).expect("registry written");
+        let added = written
+            .models
+            .iter()
+            .find(|m| m.id == "openrouter-scribe-v2")
+            .expect("custom entry persisted");
+        assert!(added.custom);
+
+        // Duplicate custom id is rejected…
+        let error = add_custom_model(data.path(), resources.path(), &entry).unwrap_err();
+        assert_eq!(error.code, AppErrorCode::ModelDuplicateId);
+        // …and so is any id already owned by a bundled entry.
+        let mut bundled_clone = bundled.models[0].clone();
+        bundled_clone.custom = true;
+        let error = add_custom_model(data.path(), resources.path(), &bundled_clone).unwrap_err();
+        assert_eq!(error.code, AppErrorCode::ModelDuplicateId);
+    }
+
+    #[test]
+    fn remove_custom_model_only_removes_user_entries() {
+        let data = tempfile::tempdir().unwrap();
+        let resources = tempfile::tempdir().unwrap();
+
+        // Bundled entries cannot be removed.
+        let error =
+            remove_custom_model(data.path(), resources.path(), "doubao-streaming").unwrap_err();
+        assert_eq!(error.code, AppErrorCode::ModelNotCustom);
+        // Unknown ids are reported as missing.
+        let error =
+            remove_custom_model(data.path(), resources.path(), "does-not-exist").unwrap_err();
+        assert_eq!(error.code, AppErrorCode::ModelNotInRegistry);
+
+        // A custom entry round-trips through add → remove.
+        let bundled: ModelRegistry = serde_json::from_str(EMBEDDED_REGISTRY).unwrap();
+        let mut entry = bundled
+            .models
+            .iter()
+            .find(|m| m.id == "openrouter-transcribe")
+            .unwrap()
+            .clone();
+        entry.id = "openrouter-qwen3-asr".into();
+        entry.custom = true;
+        add_custom_model(data.path(), resources.path(), &entry).unwrap();
+        remove_custom_model(data.path(), resources.path(), "openrouter-qwen3-asr").unwrap();
+        let written = read_registry_file(&registry_path(data.path())).expect("registry written");
+        assert!(!written
+            .models
+            .iter()
+            .any(|m| m.id == "openrouter-qwen3-asr"));
     }
 
     #[test]
@@ -805,6 +924,7 @@ mod tests {
             mem_size: None,
             model_files: std::collections::HashMap::new(),
             default_config: None,
+            custom: false,
         });
         let merged = merge_registry(current, bundled);
         assert!(merged.models.iter().any(|m| m.id == "new-model"));

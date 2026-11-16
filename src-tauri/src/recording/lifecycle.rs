@@ -147,6 +147,7 @@ pub(super) async fn stop_recording(app_handle: AppHandle) {
     let server_final_only = app_inner.config_manager.load_config().is_ok_and(|config| {
         config.audio_provider() == crate::config::ELEVENLABS_REALTIME_ID
             || crate::asr::qwen::is_qwen_model(config.audio_provider())
+            || crate::asr::openrouter::is_openrouter_model(config.audio_provider())
     });
 
     // 1. Set state to finishing
