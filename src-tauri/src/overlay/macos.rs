@@ -979,20 +979,30 @@ fn set_wave_activity(app: &AppHandle, active: bool) {
     });
 }
 
-/// Display one text level for the entire utterance, independent of ASR segments.
+/// Keep segment emphasis in dynamic system colors so AppKit adapts to the material.
 fn transcript_attr(model: &Model) -> Retained<NSAttributedString> {
     let combined = format!("{}{}", model.final_text, model.partial_text);
     let attr = NSMutableAttributedString::from_nsstring(&NSString::from_str(&combined));
     let font = NSFont::systemFontOfSize(FONT_SIZE);
     let full = NSRange::new(0, combined.encode_utf16().count());
-    let color = if matches!(model.app_state.as_str(), "recording" | "finishing") {
-        NSColor::secondaryLabelColor()
-    } else {
-        NSColor::labelColor()
-    };
     unsafe {
         attr.addAttribute_value_range(objc2_app_kit::NSFontAttributeName, &font, full);
-        attr.addAttribute_value_range(objc2_app_kit::NSForegroundColorAttributeName, &color, full);
+        let final_len = model.final_text.encode_utf16().count();
+        if final_len > 0 {
+            attr.addAttribute_value_range(
+                objc2_app_kit::NSForegroundColorAttributeName,
+                &NSColor::labelColor(),
+                NSRange::new(0, final_len),
+            );
+        }
+        let partial_len = model.partial_text.encode_utf16().count();
+        if partial_len > 0 {
+            attr.addAttribute_value_range(
+                objc2_app_kit::NSForegroundColorAttributeName,
+                &NSColor::secondaryLabelColor(),
+                NSRange::new(final_len, partial_len),
+            );
+        }
     }
     Retained::into_super(attr)
 }
@@ -1602,43 +1612,57 @@ mod tests {
     use super::*;
 
     #[test]
-    fn transcript_level_depends_on_session_state_not_asr_segments() {
-        let mut model = Model {
-            final_text: "已确认👋".into(),
-            partial_text: "仍在识别".into(),
-            ..Model::default()
-        };
-        for state in ["recording", "finishing", "idle"] {
-            model.app_state = state.into();
-            let text = transcript_attr(&model);
-            let expected = if state == "idle" {
-                NSColor::labelColor()
-            } else {
-                NSColor::secondaryLabelColor()
-            };
-            let mut range = NSRange::new(0, 0);
-            unsafe {
-                let color = text
-                    .attribute_atIndex_effectiveRange(
-                        objc2_app_kit::NSForegroundColorAttributeName,
-                        0,
-                        &mut range,
-                    )
-                    .unwrap();
-                let equal: bool = msg_send![&*color, isEqual: &*expected];
-                assert!(equal, "unexpected text level for {state}");
-                assert_eq!(range, NSRange::new(0, text.length()));
-                let font = text
-                    .attribute_atIndex_effectiveRange(
-                        objc2_app_kit::NSFontAttributeName,
-                        0,
-                        &mut range,
-                    )
-                    .unwrap();
-                let regular: bool =
-                    msg_send![&*font, isEqual: &*NSFont::systemFontOfSize(FONT_SIZE)];
-                assert!(regular);
-                assert_eq!(range, NSRange::new(0, text.length()));
+    fn transcript_preserves_dynamic_colors_for_final_and_partial_segments() {
+        for (final_text, partial_text) in [
+            ("已确认👋", "仍在识别"),
+            ("已确认👋", ""),
+            ("", "仍在识别👋"),
+            ("", ""),
+        ] {
+            for state in ["recording", "finishing", "idle"] {
+                let model = Model {
+                    final_text: final_text.into(),
+                    partial_text: partial_text.into(),
+                    app_state: state.into(),
+                    ..Model::default()
+                };
+                let text = transcript_attr(&model);
+                let final_len = final_text.encode_utf16().count();
+                let partial_len = partial_text.encode_utf16().count();
+                assert_eq!(text.length(), final_len + partial_len);
+                for index in 0..text.length() {
+                    let (expected, expected_range) = if index < final_len {
+                        (NSColor::labelColor(), NSRange::new(0, final_len))
+                    } else {
+                        (
+                            NSColor::secondaryLabelColor(),
+                            NSRange::new(final_len, partial_len),
+                        )
+                    };
+                    let mut range = NSRange::new(0, 0);
+                    unsafe {
+                        let color = text
+                            .attribute_atIndex_effectiveRange(
+                                objc2_app_kit::NSForegroundColorAttributeName,
+                                index,
+                                &mut range,
+                            )
+                            .unwrap();
+                        let equal: bool = msg_send![&*color, isEqual: &*expected];
+                        assert!(equal, "unexpected text color for {state} at {index}");
+                        assert_eq!(range, expected_range);
+                        let font = text
+                            .attribute_atIndex_effectiveRange(
+                                objc2_app_kit::NSFontAttributeName,
+                                index,
+                                &mut range,
+                            )
+                            .unwrap();
+                        let regular: bool =
+                            msg_send![&*font, isEqual: &*NSFont::systemFontOfSize(FONT_SIZE)];
+                        assert!(regular);
+                    }
+                }
             }
         }
     }
