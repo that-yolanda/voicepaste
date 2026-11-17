@@ -63,7 +63,7 @@ it("reserves library space while loading and preserves loaded rows across naviga
   const view = render(<SettingsApp />);
   fireEvent.click(screen.getByText("hotwords"));
   expect(view.container.querySelector('[aria-busy="true"]')).not.toBeNull();
-  expect(screen.queryByText("添加")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "添加" })).toBeDisabled();
   await act(async () =>
     resolveHotwords({ active_group: "g", groups: [{ id: "g", name: "My words", words: [] }] }),
   );

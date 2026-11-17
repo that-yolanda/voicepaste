@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { errText } from "@/i18n/errText";
 import { loadPrompts, savePrompts, validateHotkeySettings } from "@/settings/bridge";
+import { Button } from "@/settings/components/Button";
 import { HotkeyInput } from "@/settings/components/HotkeyInput";
 import { SegmentedControl } from "@/settings/components/SegmentedControl";
+import { Skeleton } from "@/settings/components/Skeleton";
 import { Toast, useToast } from "@/settings/components/Toast";
 import {
   PageLayout,
@@ -39,18 +41,29 @@ export function HotkeyPage() {
   const { toast, showToast } = useToast();
   const modeOptions = MODE_OPTIONS.map((o) => ({ ...o, label: t(o.label) }));
 
+  const [promptsLoading, setPromptsLoading] = useState(true);
+  const [promptsError, setPromptsError] = useState(false);
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
   // Which field is currently capturing — only one recorder runs at a time, so
   // every other recordable field goes `busy` while it is set.
   const [activeRecorder, setActiveRecorder] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadPrompts()
-      .then((d) => {
-        if (Array.isArray(d)) setPrompts(d as unknown as PromptItem[]);
-      })
-      .catch(() => {});
+  const load = useCallback(async () => {
+    setPromptsLoading(true);
+    setPromptsError(false);
+    try {
+      const data = await loadPrompts();
+      if (Array.isArray(data)) setPrompts(data as unknown as PromptItem[]);
+    } catch {
+      setPromptsError(true);
+    } finally {
+      setPromptsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const isBusyFor = useCallback(
     (id: string) => activeRecorder !== null && activeRecorder !== id,
@@ -243,7 +256,17 @@ export function HotkeyPage() {
             />
 
             <div data-tour="hotkey-templates" className="space-y-2">
-              {prompts.length === 0 && (
+              {promptsLoading ? (
+                <div aria-busy="true">
+                  <Skeleton className="h-9 w-full" />
+                </div>
+              ) : promptsError ? (
+                <div role="alert" className="flex items-center justify-between min-h-9">
+                  <p>{t("ui.load_failed")}</p>
+                  <Button onClick={() => void load()}>{t("ui.retry")}</Button>
+                </div>
+              ) : null}
+              {!promptsLoading && !promptsError && prompts.length === 0 && (
                 <p className="text-center text-sm text-text-muted">
                   {t("ui.hotkey_page.no_templates")}
                 </p>

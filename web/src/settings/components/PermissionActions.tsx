@@ -10,6 +10,7 @@ import {
   requestMicrophoneAccess,
 } from "@/settings/bridge";
 import { Button } from "@/settings/components/Button";
+import { Skeleton } from "@/settings/components/Skeleton";
 export function PermissionActions({ microphone }: { microphone: boolean }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState("unknown");
@@ -92,23 +93,31 @@ export function PermissionActions({ microphone }: { microphone: boolean }) {
       data-tour={microphone ? "microphone" : "accessibility"}
       className="flex flex-wrap items-center justify-end gap-2"
     >
-      <span role="status" aria-live="polite" className="text-xs text-text-muted">
-        {!busy &&
-          (hint ? (
-            t(`ui.permissions.${hint}`)
-          ) : status === "granted" ? (
-            <span title={t("ui.permissions.granted")}>
-              <CircleCheck size={16} className="fill-success text-surface" aria-hidden="true" />
-              <span className="sr-only">{t("ui.permissions.granted")}</span>
-            </span>
-          ) : null)}
-      </span>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy={busy !== null}
+        className="flex min-h-4 min-w-4 items-center justify-end text-xs text-text-muted"
+      >
+        {busy ? (
+          <Skeleton className="size-4" />
+        ) : hint ? (
+          t(`ui.permissions.${hint}`)
+        ) : status === "granted" ? (
+          <span title={t("ui.permissions.granted")}>
+            <CircleCheck size={16} className="fill-success text-surface" aria-hidden="true" />
+            <span className="sr-only">{t("ui.permissions.granted")}</span>
+          </span>
+        ) : null}
+      </div>
       <Button
         disabled={busy !== null}
         onClick={() => void check(true)}
         className="whitespace-nowrap"
       >
-        {busy === "check" && <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />}
+        <span className="size-3.5 shrink-0" aria-hidden="true">
+          {busy === "check" && <LoaderCircle size={14} className="animate-spin" />}
+        </span>
         {t(`ui.permissions.${allow ? "allow" : "check"}`)}
       </Button>
       <Button
@@ -116,9 +125,9 @@ export function PermissionActions({ microphone }: { microphone: boolean }) {
         onClick={() => void openSettings()}
         className="whitespace-nowrap"
       >
-        {busy === "settings" && (
-          <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
-        )}
+        <span className="size-3.5 shrink-0" aria-hidden="true">
+          {busy === "settings" && <LoaderCircle size={14} className="animate-spin" />}
+        </span>
         {t("ui.permissions.settings")}
       </Button>
     </div>

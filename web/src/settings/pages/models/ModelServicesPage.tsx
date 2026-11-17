@@ -17,6 +17,7 @@ import { Button } from "@/settings/components/Button";
 import { Collapse } from "@/settings/components/Collapse";
 import { ProviderIcon } from "@/settings/components/models/ProviderIcon";
 import { Select } from "@/settings/components/Select";
+import { Skeleton } from "@/settings/components/Skeleton";
 import { Toast, useToast } from "@/settings/components/Toast";
 import {
   PageLayout,
@@ -56,6 +57,10 @@ export function ModelServicesPage() {
   const { toast, showToast } = useToast();
   const config = (settings?.parsedConfig || {}) as Config;
 
+  const [registryLoading, setRegistryLoading] = useState(true);
+  const [downloadsLoading, setDownloadsLoading] = useState(true);
+  const [defaultsLoading, setDefaultsLoading] = useState(true);
+  const [registryError, setRegistryError] = useState(false);
   const [providers, setProviders] = useState<RegistryProvider[]>([]);
   const [models, setModels] = useState<RegistryModel[]>([]);
   const [downloaded, setDownloaded] = useState<string[]>([]);
@@ -78,7 +83,10 @@ export function ModelServicesPage() {
         if (mounted.current && isRecord(defaults))
           setRuntimeDefaults(defaults as unknown as AsrDefaults);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (mounted.current) setDefaultsLoading(false);
+      });
     return () => {
       mounted.current = false;
     };
@@ -90,12 +98,15 @@ export function ModelServicesPage() {
       if (mounted.current) setDownloaded(Array.isArray(ids) ? ids : []);
     } catch {
       /* ignore */
+    } finally {
+      if (mounted.current) setDownloadsLoading(false);
     }
   }, []);
 
   /** Re-fetch the model registry; returns the fresh model list so callers can
    * act on entries they just added or removed. */
   const refreshRegistry = useCallback(async (): Promise<RegistryModel[]> => {
+    setRegistryError(false);
     try {
       const { providers: p, models: m } = await getModelRegistry();
       if (mounted.current) {
@@ -104,7 +115,10 @@ export function ModelServicesPage() {
       }
       return m as RegistryModel[];
     } catch {
+      if (mounted.current) setRegistryError(true);
       return [];
+    } finally {
+      if (mounted.current) setRegistryLoading(false);
     }
   }, []);
 
@@ -214,6 +228,7 @@ export function ModelServicesPage() {
         <SectionContent>
           <SectionItemList>
             <DefaultsRow
+              disabled={registryLoading || downloadsLoading || defaultsLoading}
               tourTarget="models-default-asr"
               label={t("ui.models.tab_asr")}
               value={activeAsrId}
@@ -227,6 +242,7 @@ export function ModelServicesPage() {
             />
             <DefaultsRow
               last
+              disabled={registryLoading || downloadsLoading || defaultsLoading}
               tourTarget="models-default-llm"
               label={t("ui.models.tab_llm")}
               value={defaultLlm ? `${defaultLlm.provider.id}::${defaultLlm.model.id}` : ""}
@@ -260,126 +276,150 @@ export function ModelServicesPage() {
           }
         />
         <SectionRows>
-          {visible.map((provider, index) => {
-            const { name } = localizedProviderFields(provider, i18n.language);
-            const expanded = detailProviderId === provider.id;
-            const panelId = `provider-panel-${provider.id}`;
-            return (
-              <div
-                key={provider.id}
-                className={index < visible.length - 1 ? "border-b border-border-subtle" : undefined}
+          {registryLoading ? (
+            <div aria-busy="true" className="p-3">
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : registryError && providers.length === 0 ? (
+            <div role="alert" className="p-3 space-y-2">
+              <p>{t("ui.load_failed")}</p>
+              <Button
+                onClick={() => {
+                  setRegistryLoading(true);
+                  void refreshRegistry();
+                }}
               >
-                <SectionRow
-                  aria-expanded={expanded}
-                  aria-controls={panelId}
-                  onClick={() => {
-                    setDetailProviderId(expanded ? null : provider.id);
-                    setCatalogOpen(false);
-                  }}
-                >
-                  <ProviderIcon provider={provider} />
-                  <span className="min-w-0 font-semibold">{name}</span>
-                  {provider.kind === "local" ? (
-                    <Laptop size={14} aria-label={t("ui.models.filter_local")} />
-                  ) : (
-                    <Globe size={14} aria-label={t("ui.models.filter_online")} />
-                  )}
-                  <span className="flex flex-wrap gap-1">
-                    {provider.capabilities.map((cap) => (
-                      <Badge key={cap} size="xs">
-                        {t(cap === "asr" ? "ui.models.tag_asr" : "ui.models.tag_llm")}
-                      </Badge>
-                    ))}
-                  </span>
-                  <ChevronRight
-                    size={15}
-                    className={`ml-auto shrink-0 transition-transform motion-reduce:transition-none ${expanded ? "rotate-90" : ""}`}
-                  />
-                </SectionRow>
-                <Collapse open={expanded} id={panelId}>
-                  <div className="bg-surface-expanded px-3 pb-3 pt-1" data-tour="model-detail">
-                    <ProviderDetailPage
-                      provider={provider}
-                      providers={providers}
-                      models={models}
-                      asrDefaults={asrDefaults}
-                      downloaded={downloaded}
-                      downloadProgress={downloadProgress}
-                      onDownloadedChange={refreshDownloaded}
-                      onRegistryChange={refreshRegistry}
-                      onBack={() => setDetailProviderId(null)}
-                    />
-                  </div>
-                </Collapse>
-              </div>
-            );
-          })}
-          {catalog.length > 0 && (
+                {t("ui.retry")}
+              </Button>
+            </div>
+          ) : (
             <>
-              <Collapse open={catalogOpen} id="provider-catalog">
-                <div className="divide-y divide-border-subtle border-t border-border-subtle">
-                  {catalog.map((provider) => (
+              {visible.map((provider, index) => {
+                const { name } = localizedProviderFields(provider, i18n.language);
+                const expanded = detailProviderId === provider.id;
+                const panelId = `provider-panel-${provider.id}`;
+                return (
+                  <div
+                    key={provider.id}
+                    className={
+                      index < visible.length - 1 ? "border-b border-border-subtle" : undefined
+                    }
+                  >
                     <SectionRow
-                      key={provider.id}
-                      disabled={addingProvider !== null}
-                      onClick={async () => {
-                        setAddingProvider(provider.id);
-                        try {
-                          if (
-                            await save(withAddedProvider(clonePlain(config), provider.id, models))
-                          ) {
-                            setDetailProviderId(provider.id);
-                            setCatalogOpen(false);
-                          }
-                        } finally {
-                          setAddingProvider(null);
-                        }
+                      aria-expanded={expanded}
+                      aria-controls={panelId}
+                      onClick={() => {
+                        setDetailProviderId(expanded ? null : provider.id);
+                        setCatalogOpen(false);
                       }}
                     >
                       <ProviderIcon provider={provider} />
-                      <span className="min-w-0 font-semibold">
-                        {localizedProviderFields(provider, i18n.language).name}
-                      </span>
+                      <span className="min-w-0 font-semibold">{name}</span>
                       {provider.kind === "local" ? (
                         <Laptop size={14} aria-label={t("ui.models.filter_local")} />
                       ) : (
                         <Globe size={14} aria-label={t("ui.models.filter_online")} />
                       )}
-                      {provider.capabilities.map((cap) => (
-                        <Badge key={cap} size="xs">
-                          {t(cap === "asr" ? "ui.models.tag_asr" : "ui.models.tag_llm")}
-                        </Badge>
-                      ))}
-                      <Plus size={14} className="ml-auto shrink-0" />
+                      <span className="flex flex-wrap gap-1">
+                        {provider.capabilities.map((cap) => (
+                          <Badge key={cap} size="xs">
+                            {t(cap === "asr" ? "ui.models.tag_asr" : "ui.models.tag_llm")}
+                          </Badge>
+                        ))}
+                      </span>
+                      <ChevronRight
+                        size={15}
+                        className={`ml-auto shrink-0 transition-transform motion-reduce:transition-none ${expanded ? "rotate-90" : ""}`}
+                      />
                     </SectionRow>
-                  ))}
-                </div>
-              </Collapse>
-              <div data-tour="models-add-provider">
-                <button
-                  type="button"
-                  aria-expanded={catalogOpen}
-                  aria-controls="provider-catalog"
-                  className="flex min-h-9 w-full items-center justify-center gap-1 border-t border-border-subtle text-xs text-text-muted hover:bg-fill-hover"
-                  onClick={() => {
-                    setCatalogOpen(!catalogOpen);
-                    setDetailProviderId(null);
-                  }}
-                >
-                  {t(
-                    catalogOpen
-                      ? "ui.models.collapse_providers"
-                      : visible.length === 0
-                        ? "ui.models.add_provider"
-                        : "ui.models.show_remaining_providers",
-                    { count: catalog.length },
-                  )}
-                  <ChevronDown
-                    size={13}
-                    className={`transition-transform motion-reduce:transition-none ${catalogOpen ? "rotate-180" : ""}`}
-                  />
-                </button>
-              </div>
+                    <Collapse open={expanded} id={panelId}>
+                      <div className="bg-surface-expanded px-3 pb-3 pt-1" data-tour="model-detail">
+                        <ProviderDetailPage
+                          provider={provider}
+                          providers={providers}
+                          models={models}
+                          asrDefaults={asrDefaults}
+                          downloaded={downloaded}
+                          downloadProgress={downloadProgress}
+                          onDownloadedChange={refreshDownloaded}
+                          onRegistryChange={refreshRegistry}
+                          onBack={() => setDetailProviderId(null)}
+                        />
+                      </div>
+                    </Collapse>
+                  </div>
+                );
+              })}
+              {catalog.length > 0 && (
+                <>
+                  <Collapse open={catalogOpen} id="provider-catalog">
+                    <div className="divide-y divide-border-subtle border-t border-border-subtle">
+                      {catalog.map((provider) => (
+                        <SectionRow
+                          key={provider.id}
+                          disabled={addingProvider !== null}
+                          onClick={async () => {
+                            setAddingProvider(provider.id);
+                            try {
+                              if (
+                                await save(
+                                  withAddedProvider(clonePlain(config), provider.id, models),
+                                )
+                              ) {
+                                setDetailProviderId(provider.id);
+                                setCatalogOpen(false);
+                              }
+                            } finally {
+                              setAddingProvider(null);
+                            }
+                          }}
+                        >
+                          <ProviderIcon provider={provider} />
+                          <span className="min-w-0 font-semibold">
+                            {localizedProviderFields(provider, i18n.language).name}
+                          </span>
+                          {provider.kind === "local" ? (
+                            <Laptop size={14} aria-label={t("ui.models.filter_local")} />
+                          ) : (
+                            <Globe size={14} aria-label={t("ui.models.filter_online")} />
+                          )}
+                          {provider.capabilities.map((cap) => (
+                            <Badge key={cap} size="xs">
+                              {t(cap === "asr" ? "ui.models.tag_asr" : "ui.models.tag_llm")}
+                            </Badge>
+                          ))}
+                          <Plus size={14} className="ml-auto shrink-0" />
+                        </SectionRow>
+                      ))}
+                    </div>
+                  </Collapse>
+                  <div data-tour="models-add-provider">
+                    <button
+                      type="button"
+                      aria-expanded={catalogOpen}
+                      aria-controls="provider-catalog"
+                      className="flex min-h-9 w-full items-center justify-center gap-1 border-t border-border-subtle text-xs text-text-muted hover:bg-fill-hover"
+                      onClick={() => {
+                        setCatalogOpen(!catalogOpen);
+                        setDetailProviderId(null);
+                      }}
+                    >
+                      {t(
+                        catalogOpen
+                          ? "ui.models.collapse_providers"
+                          : visible.length === 0
+                            ? "ui.models.add_provider"
+                            : "ui.models.show_remaining_providers",
+                        { count: catalog.length },
+                      )}
+                      <ChevronDown
+                        size={13}
+                        className={`transition-transform motion-reduce:transition-none ${catalogOpen ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </SectionRows>
@@ -405,7 +445,9 @@ function DefaultsRow({
   options,
   onChange,
   last = false,
+  disabled = false,
 }: {
+  disabled?: boolean;
   label: string;
   tourTarget: string;
   last?: boolean;
@@ -420,6 +462,7 @@ function DefaultsRow({
       action={
         <div data-tour={tourTarget} className="w-full">
           <Select
+            disabled={disabled}
             aria-label={label}
             value={options.some((o) => o.value === value) ? value : ""}
             options={

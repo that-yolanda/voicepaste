@@ -134,6 +134,8 @@ On macOS, Regular is the default adaptive Liquid Glass style; Clear preserves mo
 
 Shortcut hints use their own background with the same material and Liquid Glass variant as the transcript pill. During recording and processing, the transcript uses one secondary text level regardless of which segments the recognizer has confirmed; completed text uses the primary level. Text uses the regular system font. Overflow fades only near the top edge.
 
+Settings navigation switches directly without timers or hidden pre-rendering. Model selectors and configured global/voice shortcuts use their real controls from the first render; only unresolved provider and template lists show local placeholders. Model selectors stay disabled until their dependencies finish loading. Permission checks reserve status and progress space. Failed reads offer retry. Segmented controls draw the selected option directly without measuring or animating its initial width. Scroll resets on navigation.
+
 ### audio — ASR Configuration
 
 `config.yaml` only records user overrides — all default values come from `registry.json`. See [Default Value Resolution](#default-value-resolution) above.

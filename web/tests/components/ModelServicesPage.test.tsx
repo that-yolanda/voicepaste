@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { getAudioConfigDefaults, getModelRegistry } from "@/settings/bridge";
 import { ModelServicesPage } from "@/settings/pages/models/ModelServicesPage";
 import type { RegistryModel } from "@/settings/types/models";
 import registry from "../../../registry.json";
@@ -181,7 +182,11 @@ test("fresh installs show only Add Provider and adding one does not seed models"
   mocks.refresh.mockImplementationOnce(async () => {
     view.rerender(<ModelServicesPage />);
   });
-  const add = await screen.findByRole("button", { name: "添加供应商" });
+  const add = await waitFor(() => {
+    const button = screen.getByRole("button", { name: "添加供应商" });
+    expect(button).toBeEnabled();
+    return button;
+  });
   expect(add.closest('[data-tour="models-add-provider"]')).toContainElement(add);
   expect(add).toHaveAttribute("aria-expanded", "false");
   expect(screen.queryByRole("button", { name: new RegExp(`^${providerName}`) })).toBeNull();
@@ -204,4 +209,46 @@ test("fresh installs show only Add Provider and adding one does not seed models"
   expect(screen.queryByRole("button", { name: /^配置 / })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "大语言" }));
   expect(screen.getByText("暂无模型，点击「添加模型」加入")).toBeInTheDocument();
+});
+
+test("keeps real model selectors mounted until all dependencies are ready", async () => {
+  let finishRegistry: (value: typeof registry) => void = () => {};
+  let finishDefaults: (value: Record<string, unknown>) => void = () => {};
+  let finishDownloaded: (value: string[]) => void = () => {};
+  vi.mocked(getModelRegistry).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishRegistry = resolve;
+      }),
+  );
+  vi.mocked(getAudioConfigDefaults).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishDefaults = resolve;
+      }),
+  );
+  mocks.getDownloaded.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishDownloaded = resolve;
+      }),
+  );
+  const view = render(<ModelServicesPage />);
+  expect(view.container.querySelector('[aria-busy="true"]')).not.toBeNull();
+  expect(screen.getByRole("combobox", { name: "语音识别" })).toBeVisible();
+  await act(async () => finishRegistry(registry));
+  await act(async () => finishDefaults({ ...registry.defaults.asr, vad: registry.defaults.vad }));
+  expect(screen.getByRole("combobox", { name: "语音识别" })).toBeVisible();
+  await act(async () => finishDownloaded([localModel.id]));
+  expect(screen.getByRole("combobox", { name: "语音识别" })).toHaveValue(localModel.id);
+  expect(view.container.querySelector('[aria-busy="true"]')).toBeNull();
+});
+
+test("replaces a failed initial registry read with retry instead of empty model choices", async () => {
+  vi.mocked(getModelRegistry).mockRejectedValueOnce(new Error("unavailable"));
+  render(<ModelServicesPage />);
+  const alert = await screen.findByRole("alert");
+  expect(screen.getByRole("combobox", { name: "语音识别" })).toBeVisible();
+  fireEvent.click(within(alert).getByRole("button", { name: "重试" }));
+  expect(await screen.findByRole("combobox", { name: "语音识别" })).toBeVisible();
 });

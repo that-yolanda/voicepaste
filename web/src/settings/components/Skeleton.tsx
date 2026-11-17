@@ -1,3 +1,8 @@
+import { ChevronRight, Lightbulb, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Button } from "@/settings/components/Button";
+import { PageLayout, SectionRow, SectionRows } from "@/settings/layout/PageLayout";
+
 export function Skeleton({ className = "" }: { className?: string }) {
   return <div aria-hidden="true" className={`rounded bg-fill-interactive ${className}`} />;
 }
@@ -24,25 +29,33 @@ export function HomeSkeleton() {
 }
 
 export function LibrarySkeleton() {
+  const { t } = useTranslation();
   return (
-    <div aria-busy="true" className="space-y-4">
-      <div
-        aria-hidden="true"
-        className="overflow-hidden rounded-lg border border-border bg-surface-card"
-      >
-        {[0, 1, 2].map((key) => (
-          <div
-            key={key}
-            className="flex h-12 items-center px-3 border-b border-border-subtle last:border-b-0"
-          >
-            <Skeleton className="h-4 w-36" />
-          </div>
-        ))}
-      </div>
-      <div aria-hidden="true" className="flex h-8 items-center gap-3">
-        <Skeleton className="h-4 w-20" />
-        <Skeleton className="h-4 w-24" />
-      </div>
+    <div aria-busy="true">
+      <PageLayout>
+        <SectionRows>
+          {["first", "second", "third"].map((id) => (
+            <div key={id} className="border-b border-border-subtle last:border-b-0">
+              <SectionRow disabled>
+                <span className="min-w-0 flex-1">
+                  <Skeleton className="h-4 w-36" />
+                </span>
+                <ChevronRight size={15} aria-hidden="true" />
+              </SectionRow>
+            </div>
+          ))}
+        </SectionRows>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" disabled>
+            <Plus size={14} />
+            {t("ui.library.add")}
+          </Button>
+          <Button variant="ghost" disabled>
+            <Lightbulb size={14} />
+            {t("ui.library.templates")}
+          </Button>
+        </div>
+      </PageLayout>
     </div>
   );
 }

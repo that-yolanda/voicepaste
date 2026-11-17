@@ -51,7 +51,7 @@ afterEach(() => {
 it.each([0, 1])("keeps shortcut controls mounted while mode row %s refreshes", async (row) => {
   const view = render(<SettingsApp />);
   fireEvent.click(screen.getByText("open-hotkeys"));
-  await screen.findByText("Test template");
+  await waitFor(() => expect(screen.getByText("Test template")).toBeVisible());
   const page = view.container.querySelector('[data-tour="hotkey-main"]');
   let finishRefresh: (value: unknown) => void = () => {};
   mocks.getData.mockImplementation(

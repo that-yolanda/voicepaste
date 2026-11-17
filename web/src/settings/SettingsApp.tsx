@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/settings/components/Button";
 import { HomeSkeleton } from "@/settings/components/Skeleton";
@@ -47,6 +47,11 @@ function SettingsShell() {
       setVisited((previous) => (previous.includes(next) ? previous : [...previous, next]));
     }
   }, []);
+  const pageScroll = useRef<HTMLElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Reset scroll on navigation.
+  useLayoutEffect(() => {
+    if (pageScroll.current) pageScroll.current.scrollTop = 0;
+  }, [section]);
   const feedback = useFeedback(section === "feedback");
   const onboarding = useOnboarding(navigate);
 
@@ -75,7 +80,10 @@ function SettingsShell() {
           onStartOnboarding={() => void onboarding.start()}
         />
         <div className="relative min-w-0 flex-1">
-          <main className="settings-page-scroll h-full relative rounded-tl-xl border-l border-border">
+          <main
+            ref={pageScroll}
+            className="settings-page-scroll h-full relative rounded-tl-xl border-l border-border"
+          >
             <div className="max-w-[640px] mx-auto py-5 px-6">
               {loading ? (
                 <HomeSkeleton />
@@ -86,7 +94,7 @@ function SettingsShell() {
                 </div>
               ) : (
                 <>
-                  {section === "home" && <HomePage onOpenSettings={() => setSection("app")} />}
+                  {section === "home" && <HomePage onOpenSettings={() => navigate("app")} />}
                   {section === "app" && <AppSettingsPage />}
                   {visited.includes("templates") && (
                     <div hidden={section !== "templates"}>

@@ -48,7 +48,8 @@ describe("native permission controls", () => {
     mocks.getMicrophoneStatus.mockResolvedValue({ status: "prompt" });
     render(<AppSettingsPage />);
     const allow = await screen.findByRole("button", { name: "授权" });
-    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByRole("status")).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("status").textContent).toBe("");
     mocks.requestMicrophoneAccess.mockResolvedValue({ status: "denied", granted: false });
     fireEvent.click(allow);
     await screen.findByText("权限已禁用。请在设置中开启。");
@@ -68,7 +69,8 @@ describe("native permission controls", () => {
     fireEvent.click(button);
     expect(button).toBeDisabled();
     expect(screen.getByRole("button", { name: "前往设置" })).toBeDisabled();
-    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByRole("status")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status").textContent).toBe("");
     fireEvent.click(button);
     expect(mocks.requestMicrophoneAccess).toHaveBeenCalledTimes(1);
     await act(async () => finish?.({ status: "denied", granted: false }));
