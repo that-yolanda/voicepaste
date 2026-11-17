@@ -46,6 +46,22 @@ pub(crate) fn activate_app() {
 #[cfg(not(target_os = "macos"))]
 pub(crate) fn activate_app() {}
 
+fn settings_background(theme: &str) -> tauri::window::Color {
+    if theme == "light" {
+        tauri::window::Color(250, 249, 245, 255)
+    } else {
+        tauri::window::Color(20, 20, 19, 255)
+    }
+}
+
+pub(crate) fn sync_settings_background(app: &AppHandle, theme: &str) {
+    if let Some(window) = app.get_webview_window("settings") {
+        if let Err(e) = window.set_background_color(Some(settings_background(theme))) {
+            log_tray!(error, "failed to update settings window background: {e}");
+        }
+    }
+}
+
 /// Bring the settings window to front and show it in the Dock. If it was closed
 /// (lazy lifecycle: closing destroys it to free the WebView), rebuild it from the
 /// bundled window config before showing.
@@ -76,11 +92,7 @@ pub(crate) fn show_settings(app: &AppHandle) {
                     .map(|config| config.app.theme)
                     .unwrap_or_else(|_| "system".into());
                 let resolved = crate::commands::resolve_theme(&preference);
-                let background = if resolved == "light" {
-                    tauri::window::Color(250, 249, 245, 255)
-                } else {
-                    tauri::window::Color(20, 20, 19, 255)
-                };
+                let background = settings_background(&resolved);
                 let theme = match preference.as_str() {
                     "light" => Some(tauri::Theme::Light),
                     "dark" => Some(tauri::Theme::Dark),

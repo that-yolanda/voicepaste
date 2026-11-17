@@ -231,6 +231,19 @@ pub fn run() {
             }
             RunEvent::WindowEvent {
                 label,
+                event: tauri::WindowEvent::ThemeChanged(theme),
+                ..
+            } if label == "settings" => {
+                let state = app.state::<app_state::AppHandle>();
+                if let Ok(config) = state.config_manager.load_config() {
+                    if config.app.theme == "system" {
+                        let resolved = if theme == tauri::Theme::Light { "light" } else { "dark" };
+                        platform::sync_settings_background(app, resolved);
+                    }
+                }
+            }
+            RunEvent::WindowEvent {
+                label,
                 event: tauri::WindowEvent::CloseRequested { api, .. },
                 ..
             } if label == "settings" => {

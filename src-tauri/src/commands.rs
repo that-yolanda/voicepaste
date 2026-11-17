@@ -74,6 +74,7 @@ pub(crate) fn apply_app_theme(app: &AppHandle, preference: &str) {
         _ => None,
     };
     app.set_theme(theme);
+    crate::platform::sync_settings_background(app, &resolve_theme(preference));
 }
 
 /// Current UI language (already resolved, so `auto` reflects the OS locale)
