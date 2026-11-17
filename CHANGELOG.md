@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.1.8 (2026-11-17)
+This update adds OpenRouter speech recognition backed by an online model catalog and the ElevenLabs Scribe v3 Live realtime model, and refines the voice overlay and settings visuals.
+
+### Added
+- **OpenRouter Speech Recognition** — Dictate through 30+ speech models from OpenRouter's online catalog. Adding a model fetches the list automatically and pre-fills its language and temperature settings; custom model entries survive upgrades and can be removed anytime. Quota and rate-limit failures surface as clear errors, and short utterances still transcribe.
+- **ElevenLabs Scribe v3 Live** — Scribe v3 Live joins ElevenLabs realtime recognition with context-aware confirmation, a configurable VAD fallback for when the model's endpointing doesn't fit, and full recordings kept for retry after connection failures.
+
+### Fixed
+- **Committed Text Stands Out in the Overlay** — Text already confirmed by the recognizer now renders in adaptive system colors, clearly distinct from interim text in both light and dark themes.
+- **Steadier Settings Window** — The title bar follows theme changes immediately, controls no longer resize when switching pages, and the template and hotword library pages stay stable while loading and revisiting.
+- **Clearer Recording Hints and Appearance Names** — Recording text is worded consistently with the overlay, shortcut hint styles match the overlay, and appearance themes are named clearly.
+
 ## v2.1.7 (2026-11-13)
 This update adds Qwen online speech recognition and Qwen LLM support, rebuilds model management as a provider-centric services page, and safely migrates existing model settings during upgrade.
 
