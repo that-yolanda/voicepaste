@@ -1,7 +1,42 @@
 {
-  "latest": "v2.1.7",
+  "latest": "v2.1.8",
   "githubReleases": "https://github.com/that-yolanda/voicepaste/releases",
   "releases": [
+    {
+      "version": "v2.1.8",
+      "date": "2026-11-17",
+      "releaseUrl": "https://github.com/that-yolanda/voicepaste/releases/tag/v2.1.8",
+      "files": [
+        {
+          "platform": "macos-arm64",
+          "filename": "VoicePaste_2.1.8_aarch64.dmg",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.8/VoicePaste_2.1.8_aarch64.dmg",
+          "size": 16580613
+        },
+        {
+          "platform": "macos-x64",
+          "filename": "VoicePaste_2.1.8_x64.dmg",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.8/VoicePaste_2.1.8_x64.dmg",
+          "size": 18722820
+        },
+        {
+          "platform": "windows-x64",
+          "filename": "VoicePaste_2.1.8_x64-setup.exe",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.8/VoicePaste_2.1.8_x64-setup.exe",
+          "size": 10734328
+        },
+        {
+          "platform": "windows-msi",
+          "filename": "VoicePaste_2.1.8_x64_en-US.msi",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.8/VoicePaste_2.1.8_x64_en-US.msi",
+          "size": 15425536
+        }
+      ],
+      "notes": {
+        "en": "This update adds OpenRouter speech recognition backed by an online model catalog and the ElevenLabs Scribe v3 Live realtime model, and refines the voice overlay and settings visuals.\n\n### Added\n- **OpenRouter Speech Recognition** — Dictate through 30+ speech models from OpenRouter's online catalog. Adding a model fetches the list automatically and pre-fills its language and temperature settings; custom model entries survive upgrades and can be removed anytime. Quota and rate-limit failures surface as clear errors, and short utterances still transcribe.\n- **ElevenLabs Scribe v3 Live** — Scribe v3 Live joins ElevenLabs realtime recognition with context-aware confirmation, a configurable VAD fallback for when the model's endpointing doesn't fit, and full recordings kept for retry after connection failures.\n\n### Fixed\n- **Committed Text Stands Out in the Overlay** — Text already confirmed by the recognizer now renders in adaptive system colors, clearly distinct from interim text in both light and dark themes.\n- **Steadier Settings Window** — The title bar follows theme changes immediately, controls no longer resize when switching pages, and the template and hotword library pages stay stable while loading and revisiting.\n- **Clearer Recording Hints and Appearance Names** — Recording text is worded consistently with the overlay, shortcut hint styles match the overlay, and appearance themes are named clearly.",
+        "zh": "本次更新新增基于在线模型目录的 OpenRouter 语音识别与 ElevenLabs Scribe v3 Live 实时识别模型，并优化语音浮窗与设置窗口的视觉细节。\n\n### 新增\n- **OpenRouter 语音识别** — 通过 OpenRouter 在线目录选用 30 余个语音模型。添加模型时自动拉取目录并预填语言与温度设置；自定义模型条目升级后保留、可随时删除；配额与限流失败以清晰的错误提示呈现，短语音也能正常识别。\n- **ElevenLabs Scribe v3 Live** — ElevenLabs 实时识别新增 Scribe v3 Live 模型，支持上下文感知的确认方式，可在模型断句不适用时配置 VAD 兜底；连接失败后保留完整录音供重试。\n\n### 修复\n- **浮窗已确认文本更醒目** — 识别已确认的文本改用自适应系统颜色，在浅色与深色主题下都能与临时文本明确区分。\n- **更稳定的设置窗口** — 标题栏颜色随主题切换即时同步，切换页面时控件不再缩放抖动，模板与热词库页面在加载和回访时保持稳定。\n- **更清晰的录音提示与外观命名** — 录音文案与浮窗统一措辞，快捷键提示样式与浮窗一致，外观主题命名更清晰。"
+      }
+    },
     {
       "version": "v2.1.7",
       "date": "2026-11-13",
