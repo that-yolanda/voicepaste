@@ -97,6 +97,62 @@ test("uses the backend default provider when the saved provider is omitted", asy
   );
 });
 
+test("keeps the first LLM candidate unselected until the user sets it as default", async () => {
+  const model = "deepseek-v4-flash";
+  const value = `deepseek::${model}`;
+  const initialLlm = {
+    provider: "bytedance",
+    bytedance: { models: [] },
+    deepseek: { models: [{ id: model }] },
+  };
+  mocks.config = {
+    model_providers: { added: ["bytedance", "deepseek"] },
+    llm: initialLlm,
+  };
+  const view = render(<ModelServicesPage />);
+  const llm = screen.getByRole<HTMLSelectElement>("combobox", { name: "大语言" });
+  await waitFor(() => expect(llm).toBeEnabled());
+  expect(Array.from(llm.options, (option) => option.value)).toEqual(["", value]);
+  expect(llm).toHaveValue("");
+  expect(mocks.save).not.toHaveBeenCalled();
+
+  fireEvent.change(llm, { target: { value } });
+  expect(mocks.save).toHaveBeenCalledExactlyOnceWith({
+    ...mocks.config,
+    llm: { ...initialLlm, provider: "deepseek", default_model: model },
+  });
+  await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+  mocks.config = mocks.save.mock.calls[0][0];
+  view.rerender(<ModelServicesPage />);
+  expect(llm).toHaveValue(value);
+});
+
+test("keeps the existing LLM default when another provider gets a model", async () => {
+  const activeLlm = {
+    provider: "bytedance",
+    default_model: "doubao-seed-1-6-flash",
+    bytedance: { models: [{ id: "doubao-seed-1-6-flash" }] },
+  };
+  mocks.config = {
+    model_providers: { added: ["deepseek", "bytedance"] },
+    llm: { ...activeLlm, deepseek: { models: [] } },
+  };
+  const view = render(<ModelServicesPage />);
+  const llm = screen.getByRole<HTMLSelectElement>("combobox", { name: "大语言" });
+  await waitFor(() => expect(llm).toHaveValue("bytedance::doubao-seed-1-6-flash"));
+
+  mocks.config = {
+    ...mocks.config,
+    llm: { ...activeLlm, deepseek: { models: [{ id: "deepseek-v4-flash" }] } },
+  };
+  view.rerender(<ModelServicesPage />);
+  expect(Array.from(llm.options, (option) => option.value)).toContain(
+    "deepseek::deepseek-v4-flash",
+  );
+  expect(llm).toHaveValue("bytedance::doubao-seed-1-6-flash");
+  expect(mocks.save).not.toHaveBeenCalled();
+});
+
 test("failed default save shows an error without reporting success", async () => {
   mocks.save.mockRejectedValueOnce({
     code: "asr.config_field_invalid",

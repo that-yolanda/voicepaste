@@ -187,18 +187,10 @@ export function ModelServicesPage() {
       : llm.provider === "openai_compatible"
         ? "custom_openai"
         : llm.provider;
-  const resolvedLlm =
-    typeof activeLlmProvider === "string"
-      ? resolveDefaultLlmModel(llm, activeLlmProvider, models)
-      : null;
-  const defaultLlmEntry = llmCandidates.find(
+  const resolvedLlm = resolveDefaultLlmModel(llm, activeLlmProvider, models);
+  const defaultLlm = llmCandidates.find(
     ({ provider, model }) => provider.id === activeLlmProvider && model.id === resolvedLlm?.id,
   );
-  // Fallback for legacy configs: first visible entry of the active provider.
-  const defaultLlm =
-    defaultLlmEntry ??
-    llmCandidates.find(({ provider }) => provider.id === activeLlmProvider) ??
-    llmCandidates[0];
 
   /* ---------- asr_defaults writers (CustomConfigModal) ---------- */
 
@@ -251,6 +243,7 @@ export function ModelServicesPage() {
                 label: `${localizedProviderFields(provider, i18n.language).name} / ${model.name ?? localizedModelFields(model.preset ?? { id: model.id, name: model.id, type: "online" }, i18n.language).name}`,
               }))}
               onChange={(value) => {
+                if (!value) return;
                 const [providerId, modelId] = value.split("::");
                 void save(withDefaultLlmModel(clonePlain(config), providerId, modelId));
               }}
