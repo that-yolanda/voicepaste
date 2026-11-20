@@ -151,7 +151,7 @@ Before pushing or publishing, present a summary:
 - Categorized changes grouped by type
 - Artifacts that will be uploaded
 - Commits and the verified release branch to be pushed
-- Website synchronization and deployment planned after the GitHub assets are available
+- Website synchronization and production deployment planned after the GitHub assets are available (a release normally updates the website too; deployment promotes the release commit's Vercel Preview to production)
 
 If push/publication is not already authorized, obtain confirmation for the concrete summary before proceeding. Do not repeat an approval already supplied for the same actions.
 
@@ -243,6 +243,22 @@ Run the website checks from Step 5 and review `git diff -- website/config/releas
 
 Commit the website data as a follow-up to the release, together with any source-note corrections. This does not require moving or amending the published release tag. Push/deploy only within the user's authorization. Do not introduce `channel`, `notesFormat`, or `schemaVersion` fields for this workflow.
 
+#### Deploy to Production (Vercel)
+
+A push to `master` only creates a **Preview** deployment — the production domain (`voicepaste.dev`) never updates by itself. After the website data commit is pushed, wait for that commit's preview to become Ready, then promote it: production then serves exactly the deployment built from the pushed commit, with no rebuild.
+
+```bash
+cd website
+vercel link --project voicepaste --yes                # one-time per machine; run `vercel login` first
+vercel ls -m githubCommitSha=$(git rev-parse HEAD)    # wait until the Preview entry shows ● Ready
+vercel promote <preview-deployment-url> --yes         # instant promotion, no rebuild
+```
+
+- Promote the **Preview** deployment for the release commit, not a Production one; `vercel promote` reassigns the production alias without rebuilding.
+- Do not use `vercel deploy --prod`: it rebuilds from the local working tree and can ship uncommitted files, diverging from the verified preview.
+- In CI, set `VERCEL_TOKEN` instead of running `vercel login`.
+- Promotion is outward-facing: include "promote deployment X to production" in the Step 7 confirmation summary. A normal version release does update the website, so treat this as part of the release flow.
+
 ### Step 12: Verify and Report Completion
 
 Report these outcomes separately:
@@ -253,7 +269,7 @@ Report these outcomes separately:
   curl -sL https://github.com/that-yolanda/voicepaste/releases/latest/download/latest.json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);const n=JSON.parse(j.notes||'{}');console.log(j.version,'zh:',(n.zh||'').slice(0,40),'| en:',(n.en||'').slice(0,40))})"
   ```
 - Website target-version validation and local commit/push status.
-- Website deployment and live verification: `/zh/downloads`, `/en/downloads`, and `/api/releases?version=<version>&lang=zh` (also `lang=en`). Check the expected notes and installer links after cache refresh; successful local checks do not prove deployment.
+- Website production deployment (Preview promoted via `vercel promote`) and live verification: `/zh/downloads`, `/en/downloads`, and `/api/releases?version=<version>&lang=zh` (also `lang=en`). Check the expected notes and installer links after cache refresh; successful local checks do not prove deployment.
 
 If website deployment is not authorized or has not completed, report that it remains pending. Do not mark the whole release synchronized merely because the local JSON changed.
 
@@ -406,6 +422,8 @@ git tag -a v<version> -m "Release v<version>"
 git push origin v<version>
 gh release view v<version>
 gh release create v<version> --draft ...
+vercel ls -m githubCommitSha=$(git rev-parse HEAD)
+vercel promote <preview-deployment-url> --yes
 ```
 
 For artifact validation:
