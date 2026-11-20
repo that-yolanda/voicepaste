@@ -53,6 +53,11 @@ test("speech cleanup does not inherit Message support for Qwen Streaming", () =>
     catalog
       .filter((model) => model.capabilities.smoothing)
       .map((model) => model.id),
-    ["doubao-streaming", "elevenlabs-realtime", "elevenlabs-scribe-v3-live", "qwen-asr-message"]
+    [
+      "doubao-streaming",
+      "elevenlabs-realtime",
+      "elevenlabs-scribe-v3-live",
+      "qwen-asr-message",
+    ]
   )
 })
