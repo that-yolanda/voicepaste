@@ -4,6 +4,9 @@ use std::time::Duration;
 
 use crate::errors::{AppError, AppErrorCode};
 
+#[cfg(target_os = "macos")]
+mod macos;
+
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -32,14 +35,54 @@ fn hide_console(cmd: &mut Command) {
     let _ = cmd;
 }
 
-/// Simulate paste keystroke (Cmd+V / Ctrl+V) to the currently focused element.
-/// Clipboard write is handled by the caller (command handler or recording lifecycle).
-pub fn simulate_paste() -> PasteResult {
-    // Use Tauri clipboard plugin via a simple approach:
-    // Write to clipboard via pbcopy/clip, then simulate paste via osascript/PowerShell.
-    // In the actual Tauri app, clipboard write is done via the plugin, and paste simulation is done here.
+pub(crate) fn paste_text(
+    _app: &tauri::AppHandle,
+    text: &str,
+    keep_clipboard: bool,
+) -> Result<(), AppError> {
+    #[cfg(target_os = "macos")]
+    let result = macos::paste_text(text, keep_clipboard)?;
+    #[cfg(not(target_os = "macos"))]
+    let result = paste_with_clipboard(_app, text, keep_clipboard)?;
 
-    // For the paste simulation part only (clipboard write is handled by the Tauri command):
+    if result.ok {
+        Ok(())
+    } else {
+        Err(result
+            .message
+            .unwrap_or_else(|| AppError::new(AppErrorCode::PasteSimulationFailed)))
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn paste_with_clipboard(
+    app: &tauri::AppHandle,
+    text: &str,
+    keep_clipboard: bool,
+) -> Result<PasteResult, AppError> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+
+    let clipboard = app.clipboard();
+    let original = if keep_clipboard {
+        None
+    } else {
+        clipboard.read_text().ok()
+    };
+    clipboard.write_text(text).map_err(|e| {
+        AppError::new(AppErrorCode::PasteClipboardWriteFailed).with_detail(e.to_string())
+    })?;
+
+    let result = simulate_paste();
+    if let Some(original) = original {
+        if let Err(e) = clipboard.write_text(&original) {
+            log_rec!(error, "Failed to restore clipboard: {}", e);
+        }
+    }
+    Ok(result)
+}
+
+/// Send the paste keystroke to the currently focused element.
+fn simulate_paste() -> PasteResult {
     let result = if cfg!(target_os = "macos") {
         simulate_paste_macos()
     } else {
@@ -94,9 +137,6 @@ fn simulate_paste_macos() -> Result<(), String> {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(stderr);
     }
-
-    // Give the target app a brief moment to read the clipboard
-    thread::sleep(Duration::from_millis(120));
 
     Ok(())
 }

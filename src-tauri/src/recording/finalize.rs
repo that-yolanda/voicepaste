@@ -224,45 +224,10 @@ pub(super) async fn deliver_text(
     config: Option<&crate::config::AppConfig>,
     polish: crate::stats::PolishRecord,
 ) -> bool {
-    use tauri_plugin_clipboard_manager::ClipboardExt;
-
     overlay::set_decision_keys_enabled(app_handle, false);
 
-    // Both modes auto-paste the recognized text. keep_clipboard (ON) leaves the
-    // recognized text in the clipboard after pasting; !keep_clipboard (OFF,
-    // default) restores whatever the clipboard held beforehand.
     let keep_clipboard = config.map(|c| c.app.keep_clipboard).unwrap_or(true);
-
-    // Snapshot the clipboard before overwriting it so we can restore it after
-    // the paste. Only needed when OFF (ON keeps the recognized text).
-    let original_clipboard: Option<String> = if !keep_clipboard {
-        app_handle.clipboard().read_text().ok()
-    } else {
-        None
-    };
-
-    if let Err(e) = app_handle.clipboard().write_text(final_text) {
-        let error =
-            crate::errors::AppError::new(crate::errors::AppErrorCode::PasteClipboardWriteFailed)
-                .with_detail(e.to_string());
-        overlay::show_output_error(app_handle, app_inner, &error).await;
-        return false;
-    }
-
-    let result = crate::paste::simulate_paste();
-
-    // Restore original clipboard content when keep_clipboard is OFF. When ON,
-    // original_clipboard is None, so the recognized text stays in the clipboard.
-    if let Some(original) = original_clipboard {
-        if let Err(e) = app_handle.clipboard().write_text(&original) {
-            log_rec!(error, "Failed to restore clipboard: {}", e);
-        }
-    }
-
-    if !result.ok {
-        let error = result.message.unwrap_or_else(|| {
-            crate::errors::AppError::new(crate::errors::AppErrorCode::PasteSimulationFailed)
-        });
+    if let Err(error) = crate::paste::paste_text(app_handle, final_text, keep_clipboard) {
         overlay::show_output_error(app_handle, app_inner, &error).await;
         return false;
     }
