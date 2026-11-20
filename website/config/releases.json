@@ -1,7 +1,42 @@
 {
-  "latest": "v2.1.8",
+  "latest": "v2.1.9",
   "githubReleases": "https://github.com/that-yolanda/voicepaste/releases",
   "releases": [
+    {
+      "version": "v2.1.9",
+      "date": "2026-11-20",
+      "releaseUrl": "https://github.com/that-yolanda/voicepaste/releases/tag/v2.1.9",
+      "files": [
+        {
+          "platform": "macos-arm64",
+          "filename": "VoicePaste_2.1.9_aarch64.dmg",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.9/VoicePaste_2.1.9_aarch64.dmg",
+          "size": 16581350
+        },
+        {
+          "platform": "macos-x64",
+          "filename": "VoicePaste_2.1.9_x64.dmg",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.9/VoicePaste_2.1.9_x64.dmg",
+          "size": 18723100
+        },
+        {
+          "platform": "windows-x64",
+          "filename": "VoicePaste_2.1.9_x64-setup.exe",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.9/VoicePaste_2.1.9_x64-setup.exe",
+          "size": 10725491
+        },
+        {
+          "platform": "windows-msi",
+          "filename": "VoicePaste_2.1.9_x64_en-US.msi",
+          "url": "https://github.com/that-yolanda/voicepaste/releases/download/v2.1.9/VoicePaste_2.1.9_x64_en-US.msi",
+          "size": 15417344
+        }
+      ],
+      "notes": {
+        "en": "This update fixes a macOS issue where dictation could paste stale clipboard text, and polishes two settings details.\n\n### Fixed\n- **macOS Pastes the New Transcript Reliably** — Pasting now waits for the clipboard write to take effect before simulating ⌘V, so dictation no longer pastes stale clipboard content.\n- **Default Language Model Shows Its Real State** — The Model Services page no longer presents a fallback model as the default; it shows an unset placeholder until you actually choose one.\n- **Centered Permission Button Labels** — Permission buttons keep their labels centered instead of shifting when a loading spinner appears.",
+        "zh": "本次更新修复了 macOS 上听写可能粘贴旧剪贴板内容的问题，并优化两处设置细节。\n\n### 修复\n- **macOS 粘贴最新识别文本更可靠** — 粘贴前会等待剪贴板写入生效再模拟 ⌘V，听写不再粘贴到过期的剪贴板内容。\n- **默认大语言模型如实显示** — 模型服务页不再把兜底模型显示为默认值，在真正选择模型前会明确显示未设置状态。\n- **权限按钮文字保持居中** — 权限按钮出现加载图标时，文字不再偏移。"
+      }
+    },
     {
       "version": "v2.1.8",
       "date": "2026-11-17",
