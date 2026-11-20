@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.9 (2026-11-20)
+This update fixes a macOS issue where dictation could paste stale clipboard text, and polishes two settings details.
+
+### Fixed
+- **macOS Pastes the New Transcript Reliably** — Pasting now waits for the clipboard write to take effect before simulating ⌘V, so dictation no longer pastes stale clipboard content.
+- **Default Language Model Shows Its Real State** — The Model Services page no longer presents a fallback model as the default; it shows an unset placeholder until you actually choose one.
+- **Centered Permission Button Labels** — Permission buttons keep their labels centered instead of shifting when a loading spinner appears.
+
 ## v2.1.8 (2026-11-17)
 This update adds OpenRouter speech recognition backed by an online model catalog and the ElevenLabs Scribe v3 Live realtime model, and refines the voice overlay and settings visuals.
 
