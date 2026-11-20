@@ -251,10 +251,11 @@ A push to `master` only creates a **Preview** deployment — the production doma
 cd website
 vercel link --project voicepaste --yes                # one-time per machine; run `vercel login` first
 vercel ls -m githubCommitSha=$(git rev-parse HEAD)    # wait until the Preview entry shows ● Ready
-vercel promote <preview-deployment-url> --yes         # instant promotion, no rebuild
+vercel promote <preview-deployment-url> --yes         # clones the deployment; no rebuild
 ```
 
-- Promote the **Preview** deployment for the release commit, not a Production one; `vercel promote` reassigns the production alias without rebuilding.
+- Promote the **Preview** deployment for the release commit, not a Production one; `vercel promote` creates a production clone without rebuilding.
+- The command returns immediately but the production alias switch is asynchronous (~10–30s): confirm with `vercel inspect voicepaste.dev` until the URL points at the new deployment before running live checks.
 - Do not use `vercel deploy --prod`: it rebuilds from the local working tree and can ship uncommitted files, diverging from the verified preview.
 - In CI, set `VERCEL_TOKEN` instead of running `vercel login`.
 - Promotion is outward-facing: include "promote deployment X to production" in the Step 7 confirmation summary. A normal version release does update the website, so treat this as part of the release flow.
