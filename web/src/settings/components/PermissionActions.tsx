@@ -115,9 +115,9 @@ export function PermissionActions({ microphone }: { microphone: boolean }) {
         onClick={() => void check(true)}
         className="whitespace-nowrap"
       >
-        <span className="size-3.5 shrink-0" aria-hidden="true">
-          {busy === "check" && <LoaderCircle size={14} className="animate-spin" />}
-        </span>
+        {busy === "check" && (
+          <LoaderCircle size={14} className="shrink-0 animate-spin" aria-hidden="true" />
+        )}
         {t(`ui.permissions.${allow ? "allow" : "check"}`)}
       </Button>
       <Button
@@ -125,9 +125,9 @@ export function PermissionActions({ microphone }: { microphone: boolean }) {
         onClick={() => void openSettings()}
         className="whitespace-nowrap"
       >
-        <span className="size-3.5 shrink-0" aria-hidden="true">
-          {busy === "settings" && <LoaderCircle size={14} className="animate-spin" />}
-        </span>
+        {busy === "settings" && (
+          <LoaderCircle size={14} className="shrink-0 animate-spin" aria-hidden="true" />
+        )}
         {t("ui.permissions.settings")}
       </Button>
     </div>
